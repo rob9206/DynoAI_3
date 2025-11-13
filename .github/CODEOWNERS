@@ -1,0 +1,18 @@
+# CODEOWNERS file for DynoAI_3
+# This file defines code ownership for the repository
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+* @rob9206
+
+# Math-critical files require additional review and protection
+# These files contain core mathematical algorithms and prototypes
+/core/ @rob9206
+/experiments/protos/ @rob9206
+
+# GitHub workflows and automation
+/.github/ @rob9206
+
+# Documentation
+*.md @rob9206
+/docs/ @rob9206

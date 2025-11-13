@@ -1,0 +1,65 @@
+# Labeler configuration for automatic PR labeling
+# https://github.com/actions/labeler
+
+# Core functionality
+'core':
+  - changed-files:
+    - any-glob-to-any-file: 'core/**/*'
+
+# Experiments and prototypes
+'experiments':
+  - changed-files:
+    - any-glob-to-any-file: 'experiments/**/*'
+
+# Math-critical files
+'math-critical':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'core/**/*'
+      - 'experiments/protos/**/*'
+
+# Tests
+'tests':
+  - changed-files:
+    - any-glob-to-any-file: 'tests/**/*'
+
+# Documentation
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**/*'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+
+# GitHub workflows and automation
+'github-actions':
+  - changed-files:
+    - any-glob-to-any-file: '.github/**/*'
+
+# Dependencies
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'requirements*.txt'
+      - 'setup.py'
+      - 'setup.cfg'
+      - 'pyproject.toml'
+      - 'Pipfile'
+      - 'poetry.lock'
+
+# Configuration
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.json'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/*.toml'
+      - '**/*.ini'
+      - '**/*.cfg'
+
+# Python code
+'python':
+  - changed-files:
+    - any-glob-to-any-file: '**/*.py'

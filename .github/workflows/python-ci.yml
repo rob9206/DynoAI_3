@@ -1,0 +1,117 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          pip install pytest pytest-cov pytest-xdist
+      
+      - name: Run selftests
+        run: |
+          if [ -f selftests.py ]; then
+            python selftests.py
+          else
+            echo "No selftests.py found, skipping..."
+          fi
+      
+      - name: Run kernel tests
+        run: |
+          if [ -d tests/kernel ]; then
+            pytest tests/kernel -v --tb=short
+          else
+            echo "No kernel tests found, skipping..."
+          fi
+      
+      - name: Run unit tests
+        run: |
+          if [ -d tests/unit ]; then
+            pytest tests/unit -v --cov=. --cov-report=xml --cov-report=term
+          else
+            echo "No unit tests found, skipping..."
+          fi
+      
+      - name: Run integration tests
+        run: |
+          if [ -d tests/integration ]; then
+            pytest tests/integration -v --tb=short
+          else
+            echo "No integration tests found, skipping..."
+          fi
+      
+      - name: Upload coverage reports
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort mypy pylint
+      
+      - name: Run flake8
+        run: |
+          if [ -d core ] || [ -d experiments ] || [ -d tests ]; then
+            flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+            flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          else
+            echo "No Python source directories found, skipping flake8..."
+          fi
+      
+      - name: Run black check
+        run: |
+          if [ -d core ] || [ -d experiments ] || [ -d tests ]; then
+            black --check --diff .
+          else
+            echo "No Python source directories found, skipping black..."
+          fi
+      
+      - name: Run isort check
+        run: |
+          if [ -d core ] || [ -d experiments ] || [ -d tests ]; then
+            isort --check-only --diff .
+          else
+            echo "No Python source directories found, skipping isort..."
+          fi
