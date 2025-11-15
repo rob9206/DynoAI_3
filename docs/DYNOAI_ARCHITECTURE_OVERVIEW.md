@@ -559,6 +559,94 @@ python web_service/api/app.py
 
 ---
 
+## 17. v3 Minimal Repo Cutover
+
+This section documents the migration process from DynoAI v2 to v3.
+
+### Overview
+DynoAI v3 is a **minimal, production-focused repository** that includes only code actively referenced by v2's pipeline, tests, and selftests. Unused and legacy modules are not included in v3.
+
+### Migration Steps
+
+**Step 1: Check out DynoAI v2**
+```bash
+git clone https://github.com/your-org/DynoAI_2.git
+cd DynoAI_2
+```
+
+**Step 2: Run the materialization script**
+```bash
+python scripts/materialize_v3_minimal_tree.py \
+    --source-root <path-to-v2> \
+    --target-root <path-to-new-v3>
+```
+
+This script:
+- Analyzes v2's import graph, test references, and selftest dependencies
+- Copies only the files actively used by the production pipeline
+- Excludes legacy, experimental, and unused modules
+- Preserves directory structure for active components
+
+**Step 3: Change into the v3 directory**
+```bash
+cd <path-to-new-v3>
+```
+
+**Step 4: Validate the v3 installation**
+
+Run the selftest runner:
+```bash
+python selftest_runner.py
+```
+
+Run all pytest tests:
+```bash
+python -m pytest tests/ -v
+```
+
+Expected results:
+- All selftests passing (2/2)
+- All pytest tests passing (15/15)
+- No import errors or missing dependencies
+
+**Step 5: Initialize new git repository**
+```bash
+git init
+git add .
+git commit -m "Initial commit: DynoAI v3 minimal cutover"
+git remote add origin https://github.com/your-org/DynoAI_3.git
+git push -u origin main
+```
+
+### What's Included in v3
+- ✅ Core engine (`core/ai_tuner_toolkit_dyno_v1_2.py`)
+- ✅ VE operations (`core/ve_operations.py`)
+- ✅ I/O contracts and safety (`core/io_contracts.py`)
+- ✅ Full test suite (`tests/`)
+- ✅ Active experimental kernels (`experiments/protos/`)
+- ✅ Production scripts (`scripts/`)
+- ✅ Reference tables and templates (`tables/`, `templates/`)
+- ✅ Essential documentation (`docs/`)
+
+### What's Excluded from v3
+- ❌ Archive directory (legacy GUI, VB.NET implementations, old utilities)
+- ❌ Unused web service prototypes
+- ❌ Dead code identified by static analysis
+- ❌ Duplicate or superseded implementations
+- ❌ Historical test data not referenced by current tests
+
+### Key Principle
+**v3 only includes code referenced by v2 pipeline/tests/selftests. Unused or legacy modules are not included.**
+
+This ensures:
+- Reduced maintenance burden
+- Clear dependency graph
+- Faster CI/CD execution
+- Easier onboarding for new developers
+- Production-ready baseline for future enhancements
+
+---
+
 **For implementation details, see:**
 - `docs/DYNOAI_CORE_REFERENCE.md` - Minimal runnable examples
 - `docs/DYNOAI_SAFETY_RULES.md` - Safety policies and invariants
