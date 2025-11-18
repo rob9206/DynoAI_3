@@ -1,5 +1,7 @@
 # DynoAI_3
 
+[![CI](https://github.com/rob9206/DynoAI_3/workflows/DynoAI%20CI/badge.svg)](https://github.com/rob9206/DynoAI_3/actions)
+
 Intelligent dyno tuning system for Harley-Davidson ECM calibration.
 
 ## Repository Layout (v3)
@@ -45,6 +47,37 @@ This repository is structured for clarity and maintainability:
 - `runs/{run_id}/` - Dyno tuning run outputs
 - `ve_runs/{run_id}/` - VE apply/rollback outputs
 - `ve_runs/preview/` - VE preview operations
+
+## CI/CD
+
+The repository uses GitHub Actions for continuous integration across Linux and Windows:
+
+**Test Pipeline:**
+1. **Self-tests** - `python tool/selftest_runner.py`
+2. **Unit tests** - `pytest tests/` (kernel tests, VE operations, etc.)
+3. **Linting** - `flake8` (excludes `.venv/`, `site-packages/`)
+4. **Type checking** - `mypy` (optional, won't fail builds)
+5. **Security** - `bandit` and `safety` scans (advisory)
+
+**Key Features:**
+- Cross-platform: Ubuntu + Windows runners
+- Python 3.11 via `actions/setup-python@v5` (no hardcoded paths)
+- Uses `sys.executable` for interpreter references
+- Proper virtualenv exclusion in linting
+- Deterministic dependency pinning via `requirements.txt`
+
+**Local Development:**
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests locally
+python tool/selftest_runner.py
+pytest tests/ -v
+
+# Lint code
+flake8 . --exclude=.venv,venv,**/site-packages/** --select=E9,F63,F7,F82
+```
 
 ## Documentation
 

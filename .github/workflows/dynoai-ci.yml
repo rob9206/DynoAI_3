@@ -1,0 +1,146 @@
+name: DynoAI CI
+
+on:
+  push:
+    branches: [ main, master, develop, "claude/**" ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Display Python version and location
+      run: |
+        python --version
+        python -c "import sys; print(f'Python executable: {sys.executable}')"
+        python -c "import sys; print(f'Python path: {sys.path}')"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run self-tests
+      run: |
+        python tool/selftest_runner.py
+      continue-on-error: false
+
+    - name: Run pytest suite
+      run: |
+        pytest tests/ -v --tb=short
+      continue-on-error: false
+
+    - name: Run kernel tests (if not in tests/)
+      run: |
+        pytest . -v --tb=short -k "test_k1 or test_k2 or test_k3"
+      continue-on-error: true
+
+  lint:
+    name: Lint with flake8
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8
+
+    - name: Run flake8
+      run: |
+        # Exclude virtualenvs, site-packages, and common tool directories
+        # Only report serious errors (syntax, undefined names, etc.)
+        flake8 . \
+          --exclude=.venv,venv,env,**/site-packages/**,**/__pycache__/**,.git,build,dist \
+          --select=E9,F63,F7,F82 \
+          --show-source \
+          --statistics
+      continue-on-error: false
+
+    - name: Run flake8 (style checks - warning only)
+      run: |
+        # Run broader style checks but don't fail the build
+        flake8 . \
+          --exclude=.venv,venv,env,**/site-packages/**,**/__pycache__/**,.git,build,dist \
+          --max-line-length=100 \
+          --ignore=E203,W503 \
+          --show-source \
+          --statistics
+      continue-on-error: true
+
+  typecheck:
+    name: Type checking with mypy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mypy
+        pip install -r requirements.txt
+
+    - name: Run mypy
+      run: |
+        mypy core/ tool/ io/ --ignore-missing-imports --no-strict-optional
+      continue-on-error: true
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run bandit security checks
+      run: |
+        bandit -r core/ tool/ io/ -f txt || true
+      continue-on-error: true
+
+    - name: Check for known vulnerabilities in dependencies
+      run: |
+        pip install -r requirements.txt
+        safety check --json || true
+      continue-on-error: true
