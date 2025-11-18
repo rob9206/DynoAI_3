@@ -43,6 +43,9 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Pre-commit
+.pre-commit-cache/
+
 # Type checking
 .mypy_cache/
 .dmypy.json

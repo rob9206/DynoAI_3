@@ -71,13 +71,33 @@ The repository uses GitHub Actions for continuous integration across Linux and W
 # Install dependencies
 pip install -r requirements.txt
 
+# Install pre-commit hooks (one-time setup)
+pre-commit install
+
+# Run pre-commit checks manually
+pre-commit run --all-files
+
 # Run tests locally
 python tool/selftest_runner.py
 pytest tests/ -v
 
+# Run tests with coverage
+pytest tests/ -v --cov=core --cov=tool --cov=io --cov-report=html
+
 # Lint code
 flake8 . --exclude=.venv,venv,**/site-packages/** --select=E9,F63,F7,F82
+
+# Format code
+black . --line-length=100
+isort . --profile=black
 ```
+
+**CI Features:**
+- 🚀 **Concurrency control** - Cancels outdated runs when new commits are pushed
+- 📊 **Code coverage** - Tracks test coverage with artifacts uploaded to GitHub
+- 🔄 **Dependabot** - Automated weekly dependency updates
+- 🎣 **Pre-commit hooks** - Catch issues before pushing (install with `pre-commit install`)
+- 📝 **PR/Issue templates** - Structured contribution guidelines with safety checklists
 
 ## Documentation
 

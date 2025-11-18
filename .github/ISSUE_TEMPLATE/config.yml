@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: DynoAI Documentation
+    url: https://github.com/rob9206/DynoAI_3/tree/main/docs
+    about: Read the documentation for architecture, safety rules, and agent prompts
+  - name: Security Issue
+    url: https://github.com/rob9206/DynoAI_3/security/advisories/new
+    about: Report a security vulnerability privately
