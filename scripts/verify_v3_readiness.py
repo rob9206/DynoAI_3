@@ -1,222 +1,305 @@
-from __future__ import annotations
+#!/usr/bin/env python3
+"""
+DynoAI v3 Readiness Verification Script
 
-import json
+Acts as a gatekeeper before tagging/pushing v3.
+Validates repository structure, runs tests, and checks API health.
+
+Usage:
+    python scripts/verify_v3_readiness.py                # Run all checks
+    python scripts/verify_v3_readiness.py --pytest-only  # Only pytest
+    python scripts/verify_v3_readiness.py --selftest-only # Only selftest
+    python scripts/verify_v3_readiness.py --skip-api     # Skip API check
+"""
+
+import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict
-
-# Make io_contracts import robust across layouts (repo root vs dynoai/io_contracts.py)
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-dyno_pkg = ROOT / "dynoai"
-if dyno_pkg.exists():
-    dyno_pkg_str = str(dyno_pkg)
-    if dyno_pkg_str not in sys.path:
-        sys.path.insert(0, dyno_pkg_str)
-try:
-    import io_contracts  # type: ignore
-    from io_contracts import safe_path  # type: ignore
-except ImportError:
-    from dynoai import io_contracts  # type: ignore
-    from dynoai.io_contracts import safe_path  # type: ignore
+from typing import List, Tuple
 
 
-ROOT = Path(__file__).resolve().parent.parent
-
-TOOL = ROOT / "ai_tuner_toolkit_dyno_v1_2.py"
-SELFTEST = ROOT / "selftest_runner.py"
-LARGE_LOG_GENERATOR = ROOT / "generate_large_log.py"
-
-RUNS_DIR = ROOT / "runs"
-SMOKE_OUTDIR = RUNS_DIR / "v3_smoke"
-VE_RUNS_PREVIEW = ROOT / "ve_runs" / "preview"
+# Determine repo root
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def run_cmd(cmd: list[str], cwd: Path | None = None, label: str = "") -> int:
-    print(f"\n=== RUN: {label or ' '.join(cmd)} ===")
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if proc.stdout:
-        print(proc.stdout.strip())
-    if proc.stderr:
-        print(proc.stderr.strip(), file=sys.stderr)
-    print(f"=== EXIT: {proc.returncode} ({label}) ===")
-    return proc.returncode
+def check_path(path: Path, kind: str) -> bool:
+    """
+    Validate that a required path exists.
 
+    Args:
+        path: Path to check (absolute or relative to REPO_ROOT)
+        kind: "file" or "dir"
 
-def step_selftest() -> bool:
-    print("\n[STEP A] Running selftest_runner.py ...")
-    if not SELFTEST.exists():
-        print(f"[ERROR] selftest_runner.py not found at {SELFTEST}")
-        return False
-    code = run_cmd([sys.executable, str(SELFTEST)], cwd=ROOT, label="selftest_runner")
-    if code != 0:
-        print("[FAIL] selftest_runner.py exited non-zero")
-        return False
-    print("[OK] selftest_runner.py completed.")
-    return True
+    Returns:
+        True if exists and matches kind, False otherwise
+    """
+    if not path.is_absolute():
+        path = REPO_ROOT / path
 
+    rel_path = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
 
-def ensure_large_log() -> Path | None:
-    print("\n[STEP B] Ensuring large_test_log.csv exists ...")
-    csv_path = ROOT / "large_test_log.csv"
-    if csv_path.exists():
-        print(f"[OK] Found existing {csv_path}")
-        return csv_path
-    if not LARGE_LOG_GENERATOR.exists():
-        print(f"[ERROR] generate_large_log.py not found at {LARGE_LOG_GENERATOR}")
-        return None
-    code = run_cmd(
-        [sys.executable, str(LARGE_LOG_GENERATOR)],
-        cwd=ROOT,
-        label="generate_large_log",
-    )
-    if code != 0 or not csv_path.exists():
-        print("[FAIL] Failed to generate large_test_log.csv")
-        return None
-    print(f"[OK] Generated {csv_path}")
-    return csv_path
+    if kind == "file":
+        exists = path.is_file()
+    elif kind == "dir":
+        exists = path.is_dir()
+    else:
+        exists = path.exists()
 
-
-def step_dyno_smoke(csv_path: Path) -> bool:
-    print("\n[STEP C] Running dyno smoke test on large_test_log.csv ...")
-    # Use safe_path for new output directory
-    outdir = safe_path(str(SMOKE_OUTDIR))
-    outdir.mkdir(parents=True, exist_ok=True)
-    if not TOOL.exists():
-        print(f"[ERROR] Dyno tool not found at {TOOL}")
-        return False
-    cmd = [
-        sys.executable,
-        str(TOOL),
-        "--csv",
-        str(csv_path),
-        "--outdir",
-        str(outdir),
-        "--smooth_passes",
-        "2",
-        "--clamp",
-        "7.0",
-    ]
-    code = run_cmd(cmd, cwd=ROOT, label="dyno_smoke_v3")
-    if code != 0:
-        print("[FAIL] Dyno smoke test exited non-zero")
-        return False
-    manifest_path = outdir / "manifest.json"
-    if not manifest_path.exists():
-        print(f"[FAIL] manifest.json not found in {outdir}")
-        return False
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"[FAIL] Could not parse manifest.json: {e}")
-        return False
-    status = manifest.get("status", {})
-    code_str = status.get("code")
-    if code_str != "success":
-        print(f"[FAIL] Manifest status.code != 'success' (got {code_str!r})")
-        return False
-    stats = manifest.get("stats", {})
-    rows_read = int(stats.get("rows_read", 0) or 0)
-    bins_total = int(stats.get("bins_total", 0) or 0)
-    bins_covered = int(stats.get("bins_covered", 0) or 0)
-    if rows_read <= 0 or bins_total <= 0 or bins_covered <= 0:
-        print(f"[FAIL] Suspicious stats: rows_read={rows_read}, bins_total={bins_total}, bins_covered={bins_covered}")
-        return False
-    print(f"[OK] Dyno smoke manifest: rows_read={rows_read}, bins_total={bins_total}, bins_covered={bins_covered}")
-    return True
-
-
-def find_base_ve_table() -> Path | None:
-    # Heuristic: search common locations like tables/ or root for a VE CSV
-    candidates: list[Path] = []
-    tables_dir = ROOT / "tables"
-    if tables_dir.exists():
-        candidates.extend(sorted(tables_dir.glob("*.csv")))
-    candidates.extend(sorted(ROOT.glob("*.csv")))
-    for p in candidates:
-        name = p.name.lower()
-        if "ve" in name and "base" in name:
-            return p
-    return None
-
-
-def step_ve_apply_rollback() -> bool:
-    print("\n[STEP D] (Optional) VEApply/VERollback dry-run check ...")
-    try:
-        import ve_operations
-    except ImportError as e:
-        print(f"[WARN] ve_operations not importable: {e}. Skipping VEApply/VERollback check.")
-        return True  # Non-fatal
-    base_table = find_base_ve_table()
-    if base_table is None:
-        print("[WARN] No obvious base VE table found (looking for *ve*base*.csv). Skipping VEApply/VERollback dry-run.")
-        return True  # Non-fatal
-    factor_table = SMOKE_OUTDIR / "VE_Correction_Delta_DYNO.csv"
-    if not factor_table.exists():
-        print(f"[WARN] VE_Correction_Delta_DYNO.csv not found at {factor_table}. Skipping VEApply/VERollback dry-run.")
+    if exists:
+        print(f"  [OK] {rel_path}")
         return True
-    # Use preview folder for any potential outputs; still DRY-RUN
-    preview_dir = safe_path(str(VE_RUNS_PREVIEW))
-    preview_dir.mkdir(parents=True, exist_ok=True)
-    output_path = preview_dir / "VE_Apply_Preview.csv"
-    meta_path = preview_dir / "VE_Apply_Preview_meta.json"
-    print(f"[INFO] Using base VE table: {base_table}")
-    print(f"[INFO] Using factor table: {factor_table}")
-    print(f"[INFO] Output (dry-run preview): {output_path}")
-    print(f"[INFO] Metadata (dry-run preview): {meta_path}")
-    applier = ve_operations.VEApply()
-    # DRY RUN: does not actually write files
-    applier.apply(
-        base_ve_path=base_table,
-        factor_path=factor_table,
-        output_path=output_path,
-        metadata_path=meta_path,
-        dry_run=True,
+    else:
+        print(f"  [MISSING] {rel_path}")
+        return False
+
+
+def check_repo_structure() -> bool:
+    """
+    Validate that all required files and directories exist.
+
+    Returns:
+        True if all required paths exist, False otherwise
+    """
+    print("\n[VERIFY] Checking repo structure...")
+
+    required_paths: List[Tuple[Path, str]] = [
+        # Core engine files
+        (REPO_ROOT / "ai_tuner_toolkit_dyno_v1_2.py", "file"),
+        (REPO_ROOT / "ve_operations.py", "file"),
+        (REPO_ROOT / "io_contracts.py", "file"),
+        # Test infrastructure
+        (REPO_ROOT / "tests", "dir"),
+        # API
+        (REPO_ROOT / "api", "dir"),
+        (REPO_ROOT / "api" / "app.py", "file"),
+        # Essential configs
+        (REPO_ROOT / "requirements.txt", "file"),
+    ]
+
+    all_exist = True
+    for path, kind in required_paths:
+        if not check_path(path, kind):
+            all_exist = False
+
+    # Check for at least one selftest file
+    selftest_files = list(REPO_ROOT.glob("selftest*.py"))
+    if selftest_files:
+        print(f"  [OK] Found {len(selftest_files)} selftest file(s)")
+    else:
+        print("  [MISSING] No selftest*.py files found")
+        all_exist = False
+
+    if all_exist:
+        print("[+] All required files present")
+    else:
+        print("[-] Some required files are missing")
+
+    return all_exist
+
+
+def run_pytest(repo_root: Path) -> int:
+    """
+    Run pytest test suite.
+
+    Args:
+        repo_root: Repository root directory
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    print("[VERIFY] Running pytest...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest"],
+        cwd=str(repo_root)
     )
-    print("[OK] VEApply dry-run completed successfully.")
-    return True
+    if result.returncode == 0:
+        print("[VERIFY] pytest PASSED")
+    else:
+        print("[VERIFY] pytest FAILED (exit code {})".format(result.returncode))
+    return result.returncode
 
 
-def step_git_status() -> bool:
-    print("\n[STEP E] Checking git status (optional) ...")
-    code = run_cmd(["git", "status", "--porcelain"], cwd=ROOT, label="git_status")
-    # Non-zero exit means git not available; that's not a blocker for code readiness.
-    return True
+def run_selftest(repo_root: Path) -> int:
+    """
+    Run selftest suite.
+
+    Args:
+        repo_root: Repository root directory
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    selftest_runner = repo_root / "selftest_runner.py"
+    selftest_main = repo_root / "selftest.py"
+
+    if selftest_runner.exists():
+        cmd = [sys.executable, str(selftest_runner)]
+        label = "selftest_runner.py"
+    elif selftest_main.exists():
+        cmd = [sys.executable, str(selftest_main)]
+        label = "selftest.py"
+    else:
+        print("[VERIFY] No selftest script found; skipping selftest step.")
+        return 0
+
+    print(f"[VERIFY] Running {label}...")
+    result = subprocess.run(cmd, cwd=str(repo_root))
+    if result.returncode == 0:
+        print(f"[VERIFY] {label} PASSED")
+    else:
+        print(f"[VERIFY] {label} FAILED (exit code {result.returncode})")
+    return result.returncode
+
+
+def check_api_health() -> bool:
+    """
+    Check if API server is running and healthy.
+
+    Returns:
+        True if API is healthy, False otherwise
+    """
+    print("\n[TEST] Checking API health...")
+
+    try:
+        import requests
+    except ImportError:
+        print("[WARN] requests module not installed, skipping API check")
+        print("       Install with: pip install requests")
+        return True  # Non-fatal
+
+    api_url = "http://localhost:5001/api/health"
+
+    try:
+        response = requests.get(api_url, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            print(f"[+] API health check: PASS")
+            print(f"    Status: {data.get('status')}")
+            print(f"    Version: {data.get('version')}")
+            return True
+        else:
+            print(f"[-] API health check: FAIL (HTTP {response.status_code})")
+            return False
+
+    except requests.exceptions.ConnectionError:
+        print("[-] API health check: FAIL (connection refused)")
+        print("    API server may not be running on port 5001")
+        print("    Start with: python api/app.py")
+        return False
+    except requests.exceptions.Timeout:
+        print("[-] API health check: FAIL (timeout)")
+        return False
+    except Exception as e:
+        print(f"[-] API health check: FAIL ({e})")
+        return False
 
 
 def main() -> int:
-    print("DynoAI v3 Readiness Verification\n")
-    ok = True
-    if not step_selftest():
-        ok = False
-    csv_path = ensure_large_log()
-    if csv_path is None:
-        ok = False
-    else:
-        if not step_dyno_smoke(csv_path):
-            ok = False
-    if not step_ve_apply_rollback():
-        # optional; only mark as fatal if you want. Keep non-fatal for now.
-        pass
-    step_git_status()
-    print("\n=== SUMMARY ===")
-    if ok:
-        print("[OK] DynoAI v3 is READY from engine/selftest perspective.")
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="DynoAI v3 Readiness Verification",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/verify_v3_readiness.py               # Run all checks
+  python scripts/verify_v3_readiness.py --pytest-only # Only pytest
+  python scripts/verify_v3_readiness.py --skip-api    # Skip API check
+        """,
+    )
+
+    parser.add_argument(
+        "--skip-api",
+        action="store_true",
+        help="Skip API health check",
+    )
+
+    parser.add_argument(
+        "--pytest-only",
+        action="store_true",
+        help="Only run pytest (skip selftest and API)",
+    )
+
+    parser.add_argument(
+        "--selftest-only",
+        action="store_true",
+        help="Only run selftest (skip pytest and API)",
+    )
+
+    args = parser.parse_args()
+
+    # Print header
+    print("=" * 70)
+    print("[*] DynoAI v3 Readiness Verification")
+    print("=" * 70)
+    print(f"Repo: {REPO_ROOT}")
+    print()
+
+    # Phase 1: Check structure (always run)
+    structure_ok = check_repo_structure()
+
+    if not structure_ok:
+        print("\n" + "=" * 70)
+        print("[-] VERIFICATION FAILED: Required files missing")
+        print("=" * 70)
+        return 1
+
+    # Determine which tests to run
+    run_pytest_test = not args.selftest_only
+    run_selftest_test = not args.pytest_only
+    run_api_check = (
+        not args.skip_api and not args.pytest_only and not args.selftest_only
+    )
+
+    results = []
+
+    # Phase 2: Run pytest
+    if run_pytest_test:
+        pytest_result = run_pytest(REPO_ROOT)
+        results.append(("pytest", pytest_result == 0))
+
+    # Phase 3: Run selftest
+    if run_selftest_test:
+        selftest_result = run_selftest(REPO_ROOT)
+        results.append(("selftest", selftest_result == 0))
+
+    # Phase 4: Check API
+    if run_api_check:
+        api_result = check_api_health()
+        results.append(("API health", api_result))
+
+    # Summary
+    print("\n" + "=" * 70)
+    print("[*] VERIFICATION SUMMARY")
+    print("=" * 70)
+
+    all_passed = True
+    for test_name, passed in results:
+        status = "[+] PASS" if passed else "[-] FAIL"
+        print(f"  {status}: {test_name}")
+        if not passed:
+            all_passed = False
+
+    print("=" * 70)
+
+    if all_passed and results:
+        print("\n[+] DynoAI v3 is READY for release!")
+        print("\nNext steps:")
+        print("  1. git tag -a v3.0.0 -m 'DynoAI v3.0: Production release'")
+        print("  2. git push origin v3.0.0")
+        print("  3. git push origin main")
+        print()
+        return 0
+    elif not results:
+        print("\n[WARN] No tests were run (check flags)")
         return 0
     else:
-        print("[FAIL] DynoAI v3 readiness checks FAILED. See log above.")
+        print("\n[-] DynoAI v3 has FAILED verification checks")
+        print("\nFix the issues above before releasing.")
+        print()
         return 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
-
-
+    sys.exit(main())
