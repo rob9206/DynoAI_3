@@ -1,0 +1,27 @@
+{
+    "name": "pg27aqdm-low-strain-themes",
+    "displayName": "PG27AQDM Low-Strain Themes",
+    "description": "Night and Day WOLED-friendly themes tuned for the ASUS PG27AQDM with mild deuteranopia.",
+    "publisher": "workspace-local",
+    "version": "0.1.0",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Themes"
+    ],
+    "contributes": {
+        "themes": [
+            {
+                "label": "PG27AQDM Low-Strain Dark Night (Deuteranopia Friendly)",
+                "uiTheme": "vs-dark",
+                "path": "./themes/pg27-night-color-theme.json"
+            },
+            {
+                "label": "PG27AQDM Low-Strain Dark Day (Deuteranopia Friendly)",
+                "uiTheme": "vs-dark",
+                "path": "./themes/pg27-day-color-theme.json"
+            }
+        ]
+    }
+}
