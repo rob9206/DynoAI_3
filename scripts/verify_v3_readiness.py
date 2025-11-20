@@ -109,10 +109,7 @@ def run_pytest(repo_root: Path) -> int:
         Exit code (0 for success, non-zero for failure)
     """
     print("[VERIFY] Running pytest...")
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest"],
-        cwd=str(repo_root)
-    )
+    result = subprocess.run([sys.executable, "-m", "pytest"], cwd=str(repo_root))
     if result.returncode == 0:
         print("[VERIFY] pytest PASSED")
     else:
