@@ -98,95 +98,58 @@ def check_repo_structure() -> bool:
     return all_exist
 
 
-def run_pytest() -> bool:
+def run_pytest(repo_root: Path) -> int:
     """
     Run pytest test suite.
 
+    Args:
+        repo_root: Repository root directory
+
     Returns:
-        True if all tests pass, False otherwise
+        Exit code (0 for success, non-zero for failure)
     """
-    print("\n[TEST] Running pytest test suite...")
-
-    tests_dir = REPO_ROOT / "tests"
-    if not tests_dir.exists():
-        print("[-] tests/ directory not found, skipping pytest")
-        return True  # Non-fatal if tests dir doesn't exist
-
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(tests_dir), "-v", "--tb=short"],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-        )
-
-        # Print output
-        if result.stdout:
-            print(result.stdout)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-
-        if result.returncode == 0:
-            print("[+] pytest: PASS")
-            return True
-        else:
-            print(f"[-] pytest: FAIL (exit code {result.returncode})")
-            return False
-
-    except FileNotFoundError:
-        print("[WARN] pytest not installed, skipping pytest tests")
-        return True  # Non-fatal if pytest not available
-    except Exception as e:
-        print(f"[-] pytest error: {e}")
-        return False
+    print("[VERIFY] Running pytest...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest"],
+        cwd=str(repo_root)
+    )
+    if result.returncode == 0:
+        print("[VERIFY] pytest PASSED")
+    else:
+        print("[VERIFY] pytest FAILED (exit code {})".format(result.returncode))
+    return result.returncode
 
 
-def run_selftest() -> bool:
+def run_selftest(repo_root: Path) -> int:
     """
     Run selftest suite.
 
+    Args:
+        repo_root: Repository root directory
+
     Returns:
-        True if selftest passes, False otherwise
+        Exit code (0 for success, non-zero for failure)
     """
-    print("\n[TEST] Running selftest...")
+    selftest_runner = repo_root / "selftest_runner.py"
+    selftest_main = repo_root / "selftest.py"
 
-    # Find selftest runner
-    selftest_runner = REPO_ROOT / "selftest_runner.py"
-    selftest_main = REPO_ROOT / "selftest.py"
-
-    selftest_script = None
     if selftest_runner.exists():
-        selftest_script = selftest_runner
+        cmd = [sys.executable, str(selftest_runner)]
+        label = "selftest_runner.py"
     elif selftest_main.exists():
-        selftest_script = selftest_main
+        cmd = [sys.executable, str(selftest_main)]
+        label = "selftest.py"
     else:
-        print("[WARN] No selftest script found (selftest.py or selftest_runner.py)")
-        return True  # Non-fatal
+        print("[VERIFY] No selftest script found; skipping selftest step.")
+        return 0
 
-    try:
-        result = subprocess.run(
-            [sys.executable, str(selftest_script)],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-        )
-
-        # Print output
-        if result.stdout:
-            print(result.stdout)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-
-        if result.returncode == 0:
-            print("[+] selftest: PASS")
-            return True
-        else:
-            print(f"[-] selftest: FAIL (exit code {result.returncode})")
-            return False
-
-    except Exception as e:
-        print(f"[-] selftest error: {e}")
-        return False
+    print(f"[VERIFY] Running {label}...")
+    result = subprocess.run(cmd, cwd=str(repo_root))
+    if result.returncode == 0:
+        print(f"[VERIFY] {label} PASSED")
+    else:
+        print(f"[VERIFY] {label} FAILED (exit code {result.returncode})")
+    return result.returncode
 
 
 def check_api_health() -> bool:
@@ -293,13 +256,13 @@ Examples:
 
     # Phase 2: Run pytest
     if run_pytest_test:
-        pytest_result = run_pytest()
-        results.append(("pytest", pytest_result))
+        pytest_result = run_pytest(REPO_ROOT)
+        results.append(("pytest", pytest_result == 0))
 
     # Phase 3: Run selftest
     if run_selftest_test:
-        selftest_result = run_selftest()
-        results.append(("selftest", selftest_result))
+        selftest_result = run_selftest(REPO_ROOT)
+        results.append(("selftest", selftest_result == 0))
 
     # Phase 4: Check API
     if run_api_check:
