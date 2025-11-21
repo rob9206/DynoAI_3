@@ -170,7 +170,7 @@ def main():
     print(f"\nResults saved to: {results_file}")
 
     # Summary
-    successful_datasets = [name for name in datasets.keys() if name in k2_results]
+    successful_datasets = [name for name in datasets if name in k2_results]
     print(f"\nExperiment completed successfully on {len(successful_datasets)}/{len(datasets)} datasets")
 
 if __name__ == "__main__":
