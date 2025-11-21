@@ -163,7 +163,6 @@ def generate_dense_dyno_csv(
 
 if __name__ == "__main__":
     import sys
-    from pathlib import Path
     
     # Default output path
     output = Path("dense_dyno_test.csv")
