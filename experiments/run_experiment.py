@@ -101,7 +101,6 @@ def list_csv_outputs(outdir: Path) -> list[Path]:
 
 
 def load_grid_csv(path: Path) -> tuple[list[int], list[int], list[list[float | None]]]:
-
     with path.open(newline="", encoding="utf-8") as f:
         r = csv.reader(f)
         header = next(r)
