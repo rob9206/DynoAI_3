@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Materialize DynoAI v3 minimal production repository from DynoAI_2.
 
 Purpose:
