@@ -7,12 +7,12 @@
 
 # Math-critical files require additional review and protection
 # These files contain core mathematical algorithms and prototypes
-/core/ @rob9206
-/experiments/protos/ @rob9206
+core/ @rob9206
+experiments/protos/ @rob9206
 
 # GitHub workflows and automation
-/.github/ @rob9206
+.github/ @rob9206
 
 # Documentation
 *.md @rob9206
-/docs/ @rob9206
+docs/ @rob9206
