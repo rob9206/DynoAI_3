@@ -94,9 +94,11 @@ try:
         if candidate.exists():
             csv_path = candidate
             break
-    
+
     if csv_path:
-        print(f"[OK] Test 7 PASSED: Sample CSV exists ({csv_path.stat().st_size} bytes)")
+        print(
+            f"[OK] Test 7 PASSED: Sample CSV exists ({csv_path.stat().st_size} bytes)"
+        )
     else:
         print("[WARN] Test 7 SKIPPED: No sample CSV found (non-critical)")
 except Exception as e:
