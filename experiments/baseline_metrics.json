@@ -1,0 +1,24 @@
+{
+  "generated_at": "2025-11-10T22:16:38Z",
+  "version": "2025-11-10",
+  "dense": {
+    "runtime_seconds": 1.1922597885131836,
+    "rows_read": 12000,
+    "bins_total": 55,
+    "bins_covered": 35,
+    "coverage_percent": 63.63636363636363,
+    "ve_energy": 0.0,
+    "front_accepted": 12000,
+    "rear_accepted": 11994
+  },
+  "sparse": {
+    "runtime_seconds": 1.096942663192749,
+    "rows_read": 3000,
+    "bins_total": 55,
+    "bins_covered": 7,
+    "coverage_percent": 12.727272727272727,
+    "ve_energy": 0.0,
+    "front_accepted": 3000,
+    "rear_accepted": 2999
+  }
+}
