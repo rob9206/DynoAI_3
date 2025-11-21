@@ -23,7 +23,7 @@ def _local_correction_magnitude(
     correction_grid: Sequence[Sequence[Optional[float]]],
     ri: int,
     ki: int,
-    radius: int = 1
+    radius: int = 1,
 ) -> float:
     """
     Compute local correction magnitude around a cell.
@@ -67,14 +67,15 @@ def _adaptive_passes_from_correction(correction_magnitude: float) -> int:
         return LOW_CORRECTION_PASSES  # normal smoothing
     else:
         # Linear interpolation between thresholds
-        ratio = (correction_magnitude - LOW_CORRECTION_THRESHOLD) / (HIGH_CORRECTION_THRESHOLD - LOW_CORRECTION_THRESHOLD)
+        ratio = (correction_magnitude - LOW_CORRECTION_THRESHOLD) / (
+            HIGH_CORRECTION_THRESHOLD - LOW_CORRECTION_THRESHOLD
+        )
         passes_range = HIGH_CORRECTION_PASSES - LOW_CORRECTION_PASSES
         return int(LOW_CORRECTION_PASSES + ratio * passes_range)
 
 
 def kernel_smooth(
-    grid: List[List[Optional[float]]],
-    passes: int = 2
+    grid: List[List[Optional[float]]], passes: int = 2
 ) -> List[List[Optional[float]]]:
     """
     Apply correction-magnitude-aware smoothing to VE correction grid.
@@ -92,7 +93,7 @@ def kernel_smooth(
     """
     # FINGERPRINT: Prove kernel is running
     print("KERNEL_KNOCK_AWARE_V1: kernel_smooth called!")
-    
+
     # DEBUG: Check correction magnitudes
     magnitudes: List[float] = []
     for ri, item in enumerate(grid):
@@ -100,16 +101,22 @@ def kernel_smooth(
             if item[ki] is not None:
                 magnitudes.append(abs(item[ki]))  # type: ignore
     if magnitudes:
-        print(f"KERNEL_KNOCK_AWARE_V1: Center cell correction magnitudes range: {min(magnitudes):.3f} to {max(magnitudes):.3f}")
-        print(f"KERNEL_KNOCK_AWARE_V1: Thresholds: LOW={LOW_CORRECTION_THRESHOLD}, HIGH={HIGH_CORRECTION_THRESHOLD}")
-    
+        print(
+            f"KERNEL_KNOCK_AWARE_V1: Center cell correction magnitudes range: {min(magnitudes):.3f} to {max(magnitudes):.3f}"
+        )
+        print(
+            f"KERNEL_KNOCK_AWARE_V1: Thresholds: LOW={LOW_CORRECTION_THRESHOLD}, HIGH={HIGH_CORRECTION_THRESHOLD}"
+        )
+
     # Pre-compute smoothed versions for different pass counts
     smoothed_versions = {}
     for p in range(5):  # 0 to 4 passes
         smoothed_versions[p] = _standard_kernel_smooth(grid, p)
 
     # Build correction-aware result
-    result: List[List[Optional[float]]] = [[None for _ in range(len(grid[0]))] for _ in range(len(grid))]
+    result: List[List[Optional[float]]] = [
+        [None for _ in range(len(grid[0]))] for _ in range(len(grid))
+    ]
 
     for ri, item in enumerate(grid):
         for ki in range(len(grid[0])):
@@ -127,8 +134,7 @@ def kernel_smooth(
 
 
 def _standard_kernel_smooth(
-    grid: List[List[Optional[float]]],
-    passes: int
+    grid: List[List[Optional[float]]], passes: int
 ) -> List[List[Optional[float]]]:
     """
     Standard 4-neighbor kernel smoothing (same as original toolkit).
@@ -143,7 +149,9 @@ def _standard_kernel_smooth(
     result = [row[:] for row in grid]  # Deep copy
 
     for _ in range(passes):
-        temp: List[List[Optional[float]]] = [[None for _ in range(len(grid[0]))] for _ in range(len(grid))]
+        temp: List[List[Optional[float]]] = [
+            [None for _ in range(len(grid[0]))] for _ in range(len(grid))
+        ]
 
         for ri in range(len(grid)):
             for ki in range(len(grid[0])):
@@ -156,25 +164,25 @@ def _standard_kernel_smooth(
 
                 # Up
                 if ri > 0:
-                    up_val = result[ri-1][ki]
+                    up_val = result[ri - 1][ki]
                     if up_val is not None:
                         neighbors.append(up_val)
 
                 # Down
-                if ri < len(grid)-1:
-                    down_val = result[ri+1][ki]
+                if ri < len(grid) - 1:
+                    down_val = result[ri + 1][ki]
                     if down_val is not None:
                         neighbors.append(down_val)
 
                 # Left
                 if ki > 0:
-                    left_val = result[ri][ki-1]
+                    left_val = result[ri][ki - 1]
                     if left_val is not None:
                         neighbors.append(left_val)
 
                 # Right
-                if ki < len(grid[0])-1:
-                    right_val = result[ri][ki+1]
+                if ki < len(grid[0]) - 1:
+                    right_val = result[ri][ki + 1]
                     if right_val is not None:
                         neighbors.append(right_val)
 
