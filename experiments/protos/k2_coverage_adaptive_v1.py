@@ -15,7 +15,10 @@ Algorithm:
 Key innovation: Confidence-aware safety limits that balance exploration vs safety.
 """
 
-def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0):
+
+def kernel_smooth(
+    grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0
+):
     """
     Coverage-adaptive clamp kernel smoothing for VE corrections.
 
@@ -59,7 +62,9 @@ def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_
             else:
                 # Linear interpolation between thresholds
                 # At low_threshold: 15%, at high_threshold: 7%
-                factor = (abs_correction - low_confidence_threshold) / (high_confidence_threshold - low_confidence_threshold)
+                factor = (abs_correction - low_confidence_threshold) / (
+                    high_confidence_threshold - low_confidence_threshold
+                )
                 max_adjust_pct = 15.0 - (factor * (15.0 - 7.0))
 
             # Apply confidence-adaptive clamping to this cell
@@ -76,7 +81,9 @@ def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_
                 adaptive_passes = passes
             else:
                 # Linear taper between 1.0% and 3.0%
-                taper_factor = (3.0 - abs_correction) / (3.0 - 1.0)  # 1.0 at 1%, 0.0 at 3%
+                taper_factor = (3.0 - abs_correction) / (
+                    3.0 - 1.0
+                )  # 1.0 at 1%, 0.0 at 3%
                 adaptive_passes = int(round(passes * taper_factor))
 
             # Apply adaptive smoothing passes to this cell
@@ -86,14 +93,14 @@ def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_
                     neighbors = [smoothed_val]  # Include center
 
                     # Add valid neighbors
-                    if r > 0 and adaptive_grid[r-1][c] is not None:
-                        neighbors.append(adaptive_grid[r-1][c])  # Up
-                    if r < rows-1 and adaptive_grid[r+1][c] is not None:
-                        neighbors.append(adaptive_grid[r+1][c])  # Down
-                    if c > 0 and adaptive_grid[r][c-1] is not None:
-                        neighbors.append(adaptive_grid[r][c-1])  # Left
-                    if c < cols-1 and adaptive_grid[r][c+1] is not None:
-                        neighbors.append(adaptive_grid[r][c+1])  # Right
+                    if r > 0 and adaptive_grid[r - 1][c] is not None:
+                        neighbors.append(adaptive_grid[r - 1][c])  # Up
+                    if r < rows - 1 and adaptive_grid[r + 1][c] is not None:
+                        neighbors.append(adaptive_grid[r + 1][c])  # Down
+                    if c > 0 and adaptive_grid[r][c - 1] is not None:
+                        neighbors.append(adaptive_grid[r][c - 1])  # Left
+                    if c < cols - 1 and adaptive_grid[r][c + 1] is not None:
+                        neighbors.append(adaptive_grid[r][c + 1])  # Right
 
                     smoothed_val = sum(neighbors) / len(neighbors)
 
@@ -125,10 +132,10 @@ def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_
 
             # Neighbor cells with distance-based weights
             neighbors = [
-                (r-1, c, 1.0),  # Up
-                (r+1, c, 1.0),  # Down
-                (r, c-1, 1.0),  # Left
-                (r, c+1, 1.0),  # Right
+                (r - 1, c, 1.0),  # Up
+                (r + 1, c, 1.0),  # Down
+                (r, c - 1, 1.0),  # Left
+                (r, c + 1, 1.0),  # Right
             ]
 
             for nr, nc, base_weight in neighbors:
@@ -136,14 +143,16 @@ def kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_
                     n_val = final_grid[nr][nc]
                     if n_val is not None:
                         # Distance weighting (all immediate neighbors have dist=1)
-                        dist_weight = 1.0 / (1.0 ** dist_pow)
+                        dist_weight = 1.0 / (1.0**dist_pow)
                         neighbor_values.append(n_val)
                         neighbor_weights.append(base_weight * dist_weight)
 
             # Apply coverage weighting if we have enough neighbors
             if len(neighbor_values) >= min_hits:
                 # Weighted average with alpha blending
-                weighted_sum = sum(v * w for v, w in zip(neighbor_values, neighbor_weights))
+                weighted_sum = sum(
+                    v * w for v, w in zip(neighbor_values, neighbor_weights)
+                )
                 total_weight = sum(neighbor_weights)
                 smoothed_val = weighted_sum / total_weight
 

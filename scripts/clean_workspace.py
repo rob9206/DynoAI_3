@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Sequence, Tuple
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PROTECTED_PARTS = {".git", ".venv"}
 RELEASE_ARCHIVE_PATTERNS = (
@@ -122,7 +121,9 @@ def _archive_releases(dry_run: bool, verbose: bool) -> List[Tuple[Path, Path]]:
             moves.append((src, dest))
     if dry_run:
         for src, dest in moves:
-            print(f"[dry-run] would move {src.relative_to(ROOT)} -> {dest.relative_to(ROOT)}")
+            print(
+                f"[dry-run] would move {src.relative_to(ROOT)} -> {dest.relative_to(ROOT)}"
+            )
         return moves
     dest_root.mkdir(parents=True, exist_ok=True)
     for src, dest in moves:

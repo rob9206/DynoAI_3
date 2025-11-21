@@ -94,10 +94,10 @@ def kernel_smooth(
 
                 # Neighbor cells with bilateral weights
                 neighbors = [
-                    (r-1, c, 1.0),  # Up
-                    (r+1, c, 1.0),  # Down
-                    (r, c-1, 1.0),  # Left
-                    (r, c+1, 1.0),  # Right
+                    (r - 1, c, 1.0),  # Up
+                    (r + 1, c, 1.0),  # Down
+                    (r, c - 1, 1.0),  # Left
+                    (r, c + 1, 1.0),  # Right
                 ]
 
                 for nr, nc, base_weight in neighbors:
@@ -105,21 +105,27 @@ def kernel_smooth(
                         n_val = smoothed_grid[nr][nc]
                         if n_val is not None:
                             # Spatial weight: inverse distance
-                            dist_weight = 1.0 / (1.0 ** dist_pow)  # All immediate neighbors have dist=1
+                            dist_weight = 1.0 / (
+                                1.0**dist_pow
+                            )  # All immediate neighbors have dist=1
 
                             # Value similarity weight: Gaussian
                             value_diff = abs(current_val - n_val)
-                            similarity_weight = exp(-(value_diff ** 2) / (2 * sigma ** 2))
+                            similarity_weight = exp(-(value_diff**2) / (2 * sigma**2))
 
                             # Bilateral weight = spatial × similarity
-                            bilateral_weight = base_weight * dist_weight * similarity_weight
+                            bilateral_weight = (
+                                base_weight * dist_weight * similarity_weight
+                            )
 
                             neighbor_values.append(n_val)
                             neighbor_weights.append(bilateral_weight)
 
                 # Apply bilateral weighted average
                 if len(neighbor_values) >= min_hits:
-                    weighted_sum = sum(v * w for v, w in zip(neighbor_values, neighbor_weights))
+                    weighted_sum = sum(
+                        v * w for v, w in zip(neighbor_values, neighbor_weights)
+                    )
                     total_weight = sum(neighbor_weights)
                     current_val = weighted_sum / total_weight
 

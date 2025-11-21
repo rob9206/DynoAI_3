@@ -14,6 +14,7 @@ Key innovation: Gradient-aware smoothing that preserves edges/features
 while still reducing noise in smooth areas.
 """
 
+
 def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
     """
     Gradient-limited kernel smoothing for VE corrections.
@@ -42,14 +43,14 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
             max_diff = 0.0
             # Check all 4 neighbors
             neighbors = []
-            if r > 0 and grid[r-1][c] is not None:
-                neighbors.append(grid[r-1][c])
-            if r < rows-1 and grid[r+1][c] is not None:
-                neighbors.append(grid[r+1][c])
-            if c > 0 and grid[r][c-1] is not None:
-                neighbors.append(grid[r][c-1])
-            if c < cols-1 and grid[r][c+1] is not None:
-                neighbors.append(grid[r][c+1])
+            if r > 0 and grid[r - 1][c] is not None:
+                neighbors.append(grid[r - 1][c])
+            if r < rows - 1 and grid[r + 1][c] is not None:
+                neighbors.append(grid[r + 1][c])
+            if c > 0 and grid[r][c - 1] is not None:
+                neighbors.append(grid[r][c - 1])
+            if c < cols - 1 and grid[r][c + 1] is not None:
+                neighbors.append(grid[r][c + 1])
 
             for neighbor_val in neighbors:
                 diff = abs(center_val - neighbor_val)
@@ -76,7 +77,9 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
                 adaptive_passes = passes
             else:
                 # Linear taper between 1.0% and 3.0%
-                taper_factor = (3.0 - abs_correction) / (3.0 - 1.0)  # 1.0 at 1%, 0.0 at 3%
+                taper_factor = (3.0 - abs_correction) / (
+                    3.0 - 1.0
+                )  # 1.0 at 1%, 0.0 at 3%
                 adaptive_passes = int(round(passes * taper_factor))
 
             # Apply adaptive smoothing passes to this cell
@@ -86,14 +89,14 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
                     neighbors = [smoothed_val]  # Include center
 
                     # Add valid neighbors
-                    if r > 0 and adaptive_grid[r-1][c] is not None:
-                        neighbors.append(adaptive_grid[r-1][c])  # Up
-                    if r < rows-1 and adaptive_grid[r+1][c] is not None:
-                        neighbors.append(adaptive_grid[r+1][c])  # Down
-                    if c > 0 and adaptive_grid[r][c-1] is not None:
-                        neighbors.append(adaptive_grid[r][c-1])  # Left
-                    if c < cols-1 and adaptive_grid[r][c+1] is not None:
-                        neighbors.append(adaptive_grid[r][c+1])  # Right
+                    if r > 0 and adaptive_grid[r - 1][c] is not None:
+                        neighbors.append(adaptive_grid[r - 1][c])  # Up
+                    if r < rows - 1 and adaptive_grid[r + 1][c] is not None:
+                        neighbors.append(adaptive_grid[r + 1][c])  # Down
+                    if c > 0 and adaptive_grid[r][c - 1] is not None:
+                        neighbors.append(adaptive_grid[r][c - 1])  # Left
+                    if c < cols - 1 and adaptive_grid[r][c + 1] is not None:
+                        neighbors.append(adaptive_grid[r][c + 1])  # Right
 
                     smoothed_val = sum(neighbors) / len(neighbors)
 
@@ -120,9 +123,8 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
                 # blend_factor = 1.0 when gradient = threshold * 2
 
                 gradient_limited_grid[r][c] = (
-                    (1 - blend_factor) * smoothed_val +
-                    blend_factor * original_val
-                )
+                    1 - blend_factor
+                ) * smoothed_val + blend_factor * original_val
 
     # Stage 4: Coverage-weighted smoothing (same as original)
     final_grid = [row[:] for row in gradient_limited_grid]
@@ -150,10 +152,10 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
 
             # Neighbor cells with distance-based weights
             neighbors = [
-                (r-1, c, 1.0),  # Up
-                (r+1, c, 1.0),  # Down
-                (r, c-1, 1.0),  # Left
-                (r, c+1, 1.0),  # Right
+                (r - 1, c, 1.0),  # Up
+                (r + 1, c, 1.0),  # Down
+                (r, c - 1, 1.0),  # Left
+                (r, c + 1, 1.0),  # Right
             ]
 
             for nr, nc, base_weight in neighbors:
@@ -161,14 +163,16 @@ def kernel_smooth(grid, passes=2, gradient_threshold=1.0):
                     n_val = final_grid[nr][nc]
                     if n_val is not None:
                         # Distance weighting (all immediate neighbors have dist=1)
-                        dist_weight = 1.0 / (1.0 ** dist_pow)
+                        dist_weight = 1.0 / (1.0**dist_pow)
                         neighbor_values.append(n_val)
                         neighbor_weights.append(base_weight * dist_weight)
 
             # Apply coverage weighting if we have enough neighbors
             if len(neighbor_values) >= min_hits:
                 # Weighted average with alpha blending
-                weighted_sum = sum(v * w for v, w in zip(neighbor_values, neighbor_weights))
+                weighted_sum = sum(
+                    v * w for v, w in zip(neighbor_values, neighbor_weights)
+                )
                 total_weight = sum(neighbor_weights)
                 smoothed_val = weighted_sum / total_weight
 

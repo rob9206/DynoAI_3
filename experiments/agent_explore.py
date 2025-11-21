@@ -36,16 +36,24 @@ def load_manifest_metrics(manifest_path: Path) -> Dict[str, Any]:
     except Exception:
         return {"status": "missing"}
     raw_stats = m.get("stats")
-    stats: Dict[str, Any] = cast(Dict[str, Any], raw_stats) if isinstance(raw_stats, dict) else {}
+    stats: Dict[str, Any] = (
+        cast(Dict[str, Any], raw_stats) if isinstance(raw_stats, dict) else {}
+    )
     raw_status = m.get("status")
-    status_block: Dict[str, Any] = cast(Dict[str, Any], raw_status) if isinstance(raw_status, dict) else {}
+    status_block: Dict[str, Any] = (
+        cast(Dict[str, Any], raw_status) if isinstance(raw_status, dict) else {}
+    )
     raw_apply = m.get("apply")
-    apply_block: Dict[str, Any] = cast(Dict[str, Any], raw_apply) if isinstance(raw_apply, dict) else {}
+    apply_block: Dict[str, Any] = (
+        cast(Dict[str, Any], raw_apply) if isinstance(raw_apply, dict) else {}
+    )
     status = status_block.get("code")
     apply_allowed = apply_block.get("allowed")
     return {
         "status": status,
-        "apply_allowed": bool(apply_allowed) if isinstance(apply_allowed, (bool, int)) else None,
+        "apply_allowed": (
+            bool(apply_allowed) if isinstance(apply_allowed, (bool, int)) else None
+        ),
         "bins_total": stats.get("bins_total"),
         "bins_covered": stats.get("bins_covered"),
         "rows_read": stats.get("rows_read"),
@@ -99,7 +107,9 @@ def run_runner(
     if summary:
         metrics.update(summary.get("metrics", {}))
         if "avg_abs_ve_delta_vs_baseline" in summary:
-            metrics["avg_abs_ve_delta_vs_baseline"] = summary["avg_abs_ve_delta_vs_baseline"]
+            metrics["avg_abs_ve_delta_vs_baseline"] = summary[
+                "avg_abs_ve_delta_vs_baseline"
+            ]
         metrics["duration_sec"] = summary.get("duration_sec")
         metrics["idea_id"] = summary.get("idea_id", idea_id)
     else:
@@ -127,14 +137,18 @@ def parse_ideas(path: Path) -> List[str]:
         return ["adaptive-kernel-v1", "edge-preserve-v1"]
 
 
-def write_report(outdir: Path, rows: List[Dict[str, Any]], baseline_cov: float | None) -> None:
+def write_report(
+    outdir: Path, rows: List[Dict[str, Any]], baseline_cov: float | None
+) -> None:
     report_path = outdir / "REPORT.md"
     lines: List[str] = []
     lines.append("# Experiment Report\n")
     lines.append("")
     if baseline_cov is not None:
         lines.append(f"Baseline coverage: {baseline_cov:.1f}%\n")
-    lines.append("| Idea | Status | Apply | Coverage % | ΔCoverage | Avg | Duration (s) |\n")
+    lines.append(
+        "| Idea | Status | Apply | Coverage % | ΔCoverage | Avg | Duration (s) |\n"
+    )
     lines.append("|---|---|---|---:|---:|---:|---:|\n")
     for r in rows:
         cov = r.get("coverage_pct")
@@ -144,13 +158,15 @@ def write_report(outdir: Path, rows: List[Dict[str, Any]], baseline_cov: float |
         avg = r.get("avg_abs_ve_delta_vs_baseline")
         avg_s = f"{avg:.3f}" if isinstance(avg, (int, float)) else "-"
         lines.append(
-            f"| {r.get('idea_id','?')} | {r.get('status','?')} | {r.get('apply_allowed')} | {cov_s} | {d_s} | {avg_s} | {r.get('duration_sec','-')} |"
+            f"| {r.get('idea_id', '?')} | {r.get('status', '?')} | {r.get('apply_allowed')} | {cov_s} | {d_s} | {avg_s} | {r.get('duration_sec', '-')} |"
         )
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Run baseline and all ideas, aggregate metrics and report")
+    ap = argparse.ArgumentParser(
+        description="Run baseline and all ideas, aggregate metrics and report"
+    )
     ap.add_argument("--csv", required=True, help="Input dyno CSV / WinPEP file")
     ap.add_argument(
         "--outdir",
@@ -185,7 +201,9 @@ def main() -> None:
     )
     base_bins_total = base_metrics.get("bins_total") or 0
     base_bins_cov = base_metrics.get("bins_covered") or 0
-    baseline_cov = (100.0 * base_bins_cov / base_bins_total) if base_bins_total else None
+    baseline_cov = (
+        (100.0 * base_bins_cov / base_bins_total) if base_bins_total else None
+    )
 
     # 2) Ideas
     idea_ids = parse_ideas(Path(args.ideas))
@@ -225,18 +243,25 @@ def main() -> None:
     agg_path.write_text(json.dumps(agg, indent=2), encoding="utf-8")
     write_report(outroot, rows, baseline_cov)
 
-    print(json.dumps({
-        "baseline_cov_pct": baseline_cov,
-        "ideas": [
+    print(
+        json.dumps(
             {
-                "idea_id": r.get("idea_id"),
-                "avg_abs_ve_delta_vs_baseline": r.get("avg_abs_ve_delta_vs_baseline"),
-                "coverage_drop_pct": r.get("coverage_drop_pct"),
-                "flagged": r.get("coverage_drop_flagged"),
-            }
-            for r in rows
-        ]
-    }, indent=2))
+                "baseline_cov_pct": baseline_cov,
+                "ideas": [
+                    {
+                        "idea_id": r.get("idea_id"),
+                        "avg_abs_ve_delta_vs_baseline": r.get(
+                            "avg_abs_ve_delta_vs_baseline"
+                        ),
+                        "coverage_drop_pct": r.get("coverage_drop_pct"),
+                        "flagged": r.get("coverage_drop_flagged"),
+                    }
+                    for r in rows
+                ],
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
