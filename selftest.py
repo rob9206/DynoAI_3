@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
-import random
 import subprocess
 import sys
 import time
@@ -10,8 +8,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from dynoai.test_utils import make_synthetic_csv
-# make_realistic_dyno_csv is also available in dynoai.test_utils if needed for advanced testing
-from io_contracts import sanitize_csv_cell
 
 PY = sys.executable
 ROOT = Path(__file__).resolve().parent
