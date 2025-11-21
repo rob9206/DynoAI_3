@@ -95,10 +95,10 @@ def kernel_smooth(
     
     # DEBUG: Check correction magnitudes
     magnitudes: List[float] = []
-    for ri in range(len(grid)):
+    for ri, item in enumerate(grid):
         for ki in range(len(grid[0])):
-            if grid[ri][ki] is not None:
-                magnitudes.append(abs(grid[ri][ki]))  # type: ignore
+            if item[ki] is not None:
+                magnitudes.append(abs(item[ki]))  # type: ignore
     if magnitudes:
         print(f"KERNEL_KNOCK_AWARE_V1: Center cell correction magnitudes range: {min(magnitudes):.3f} to {max(magnitudes):.3f}")
         print(f"KERNEL_KNOCK_AWARE_V1: Thresholds: LOW={LOW_CORRECTION_THRESHOLD}, HIGH={HIGH_CORRECTION_THRESHOLD}")
@@ -111,13 +111,13 @@ def kernel_smooth(
     # Build correction-aware result
     result: List[List[Optional[float]]] = [[None for _ in range(len(grid[0]))] for _ in range(len(grid))]
 
-    for ri in range(len(grid)):
+    for ri, item in enumerate(grid):
         for ki in range(len(grid[0])):
-            if grid[ri][ki] is None:
+            if item[ki] is None:
                 continue  # Skip sparse cells
 
             # Determine appropriate smoothing level based on center cell correction magnitude
-            center_correction = abs(grid[ri][ki])  # type: ignore # Already checked grid[ri][ki] is not None above
+            center_correction = abs(item[ki])  # type: ignore # Already checked grid[ri][ki] is not None above
             adaptive_passes = _adaptive_passes_from_correction(center_correction)
 
             # Use pre-computed smoothed version
