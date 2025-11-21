@@ -53,7 +53,8 @@ def test_requirement_1_clamping():
         for j in range(len(base_values[0])):
             multiplier = updated_values[i][j] / base_values[i][j]
             # Use small epsilon for floating point comparison
-            assert 0.92999 <= multiplier <= 1.07001, f"Multiplier {multiplier} out of bounds at [{i}][{j}]"
+            if not 0.92999 <= multiplier <= 1.07001:
+                raise AssertionError(f"Multiplier {multiplier} out of bounds at [{i}][{j}]")
     
     print("[OK] Requirement 1: Clamping enforced correctly (factors capped to ±7%)")
     return True
@@ -82,7 +83,8 @@ def test_requirement_2_apply_with_precision():
     
     # Check output has 4 decimal places
     content = output_path.read_text()
-    assert "105.0000" in content, "Output should have 4 decimal places"
+    if "105.0000" not in content:
+        raise AssertionError("Output should have 4 decimal places")
     
     print("[OK] Requirement 2: Apply routine outputs with 4-decimal precision")
     return True
@@ -113,17 +115,21 @@ def test_requirement_3_metadata():
     # Verify required fields
     required_fields = ["base_sha", "factor_sha", "applied_at_utc", "max_adjust_pct", "app_version"]
     for field in required_fields:
-        assert field in metadata, f"Missing required field: {field}"
+        if field not in metadata:
+            raise AssertionError(f"Missing required field: {field}")
     
     # Verify comment about rollback
-    assert "Rollback" in metadata.get("comment", ""), "Missing rollback comment"
+    if "Rollback" not in metadata.get("comment", ""):
+        raise AssertionError("Missing rollback comment")
     
     # Verify metadata file was written
-    assert metadata_path.exists(), "Metadata file not created"
+    if not metadata_path.exists():
+        raise AssertionError("Metadata file not created")
     
     with open(metadata_path) as f:
         saved_meta = json.load(f)
-    assert saved_meta == metadata, "Saved metadata doesn't match returned metadata"
+    if saved_meta != metadata:
+        raise AssertionError("Saved metadata doesn't match returned metadata")
     
     print("[OK] Requirement 3: Metadata contains all required fields and is saved correctly")
     return True
@@ -162,8 +168,8 @@ def test_requirement_4_rollback():
     
     for i in range(len(base_values)):
         for j in range(len(base_values[0])):
-            assert abs(base_values[i][j] - restored_values[i][j]) < 0.0001, \
-                f"Rollback failed at [{i}][{j}]"
+            if abs(base_values[i][j] - restored_values[i][j]) >= 0.0001:
+                raise AssertionError(f"Rollback failed at [{i}][{j}]")
     
     # Test hash verification - modify factor file and try rollback
     modified_factors = [[10.0, 10.0], [10.0, 10.0]]
@@ -171,9 +177,11 @@ def test_requirement_4_rollback():
     
     try:
         roller.rollback(updated_path, metadata_path, temp_dir / "bad_restore.csv")
-        assert False, "Rollback should have failed with hash mismatch"
+        if not False:
+            raise AssertionError("Rollback should have failed with hash mismatch")
     except RuntimeError as e:
-        assert "hash mismatch" in str(e).lower(), "Should detect hash mismatch"
+        if "hash mismatch" not in str(e).lower():
+            raise AssertionError("Should detect hash mismatch")
     
     print("[OK] Requirement 4: Rollback works and hash verification prevents tampered rollback")
     return True
@@ -204,11 +212,14 @@ def test_requirement_5_dry_run():
                             metadata_path=metadata_path, dry_run=True)
     
     # Verify no files were written
-    assert not output_path.exists(), "Output file should not exist in dry-run"
-    assert not metadata_path.exists(), "Metadata file should not exist in dry-run"
+    if output_path.exists():
+        raise AssertionError("Output file should not exist in dry-run")
+    if metadata_path.exists():
+        raise AssertionError("Metadata file should not exist in dry-run")
     
     # But metadata should be returned
-    assert "base_sha" in metadata, "Metadata should still be returned in dry-run"
+    if "base_sha" not in metadata:
+        raise AssertionError("Metadata should still be returned in dry-run")
     
     print("[OK] Requirement 5: Dry-run mode previews without writing files")
     return True
@@ -246,8 +257,8 @@ def test_requirement_6_multiplier_bounds():
     for i in range(len(base_values)):
         for j in range(len(base_values[0])):
             multiplier = updated_values[i][j] / base_values[i][j]
-            assert 0.93 <= multiplier <= 1.07, \
-                f"Multiplier {multiplier} out of [0.93, 1.07] at [{i}][{j}]"
+            if not 0.93 <= multiplier <= 1.07:
+                raise AssertionError(f"Multiplier {multiplier} out of [0.93, 1.07] at [{i}][{j}]")
     
     print("[OK] Requirement 6: All multipliers within [0.93, 1.07] bounds")
     return True
@@ -303,8 +314,8 @@ def test_requirement_7_roundtrip_tolerance():
         for j in range(len(base_values[0])):
             diff = abs(base_values[i][j] - restored_values[i][j])
             max_diff = max(max_diff, diff)
-            assert diff < 0.0001, \
-                f"Roundtrip difference {diff} exceeds 4-decimal tolerance at [{i}][{j}]"
+            if diff >= 0.0001:
+                raise AssertionError(f"Roundtrip difference {diff} exceeds 4-decimal tolerance at [{i}][{j}]")
     
     print(f"[OK] Requirement 7: Apply->Rollback roundtrip within tolerance (max diff: {max_diff:.10f})")
     return True
@@ -325,14 +336,16 @@ def test_requirement_8_deterministic_hashes():
     # Compute hash multiple times
     hash1 = compute_sha256(base_path)
     hash2 = compute_sha256(base_path)
-    assert hash1 == hash2, "Hash should be deterministic"
+    if hash1 != hash2:
+        raise AssertionError("Hash should be deterministic")
     
     # Different content should give different hash
     base_ve2 = [[100.1]]
     base_path2 = temp_dir / "base2.csv"
     write_ve_table(base_path2, rpm_bins, kpa_bins, base_ve2)
     hash3 = compute_sha256(base_path2)
-    assert hash1 != hash3, "Different files should have different hashes"
+    if hash1 == hash3:
+        raise AssertionError("Different files should have different hashes")
     
     print("[OK] Requirement 8: SHA hashes are deterministic")
     return True
