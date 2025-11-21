@@ -191,7 +191,8 @@ def test_requirement_4_rollback():
 
     try:
         roller.rollback(updated_path, metadata_path, temp_dir / "bad_restore.csv")
-        assert False, "Rollback should have failed with hash mismatch"
+        if not False:
+            raise AssertionError("Rollback should have failed with hash mismatch")
     except RuntimeError as e:
         assert "hash mismatch" in str(e).lower(), "Should detect hash mismatch"
 

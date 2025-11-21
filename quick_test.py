@@ -43,7 +43,8 @@ except Exception as e:
 try:
     test_path = Path("experiments/test")
     resolved = _resolve_under_root(test_path)
-    assert str(resolved).startswith(str(ROOT))
+    if not str(resolved).startswith(str(ROOT)):
+        raise AssertionError
     print("[OK] Test 4 PASSED: Path validation works")
     print(f"  {test_path} -> {resolved}")
 except Exception as e:
@@ -70,9 +71,12 @@ except Exception as e:
 
 # Test 6: Quote sanitization
 try:
-    assert _strip_quote_num('"123.45"') == "123.45"
-    assert _strip_quote_num("123.45") == "123.45"
-    assert _strip_quote_num('""456.78""') == "456.78"
+    if _strip_quote_num('"123.45"') != "123.45":
+        raise AssertionError
+    if _strip_quote_num("123.45") != "123.45":
+        raise AssertionError
+    if _strip_quote_num('""456.78""') != "456.78":
+        raise AssertionError
     print("[OK] Test 6 PASSED: Quote sanitization works")
 except Exception as e:
     print(f"[FAIL] Test 6 FAILED: {e}")
