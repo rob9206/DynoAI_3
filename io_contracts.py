@@ -165,27 +165,6 @@ def start_manifest(
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return {
-        "schema_id": SCHEMA_ID,
-        "tool_version": tool_version,
-        "run_id": run_id,
-        "session_id": session_id,
-        "status": {"code": "running", "message": "Processing", "last_stage": "load"},
-        "input": input_info,
-        "config": {
-            "args": args_cfg,
-            "base_tables": base_tables or {"front": None, "rear": None},
-        },
-        "env": {
-            "python": platform.python_version(),
-            "os": platform.system(),
-            "platform": platform.machine(),
-            "hostname": platform.node(),
-        },
-        "timing": {"start": utc_now_iso(), "end": None, "duration_ms": None},
-        "stats": {},
-        "diagnostics": [],
-        "outputs": [],
-        "apply": {"allowed": False, "reasons_blocked": ["pending"]},
         "schema_id": SCHEMA_ID, "tool_version": tool_version, "run_id": run_id, "session_id": session_id,
         "status":{"code":"running","message":"Processing","last_stage":"load"},
         "input": input_info, "config":{"args":args_cfg, "base_tables": base_tables or {"front":None,"rear":None}},
