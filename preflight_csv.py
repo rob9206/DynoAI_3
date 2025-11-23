@@ -13,17 +13,21 @@ import json
 import sys
 from pathlib import Path
 
-from io_contracts import safe_path, csv_schema_check, validate_input_values
-from ai_tuner_toolkit_dyno_v1_2 import detect_csv_format, load_winpep_csv, load_generic_csv
+from ai_tuner_toolkit_dyno_v1_2 import (
+    detect_csv_format,
+    load_generic_csv,
+    load_winpep_csv,
+)
+from io_contracts import csv_schema_check, safe_path, validate_input_values
 
 
 def run_preflight(csv_path: Path) -> dict:
     """
     Run comprehensive preflight checks on a CSV file.
-    
+
     Args:
         csv_path: Path to the CSV file to validate
-        
+
     Returns:
         Dictionary with validation results including:
         - schema_ok: Whether required columns are present
@@ -41,16 +45,16 @@ def run_preflight(csv_path: Path) -> dict:
     input_info = csv_schema_check(str(csv_path))
     schema_ok = bool(input_info.get("required_columns_present", False))
     missing_columns = list(input_info.get("missing_columns", []))
-    
+
     # Step 2: Validate values
     values_ok, values_msg, value_stats = validate_input_values(str(csv_path))
-    
+
     # Step 3: Detect format and attempt parsing
     file_format = detect_csv_format(str(csv_path))
     parse_ok = False
     parse_msg = ""
     records_parsed = 0
-    
+
     if file_format == "winpep":
         try:
             recs = load_winpep_csv(str(csv_path))
@@ -73,10 +77,10 @@ def run_preflight(csv_path: Path) -> dict:
         parse_ok = False
         parse_msg = "Unknown CSV format"
         records_parsed = 0
-    
+
     # Step 4: Compute overall status
     overall_ok = bool(schema_ok and values_ok and parse_ok)
-    
+
     # Step 5: Build result dictionary
     result = {
         "schema_ok": schema_ok,
@@ -90,7 +94,7 @@ def run_preflight(csv_path: Path) -> dict:
         "records_parsed": records_parsed,
         "overall_ok": overall_ok,
     }
-    
+
     return result
 
 
@@ -104,36 +108,24 @@ Examples:
   %(prog)s input.csv
   %(prog)s input.csv --json
   %(prog)s input.csv --output results.json
-        """
+        """,
     )
-    
-    parser.add_argument(
-        "csv_path",
-        type=str,
-        help="Path to CSV file to validate"
-    )
-    
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results as JSON"
-    )
-    
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Write JSON results to file"
-    )
-    
+
+    parser.add_argument("csv_path", type=str, help="Path to CSV file to validate")
+
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
+
+    parser.add_argument("--output", type=str, help="Write JSON results to file")
+
     args = parser.parse_args()
-    
+
     try:
         # Validate and resolve path
         csv_path = safe_path(args.csv_path)
-        
+
         # Run preflight checks
         result = run_preflight(csv_path)
-        
+
         # Output results
         if args.output:
             output_path = safe_path(args.output)
@@ -147,7 +139,7 @@ Examples:
             print(f"CSV Preflight Results for: {csv_path}")
             print("=" * 60)
             print(f"Schema OK: {result['schema_ok']}")
-            if result['missing_columns']:
+            if result["missing_columns"]:
                 print(f"  Missing columns: {', '.join(result['missing_columns'])}")
             print(f"Values OK: {result['values_ok']}")
             print(f"  Message: {result['values_msg']}")
@@ -158,10 +150,10 @@ Examples:
             print(f"  Records parsed: {result['records_parsed']}")
             print("=" * 60)
             print(f"Overall OK: {result['overall_ok']}")
-        
+
         # Exit with appropriate code
         sys.exit(0 if result["overall_ok"] else 1)
-        
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(2)
