@@ -33,18 +33,20 @@ def make_run_id(prefix: str = "") -> str:
 
 def file_sha256(path: str, bufsize: int = 65536) -> str:
     """Compute SHA256 hash of a file.
-    
+
     Performance: Uses 64KB buffer size (optimal for most filesystems).
     Previous default was 1MB which is less efficient for smaller files.
-    
+
     Args:
         path: Path to file to hash
         bufsize: Read buffer size in bytes (default: 64KB)
-        
+
     Returns:
         Hexadecimal SHA256 hash string
     """
     h = hashlib.sha256()
+
+
 def file_sha256(path: str, bufsize: int = 1 << 20) -> str:
     hasher = hashlib.sha256()
     with open(path, "rb") as f:
@@ -138,7 +140,7 @@ def csv_schema_check(path: str) -> Dict[str, Any]:
             f"CSV file not found: '{path}'. "
             f"Please verify the file path and ensure the file exists."
         )
-    
+
     size = os.path.getsize(path)
     info: Dict[str, Any] = {
         "path": path,
@@ -165,12 +167,27 @@ def start_manifest(
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return {
-        "schema_id": SCHEMA_ID, "tool_version": tool_version, "run_id": run_id, "session_id": session_id,
-        "status":{"code":"running","message":"Processing","last_stage":"load"},
-        "input": input_info, "config":{"args":args_cfg, "base_tables": base_tables or {"front":None,"rear":None}},
-        "env":{"python":platform.python_version(),"os":platform.system(),"platform":platform.machine(),"hostname":platform.node()},
-        "timing":{"start": utc_now_iso(), "end": None, "duration_ms": None},
-        "stats":{}, "diagnostics":{}, "outputs":[], "apply":{"allowed": False, "reasons_blocked":["pending"]}
+        "schema_id": SCHEMA_ID,
+        "tool_version": tool_version,
+        "run_id": run_id,
+        "session_id": session_id,
+        "status": {"code": "running", "message": "Processing", "last_stage": "load"},
+        "input": input_info,
+        "config": {
+            "args": args_cfg,
+            "base_tables": base_tables or {"front": None, "rear": None},
+        },
+        "env": {
+            "python": platform.python_version(),
+            "os": platform.system(),
+            "platform": platform.machine(),
+            "hostname": platform.node(),
+        },
+        "timing": {"start": utc_now_iso(), "end": None, "duration_ms": None},
+        "stats": {},
+        "diagnostics": {},
+        "outputs": [],
+        "apply": {"allowed": False, "reasons_blocked": ["pending"]},
     }
 
 
@@ -222,16 +239,33 @@ def finish_manifest(
         manifest["apply"]["reasons_blocked"] = reasons_blocked
     start = manifest["timing"]["start"]
     manifest["timing"]["end"] = utc_now_iso()
-def finish_manifest(manifest: Dict, ok: bool, last_stage: str, message: str="OK",
-                    stats: Optional[Dict]=None, diagnostics: Optional[Dict]=None,
-                    apply_allowed: Optional[bool]=None, reasons_blocked: Optional[List[str]]=None) -> Dict:
-    manifest["status"]={"code":"success" if ok else ("partial" if last_stage=="export" else "error"),
-                        "message":message,"last_stage":last_stage}
-    if stats: manifest["stats"]=stats
-    if diagnostics is not None: manifest["diagnostics"]=diagnostics
-    if apply_allowed is not None: manifest["apply"]["allowed"]=bool(apply_allowed)
-    if reasons_blocked is not None: manifest["apply"]["reasons_blocked"]=reasons_blocked
-    start = manifest["timing"]["start"]; manifest["timing"]["end"]=utc_now_iso()
+
+
+def finish_manifest(
+    manifest: Dict,
+    ok: bool,
+    last_stage: str,
+    message: str = "OK",
+    stats: Optional[Dict] = None,
+    diagnostics: Optional[Dict] = None,
+    apply_allowed: Optional[bool] = None,
+    reasons_blocked: Optional[List[str]] = None,
+) -> Dict:
+    manifest["status"] = {
+        "code": "success" if ok else ("partial" if last_stage == "export" else "error"),
+        "message": message,
+        "last_stage": last_stage,
+    }
+    if stats:
+        manifest["stats"] = stats
+    if diagnostics is not None:
+        manifest["diagnostics"] = diagnostics
+    if apply_allowed is not None:
+        manifest["apply"]["allowed"] = bool(apply_allowed)
+    if reasons_blocked is not None:
+        manifest["apply"]["reasons_blocked"] = reasons_blocked
+    start = manifest["timing"]["start"]
+    manifest["timing"]["end"] = utc_now_iso()
     try:
         start_time = datetime.fromisoformat(start.replace("Z", "+00:00"))
         end_time = datetime.fromisoformat(
@@ -359,38 +393,117 @@ MANIFEST_JSON_SCHEMA_V1: Dict[str, Any] = {
     },
 }
 MANIFEST_JSON_SCHEMA_V1 = {
-  "$schema":"http://json-schema.org/draft-07/schema#","title":"DynoAI Run Manifest v1",
-  "type":"object",
-  "required":["schema_id","tool_version","run_id","status","input","config","timing","outputs"],
-  "properties":{
-    "schema_id":{"type":"string","const":SCHEMA_ID},
-    "tool_version":{"type":"string"},"run_id":{"type":"string"},"session_id":{"type":["string","null"]},
-    "status":{"type":"object","required":["code","message","last_stage"],
-      "properties":{"code":{"type":"string","enum":["queued","running","success","error","partial"]},
-                    "message":{"type":"string"},"last_stage":{"type":"string","enum":["load","validate","compute","export"]}}},
-    "input":{"type":"object","required":["path","size_bytes","sha256","dialect","required_columns_present","missing_columns"],
-      "properties":{"path":{"type":"string"},"size_bytes":{"type":"integer","minimum":0},
-                    "sha256":{"type":"string"},"dialect":{"type":"object",
-                      "properties":{"sep":{"type":"string"},"encoding":{"type":"string"},"newline":{"type":"string"}}},
-                    "required_columns_present":{"type":"boolean"},
-                    "missing_columns":{"type":"array","items":{"type":"string"}}}},
-    "config":{"type":"object"},"env":{"type":"object"},
-    "timing":{"type":"object","required":["start","end","duration_ms"],
-              "properties":{"start":{"type":"string"},"end":{"type":"string"},
-                            "duration_ms":{"type":["integer","null"],"minimum":0}}},
-    "stats":{"type":"object"},"diagnostics":{"type":"object"},
-    "outputs":{"type":"array","minItems":1,"items":{"type":"object",
-      "required":["name","path","type","schema","size_bytes","sha256","created"],
-      "properties":{"name":{"type":"string"},"path":{"type":"string"},
-                    "type":{"type":"string","enum":["csv","json","text","png","zip"]},
-                    "schema":{"type":"string"},"rows":{"type":["integer","null"],"minimum":0},
-                    "cols":{"type":["integer","null"],"minimum":0},
-                    "size_bytes":{"type":"integer","minimum":0},"sha256":{"type":"string"},
-                    "created":{"type":"string"}}}},
-    "apply":{"type":"object","required":["allowed","reasons_blocked"],
-             "properties":{"allowed":{"type":"boolean"},
-                           "reasons_blocked":{"type":"array","items":{"type":"string"}}}}
-  }
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "DynoAI Run Manifest v1",
+    "type": "object",
+    "required": [
+        "schema_id",
+        "tool_version",
+        "run_id",
+        "status",
+        "input",
+        "config",
+        "timing",
+        "outputs",
+    ],
+    "properties": {
+        "schema_id": {"type": "string", "const": SCHEMA_ID},
+        "tool_version": {"type": "string"},
+        "run_id": {"type": "string"},
+        "session_id": {"type": ["string", "null"]},
+        "status": {
+            "type": "object",
+            "required": ["code", "message", "last_stage"],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "enum": ["queued", "running", "success", "error", "partial"],
+                },
+                "message": {"type": "string"},
+                "last_stage": {
+                    "type": "string",
+                    "enum": ["load", "validate", "compute", "export"],
+                },
+            },
+        },
+        "input": {
+            "type": "object",
+            "required": [
+                "path",
+                "size_bytes",
+                "sha256",
+                "dialect",
+                "required_columns_present",
+                "missing_columns",
+            ],
+            "properties": {
+                "path": {"type": "string"},
+                "size_bytes": {"type": "integer", "minimum": 0},
+                "sha256": {"type": "string"},
+                "dialect": {
+                    "type": "object",
+                    "properties": {
+                        "sep": {"type": "string"},
+                        "encoding": {"type": "string"},
+                        "newline": {"type": "string"},
+                    },
+                },
+                "required_columns_present": {"type": "boolean"},
+                "missing_columns": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "config": {"type": "object"},
+        "env": {"type": "object"},
+        "timing": {
+            "type": "object",
+            "required": ["start", "end", "duration_ms"],
+            "properties": {
+                "start": {"type": "string"},
+                "end": {"type": "string"},
+                "duration_ms": {"type": ["integer", "null"], "minimum": 0},
+            },
+        },
+        "stats": {"type": "object"},
+        "diagnostics": {"type": "object"},
+        "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "path",
+                    "type",
+                    "schema",
+                    "size_bytes",
+                    "sha256",
+                    "created",
+                ],
+                "properties": {
+                    "name": {"type": "string"},
+                    "path": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "enum": ["csv", "json", "text", "png", "zip"],
+                    },
+                    "schema": {"type": "string"},
+                    "rows": {"type": ["integer", "null"], "minimum": 0},
+                    "cols": {"type": ["integer", "null"], "minimum": 0},
+                    "size_bytes": {"type": "integer", "minimum": 0},
+                    "sha256": {"type": "string"},
+                    "created": {"type": "string"},
+                },
+            },
+        },
+        "apply": {
+            "type": "object",
+            "required": ["allowed", "reasons_blocked"],
+            "properties": {
+                "allowed": {"type": "boolean"},
+                "reasons_blocked": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+    },
 }
 
 
