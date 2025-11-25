@@ -64,10 +64,7 @@ class RunManager:
         """
         requested_id = run_id or make_run_id(prefix="run_")
         safe_name = (
-            requested_id.replace("/", "_")
-            .replace("\\", "_")
-            .replace("..", "_")
-            .strip()
+            requested_id.replace("/", "_").replace("\\", "_").replace("..", "_").strip()
         )
         if not safe_name:
             safe_name = make_run_id(prefix="run_")
