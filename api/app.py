@@ -31,6 +31,28 @@ try:
 except Exception:  # pragma: no cover
     pass
 
+# Register Jetstream blueprint
+try:
+    from jetstream.models import JetstreamConfig
+    from jetstream.poller import init_poller
+    from routes.jetstream import jetstream_bp
+
+    app.register_blueprint(jetstream_bp, url_prefix="/api/jetstream")
+
+    # Initialize Jetstream poller with config from environment
+    jetstream_config = JetstreamConfig(
+        api_url=os.environ.get("JETSTREAM_API_URL", ""),
+        api_key=os.environ.get("JETSTREAM_API_KEY", ""),
+        poll_interval_seconds=int(os.environ.get("JETSTREAM_POLL_INTERVAL", "30")),
+        auto_process=os.environ.get("JETSTREAM_AUTO_PROCESS", "true").lower() == "true",
+        enabled=os.environ.get("JETSTREAM_ENABLED", "false").lower() == "true",
+    )
+    poller = init_poller(jetstream_config)
+    if jetstream_config.enabled:
+        poller.start()
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
+
 # Configuration
 UPLOAD_FOLDER = Path("uploads")
 OUTPUT_FOLDER = Path("outputs")
@@ -571,6 +593,14 @@ if __name__ == "__main__":
     print("  GET  /api/diagnostics/<id>    - Get diagnostics data")
     print("  GET  /api/coverage/<id>       - Get coverage data")
     print("  POST /api/xai/chat            - Proxy chat to xAI (Grok)")
+    print("\n[*] Jetstream endpoints:")
+    print("  GET  /api/jetstream/config    - Get Jetstream configuration")
+    print("  PUT  /api/jetstream/config    - Update Jetstream configuration")
+    print("  GET  /api/jetstream/status    - Get Jetstream poller status")
+    print("  GET  /api/jetstream/runs      - List Jetstream runs")
+    print("  GET  /api/jetstream/runs/<id> - Get specific run details")
+    print("  POST /api/jetstream/sync      - Force immediate poll")
+    print("  GET  /api/jetstream/progress/<id> - SSE progress stream")
     print("\n" + "=" * 60 + "\n")
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")

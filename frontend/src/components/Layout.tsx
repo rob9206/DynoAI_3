@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, History, Home } from 'lucide-react';
+import { Activity, History, Home, Radio } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -10,7 +10,7 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
 
   const isActive = (path: string) => {
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   return (
@@ -32,9 +32,20 @@ export default function Layout({ children }: LayoutProps) {
             {/* Navigation */}
             <nav className="flex space-x-2">
               <Link
-                to="/"
+                to="/jetstream"
                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                  isActive('/')
+                  isActive('/jetstream') || isActive('/runs')
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                }`}
+              >
+                <Radio className="h-4 w-4" />
+                <span className="font-medium">Live Feed</span>
+              </Link>
+              <Link
+                to="/dashboard"
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                  isActive('/dashboard')
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                 }`}
