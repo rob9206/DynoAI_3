@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import Dashboard from './pages/Dashboard';
 import Results from './pages/Results';
 import History from './pages/History';
+import VEHeatmapDemo from './pages/VEHeatmapDemo';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/results/:runId" element={<Results />} />
               <Route path="/history" element={<History />} />
+              <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
