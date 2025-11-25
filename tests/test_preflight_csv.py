@@ -10,16 +10,20 @@ Tests the CSV preflight validation tool to ensure it properly:
 """
 
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import preflight_csv
 
 
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Project root for creating temp directories within the safe_path boundary
+PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class TestPreflightCSV(unittest.TestCase):
@@ -28,7 +32,7 @@ class TestPreflightCSV(unittest.TestCase):
     def test_run_preflight_with_valid_winpep_csv(self):
         """Test preflight with a valid WinPEP CSV file"""
         # Use an actual sample file from the repository
-        csv_path = Path(__file__).parent.parent / "tables" / "WinPEP_Sample.csv"
+        csv_path = PROJECT_ROOT / "tables" / "WinPEP_Sample.csv"
 
         if csv_path.exists():
             result = preflight_csv.run_preflight(csv_path)
@@ -60,16 +64,14 @@ class TestPreflightCSV(unittest.TestCase):
 
     def test_run_preflight_with_missing_columns(self):
         """Test preflight with CSV missing required columns"""
-        # Create a temporary CSV file missing required columns in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_path = temp_dir / "test_missing_cols.csv"
+        # Use tempfile.TemporaryDirectory within project root for safe_path compliance
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_path = Path(temp_dir) / "test_missing_cols.csv"
 
-        with open(temp_path, "w") as f:
-            f.write("col1,col2,col3\n")
-            f.write("1,2,3\n")
+            with open(temp_path, "w") as f:
+                f.write("col1,col2,col3\n")
+                f.write("1,2,3\n")
 
-        try:
             result = preflight_csv.run_preflight(temp_path)
 
             # Should detect schema issue
@@ -81,68 +83,47 @@ class TestPreflightCSV(unittest.TestCase):
                 result["file_format"], ["winpep", "generic", "powervision", "unknown"]
             )
 
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
-
     def test_run_preflight_with_valid_columns(self):
         """Test preflight with CSV that has required columns"""
-        # Create a temporary CSV file with required columns in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_path = temp_dir / "test_valid_cols.csv"
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_path = Path(temp_dir) / "test_valid_cols.csv"
 
-        with open(temp_path, "w") as f:
-            f.write("rpm,map_kpa,torque\n")
-            f.write("2000,50,100\n")
-            f.write("3000,60,120\n")
+            with open(temp_path, "w") as f:
+                f.write("rpm,map_kpa,torque\n")
+                f.write("2000,50,100\n")
+                f.write("3000,60,120\n")
 
-        try:
             result = preflight_csv.run_preflight(temp_path)
 
             # Should pass schema check
             self.assertTrue(result["schema_ok"])
             self.assertEqual(len(result["missing_columns"]), 0)
 
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
-
     def test_format_detection(self):
         """Test that format detection works"""
-        # Create a simple CSV that should be detected as generic in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_path = temp_dir / "test_format.csv"
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_path = Path(temp_dir) / "test_format.csv"
 
-        with open(temp_path, "w") as f:
-            f.write("rpm,map_kpa,torque\n")
-            f.write("2000,50,100\n")
+            with open(temp_path, "w") as f:
+                f.write("rpm,map_kpa,torque\n")
+                f.write("2000,50,100\n")
 
-        try:
             result = preflight_csv.run_preflight(temp_path)
 
             # Should detect a format
             self.assertIsNotNone(result["file_format"])
             self.assertIsInstance(result["file_format"], str)
 
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
-
     def test_overall_ok_logic(self):
         """Test that overall_ok is computed correctly"""
-        # Create a CSV with all required columns and valid values in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_path = temp_dir / "test_overall.csv"
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_path = Path(temp_dir) / "test_overall.csv"
 
-        with open(temp_path, "w") as f:
-            f.write("rpm,map_kpa,torque\n")
-            f.write("2000,50,100\n")
-            f.write("3000,60,120\n")
+            with open(temp_path, "w") as f:
+                f.write("rpm,map_kpa,torque\n")
+                f.write("2000,50,100\n")
+                f.write("3000,60,120\n")
 
-        try:
             result = preflight_csv.run_preflight(temp_path)
 
             # overall_ok should be combination of schema_ok, values_ok, and parse_ok
@@ -151,31 +132,22 @@ class TestPreflightCSV(unittest.TestCase):
             )
             self.assertEqual(result["overall_ok"], expected_overall)
 
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
-
 
 class TestPreflightCLI(unittest.TestCase):
     """Test command-line interface functionality"""
 
     def test_cli_with_json_output(self):
         """Test CLI with JSON output option"""
-        import subprocess
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_csv = Path(temp_dir) / "test_cli_json.csv"
 
-        # Create a test CSV in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_csv = temp_dir / "test_cli_json.csv"
+            with open(temp_csv, "w") as f:
+                f.write("rpm,map_kpa,torque\n")
+                f.write("2000,50,100\n")
 
-        with open(temp_csv, "w") as f:
-            f.write("rpm,map_kpa,torque\n")
-            f.write("2000,50,100\n")
-
-        try:
             result = subprocess.run(
                 [sys.executable, "preflight_csv.py", str(temp_csv), "--json"],
-                cwd=Path(__file__).parent.parent,
+                cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
             )
@@ -186,26 +158,17 @@ class TestPreflightCLI(unittest.TestCase):
                 self.assertIsInstance(output_data, dict)
                 self.assertIn("overall_ok", output_data)
 
-        finally:
-            if temp_csv.exists():
-                temp_csv.unlink()
-
     def test_cli_with_file_output(self):
         """Test CLI with file output option"""
-        import subprocess
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as temp_dir:
+            temp_csv = Path(temp_dir) / "test_cli_file.csv"
+            temp_output = Path(temp_dir) / "test_output.json"
 
-        # Create test files in project directory
-        temp_dir = Path(__file__).parent.parent / "temp_selftest"
-        temp_dir.mkdir(exist_ok=True)
-        temp_csv = temp_dir / "test_cli_file.csv"
-        temp_output = temp_dir / "test_output.json"
+            with open(temp_csv, "w") as f:
+                f.write("rpm,map_kpa,torque\n")
+                f.write("2000,50,100\n")
 
-        with open(temp_csv, "w") as f:
-            f.write("rpm,map_kpa,torque\n")
-            f.write("2000,50,100\n")
-
-        try:
-            result = subprocess.run(
+            subprocess.run(
                 [
                     sys.executable,
                     "preflight_csv.py",
@@ -213,7 +176,7 @@ class TestPreflightCLI(unittest.TestCase):
                     "--output",
                     str(temp_output),
                 ],
-                cwd=Path(__file__).parent.parent,
+                cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
             )
@@ -227,12 +190,6 @@ class TestPreflightCLI(unittest.TestCase):
                     output_data = json.load(f)
                 self.assertIsInstance(output_data, dict)
                 self.assertIn("overall_ok", output_data)
-
-        finally:
-            if temp_csv.exists():
-                temp_csv.unlink()
-            if temp_output.exists():
-                temp_output.unlink()
 
 
 if __name__ == "__main__":
