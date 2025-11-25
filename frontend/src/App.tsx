@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import Dashboard from './pages/Dashboard';
 import Results from './pages/Results';
 import History from './pages/History';
+import VEHeatmapDemo from './pages/VEHeatmapDemo';
 import JetstreamPage from './pages/JetstreamPage';
 import RunDetailPage from './pages/RunDetailPage';
 import Layout from './components/Layout';
@@ -31,6 +32,8 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/results/:runId" element={<Results />} />
               <Route path="/history" element={<History />} />
+              <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/jetstream" replace />} />
             </Routes>
           </Layout>
