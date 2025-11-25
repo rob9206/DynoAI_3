@@ -1,4 +1,4 @@
-import { getColorScale, isValueClamped } from '@/lib/colorScale';
+import { getColorScale } from '@/lib/colorScale';
 
 interface VEHeatmapLegendProps {
   clampLimit?: number;
@@ -101,6 +101,3 @@ export function VEHeatmapLegend({
     </div>
   );
 }
-
-// For unused variable suppression - the function is exported
-void isValueClamped;

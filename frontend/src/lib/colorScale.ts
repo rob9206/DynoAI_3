@@ -45,7 +45,7 @@ export function getColorForValue(value: number, options?: ColorScaleOptions): st
   const { minValue, maxValue, neutralRange } = opts;
   
   // Handle null/NaN values
-  if (value === null || isNaN(value)) {
+  if (value === null || Number.isNaN(value)) {
     return 'rgb(75, 85, 99)'; // Gray for missing data
   }
   

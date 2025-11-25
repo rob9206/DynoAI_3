@@ -1,7 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { getColorForValue, getTextColorForBackground, isValueClamped } from '@/lib/colorScale';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface VEHeatmapProps {
@@ -18,6 +17,14 @@ interface VEHeatmapProps {
   className?: string;
 }
 
+interface TooltipState {
+  row: number;
+  col: number;
+  value: number;
+  x: number;
+  y: number;
+}
+
 export function VEHeatmap({ 
   data, 
   rowLabels, 
@@ -32,6 +39,8 @@ export function VEHeatmap({
   className 
 }: VEHeatmapProps): JSX.Element {
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleCellClick = useCallback((row: number, col: number, value: number) => {
     if (onCellClick) {
@@ -39,8 +48,28 @@ export function VEHeatmap({
     }
   }, [onCellClick]);
 
-  const handleCellMouseEnter = useCallback((row: number, col: number, value: number) => {
+  const handleCellMouseEnter = useCallback((
+    row: number, 
+    col: number, 
+    value: number,
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
     setHoveredCell({ row, col });
+    
+    // Calculate tooltip position relative to container
+    const cellRect = event.currentTarget.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    
+    if (containerRect) {
+      setTooltip({
+        row,
+        col,
+        value,
+        x: cellRect.left - containerRect.left + cellRect.width / 2,
+        y: cellRect.top - containerRect.top - 8
+      });
+    }
+    
     if (onCellHover) {
       onCellHover(row, col, value);
     }
@@ -48,6 +77,7 @@ export function VEHeatmap({
 
   const handleCellMouseLeave = useCallback(() => {
     setHoveredCell(null);
+    setTooltip(null);
   }, []);
 
   const isHighlighted = useCallback((row: number, col: number) => {
@@ -59,7 +89,7 @@ export function VEHeatmap({
   }, [hoveredCell]);
 
   const content = (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto relative" ref={containerRef}>
       <div className="inline-block min-w-max">
         {/* Column headers */}
         <div className="flex">
@@ -93,59 +123,44 @@ export function VEHeatmap({
               const hovered = isHovered(rowIndex, colIndex);
               
               return (
-                <Tooltip key={colIndex}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={cn(
-                        'min-w-[32px] w-8 h-8 flex items-center justify-center cursor-pointer transition-transform duration-150 relative border border-border/30',
-                        hovered && 'scale-110 z-10 shadow-lg',
-                        highlighted && 'ring-2 ring-primary ring-offset-1',
-                        onCellClick && 'hover:scale-105'
-                      )}
-                      style={{ 
-                        backgroundColor: bgColor,
-                        color: textColor
-                      }}
-                      onClick={() => handleCellClick(rowIndex, colIndex, value)}
-                      onMouseEnter={() => handleCellMouseEnter(rowIndex, colIndex, value)}
-                      onMouseLeave={handleCellMouseLeave}
-                      role="gridcell"
-                      aria-label={`RPM ${rowLabels[rowIndex]}, Load ${colLabels[colIndex]}: ${value?.toFixed(1) ?? 'N/A'}%`}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          handleCellClick(rowIndex, colIndex, value);
-                        }
-                      }}
-                    >
-                      {/* Clamped indicator triangle */}
-                      {isClamped && (
-                        <div 
-                          className="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-t-yellow-500 border-l-[6px] border-l-transparent"
-                          aria-label="Clamped value"
-                        />
-                      )}
-                      {/* Value text */}
-                      {showValues && value !== null && !isNaN(value) && (
-                        <span className="text-[9px] font-mono leading-none">
-                          {value.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <div className="space-y-1">
-                      <div><strong>RPM:</strong> {rowLabels[rowIndex]}</div>
-                      <div><strong>Load:</strong> {colLabels[colIndex]}</div>
-                      <div><strong>Correction:</strong> {value?.toFixed(2) ?? 'N/A'}%</div>
-                      {isClamped && (
-                        <div className="text-yellow-500 font-medium">
-                          ⚠ Value clamped (exceeds ±{clampLimit}%)
-                        </div>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
+                <div
+                  key={colIndex}
+                  className={cn(
+                    'min-w-[32px] w-8 h-8 flex items-center justify-center cursor-pointer transition-transform duration-150 relative border border-border/30',
+                    hovered && 'scale-110 z-10 shadow-lg',
+                    highlighted && 'ring-2 ring-primary ring-offset-1',
+                    onCellClick && 'hover:scale-105'
+                  )}
+                  style={{ 
+                    backgroundColor: bgColor,
+                    color: textColor
+                  }}
+                  onClick={() => handleCellClick(rowIndex, colIndex, value)}
+                  onMouseEnter={(e) => handleCellMouseEnter(rowIndex, colIndex, value, e)}
+                  onMouseLeave={handleCellMouseLeave}
+                  role="gridcell"
+                  aria-label={`RPM ${rowLabels[rowIndex]}, Load ${colLabels[colIndex]}: ${value?.toFixed(1) ?? 'N/A'}%`}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleCellClick(rowIndex, colIndex, value);
+                    }
+                  }}
+                >
+                  {/* Clamped indicator triangle */}
+                  {isClamped && (
+                    <div 
+                      className="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-t-yellow-500 border-l-[6px] border-l-transparent"
+                      aria-label="Clamped value"
+                    />
+                  )}
+                  {/* Value text */}
+                  {showValues && value !== null && !Number.isNaN(value) && (
+                    <span className="text-[9px] font-mono leading-none">
+                      {value.toFixed(1)}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -162,11 +177,34 @@ export function VEHeatmap({
       
       {/* Y-axis label */}
       <div 
-        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2"
-        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg) translateY(50%)' }}
+        className="absolute left-0 top-1/2 text-xs text-muted-foreground"
+        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg) translateY(50%) translateX(8px)' }}
       >
-        <span className="text-xs text-muted-foreground">RPM</span>
+        <span>RPM</span>
       </div>
+
+      {/* Shared tooltip */}
+      {tooltip && (
+        <div
+          className="absolute z-50 bg-primary text-primary-foreground px-3 py-1.5 text-xs rounded-md shadow-lg pointer-events-none"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translate(-50%, -100%)'
+          }}
+        >
+          <div className="space-y-1">
+            <div><strong>RPM:</strong> {rowLabels[tooltip.row]}</div>
+            <div><strong>Load:</strong> {colLabels[tooltip.col]}</div>
+            <div><strong>Correction:</strong> {tooltip.value?.toFixed(2) ?? 'N/A'}%</div>
+            {showClampIndicators && isValueClamped(tooltip.value, clampLimit) && (
+              <div className="text-yellow-500 font-medium">
+                ⚠ Value clamped (exceeds ±{clampLimit}%)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 
