@@ -16,10 +16,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import preflight_csv
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import preflight_csv
 
 # Project root for creating temp directories within the safe_path boundary
 PROJECT_ROOT = Path(__file__).parent.parent
