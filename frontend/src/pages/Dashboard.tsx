@@ -1,9 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, Settings } from 'lucide-react';
+import { Loader2, CheckCircle, Settings, Play, Activity, Zap, FileSearch } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
 import { uploadAndAnalyze, pollJobStatus, handleApiError, AnalysisParams } from '../lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Progress } from '../components/ui/progress';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -61,195 +66,208 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Hero Section */}
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-white mb-4">
-          Welcome to DynoAI
+      <div className="text-center py-8 space-y-4">
+        <h1 className="text-4xl md:text-5xl font-bold text-foreground tracking-tight">
+          Precision Dyno Tuning
         </h1>
-        <p className="text-lg text-gray-400">
-          Upload your dyno log to generate VE corrections and spark timing suggestions
+        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          AI-powered analysis for WinPEP logs. Generate VE corrections and spark timing suggestions in seconds.
         </p>
       </div>
 
       {/* Upload Section */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-8 border border-gray-700 mb-8">
-        <h2 className="text-2xl font-semibold text-white mb-6">
-          Upload Dyno Log
-        </h2>
-        
-        <FileUpload onFileSelect={handleFileSelect} />
+      <Card className="border-primary/10 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl flex items-center gap-2">
+            <FileSearch className="h-6 w-6 text-primary" />
+            Upload Log File
+          </CardTitle>
+          <CardDescription>
+            Upload your CSV log file to begin analysis.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FileUpload onFileSelect={handleFileSelect} />
 
-        {/* Advanced Parameters */}
-        {currentFile && !isAnalyzing && (
-          <div className="mt-6">
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Advanced Parameters</span>
-            </button>
+          {/* Advanced Parameters */}
+          {currentFile && !isAnalyzing && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                <span>{showAdvanced ? 'Hide' : 'Show'} Advanced Parameters</span>
+              </Button>
 
-            {showAdvanced && (
-              <div className="bg-gray-900/50 rounded-lg p-6 space-y-4 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Smoothing Passes
-                    </label>
-                    <input
+              {showAdvanced && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-muted/30 rounded-lg border border-border">
+                  <div className="space-y-2">
+                    <Label htmlFor="smoothPasses">Smoothing Passes (0-5)</Label>
+                    <Input
+                      id="smoothPasses"
                       type="number"
                       min="0"
                       max="5"
                       value={params.smoothPasses}
                       onChange={(e) => setParams({ ...params, smoothPasses: parseInt(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Number of smoothing iterations (0-5)</p>
+                    <p className="text-xs text-muted-foreground">Iterations of kernel smoothing to apply.</p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Clamp (%)
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="clamp">Clamp (%)</Label>
+                    <Input
+                      id="clamp"
                       type="number"
                       min="5"
                       max="20"
                       step="0.5"
                       value={params.clamp}
                       onChange={(e) => setParams({ ...params, clamp: parseFloat(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Maximum correction percentage (5-20%)</p>
+                    <p className="text-xs text-muted-foreground">Maximum allowed correction percentage.</p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Rear Bias (%)
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="rearBias">Rear Bias (%)</Label>
+                    <Input
+                      id="rearBias"
                       type="number"
                       min="-5"
                       max="5"
                       step="0.5"
                       value={params.rearBias}
                       onChange={(e) => setParams({ ...params, rearBias: parseFloat(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Rear cylinder bias adjustment (-5 to 5%)</p>
+                    <p className="text-xs text-muted-foreground">Offset applied to rear cylinder corrections.</p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Rear Rule (deg)
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="rearRuleDeg">Rear Rule (deg)</Label>
+                    <Input
+                      id="rearRuleDeg"
                       type="number"
                       min="0"
                       max="5"
                       step="0.5"
                       value={params.rearRuleDeg}
                       onChange={(e) => setParams({ ...params, rearRuleDeg: parseFloat(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Rear cylinder timing retard (0-5 deg)</p>
+                    <p className="text-xs text-muted-foreground">Timing retard for rear cylinder heat management.</p>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <button
-              onClick={startAnalysis}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2"
-            >
-              <span>Start Analysis</span>
-            </button>
-          </div>
-        )}
-      </div>
+              <Button
+                onClick={startAnalysis}
+                size="lg"
+                className="w-full text-lg font-semibold shadow-md transition-all hover:scale-[1.01]"
+              >
+                <Play className="mr-2 h-5 w-5" />
+                Start Analysis
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Progress Section */}
       {isAnalyzing && (
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-8 border border-gray-700">
-          <h2 className="text-2xl font-semibold text-white mb-6">
-            Analysis in Progress
-          </h2>
+        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500 border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle>Analysis in Progress</CardTitle>
+            <CardDescription>Processing your data, please wait...</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{analysisMessage}</span>
+                <span className="font-mono font-medium text-primary">{analysisProgress}%</span>
+              </div>
+              <Progress value={analysisProgress} className="h-2" />
+            </div>
 
-          {/* Analysis Progress */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{analysisMessage}</span>
-              <span className="text-sm text-gray-400">{analysisProgress}%</span>
+            <div className="grid gap-3">
+              <div className="flex items-center gap-3 text-sm">
+                {analysisProgress > 0 ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                )}
+                <span className={analysisProgress > 0 ? 'text-foreground' : 'text-muted-foreground'}>
+                  File upload
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                {analysisProgress > 10 && analysisProgress < 100 ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : analysisProgress === 100 ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
+                )}
+                <span className={analysisProgress > 10 ? 'text-foreground' : 'text-muted-foreground'}>
+                  Data analysis
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                {analysisProgress === 100 ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
+                )}
+                <span className={analysisProgress === 100 ? 'text-foreground' : 'text-muted-foreground'}>
+                  Generating results
+                </span>
+              </div>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${analysisProgress}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Status Messages */}
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 text-gray-300">
-              {analysisProgress > 0 ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-              )}
-              <span>File upload</span>
-            </div>
-            <div className="flex items-center space-x-3 text-gray-300">
-              {analysisProgress > 10 && analysisProgress < 100 ? (
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-              ) : analysisProgress === 100 ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <div className="h-5 w-5 rounded-full border-2 border-gray-600" />
-              )}
-              <span>Data analysis</span>
-            </div>
-            <div className="flex items-center space-x-3 text-gray-300">
-              {analysisProgress === 100 ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <div className="h-5 w-5 rounded-full border-2 border-gray-600" />
-              )}
-              <span>Generating results</span>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Features Section */}
       {!isAnalyzing && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-          <div className="bg-gray-800/30 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              VE Corrections
-            </h3>
-            <p className="text-sm text-gray-400">
-              Adaptive kernel smoothing with automatic clamping for safe tuning
-            </p>
-          </div>
-          <div className="bg-gray-800/30 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Spark Timing
-            </h3>
-            <p className="text-sm text-gray-400">
-              Knock-aware suggestions with temperature compensation
-            </p>
-          </div>
-          <div className="bg-gray-800/30 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Diagnostics
-            </h3>
-            <p className="text-sm text-gray-400">
-              Anomaly detection and data quality analysis
-            </p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
+            <CardHeader>
+              <Activity className="h-8 w-8 text-primary mb-2" />
+              <CardTitle>VE Corrections</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Adaptive kernel smoothing with automatic clamping ensures safe, accurate Volumetric Efficiency adjustments.
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
+            <CardHeader>
+              <Zap className="h-8 w-8 text-accent mb-2" />
+              <CardTitle>Spark Timing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Knock-aware spark timing suggestions with intelligent temperature compensation for optimal power.
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
+            <CardHeader>
+              <FileSearch className="h-8 w-8 text-secondary-foreground mb-2" />
+              <CardTitle>Diagnostics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Comprehensive anomaly detection and data quality analysis to identify sensor issues before tuning.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

@@ -68,39 +68,41 @@
 
 /*
   ---break---
+  PG27AQDM Low-Strain Dark Night Theme
+  Colors from config/themes/pg27aqdm-palette.json
 */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #11141A;
+  --foreground: #D8DCE4;
+  --card: #141923;
+  --card-foreground: #D8DCE4;
+  --popover: #141923;
+  --popover-foreground: #D8DCE4;
+  --primary: #6FB4C2;
+  --primary-foreground: #11141A;
+  --secondary: #6279AA;
+  --secondary-foreground: #D8DCE4;
+  --muted: #161B25;
+  --muted-foreground: #8A909C;
+  --accent: #6FB4C2;
+  --accent-foreground: #11141A;
+  --destructive: #C56A80;
+  --border: #1C2330;
+  --input: #151A23;
+  --ring: #6FB4C2;
+  --chart-1: #6FB4C2;
+  --chart-2: #6279AA;
+  --chart-3: #4D8B7A;
+  --chart-4: #C29A5E;
+  --chart-5: #7D9BC7;
+  --sidebar: #131721;
+  --sidebar-foreground: #D8DCE4;
+  --sidebar-primary: #6FB4C2;
+  --sidebar-primary-foreground: #11141A;
+  --sidebar-accent: #6279AA;
+  --sidebar-accent-foreground: #D8DCE4;
+  --sidebar-border: #1C2330;
+  --sidebar-ring: #6FB4C2;
 }
 
 /*

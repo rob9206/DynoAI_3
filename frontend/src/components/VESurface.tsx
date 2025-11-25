@@ -18,12 +18,27 @@ export function VESurface({ data, type }: VESurfaceProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const width = container.clientWidth || 600;
+    const height = container.clientHeight || 500;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0a);
-    scene.fog = new THREE.Fog(0x0a0a0a, 40, 100);
+    // Use a color that matches the semantic bg-muted/10 or similar, but in hex.
+    // Since we can't easily read CSS vars here without a helper, let's use a neutral dark background
+    // that works with the 3D lighting. Or stick to a transparent background so CSS handles it.
+    // Let's make it transparent to respect the parent container's background.
+    // But Fog needs a color. Let's stick to the dark gray we had, or use the computed style if possible.
+    
+    // For now, let's use a dark slate to match the PRD dark theme or a very light gray for light theme.
+    // A safer bet is a dark background for the 3D view as it makes the colored mesh pop.
+    // Let's keep the dark background but ensure it matches the 'muted' color more closely if we were in dark mode.
+    // Actually, let's use a transparent background for the renderer and scene, so the gradient CSS on the container shows through.
+    // scene.background = null; // Transparent
+    
+    // However, Fog needs a solid color. 
+    const bgColor = 0x111827; // gray-900 equivalent
+    scene.background = new THREE.Color(bgColor); 
+    scene.fog = new THREE.Fog(bgColor, 40, 100);
+    
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
@@ -36,6 +51,12 @@ export function VESurface({ data, type }: VESurfaceProps) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Clear any existing canvas
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
+    
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -147,6 +168,9 @@ export function VESurface({ data, type }: VESurfaceProps) {
 
     window.addEventListener('resize', handleResize);
 
+    // Trigger resize after a short delay to ensure container is sized correctly
+    setTimeout(handleResize, 100);
+
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleResize);
@@ -157,14 +181,15 @@ export function VESurface({ data, type }: VESurfaceProps) {
       renderer.dispose();
       geometry.dispose();
       material.dispose();
-      if (renderer.domElement.parentElement === container) {
+      // Check if child still exists before removing
+      if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
   }, [data, type]);
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-lg overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900" />
+    <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-lg overflow-hidden bg-muted/20" />
   );
 }
 
@@ -188,20 +213,33 @@ function createSurfaceGeometry(
 
   for (let i = 0; i < rpm.length; i++) {
     for (let j = 0; j < load.length; j++) {
-      minVE = Math.min(minVE, veValues[i][j]);
-      maxVE = Math.max(maxVE, veValues[i][j]);
+      const val = veValues[i][j];
+      if (val !== null && !isNaN(val)) {
+        minVE = Math.min(minVE, val);
+        maxVE = Math.max(maxVE, val);
+      }
     }
+  }
+  
+  // Fallback if data is empty
+  if (minVE === Infinity) {
+      minVE = 0;
+      maxVE = 100;
+  }
+  if (minVE === maxVE) {
+      maxVE = minVE + 1;
   }
 
   for (let i = 0; i < rpm.length; i++) {
     for (let j = 0; j < load.length; j++) {
       const x = (i - rpm.length / 2) * scaleX;
       const z = (j - load.length / 2) * scaleZ;
-      const y = veValues[i][j] * scaleY;
+      const val = veValues[i][j] !== null ? veValues[i][j] : 0;
+      const y = val * scaleY;
 
       vertices.push(x, y, z);
 
-      const normalized = (veValues[i][j] - minVE) / (maxVE - minVE);
+      const normalized = (val - minVE) / (maxVE - minVE);
       const color = getGradientColor(normalized, type);
       colors.push(color.r, color.g, color.b);
     }

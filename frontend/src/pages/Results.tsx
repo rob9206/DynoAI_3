@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, ArrowLeft, FileText, Table, Box, Grid } from 'lucide-react';
+import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getJobStatus, getVEData, getCoverageData, getDiagnostics, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest } from '../lib/api';
 import VEHeatmap from '../components/VEHeatmap';
 import { VESurface } from '../components/VESurface';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Badge } from '../components/ui/badge';
 
 export default function Results() {
   const { runId } = useParams<{ runId: string }>();
@@ -15,8 +19,8 @@ export default function Results() {
   const [coverageData, setCoverageData] = useState<CoverageData | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'visualizations' | 'diagnostics'>('overview');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [veLoadError, setVeLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -36,15 +40,17 @@ export default function Results() {
 
         // Load additional data
         try {
-          const [ve, coverage, diag] = await Promise.all([
-            getVEData(runId!).catch(() => null),
-            getCoverageData(runId!).catch(() => null),
-            getDiagnostics(runId!).catch(() => null),
-          ]);
+          const veResult = await getVEData(runId!).catch(err => {
+             console.error("VE Data Load Error:", err);
+             setVeLoadError("Failed to load VE Data");
+             return null;
+          });
+          const coverageResult = await getCoverageData(runId!).catch(() => null);
+          const diagResult = await getDiagnostics(runId!).catch(() => null);
 
-          setVeData(ve);
-          setCoverageData(coverage);
-          setDiagnostics(diag);
+          setVeData(veResult);
+          setCoverageData(coverageResult);
+          setDiagnostics(diagResult);
         } catch (err) {
           console.warn('Some visualization data could not be loaded:', err);
         }
@@ -97,9 +103,9 @@ export default function Results() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading results...</p>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading results...</p>
         </div>
       </div>
     );
@@ -107,194 +113,194 @@ export default function Results() {
 
   if (!manifest) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">No results found</p>
-        <button
-          onClick={() => navigate('/')}
-          className="mt-4 text-blue-500 hover:text-blue-400"
-        >
+      <div className="text-center py-12 space-y-6">
+        <p className="text-muted-foreground text-lg">No results found</p>
+        <Button variant="link" onClick={() => navigate('/')}>
           Return to Dashboard
-        </button>
+        </Button>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          <span>Back to Dashboard</span>
-        </button>
+  const hasVisualizations = !!veData || !!coverageData?.front || !!coverageData?.rear;
 
-        <button
+  return (
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 pl-0 hover:pl-2 transition-all"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Dashboard</span>
+        </Button>
+
+        <Button
           onClick={downloadAll}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center gap-2 shadow-sm"
         >
           <Download className="h-4 w-4" />
           <span>Download All</span>
-        </button>
+        </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-          <p className="text-sm text-gray-400 mb-1">Rows Processed</p>
-          <p className="text-3xl font-bold text-white">
-            {manifest.rowsProcessed.toLocaleString()}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Rows Processed</CardDescription>
+            <CardTitle className="text-3xl font-mono">
+              {manifest.rowsProcessed.toLocaleString()}
+            </CardTitle>
+          </CardHeader>
+        </Card>
 
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-          <p className="text-sm text-gray-400 mb-1">Corrections Applied</p>
-          <p className="text-3xl font-bold text-green-500">
-            {manifest.correctionsApplied}
-          </p>
-        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Corrections Applied</CardDescription>
+            <CardTitle className="text-3xl font-mono text-green-500">
+              {manifest.correctionsApplied}
+            </CardTitle>
+          </CardHeader>
+        </Card>
 
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-          <p className="text-sm text-gray-400 mb-1">Avg Correction</p>
-          <p className="text-3xl font-bold text-blue-500">
-            {manifest.analysisMetrics.avgCorrection.toFixed(1)}%
-          </p>
-        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Avg Correction</CardDescription>
+            <CardTitle className="text-3xl font-mono text-primary">
+              {manifest.analysisMetrics.avgCorrection.toFixed(1)}%
+            </CardTitle>
+          </CardHeader>
+        </Card>
 
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
-          <p className="text-sm text-gray-400 mb-1">Max Correction</p>
-          <p className="text-3xl font-bold text-orange-500">
-            {manifest.analysisMetrics.maxCorrection.toFixed(1)}%
-          </p>
-        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Max Correction</CardDescription>
+            <CardTitle className="text-3xl font-mono text-accent">
+              {manifest.analysisMetrics.maxCorrection.toFixed(1)}%
+            </CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
       {/* Analysis Info */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
-        <h2 className="text-xl font-semibold text-white mb-4">Analysis Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Input File:</span>
-            <span className="ml-2 text-white">{manifest.inputFile}</span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" />
+            Analysis Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Input File</p>
+              <p className="font-medium break-all">{manifest.inputFile}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Timestamp</p>
+              <p className="font-medium font-mono">
+                {new Date(manifest.timestamp).toLocaleString()}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Target AFR</p>
+              <p className="font-medium font-mono">{manifest.analysisMetrics.targetAFR}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Smoothing Iterations</p>
+              <p className="font-medium font-mono">{manifest.analysisMetrics.iterations}</p>
+            </div>
           </div>
-          <div>
-            <span className="text-gray-400">Timestamp:</span>
-            <span className="ml-2 text-white">
-              {new Date(manifest.timestamp).toLocaleString()}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-400">Target AFR:</span>
-            <span className="ml-2 text-white">{manifest.analysisMetrics.targetAFR}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Smoothing Iterations:</span>
-            <span className="ml-2 text-white">{manifest.analysisMetrics.iterations}</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
-        <div className="flex border-b border-gray-700">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 font-medium transition-colors ${activeTab === 'overview'
-                ? 'bg-gray-700 text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            Output Files
-          </button>
-          <button
-            onClick={() => setActiveTab('visualizations')}
-            className={`px-6 py-3 font-medium transition-colors ${activeTab === 'visualizations'
-                ? 'bg-gray-700 text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            Visualizations
-          </button>
-          <button
-            onClick={() => setActiveTab('diagnostics')}
-            className={`px-6 py-3 font-medium transition-colors ${activeTab === 'diagnostics'
-                ? 'bg-gray-700 text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            Diagnostics
-          </button>
-        </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-md mb-6">
+          <TabsTrigger value="overview">Output Files</TabsTrigger>
+          <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
+          <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+        </TabsList>
 
-        <div className="p-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="space-y-3">
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Generated Files</CardTitle>
+              <CardDescription>Download individual analysis results.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
               {manifest.outputFiles.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-4 bg-gray-900/50 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex items-center space-x-3">
-                    {file.name.endsWith('.csv') ? (
-                      <Table className="h-5 w-5 text-blue-500" />
-                    ) : (
-                      <FileText className="h-5 w-5 text-green-500" />
-                    )}
+                  <div className="flex items-center space-x-4">
+                    <div className="p-2 bg-background rounded-md border border-border">
+                      {file.name.endsWith('.csv') ? (
+                        <Table className="h-6 w-6 text-primary" />
+                      ) : (
+                        <FileText className="h-6 w-6 text-green-500" />
+                      )}
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-white">{file.name}</p>
-                      <p className="text-xs text-gray-500">{file.type}</p>
+                      <p className="text-sm font-medium text-foreground">{file.name}</p>
+                      <Badge variant="secondary" className="mt-1 text-xs font-normal">
+                        {file.type}
+                      </Badge>
                     </div>
                   </div>
 
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleDownloadFile(file.name)}
-                    className="flex items-center space-x-2 text-blue-500 hover:text-blue-400 transition-colors"
+                    className="text-primary hover:text-primary/80 hover:bg-primary/10"
                   >
-                    <Download className="h-4 w-4" />
-                    <span className="text-sm">Download</span>
-                  </button>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
                 </div>
               ))}
-            </div>
-          )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Visualizations Tab */}
-          {activeTab === 'visualizations' && (
+        {/* Visualizations Tab */}
+        <TabsContent value="visualizations" className="space-y-6 min-h-[200px]">
+          {hasVisualizations ? (
             <div className="space-y-6">
               {veData && (
                 <>
-                  <div className="flex justify-end mb-4">
-                    <div className="bg-gray-800 p-1 rounded-lg inline-flex border border-gray-700">
-                      <button
+                  <div className="flex justify-between items-center">
+                     <h3 className="text-lg font-medium">VE Corrections</h3>
+                     <div className="bg-muted p-1 rounded-lg inline-flex">
+                      <Button
+                        variant={viewMode === '2d' ? 'default' : 'ghost'}
+                        size="sm"
                         onClick={() => setViewMode('2d')}
-                        className={`p-2 rounded flex items-center space-x-2 ${viewMode === '2d'
-                            ? 'bg-gray-700 text-white shadow-sm'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                          }`}
-                        title="2D Heatmap"
+                        className="h-8"
                       >
-                        <Grid className="h-4 w-4" />
-                        <span className="text-sm font-medium">2D View</span>
-                      </button>
-                      <button
+                        <Grid className="h-4 w-4 mr-2" />
+                        2D View
+                      </Button>
+                      <Button
+                        variant={viewMode === '3d' ? 'default' : 'ghost'}
+                        size="sm"
                         onClick={() => setViewMode('3d')}
-                        className={`p-2 rounded flex items-center space-x-2 ${viewMode === '3d'
-                            ? 'bg-gray-700 text-white shadow-sm'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                          }`}
-                        title="3D Surface"
+                        className="h-8"
                       >
-                        <Box className="h-4 w-4" />
-                        <span className="text-sm font-medium">3D View</span>
-                      </button>
+                        <Box className="h-4 w-4 mr-2" />
+                        3D View
+                      </Button>
                     </div>
                   </div>
 
                   {viewMode === '2d' ? (
-                    <>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                       <VEHeatmap
                         data={veData.before}
                         rpm={veData.rpm}
@@ -307,27 +313,35 @@ export default function Results() {
                         load={veData.load}
                         title="VE Table - After Corrections"
                       />
-                    </>
+                    </div>
                   ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">VE Table - Before Corrections</h3>
-                        <div className="h-[500px] border border-gray-700 rounded-lg overflow-hidden">
-                          <VESurface data={veData} type="before" />
-                        </div>
-                        <p className="text-sm text-gray-400 text-center">
-                          Click and drag to rotate • Scroll to zoom
-                        </p>
-                      </div>
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">VE Table - After Corrections</h3>
-                        <div className="h-[500px] border border-gray-700 rounded-lg overflow-hidden">
-                          <VESurface data={veData} type="after" />
-                        </div>
-                        <p className="text-sm text-gray-400 text-center">
-                          Click and drag to rotate • Scroll to zoom
-                        </p>
-                      </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>VE Table - Before Corrections</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[500px] rounded-lg overflow-hidden border border-border bg-muted/10">
+                            <VESurface data={veData} type="before" />
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center mt-4">
+                            Click and drag to rotate • Scroll to zoom
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>VE Table - After Corrections</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[500px] rounded-lg overflow-hidden border border-border bg-muted/10">
+                            <VESurface data={veData} type="after" />
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center mt-4">
+                            Click and drag to rotate • Scroll to zoom
+                          </p>
+                        </CardContent>
+                      </Card>
                     </div>
                   )}
                 </>
@@ -350,32 +364,40 @@ export default function Results() {
                   title="Data Coverage - Rear Cylinder"
                 />
               )}
-
-              {!veData && !coverageData && (
-                <p className="text-center text-gray-400 py-8">
-                  No visualization data available
-                </p>
-              )}
             </div>
+          ) : (
+            <Card className="py-12 text-center border-dashed">
+              <CardContent className="space-y-4 pt-6">
+                 <div className="p-4 bg-muted rounded-full w-fit mx-auto">
+                   <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                 </div>
+                <div className="space-y-2">
+                   <p className="font-medium text-foreground">No visualization data available</p>
+                   <p className="text-sm text-muted-foreground">
+                     {veLoadError ? `Error: ${veLoadError}` : "The analysis did not produce compatible 3D/2D visualization data."}
+                   </p>
+                </div>
+              </CardContent>
+            </Card>
           )}
+        </TabsContent>
 
-          {/* Diagnostics Tab */}
-          {activeTab === 'diagnostics' && (
-            <>
-              {diagnostics?.anomalies ? (
-                <DiagnosticsPanel
-                  anomalies={diagnostics.anomalies.anomalies || []}
-                  correctionDiagnostics={diagnostics.anomalies.correction_diagnostics}
-                />
-              ) : (
-                <p className="text-center text-gray-400 py-8">
-                  No diagnostics data available
-                </p>
-              )}
-            </>
+        {/* Diagnostics Tab */}
+        <TabsContent value="diagnostics">
+          {diagnostics?.anomalies ? (
+            <DiagnosticsPanel
+              anomalies={diagnostics.anomalies.anomalies || []}
+              correctionDiagnostics={diagnostics.anomalies.correction_diagnostics}
+            />
+          ) : (
+            <Card className="py-12 text-center">
+              <CardContent>
+                <p className="text-muted-foreground">No diagnostics data available</p>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

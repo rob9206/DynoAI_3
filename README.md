@@ -105,3 +105,19 @@ python -m unittest test_ve_operations -v
 - [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - Complete VE Apply/Rollback system documentation
 - [Dyno_AI_Tuner_v1_2_README.txt](Dyno_AI_Tuner_v1_2_README.txt) - Main toolkit documentation
 
+## DynoAI Coding Agent (Minimal, Local-First)
+
+- Generate a patch:
+
+  ```bash
+  python scripts/dynoai_make_patch.py --goal "..." --files ai_tuner_toolkit_dyno_v1_2.py
+  ```
+
+- Apply & test:
+
+  ```bash
+  python scripts/dynoai_apply_patch.py patches/<generated>.diff
+  ```
+
+- See `docs/DYNOAI_AGENT_WORKFLOW.md` for details.
+

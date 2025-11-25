@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface VEHeatmapProps {
   data: number[][];
@@ -83,62 +84,66 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
   }, [data, rpm, load]);
 
   return (
-    <div className="bg-gray-900/50 rounded-lg p-6 border border-gray-700">
-      <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
-      <div className="overflow-x-auto">
-        <div className="relative" style={{ paddingLeft: '70px', paddingTop: '40px' }}>
-          {/* Y-axis labels (RPM) */}
-          <div className="absolute left-5 top-[40px] w-[40px] h-[400px] flex flex-col justify-between text-xs text-gray-400 font-mono">
-            {rpm.map((val, i) => (
-              <div key={i} className="flex-1 flex items-center justify-end pr-2">
-                {val}
-              </div>
-            ))}
-          </div>
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <div className="relative min-w-[670px]" style={{ paddingLeft: '70px', paddingTop: '40px' }}>
+            {/* Y-axis labels (RPM) */}
+            <div className="absolute left-0 top-[40px] w-[60px] h-[400px] flex flex-col justify-between text-xs text-muted-foreground font-mono pr-2 border-r border-border">
+              {rpm.map((val, i) => (
+                <div key={i} className="flex-1 flex items-center justify-end">
+                  {val}
+                </div>
+              ))}
+            </div>
 
-          {/* X-axis labels (Load) */}
-          <div className="absolute left-[70px] top-[15px] w-[600px] h-[20px] flex justify-between text-xs text-gray-400 font-mono">
-            {load.map((val, i) => (
-              <div key={i} className="flex-1 flex items-center justify-center">
-                {val}
-              </div>
-            ))}
-          </div>
+            {/* X-axis labels (Load) */}
+            <div className="absolute left-[70px] top-[10px] w-[600px] h-[25px] flex justify-between text-xs text-muted-foreground font-mono border-b border-border">
+              {load.map((val, i) => (
+                <div key={i} className="flex-1 flex items-center justify-center">
+                  {val}
+                </div>
+              ))}
+            </div>
 
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={400}
-            className="border border-gray-700 rounded"
-          />
-          
-          {/* Axis Titles */}
-          <div className="absolute top-0 left-[70px] w-[600px] text-center text-xs font-semibold text-gray-300">
-            MAP (kPa)
-          </div>
-          <div className="absolute left-0 top-[40px] h-[400px] flex items-center justify-center -ml-4">
-            <div className="-rotate-90 text-xs font-semibold text-gray-300 whitespace-nowrap">
-              RPM
+            <canvas
+              ref={canvasRef}
+              width={600}
+              height={400}
+              className="border border-border rounded bg-muted/10 shadow-inner"
+            />
+            
+            {/* Axis Titles */}
+            <div className="absolute top-0 left-[70px] w-[600px] text-center text-xs font-semibold text-muted-foreground">
+              MAP (kPa)
+            </div>
+            <div className="absolute left-[-10px] top-[40px] h-[400px] flex items-center justify-center">
+              <div className="-rotate-90 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                RPM
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* Legend */}
-      <div className="mt-4 flex items-center justify-center space-x-4 text-xs text-gray-400">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-blue-500 rounded"></div>
-          <span>Lean (Negative)</span>
+        
+        {/* Legend */}
+        <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-muted-foreground">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
+            <span>Lean (Negative)</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></div>
+            <span>Target (Zero)</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+            <span>Rich (Positive)</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-white rounded"></div>
-          <span>Target (Zero)</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-red-500 rounded"></div>
-          <span>Rich (Positive)</span>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
