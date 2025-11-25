@@ -14,10 +14,12 @@ import sys
 import unittest
 from pathlib import Path
 
+import preflight_csv
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import preflight_csv
+
 class TestPreflightCSV(unittest.TestCase):
     """Test CSV preflight validation functionality"""
 
