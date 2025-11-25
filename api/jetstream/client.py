@@ -66,6 +66,9 @@ class JetstreamClient:
 
         request = Request(url, data=body, headers=headers, method=method)
 
+        # Maximum size for error response bodies (32KB)
+        MAX_ERROR_BODY_SIZE = 32 * 1024
+
         try:
             with urlopen(request, timeout=self._timeout) as response:
                 response_data = response.read().decode("utf-8")
@@ -73,7 +76,8 @@ class JetstreamClient:
                     return json.loads(response_data)
                 return {}
         except HTTPError as e:
-            error_body = e.read().decode("utf-8") if e.fp else str(e)
+            # Limit error body size to prevent memory exhaustion
+            error_body = e.read(MAX_ERROR_BODY_SIZE).decode("utf-8") if e.fp else str(e)
             raise ConnectionError(
                 f"Jetstream API error ({e.code}): {error_body}"
             ) from e

@@ -40,7 +40,7 @@ export function JetstreamRunCard({ run }: JetstreamRunCardProps) {
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <CardTitle className="text-base font-medium">
-              {run.run_id.substring(0, 20)}...
+              {run.run_id.length > 20 ? `${run.run_id.substring(0, 20)}...` : run.run_id}
             </CardTitle>
             <p className="text-sm text-muted-foreground">{vehicle}</p>
           </div>

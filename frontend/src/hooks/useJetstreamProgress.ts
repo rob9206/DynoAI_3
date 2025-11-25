@@ -62,27 +62,19 @@ export function useJetstreamProgress(runId: string | undefined) {
       eventSource.close();
     });
 
-    eventSource.addEventListener('error', (event: Event) => {
-      // Check if this is an SSE error event with data
-      if (event instanceof MessageEvent) {
-        const messageEvent = event as MessageEvent<string>;
-        const data = JSON.parse(messageEvent.data) as {
-          error: { stage: string; code: string; message: string };
-        };
-        setState((prev) => ({
-          ...prev,
-          error: data.error,
-        }));
-      } else {
-        // Connection error
-        setState((prev) => ({
-          ...prev,
-          connected: false,
-        }));
-      }
+    // Handle custom 'run_error' event type from backend (sent via SSE)
+    eventSource.addEventListener('run_error', (event: MessageEvent<string>) => {
+      const data = JSON.parse(event.data) as {
+        error: { stage: string; code: string; message: string };
+      };
+      setState((prev) => ({
+        ...prev,
+        error: data.error,
+      }));
       eventSource.close();
     });
 
+    // Handle connection errors (not SSE events)
     eventSource.onerror = () => {
       setState((prev) => ({ ...prev, connected: false }));
       eventSource.close();

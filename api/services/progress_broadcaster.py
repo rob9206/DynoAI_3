@@ -140,7 +140,7 @@ class ProgressBroadcaster:
         """
         event = ProgressEvent(
             run_id=run_id,
-            event_type="error",
+            event_type="run_error",  # Use 'run_error' to avoid collision with SSE error event
             data={
                 "run_id": run_id,
                 "error": {
