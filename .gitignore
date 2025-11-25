@@ -6,6 +6,15 @@
 # Python virtual environments
 .venv/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules and build output
+node_modules/
+dist/
+
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
 
