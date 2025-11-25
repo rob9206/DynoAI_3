@@ -5,6 +5,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify
 from jetstream.poller import get_poller
+from jetstream.stub_data import get_stub_sync_response, is_stub_mode_enabled
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -25,6 +26,9 @@ def trigger_sync():
         "run_ids": ["run_abc123", "run_def456"]
     }
     """
+    if is_stub_mode_enabled():
+        return jsonify(get_stub_sync_response()), 200
+
     poller = get_poller()
 
     if not poller:

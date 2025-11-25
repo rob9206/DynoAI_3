@@ -24,6 +24,9 @@ import { useJetstreamRun } from '../hooks/useJetstream';
 import { useJetstreamProgress } from '../hooks/useJetstreamProgress';
 import { downloadRunFile } from '../api/jetstream';
 import type { RunStatus } from '../api/jetstream';
+import { VEHeatmap } from '../components/results/VEHeatmap';
+import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
+import { useVEData } from '../hooks/useVEData';
 
 const statusConfig: Record<
   RunStatus,
@@ -320,9 +323,7 @@ export default function RunDetailPage() {
               <CardDescription>Volumetric Efficiency corrections</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64 bg-muted/50 rounded-lg flex items-center justify-center">
-                <p className="text-muted-foreground">VE Heatmap visualization coming soon</p>
-              </div>
+              <VEHeatmapWithData runId={run.run_id} />
             </CardContent>
           </Card>
 
@@ -348,6 +349,62 @@ export default function RunDetailPage() {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * VE Heatmap component with data fetching
+ */
+function VEHeatmapWithData({ runId }: { runId: string }) {
+  const { data: veData, isLoading, error } = useVEData(runId);
+
+  if (isLoading) {
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading VE data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-64 bg-muted/50 rounded-lg flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-center px-4">
+          <AlertCircle className="h-8 w-8 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            Unable to load VE data: {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!veData || !veData.corrections || veData.corrections.length === 0) {
+    return (
+      <div className="h-64 bg-muted/50 rounded-lg flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <FileText className="h-8 w-8 text-muted-foreground" />
+          <p className="text-muted-foreground">No VE correction data available</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <VEHeatmapLegend clampLimit={7} />
+      <VEHeatmap
+        data={veData.corrections}
+        rowLabels={veData.rpm.map(String)}
+        colLabels={veData.load.map(String)}
+        clampLimit={7}
+        showClampIndicators={true}
+        showValues={true}
+      />
     </div>
   );
 }

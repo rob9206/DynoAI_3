@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify
 from jetstream.models import PollerStatus
 from jetstream.poller import get_poller
+from jetstream.stub_data import get_stub_status, is_stub_mode_enabled
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -28,6 +29,9 @@ def get_status():
         "error": null
     }
     """
+    if is_stub_mode_enabled():
+        return jsonify(get_stub_status()), 200
+
     poller = get_poller()
 
     if poller:

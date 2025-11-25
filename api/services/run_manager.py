@@ -48,6 +48,7 @@ class RunManager:
         source: str,
         jetstream_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        run_id: Optional[str] = None,
     ) -> RunState:
         """
         Create a new run directory structure.
@@ -56,12 +57,23 @@ class RunManager:
             source: Source of the run ('jetstream' or 'manual_upload')
             jetstream_id: Optional Jetstream run ID
             metadata: Optional metadata to store
+            run_id: Optional explicit run ID (useful for fixtures/stubs)
 
         Returns:
             The created RunState
         """
-        run_id = make_run_id(prefix="run_")
-        run_dir = self._runs_dir / run_id
+        requested_id = run_id or make_run_id(prefix="run_")
+        safe_name = (
+            requested_id.replace("/", "_")
+            .replace("\\", "_")
+            .replace("..", "_")
+            .strip()
+        )
+        if not safe_name:
+            safe_name = make_run_id(prefix="run_")
+
+        run_dir = Path(safe_path(str(self._runs_dir / safe_name)))
+        run_id = run_dir.name
 
         # Create directory structure
         run_dir.mkdir(parents=True, exist_ok=True)
