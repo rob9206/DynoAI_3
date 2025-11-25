@@ -11,6 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// No-op function for disabled state
+const noop = (): void => {
+  // Intentionally empty - used to prevent dialog close during loading
+};
+
 interface ConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -73,7 +78,7 @@ export function ConfirmationDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={loading ? undefined : onOpenChange}>
+    <Dialog open={open} onOpenChange={loading ? noop : onOpenChange}>
       <DialogContent
         onKeyDown={handleKeyDown}
         aria-describedby="confirmation-dialog-description"

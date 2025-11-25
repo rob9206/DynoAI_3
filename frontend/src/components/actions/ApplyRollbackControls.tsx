@@ -48,6 +48,8 @@ export function ApplyRollbackControls({
 
   const isApplying = status === 'applying';
   const isRollingBack = status === 'rolling_back';
+  const isSuccess = status === 'success';
+  const isError = status === 'error';
   const isLoading = isApplying || isRollingBack;
 
   const handleApplyClick = useCallback(() => {
@@ -77,7 +79,7 @@ export function ApplyRollbackControls({
         </>
       );
     }
-    if (status === 'success' && !canApply) {
+    if (isSuccess && !canApply) {
       return (
         <>
           <Check className="h-4 w-4" />
@@ -140,9 +142,10 @@ export function ApplyRollbackControls({
                 className={cn(
                   'gap-2',
                   isMobile ? 'w-full' : '',
-                  status === 'success' &&
+                  isSuccess &&
                     !canApply &&
-                    'bg-green-600 hover:bg-green-700'
+                    'bg-green-600 hover:bg-green-700',
+                  isError && 'border-destructive'
                 )}
                 aria-busy={isApplying}
                 aria-disabled={!canApply || isLoading}

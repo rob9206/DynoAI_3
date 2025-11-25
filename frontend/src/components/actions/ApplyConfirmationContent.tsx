@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface ApplyConfirmationContentProps {
   summary: {
@@ -38,9 +39,10 @@ export function ApplyConfirmationContent({
         <div className="space-y-1">
           <p className="text-muted-foreground">Clamped cells</p>
           <p
-            className={`font-mono font-medium text-lg ${
+            className={cn(
+              'font-mono font-medium text-lg',
               clampedCells > 0 ? 'text-amber-500' : 'text-green-500'
-            }`}
+            )}
           >
             {clampedCells}
           </p>

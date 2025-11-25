@@ -7,6 +7,9 @@ interface UseApplyRollbackOptions {
   runId: string;
   onSuccess?: (action: 'apply' | 'rollback') => void;
   onError?: (action: 'apply' | 'rollback', error: Error) => void;
+  initialCanApply?: boolean;
+  initialCanRollback?: boolean;
+  initialLastApplied?: string | null;
 }
 
 interface ApplyResponse {
@@ -34,11 +37,14 @@ export function useApplyRollback({
   runId,
   onSuccess,
   onError,
+  initialCanApply = true,
+  initialCanRollback = false,
+  initialLastApplied = null,
 }: UseApplyRollbackOptions): UseApplyRollbackReturn {
   const queryClient = useQueryClient();
-  const [lastApplied, setLastApplied] = useState<string | null>(null);
-  const [canApply, setCanApply] = useState(true);
-  const [canRollback, setCanRollback] = useState(false);
+  const [lastApplied, setLastApplied] = useState<string | null>(initialLastApplied);
+  const [canApply, setCanApply] = useState(initialCanApply);
+  const [canRollback, setCanRollback] = useState(initialCanRollback);
 
   const applyMutation = useMutation({
     mutationFn: async (): Promise<ApplyResponse> => {
