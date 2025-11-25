@@ -6,14 +6,15 @@ import sys
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
+from jetstream.models import JetstreamConfig
+from jetstream.poller import get_poller, init_poller
+
+from io_contracts import safe_path
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from io_contracts import safe_path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from jetstream.models import JetstreamConfig
-from jetstream.poller import get_poller, init_poller
 
 config_bp = Blueprint("jetstream_config", __name__)
 
@@ -108,9 +109,14 @@ def update_config():
 
         # Validate
         if existing.enabled and (not existing.api_url or not existing.api_key):
-            return jsonify({
-                "error": "API URL and API key are required when enabling Jetstream"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": "API URL and API key are required when enabling Jetstream"
+                    }
+                ),
+                400,
+            )
 
         # Save updated config
         _save_config(existing)
@@ -120,10 +126,15 @@ def update_config():
         if poller:
             poller.configure(existing)
 
-        return jsonify({
-            "message": "Configuration updated",
-            "config": existing.to_dict(mask_key=True)
-        }), 200
+        return (
+            jsonify(
+                {
+                    "message": "Configuration updated",
+                    "config": existing.to_dict(mask_key=True),
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

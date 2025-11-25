@@ -33,9 +33,9 @@ except Exception:  # pragma: no cover
 
 # Register Jetstream blueprint
 try:
-    from routes.jetstream import jetstream_bp
     from jetstream.models import JetstreamConfig
     from jetstream.poller import init_poller
+    from routes.jetstream import jetstream_bp
 
     app.register_blueprint(jetstream_bp, url_prefix="/api/jetstream")
 

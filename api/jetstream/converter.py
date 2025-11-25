@@ -6,9 +6,10 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from io_contracts import safe_path
+
 # Add parent directory to path for io_contracts import
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from io_contracts import safe_path
 
 # Required columns for DynoAI processing
 REQUIRED_COLUMNS = ("rpm", "map_kpa", "torque")

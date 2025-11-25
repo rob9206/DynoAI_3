@@ -81,7 +81,9 @@ class RunState:
         """Convert to dictionary for JSON serialization."""
         result = {
             "run_id": self.run_id,
-            "status": self.status.value if isinstance(self.status, RunStatus) else self.status,
+            "status": (
+                self.status.value if isinstance(self.status, RunStatus) else self.status
+            ),
             "source": self.source,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -112,7 +114,11 @@ class RunState:
             )
         return cls(
             run_id=data["run_id"],
-            status=RunStatus(data["status"]) if isinstance(data["status"], str) else data["status"],
+            status=(
+                RunStatus(data["status"])
+                if isinstance(data["status"], str)
+                else data["status"]
+            ),
             source=data["source"],
             created_at=data["created_at"],
             updated_at=data["updated_at"],

@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
+from jetstream.models import RunStatus
+from services.run_manager import get_run_manager
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from jetstream.models import RunStatus
-from services.run_manager import get_run_manager
 
 runs_bp = Blueprint("jetstream_runs", __name__)
 
@@ -89,11 +89,13 @@ def get_run(run_id: str):
         files = []
         for file_path in output_dir.iterdir():
             if file_path.is_file():
-                files.append({
-                    "name": file_path.name,
-                    "size": file_path.stat().st_size,
-                    "url": f"/api/jetstream/runs/{run_id}/files/{file_path.name}",
-                })
+                files.append(
+                    {
+                        "name": file_path.name,
+                        "size": file_path.stat().st_size,
+                        "url": f"/api/jetstream/runs/{run_id}/files/{file_path.name}",
+                    }
+                )
         response["output_files"] = files
 
     # Load jetstream metadata if available

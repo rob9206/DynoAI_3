@@ -4,11 +4,11 @@ import sys
 from pathlib import Path
 
 from flask import Blueprint, jsonify
+from jetstream.models import PollerStatus
+from jetstream.poller import get_poller
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from jetstream.poller import get_poller
-from jetstream.models import PollerStatus
 
 status_bp = Blueprint("jetstream_status", __name__)
 
@@ -34,9 +34,6 @@ def get_status():
         status = poller.status
     else:
         # No poller initialized
-        status = PollerStatus(
-            connected=False,
-            error="Jetstream poller not initialized"
-        )
+        status = PollerStatus(connected=False, error="Jetstream poller not initialized")
 
     return jsonify(status.to_dict()), 200

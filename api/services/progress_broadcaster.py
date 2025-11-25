@@ -104,7 +104,9 @@ class ProgressBroadcaster:
         )
         self._broadcast(run_id, event)
 
-    def broadcast_complete(self, run_id: str, results_summary: Optional[Dict] = None) -> None:
+    def broadcast_complete(
+        self, run_id: str, results_summary: Optional[Dict] = None
+    ) -> None:
         """
         Broadcast a completion event.
 

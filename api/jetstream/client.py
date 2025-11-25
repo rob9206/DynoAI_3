@@ -9,11 +9,12 @@ from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-# Add parent directory to path for io_contracts import
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from io_contracts import safe_path
 
 from .models import JetstreamRun, JetstreamRunMetadata
+
+# Add parent directory to path for io_contracts import
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 class JetstreamClient:
@@ -210,9 +211,7 @@ class JetstreamClient:
                 f"Failed to download run data ({e.code}): {e.read().decode('utf-8') if e.fp else str(e)}"
             ) from e
         except URLError as e:
-            raise ConnectionError(
-                f"Failed to download run data: {e.reason}"
-            ) from e
+            raise ConnectionError(f"Failed to download run data: {e.reason}") from e
 
     def mark_run_processed(self, run_id: str) -> None:
         """

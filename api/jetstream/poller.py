@@ -10,12 +10,13 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Callable, Dict, List, Optional
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from io_contracts import safe_path
 
 from .client import JetstreamClient
 from .models import JetstreamConfig, JetstreamRun, PollerStatus, RunStatus
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +262,9 @@ class JetstreamPoller:
             try:
                 self._client.mark_run_processed(run_id)
             except Exception as e:
-                logger.warning(f"Failed to mark run {run_id} as processed on Jetstream: {e}")
+                logger.warning(
+                    f"Failed to mark run {run_id} as processed on Jetstream: {e}"
+                )
 
 
 # Global poller instance
@@ -273,7 +276,9 @@ def get_poller() -> Optional[JetstreamPoller]:
     return _poller
 
 
-def init_poller(config: JetstreamConfig, on_new_run: Optional[Callable] = None) -> JetstreamPoller:
+def init_poller(
+    config: JetstreamConfig, on_new_run: Optional[Callable] = None
+) -> JetstreamPoller:
     """
     Initialize the global poller instance.
 

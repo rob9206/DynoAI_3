@@ -3,10 +3,10 @@
 from flask import Blueprint
 
 from .config import config_bp
-from .status import status_bp
-from .runs import runs_bp
-from .sync import sync_bp
 from .progress import progress_bp
+from .runs import runs_bp
+from .status import status_bp
+from .sync import sync_bp
 
 # Create main jetstream blueprint
 jetstream_bp = Blueprint("jetstream", __name__)
