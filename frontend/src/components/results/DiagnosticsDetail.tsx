@@ -110,8 +110,8 @@ export function DiagnosticsDetail({
             <span className="text-muted-foreground">Kernels Applied:</span>
             <div className="flex gap-1.5 flex-wrap justify-end">
               {data.kernelsApplied.length > 0 ? (
-                data.kernelsApplied.map((kernel) => (
-                  <Badge key={kernel} variant="secondary" className="font-mono text-xs">
+                data.kernelsApplied.map((kernel, index) => (
+                  <Badge key={`${kernel}-${index}`} variant="secondary" className="font-mono text-xs">
                     {kernel}
                   </Badge>
                 ))

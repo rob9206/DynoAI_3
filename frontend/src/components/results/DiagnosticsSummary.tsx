@@ -30,6 +30,7 @@ function getMetricStatus(
   switch (metric) {
     case 'cellsClamped':
       if (value === 0) return 'success';
+      if (data.totalCells === 0) return 'neutral';
       if (value / data.totalCells > 0.1) return 'error';
       return 'warning';
 

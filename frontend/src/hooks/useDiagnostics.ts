@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import type { DiagnosticsData } from '@/components/results/DiagnosticsDetail';
 
+const DEFAULT_CLAMP_LIMIT = 7;
+
 export interface UseDiagnosticsOptions {
   runId: string;
   enabled?: boolean;
@@ -43,7 +45,7 @@ function transformApiResponse(response: ApiDiagnosticsResponse): DiagnosticsData
     minCorrection: diag.minCorrection ?? 0,
     avgCorrection: diag.avgCorrection ?? 0,
     cellsClamped: diag.cellsClamped ?? 0,
-    clampLimit: diag.clampLimit ?? 7,
+    clampLimit: diag.clampLimit ?? DEFAULT_CLAMP_LIMIT,
     coveragePercent: diag.coveragePercent ?? 0,
     processingTimeMs: diag.processingTimeMs ?? 0,
     dataPoints: diag.dataPoints ?? 0,
