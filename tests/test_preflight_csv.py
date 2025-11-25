@@ -10,7 +10,6 @@ Tests the CSV preflight validation tool to ensure it properly:
 """
 
 import json
-import os
 import sys
 import unittest
 from pathlib import Path
