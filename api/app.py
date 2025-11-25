@@ -58,6 +58,13 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
 
+# Register Baseline blueprint
+try:
+    from routes.baseline import baseline_bp
+    app.register_blueprint(baseline_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Baseline integration: {e}")
+
 # Configuration
 UPLOAD_FOLDER = Path("uploads")
 OUTPUT_FOLDER = Path("outputs")
@@ -598,6 +605,9 @@ if __name__ == "__main__":
     print("  GET  /api/diagnostics/<id>    - Get diagnostics data")
     print("  GET  /api/coverage/<id>       - Get coverage data")
     print("  POST /api/xai/chat            - Proxy chat to xAI (Grok)")
+    print("\n[*] Baseline endpoints:")
+    print("  POST /api/baseline/generate   - Generate One-Pull Baseline")
+    print("  POST /api/baseline/preview    - Preview baseline (no save)")
     print("\n[*] Jetstream endpoints:")
     print("  GET  /api/jetstream/config    - Get Jetstream configuration")
     print("  PUT  /api/jetstream/config    - Update Jetstream configuration")

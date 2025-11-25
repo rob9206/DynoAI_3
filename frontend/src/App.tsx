@@ -8,6 +8,7 @@ import History from './pages/History';
 import VEHeatmapDemo from './pages/VEHeatmapDemo';
 import JetstreamPage from './pages/JetstreamPage';
 import RunDetailPage from './pages/RunDetailPage';
+import { BaselinePage } from './pages/BaselinePage';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ function App() {
               <Route path="/" element={<Navigate to="/jetstream" replace />} />
               <Route path="/jetstream" element={<JetstreamPage />} />
               <Route path="/runs/:runId" element={<RunDetailPage />} />
+              <Route path="/baseline/:runId?" element={<BaselinePage />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/results/:runId" element={<Results />} />
               <Route path="/history" element={<History />} />
