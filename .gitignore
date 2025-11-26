@@ -3,6 +3,11 @@
 *.tar.gz
 *.rar
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # Python virtual environments
 .venv/
 
