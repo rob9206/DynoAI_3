@@ -6,6 +6,7 @@ interface VEHeatmapProps {
   rpm: number[];
   load: number[];
   title: string;
+  colorMode?: 'diverging' | 'sequential'; // diverging for corrections, sequential for coverage
 }
 
 interface TooltipData {
@@ -16,7 +17,7 @@ interface TooltipData {
   y: number;
 }
 
-export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
+export default function VEHeatmap({ data, rpm, load, title, colorMode = 'diverging' }: VEHeatmapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -41,7 +42,6 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
     const flatData = data.flat().filter(v => v !== null && !isNaN(v));
     const min = Math.min(...flatData);
     const max = Math.max(...flatData);
-    const range = max - min;
 
     // Draw heatmap
     data.forEach((row, rpmIdx) => {
@@ -49,10 +49,38 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
         if (value === null || isNaN(value)) {
           // Gray for missing data
           ctx.fillStyle = '#374151';
+        } else if (colorMode === 'sequential') {
+          // Sequential color scale for coverage data (0 to max)
+          // Gradient: white -> cyan -> green -> yellow -> orange -> red
+          const normalized = max > 0 ? value / max : 0;
+
+          if (value === 0) {
+            // White/light gray for no data
+            ctx.fillStyle = '#f3f4f6';
+          } else if (normalized < 0.2) {
+            // Light blue to cyan
+            const t = normalized / 0.2;
+            ctx.fillStyle = `rgb(${Math.floor(200 + (100 - 200) * t)}, ${Math.floor(220 + (220 - 220) * t)}, ${Math.floor(255)})`;
+          } else if (normalized < 0.4) {
+            // Cyan to green
+            const t = (normalized - 0.2) / 0.2;
+            ctx.fillStyle = `rgb(${Math.floor(100 - 100 * t)}, ${Math.floor(220 - 20 * t)}, ${Math.floor(255 - 55 * t)})`;
+          } else if (normalized < 0.6) {
+            // Green to yellow-green
+            const t = (normalized - 0.4) / 0.2;
+            ctx.fillStyle = `rgb(${Math.floor(100 * t)}, ${Math.floor(200 + 55 * t)}, ${Math.floor(200 - 200 * t)})`;
+          } else if (normalized < 0.8) {
+            // Yellow to orange
+            const t = (normalized - 0.6) / 0.2;
+            ctx.fillStyle = `rgb(${Math.floor(100 + 155 * t)}, ${Math.floor(255 - 100 * t)}, ${0})`;
+          } else {
+            // Orange to red
+            const t = (normalized - 0.8) / 0.2;
+            ctx.fillStyle = `rgb(${255}, ${Math.floor(155 - 155 * t)}, ${0})`;
+          }
         } else {
-          // Color scale from blue (negative) through white (zero) to red (positive)
-          const normalized = range > 0 ? (value - min) / range : 0.5;
-          
+          // Diverging color scale for VE corrections (negative to positive)
+          // Blue (negative) through white (zero) to red (positive)
           if (value < 0) {
             // Blue for negative corrections
             const intensity = Math.abs(value) / Math.abs(min);
@@ -78,7 +106,17 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
 
         // Draw value text
         if (value !== null && !isNaN(value)) {
-          ctx.fillStyle = Math.abs(value) > (max - min) / 2 ? '#ffffff' : '#000000';
+          // Choose text color based on background brightness
+          if (colorMode === 'sequential') {
+            const normalized = max > 0 ? value / max : 0;
+            // Use white text for darker backgrounds (high values), black for lighter
+            ctx.fillStyle = normalized > 0.5 ? '#ffffff' : '#000000';
+          } else {
+            // For diverging scale, use white text for extreme values
+            const absValue = Math.abs(value);
+            const maxAbs = Math.max(Math.abs(min), Math.abs(max));
+            ctx.fillStyle = absValue > maxAbs / 2 ? '#ffffff' : '#000000';
+          }
           ctx.font = '12px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -91,7 +129,7 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
       });
     });
 
-  }, [data, rpm, load]);
+  }, [data, rpm, load, colorMode]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
@@ -110,7 +148,7 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
     if (
       loadIdx >= 0 && loadIdx < load.length &&
       rpmIdx >= 0 && rpmIdx < rpm.length &&
-      data[rpmIdx] && data[rpmIdx][loadIdx] !== null && !isNaN(data[rpmIdx][loadIdx])
+      data[rpmIdx]?.[loadIdx] != null && !isNaN(data[rpmIdx][loadIdx])
     ) {
       setTooltip({
         value: data[rpmIdx][loadIdx],
@@ -162,7 +200,7 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             />
-            
+
             {/* Axis Titles */}
             <div className="absolute top-0 left-[70px] w-[600px] text-center text-xs font-semibold text-muted-foreground">
               MAP (kPa)
@@ -195,21 +233,48 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
             )}
           </div>
         </div>
-        
+
         {/* Legend */}
-        <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-muted-foreground">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
-            <span>Lean (Negative)</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></div>
-            <span>Target (Zero)</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
-            <span>Rich (Positive)</span>
-          </div>
+        <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-muted-foreground flex-wrap gap-2">
+          {colorMode === 'sequential' ? (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-gray-100 border border-gray-300 rounded-sm"></div>
+                <span>No Data</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-cyan-400 rounded-sm"></div>
+                <span>Low</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+                <span>Medium</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-yellow-500 rounded-sm"></div>
+                <span>High</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+                <span>Very High</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
+                <span>Lean (Negative)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></div>
+                <span>Target (Zero)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+                <span>Rich (Positive)</span>
+              </div>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

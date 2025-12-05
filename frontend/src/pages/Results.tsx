@@ -41,9 +41,9 @@ export default function Results() {
         // Load additional data
         try {
           const veResult = await getVEData(runId!).catch(err => {
-             console.error("VE Data Load Error:", err);
-             setVeLoadError("Failed to load VE Data");
-             return null;
+            console.error("VE Data Load Error:", err);
+            setVeLoadError("Failed to load VE Data");
+            return null;
           });
           const coverageResult = await getCoverageData(runId!).catch(() => null);
           const diagResult = await getDiagnostics(runId!).catch(() => null);
@@ -239,8 +239,8 @@ export default function Results() {
                 <FileText className="h-8 w-8 text-purple-500" />
               );
 
-              const fileSize = typeof file === 'object' && 'size' in file ? 
-                `${((file.size as number) / 1024).toFixed(1)} KB` : 
+              const fileSize = typeof file === 'object' && 'size' in file ?
+                `${((file.size as number) / 1024).toFixed(1)} KB` :
                 '';
 
               return (
@@ -266,12 +266,12 @@ export default function Results() {
                         <Download className="h-4 w-4" />
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <h3 className="font-semibold text-sm text-foreground line-clamp-2 min-h-[2.5rem]">
                         {file.name}
                       </h3>
-                      
+
                       <div className="flex items-center justify-between">
                         <Badge variant="secondary" className="text-xs font-normal">
                           {file.type}
@@ -304,8 +304,8 @@ export default function Results() {
               {veData && (
                 <>
                   <div className="flex justify-between items-center">
-                     <h3 className="text-lg font-medium">VE Corrections</h3>
-                     <div className="bg-muted p-1 rounded-lg inline-flex">
+                    <h3 className="text-lg font-medium">VE Corrections</h3>
+                    <div className="bg-muted p-1 rounded-lg inline-flex">
                       <Button
                         variant={viewMode === '2d' ? 'default' : 'ghost'}
                         size="sm"
@@ -381,6 +381,7 @@ export default function Results() {
                   rpm={coverageData.front.rpm}
                   load={coverageData.front.load}
                   title="Data Coverage - Front Cylinder"
+                  colorMode="sequential"
                 />
               )}
 
@@ -390,20 +391,21 @@ export default function Results() {
                   rpm={coverageData.rear.rpm}
                   load={coverageData.rear.load}
                   title="Data Coverage - Rear Cylinder"
+                  colorMode="sequential"
                 />
               )}
             </div>
           ) : (
             <Card className="py-12 text-center border-dashed">
               <CardContent className="space-y-4 pt-6">
-                 <div className="p-4 bg-muted rounded-full w-fit mx-auto">
-                   <AlertCircle className="h-8 w-8 text-muted-foreground" />
-                 </div>
+                <div className="p-4 bg-muted rounded-full w-fit mx-auto">
+                  <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                </div>
                 <div className="space-y-2">
-                   <p className="font-medium text-foreground">No visualization data available</p>
-                   <p className="text-sm text-muted-foreground">
-                     {veLoadError ? `Error: ${veLoadError}` : "The analysis did not produce compatible 3D/2D visualization data."}
-                   </p>
+                  <p className="font-medium text-foreground">No visualization data available</p>
+                  <p className="text-sm text-muted-foreground">
+                    {veLoadError ? `Error: ${veLoadError}` : "The analysis did not produce compatible 3D/2D visualization data."}
+                  </p>
                 </div>
               </CardContent>
             </Card>
