@@ -5,10 +5,10 @@ VE table grids, coverage analysis, and correction calculations.
 
 Usage:
     from dynoai.constants import RPM_BINS, KPA_BINS, validate_grid_dimensions
-    
+
     # Use in grid operations
     grid = [[None] * len(KPA_BINS) for _ in range(len(RPM_BINS))]
-    
+
     # Validate grid dimensions
     validate_grid_dimensions(grid)
 """
@@ -34,7 +34,7 @@ KPA_BINS: List[int] = [35, 50, 65, 80, 95]
 
 # Grid dimensions (rows × columns)
 GRID_ROWS: int = len(RPM_BINS)  # 11 rows
-GRID_COLS: int = len(KPA_BINS)   # 5 columns
+GRID_COLS: int = len(KPA_BINS)  # 5 columns
 GRID_CELLS: int = GRID_ROWS * GRID_COLS  # 55 total cells
 
 # ============================================================================
@@ -50,21 +50,22 @@ KPA_INDEX: dict[int, int] = {kpa: i for i, kpa in enumerate(KPA_BINS)}
 # Validation Functions
 # ============================================================================
 
+
 def validate_grid_dimensions(
     grid: Sequence[Sequence[Optional[float]]],
     expected_rows: Optional[int] = None,
-    expected_cols: Optional[int] = None
+    expected_cols: Optional[int] = None,
 ) -> None:
     """Validate grid matches expected dimensions.
-    
+
     Args:
         grid: 2D grid to validate (list of lists)
         expected_rows: Expected row count (default: GRID_ROWS)
         expected_cols: Expected column count (default: GRID_COLS)
-        
+
     Raises:
         ValueError: If grid dimensions don't match expected values
-        
+
     Example:
         >>> grid = [[1.0, 2.0, 3.0, 4.0, 5.0] for _ in range(11)]
         >>> validate_grid_dimensions(grid)  # OK
@@ -75,7 +76,7 @@ def validate_grid_dimensions(
         expected_rows = GRID_ROWS
     if expected_cols is None:
         expected_cols = GRID_COLS
-    
+
     actual_rows = len(grid)
     if actual_rows != expected_rows:
         raise ValueError(
@@ -83,7 +84,7 @@ def validate_grid_dimensions(
             f"Expected dimensions: {expected_rows}×{expected_cols} = {expected_rows * expected_cols} cells\n"
             f"Hint: Standard DynoAI grids are {GRID_ROWS}×{GRID_COLS} = {GRID_CELLS} cells"
         )
-    
+
     for i, row in enumerate(grid):
         actual_cols = len(row)
         if actual_cols != expected_cols:
@@ -96,13 +97,13 @@ def validate_grid_dimensions(
 
 def get_rpm_index(rpm: int) -> Optional[int]:
     """Get the index of an RPM bin value.
-    
+
     Args:
         rpm: RPM value to find
-        
+
     Returns:
         Index in RPM_BINS, or None if not found
-        
+
     Example:
         >>> get_rpm_index(3000)
         3
@@ -117,13 +118,13 @@ def get_rpm_index(rpm: int) -> Optional[int]:
 
 def get_kpa_index(kpa: int) -> Optional[int]:
     """Get the index of a kPa bin value.
-    
+
     Args:
         kpa: kPa value to find
-        
+
     Returns:
         Index in KPA_BINS, or None if not found
-        
+
     Example:
         >>> get_kpa_index(65)
         2
@@ -138,13 +139,13 @@ def get_kpa_index(kpa: int) -> Optional[int]:
 
 def nearest_rpm_bin(rpm: float) -> int:
     """Find the nearest RPM bin for a given value.
-    
+
     Args:
         rpm: Measured RPM value
-        
+
     Returns:
         Nearest RPM bin value
-        
+
     Example:
         >>> nearest_rpm_bin(2780.5)
         3000
@@ -156,13 +157,13 @@ def nearest_rpm_bin(rpm: float) -> int:
 
 def nearest_kpa_bin(kpa: float) -> int:
     """Find the nearest kPa bin for a given value.
-    
+
     Args:
         kpa: Measured kPa value
-        
+
     Returns:
         Nearest kPa bin value
-        
+
     Example:
         >>> nearest_kpa_bin(72.3)
         65
@@ -227,7 +228,6 @@ Grid = Sequence[Sequence[Optional[float]]]
 
 # Type alias for mutable grids (computation)
 GridList = List[List[Optional[float]]]
-
 
 # ============================================================================
 # Module Documentation
