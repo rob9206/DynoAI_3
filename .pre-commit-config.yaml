@@ -1,0 +1,89 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Python formatting with Black
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+
+  # Python import sorting with isort
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=88]
+
+  # Python linting with Ruff (fast!)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.2
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+        args: [--ignore-missing-imports, --no-error-summary]
+        # Only check files that have been modified
+        pass_filenames: true
+        # Exclude test files and generated code
+        exclude: ^(tests/|temp_|experiments/)
+
+  # Security checks with Bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        args: [-ll, --skip, B101]  # Skip assert warnings
+        exclude: ^tests/
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.41.0
+    hooks:
+      - id: markdownlint
+        args: [--fix, --disable, MD013, MD033, MD041]
+
+# CI configuration
+ci:
+  autofix_prs: true
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+    
+    for more information, see https://pre-commit.ci
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [mypy]  # Skip mypy in CI (run separately with full type stubs)
+  submodules: false
+
+# Local-only hooks (not run in CI)
+default_stages: [pre-commit]
+

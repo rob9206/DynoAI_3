@@ -1,0 +1,92 @@
+# DynoAI Docker Compose Configuration
+# Orchestrates the full application stack
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Backend API Service
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: dynoai-api
+    restart: unless-stopped
+    environment:
+      - DYNOAI_HOST=0.0.0.0
+      - DYNOAI_PORT=5001
+      - DYNOAI_DEBUG=${DYNOAI_DEBUG:-false}
+      - DYNOAI_UPLOAD_DIR=/app/uploads
+      - DYNOAI_OUTPUT_DIR=/app/outputs
+      - DYNOAI_RUNS_DIR=/app/runs
+      - JETSTREAM_ENABLED=${JETSTREAM_ENABLED:-false}
+      - JETSTREAM_API_URL=${JETSTREAM_API_URL:-}
+      - JETSTREAM_API_KEY=${JETSTREAM_API_KEY:-}
+      - JETSTREAM_STUB_MODE=${JETSTREAM_STUB_MODE:-false}
+      - XAI_ENABLED=${XAI_ENABLED:-false}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+    volumes:
+      # Persist data directories
+      - dynoai-uploads:/app/uploads
+      - dynoai-outputs:/app/outputs
+      - dynoai-runs:/app/runs
+      # Optional: mount local tables for customization
+      - ./tables:/app/tables:ro
+    ports:
+      - "${API_PORT:-5001}:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dynoai-network
+
+  # ==========================================================================
+  # Frontend Web Service
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - VITE_API_URL=${VITE_API_URL:-}
+    container_name: dynoai-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - dynoai-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  dynoai-network:
+    driver: bridge
+    name: dynoai-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  dynoai-uploads:
+    name: dynoai-uploads
+  dynoai-outputs:
+    name: dynoai-outputs
+  dynoai-runs:
+    name: dynoai-runs
+
