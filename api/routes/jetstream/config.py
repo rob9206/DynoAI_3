@@ -56,9 +56,26 @@ def _save_config(config: JetstreamConfig) -> None:
 @config_bp.route("/config", methods=["GET"])
 def get_config():
     """
-    Get Jetstream configuration.
-
-    Returns masked API key for security.
+    Get Jetstream config.
+    ---
+    tags:
+      - Jetstream
+    summary: Get Jetstream configuration
+    description: |
+      Returns the current Jetstream configuration.
+      The API key is masked for security (shows only first and last 4 characters).
+    responses:
+      200:
+        description: Jetstream configuration
+        schema:
+          $ref: '#/definitions/JetstreamConfig'
+        examples:
+          application/json:
+            api_url: "https://api.jetstream.example.com"
+            api_key: "abc1****xyz9"
+            poll_interval_seconds: 30
+            auto_process: true
+            enabled: true
     """
     config = _load_config()
     return jsonify(config.to_dict(mask_key=True)), 200
@@ -67,16 +84,43 @@ def get_config():
 @config_bp.route("/config", methods=["PUT"])
 def update_config():
     """
-    Update Jetstream configuration.
+    Update Jetstream config.
+    ---
+    tags:
+      - Jetstream
+    summary: Update Jetstream configuration
+    description: |
+      Update the Jetstream configuration. Only provided fields will be updated.
 
-    Expected JSON body:
-    {
-        "api_url": "https://api.jetstream.example.com",
-        "api_key": "your-api-key",
-        "poll_interval_seconds": 30,
-        "auto_process": true,
-        "enabled": true
-    }
+      **Note:** To update the API key, provide the full unmasked key.
+      If the provided api_key contains asterisks, it will be ignored.
+    consumes:
+      - application/json
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/JetstreamConfig'
+    responses:
+      200:
+        description: Configuration updated successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Configuration updated"
+            config:
+              $ref: '#/definitions/JetstreamConfig'
+      400:
+        description: Validation error (e.g., missing API URL when enabling)
+        schema:
+          $ref: '#/definitions/Error'
+      500:
+        description: Server error
+        schema:
+          $ref: '#/definitions/Error'
     """
     try:
         data = request.get_json()

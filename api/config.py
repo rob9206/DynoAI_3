@@ -28,7 +28,7 @@ def _get_int_env(key: str, default: int) -> int:
 @dataclass
 class ServerConfig:
     """Flask server configuration."""
-    
+
     host: str = field(default_factory=lambda: os.environ.get("DYNOAI_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: _get_int_env("DYNOAI_PORT", 5001))
     debug: bool = field(default_factory=lambda: _get_bool_env("DYNOAI_DEBUG", True))
@@ -38,7 +38,7 @@ class ServerConfig:
 @dataclass
 class StorageConfig:
     """File storage configuration."""
-    
+
     upload_folder: Path = field(
         default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "uploads"))
     )
@@ -54,7 +54,7 @@ class StorageConfig:
     allowed_extensions: frozenset = field(
         default_factory=lambda: frozenset({"csv", "txt"})
     )
-    
+
     def __post_init__(self) -> None:
         """Ensure storage directories exist."""
         self.upload_folder.mkdir(exist_ok=True)
@@ -65,7 +65,7 @@ class StorageConfig:
 @dataclass
 class JetstreamConfig:
     """Jetstream integration configuration."""
-    
+
     api_url: str = field(
         default_factory=lambda: os.environ.get("JETSTREAM_API_URL", "")
     )
@@ -84,7 +84,7 @@ class JetstreamConfig:
     stub_mode: bool = field(
         default_factory=lambda: _get_bool_env("JETSTREAM_STUB_MODE", False)
     )
-    
+
     def to_dict(self, mask_key: bool = True) -> Dict[str, Any]:
         """Convert to dictionary, optionally masking the API key."""
         return {
@@ -95,7 +95,7 @@ class JetstreamConfig:
             "enabled": self.enabled,
             "stub_mode": self.stub_mode,
         }
-    
+
     def _mask_key(self) -> str:
         """Mask the API key for safe display."""
         if not self.api_key:
@@ -108,14 +108,12 @@ class JetstreamConfig:
 @dataclass
 class CORSConfig:
     """CORS configuration."""
-    
+
     origins: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "DYNOAI_CORS_ORIGINS", "*"
-        ).split(",")
+        default_factory=lambda: os.environ.get("DYNOAI_CORS_ORIGINS", "*").split(",")
     )
     resources: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self) -> None:
         """Set up CORS resources pattern."""
         if not self.resources:
@@ -125,7 +123,7 @@ class CORSConfig:
 @dataclass
 class AnalysisConfig:
     """Default analysis parameters."""
-    
+
     default_smooth_passes: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_SMOOTH_PASSES", 2)
     )
@@ -144,33 +142,60 @@ class AnalysisConfig:
 
 
 @dataclass
+class LoggingConfig:
+    """Logging configuration."""
+
+    level: str = field(default_factory=lambda: os.environ.get("LOG_LEVEL", "INFO"))
+    format: str = field(
+        default_factory=lambda: os.environ.get("LOG_FORMAT", "development")
+    )
+    # "development" = human-readable with colors
+    # "production" = JSON structured logs
+
+
+@dataclass
+class RateLimitConfig:
+    """Rate limiting configuration."""
+
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("RATE_LIMIT_ENABLED", "true").lower()
+        == "true"
+    )
+    default: str = field(
+        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "100/minute")
+    )
+    expensive: str = field(
+        default_factory=lambda: os.environ.get(
+            "RATE_LIMIT_EXPENSIVE", "5/minute;20/hour"
+        )
+    )
+    storage_uri: str = field(
+        default_factory=lambda: os.environ.get("RATE_LIMIT_STORAGE", "memory://")
+    )
+
+
+@dataclass
 class XAIConfig:
     """xAI (Grok) API configuration."""
-    
-    api_key: str = field(
-        default_factory=lambda: os.environ.get("XAI_API_KEY", "")
-    )
+
+    api_key: str = field(default_factory=lambda: os.environ.get("XAI_API_KEY", ""))
     api_url: str = field(
         default_factory=lambda: os.environ.get(
             "XAI_API_URL", "https://api.x.ai/v1/chat/completions"
         )
     )
-    model: str = field(
-        default_factory=lambda: os.environ.get("XAI_MODEL", "grok-beta")
-    )
-    enabled: bool = field(
-        default_factory=lambda: _get_bool_env("XAI_ENABLED", False)
-    )
+    model: str = field(default_factory=lambda: os.environ.get("XAI_MODEL", "grok-beta"))
+    enabled: bool = field(default_factory=lambda: _get_bool_env("XAI_ENABLED", False))
 
 
 @dataclass
 class AppConfig:
     """Main application configuration container."""
-    
+
     # Application metadata
     app_name: str = "DynoAI"
     version: str = "1.2.0"
-    
+
     # Sub-configurations
     server: ServerConfig = field(default_factory=ServerConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
@@ -178,12 +203,14 @@ class AppConfig:
     cors: CORSConfig = field(default_factory=CORSConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     xai: XAIConfig = field(default_factory=XAIConfig)
-    
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         """Create configuration from environment variables."""
         return cls()
-    
+
     def to_dict(self, include_secrets: bool = False) -> Dict[str, Any]:
         """Convert to dictionary for logging/debugging."""
         return {
@@ -226,4 +253,3 @@ def reload_config() -> AppConfig:
     global _config
     _config = AppConfig.from_env()
     return _config
-

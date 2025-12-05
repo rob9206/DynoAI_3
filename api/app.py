@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 DynoAI Flask API Server
-
-Provides REST API endpoints for the React frontend to interact with the Python toolkit.
+Provides REST API endpoints for the React frontend to interact with the Python toolkit
 """
 
 import json
@@ -20,36 +19,38 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-# Load environment variables from .env if present
-load_dotenv()
-
-# Import centralized configuration and error handling
-from api.config import get_config
-from api.errors import (
-    AnalysisError,
-    FileNotAllowedError,
-    NotFoundError,
-    ValidationError,
-    register_error_handlers,
-    with_error_handling,
-)
-
-# Get application configuration
-config = get_config()
-
-# Initialize Flask app
+load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all API routes
 
-# Apply configuration
-app.config["UPLOAD_FOLDER"] = config.storage.upload_folder
-app.config["OUTPUT_FOLDER"] = config.storage.output_folder
-app.config["MAX_CONTENT_LENGTH"] = config.storage.max_content_length
+# Initialize rate limiter (optional - graceful degradation if not available)
+limiter = None
+try:
+    from api.rate_limit import init_rate_limiter
 
-# Enable CORS
-CORS(app, resources=config.cors.resources)
+    limiter = init_rate_limiter(app)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize rate limiter: {e}")
 
-# Register centralized error handlers
-register_error_handlers(app)
+
+def rate_limit(limit_string: str):
+    """Decorator that applies rate limiting if limiter is available."""
+
+    def decorator(f):
+        if limiter is not None:
+            return limiter.limit(limit_string)(f)
+        return f
+
+    return decorator
+
+
+# Register health blueprint for detailed health checks (liveness/readiness probes)
+try:
+    from api.health import health_bp
+
+    app.register_blueprint(health_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not register health blueprint: {e}")
 
 # Lazy import/register of xAI blueprint if available
 try:
@@ -68,13 +69,13 @@ try:
 
     app.register_blueprint(jetstream_bp, url_prefix="/api/jetstream")
 
-    # Initialize Jetstream poller with config from centralized config
+    # Initialize Jetstream poller with config from environment
     jetstream_config = JetstreamConfig(
-        api_url=config.jetstream.api_url,
-        api_key=config.jetstream.api_key,
-        poll_interval_seconds=config.jetstream.poll_interval_seconds,
-        auto_process=config.jetstream.auto_process,
-        enabled=config.jetstream.enabled,
+        api_url=os.environ.get("JETSTREAM_API_URL", ""),
+        api_key=os.environ.get("JETSTREAM_API_KEY", ""),
+        poll_interval_seconds=int(os.environ.get("JETSTREAM_POLL_INTERVAL", "30")),
+        auto_process=os.environ.get("JETSTREAM_AUTO_PROCESS", "true").lower() == "true",
+        enabled=os.environ.get("JETSTREAM_ENABLED", "false").lower() == "true",
     )
     if is_stub_mode_enabled():
         initialize_stub_data()
@@ -86,17 +87,25 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
 
+# Configuration
+UPLOAD_FOLDER = Path("uploads")
+OUTPUT_FOLDER = Path("outputs")
+ALLOWED_EXTENSIONS = {"csv", "txt"}
+
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+OUTPUT_FOLDER.mkdir(exist_ok=True)
+
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max file size
 
 # Store active analysis jobs
 active_jobs = {}
 
 
 def allowed_file(filename: str) -> bool:
-    """Check if file extension is allowed."""
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower() in config.storage.allowed_extensions
-    )
+    """Check if file extension is allowed"""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def run_dyno_analysis(
@@ -107,7 +116,7 @@ def run_dyno_analysis(
     progress_queue: Queue = None,
 ) -> dict:
     """
-    Run the DynoAI analysis toolkit on a CSV file with progress tracking.
+    Run the DynoAI analysis toolkit on a CSV file with progress tracking
 
     Args:
         csv_path: Path to input CSV file
@@ -118,9 +127,6 @@ def run_dyno_analysis(
 
     Returns:
         dict: Manifest data from analysis
-
-    Raises:
-        AnalysisError: If analysis fails
     """
     # Ensure we're running from the project root directory
     project_root = Path(__file__).parent.parent
@@ -157,15 +163,8 @@ def run_dyno_analysis(
         if "hot_extra" in params:
             cmd.extend(["--hot_extra", str(params["hot_extra"])])
     else:
-        # Use default parameters from config
-        cmd.extend(
-            [
-                "--clamp",
-                str(config.analysis.default_clamp),
-                "--smooth_passes",
-                str(config.analysis.default_smooth_passes),
-            ]
-        )
+        # Default parameters
+        cmd.extend(["--clamp", "15", "--smooth_passes", "2"])
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -178,12 +177,12 @@ def run_dyno_analysis(
             if stdout_msg
             else f"[ERROR] {stderr_msg}"
         )
-        raise AnalysisError(error_details, stage="analysis")
+        raise Exception(f"Analysis failed: {error_details}")
 
     # Read the manifest file
     manifest_path = output_dir / "manifest.json"
     if not manifest_path.exists():
-        raise AnalysisError("Manifest file not generated", stage="export")
+        raise Exception("Manifest file not generated")
 
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
@@ -193,7 +192,7 @@ def run_dyno_analysis(
 
 def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
     """
-    Convert DynoAI manifest format to frontend-expected format.
+    Convert DynoAI manifest format to frontend-expected format
 
     Args:
         manifest: DynoAI manifest dict
@@ -229,139 +228,116 @@ def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
             "targetAFR": 14.7,
             "iterations": manifest.get("config", {})
             .get("args", {})
-            .get("smooth_passes", config.analysis.default_smooth_passes),
+            .get("smooth_passes", 2),
         },
     }
 
 
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    """Health check endpoint."""
-    return jsonify(
-        {
-            "status": "ok",
-            "version": config.version,
-            "app": config.app_name,
-        }
-    )
-
-
 @app.route("/api/analyze", methods=["POST"])
-@with_error_handling
+@rate_limit("5/minute;20/hour")  # Expensive operation - stricter limits
 def analyze():
     """
-    Analyze uploaded CSV file (async).
+    Analyze uploaded CSV file (async)
 
-    Expected: multipart/form-data with 'file' field and optional parameters.
-
+    Expected: multipart/form-data with 'file' field and optional parameters
     Parameters:
         - smoothPasses: int (default: 2)
         - clamp: float (default: 15.0)
         - rearBias: float (default: 0.0)
         - rearRuleDeg: float (default: 2.0)
         - hotExtra: float (default: -1.0)
-
-    Returns:
-        Job ID for tracking progress
+    Returns: Job ID for tracking progress
     """
     # Check if file is in request
     if "file" not in request.files:
-        raise ValidationError("No file provided")
+        return jsonify({"error": "No file provided"}), 400
 
     file = request.files["file"]
 
     if file.filename == "":
-        raise ValidationError("No file selected")
+        return jsonify({"error": "No file selected"}), 400
 
     if not allowed_file(file.filename):
-        raise FileNotAllowedError(
-            file.filename,
-            allowed_types=list(config.storage.allowed_extensions),
+        return (
+            jsonify({"error": "Invalid file type. Only CSV and TXT files allowed"}),
+            400,
         )
 
-    # Generate unique run ID
-    run_id = str(uuid.uuid4())
+    try:
+        # Generate unique run ID
+        run_id = str(uuid.uuid4())
 
-    # Save uploaded file
-    filename = secure_filename(file.filename)
-    upload_path = config.storage.upload_folder / run_id / filename
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        upload_path = UPLOAD_FOLDER / run_id / filename
+        upload_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[>] Saving uploaded file to: {upload_path}")
-    file.save(str(upload_path))
+        print(f"[>] Saving uploaded file to: {upload_path}")
+        file.save(str(upload_path))
 
-    # Verify file was saved
-    if not upload_path.exists():
-        raise AnalysisError(f"File upload failed - file not found at {upload_path}")
+        # Verify file was saved
+        if not upload_path.exists():
+            raise Exception(f"File upload failed - file not found at {upload_path}")
 
-    file_size = upload_path.stat().st_size
-    print(f"[+] File saved successfully ({file_size} bytes)")
+        file_size = upload_path.stat().st_size
+        print(f"[+] File saved successfully ({file_size} bytes)")
 
-    # Create output directory
-    output_dir = config.storage.output_folder / run_id
-    output_dir.mkdir(parents=True, exist_ok=True)
+        # Create output directory
+        output_dir = OUTPUT_FOLDER / run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract tuning parameters from form data
-    params = {
-        "smooth_passes": int(
-            request.form.get("smoothPasses", config.analysis.default_smooth_passes)
-        ),
-        "clamp": float(request.form.get("clamp", config.analysis.default_clamp)),
-        "rear_bias": float(
-            request.form.get("rearBias", config.analysis.default_rear_bias)
-        ),
-        "rear_rule_deg": float(
-            request.form.get("rearRuleDeg", config.analysis.default_rear_rule_deg)
-        ),
-        "hot_extra": float(
-            request.form.get("hotExtra", config.analysis.default_hot_extra)
-        ),
-    }
+        # Extract tuning parameters from form data
+        params = {
+            "smooth_passes": int(request.form.get("smoothPasses", 2)),
+            "clamp": float(request.form.get("clamp", 15.0)),
+            "rear_bias": float(request.form.get("rearBias", 0.0)),
+            "rear_rule_deg": float(request.form.get("rearRuleDeg", 2.0)),
+            "hot_extra": float(request.form.get("hotExtra", -1.0)),
+        }
 
-    # Initialize job tracking
-    active_jobs[run_id] = {
-        "status": "queued",
-        "progress": 0,
-        "message": "Starting analysis...",
-        "filename": filename,
-        "params": params,
-        "started_at": datetime.utcnow().isoformat(),
-    }
+        # Initialize job tracking
+        active_jobs[run_id] = {
+            "status": "queued",
+            "progress": 0,
+            "message": "Starting analysis...",
+            "filename": filename,
+            "params": params,
+            "started_at": datetime.utcnow().isoformat(),
+        }
 
-    # Run analysis in background thread
-    def run_analysis_thread():
-        try:
-            active_jobs[run_id]["status"] = "running"
-            active_jobs[run_id]["message"] = "Running analysis..."
-            manifest = run_dyno_analysis(upload_path, output_dir, run_id, params)
-            active_jobs[run_id]["manifest"] = manifest
-            active_jobs[run_id]["status"] = "completed"
-            active_jobs[run_id]["message"] = "Analysis complete"
-        except Exception as e:
-            active_jobs[run_id]["status"] = "error"
-            active_jobs[run_id]["error"] = str(e)
-            active_jobs[run_id]["message"] = f"Error: {str(e)}"
+        # Run analysis in background thread
+        def run_analysis_thread():
+            try:
+                active_jobs[run_id]["status"] = "running"
+                active_jobs[run_id]["message"] = "Running analysis..."
+                manifest = run_dyno_analysis(upload_path, output_dir, run_id, params)
+                active_jobs[run_id]["manifest"] = manifest
+                active_jobs[run_id]["status"] = "completed"
+                active_jobs[run_id]["message"] = "Analysis complete"
+            except Exception as e:
+                active_jobs[run_id]["status"] = "error"
+                active_jobs[run_id]["error"] = str(e)
+                active_jobs[run_id]["message"] = f"Error: {str(e)}"
 
-    thread = threading.Thread(target=run_analysis_thread, daemon=True)
-    thread.start()
+        thread = threading.Thread(target=run_analysis_thread, daemon=True)
+        thread.start()
 
-    return (
-        jsonify(
-            {
-                "runId": run_id,
-                "status": "queued",
-                "message": "Analysis started",
-            }
-        ),
-        202,
-    )
+        return (
+            jsonify(
+                {"runId": run_id, "status": "queued", "message": "Analysis started"}
+            ),
+            202,
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/status/<run_id>", methods=["GET"])
-@with_error_handling
+@rate_limit("120/minute")  # Read-only - permissive
 def get_status(run_id):
     """
-    Get the status of an analysis job.
+    Get the status of an analysis job
 
     Args:
         run_id: Unique run identifier
@@ -370,7 +346,7 @@ def get_status(run_id):
         JSON with current job status and progress
     """
     if run_id not in active_jobs:
-        raise NotFoundError("Job", run_id)
+        return jsonify({"error": "Job not found"}), 404
 
     job = active_jobs[run_id]
     response = {
@@ -393,10 +369,10 @@ def get_status(run_id):
 
 
 @app.route("/api/download/<run_id>/<filename>", methods=["GET"])
-@with_error_handling
+@rate_limit("60/minute")  # Standard - moderate limit for downloads
 def download_file(run_id, filename):
     """
-    Download a specific output file.
+    Download a specific output file
 
     Args:
         run_id: Unique run identifier
@@ -405,29 +381,27 @@ def download_file(run_id, filename):
     Returns:
         File download
     """
-    # Sanitize inputs and validate results
-    safe_run_id = secure_filename(run_id)
-    safe_filename = secure_filename(filename)
+    try:
+        # Sanitize inputs
+        run_id = secure_filename(run_id)
+        filename = secure_filename(filename)
 
-    # Validate sanitized values are not empty (secure_filename can return "" for inputs like "...")
-    if not safe_run_id:
-        raise ValidationError(f"Invalid run_id: {run_id}")
-    if not safe_filename:
-        raise ValidationError(f"Invalid filename: {filename}")
+        file_path = OUTPUT_FOLDER / run_id / filename
 
-    file_path = config.storage.output_folder / safe_run_id / safe_filename
+        if not file_path.exists():
+            return jsonify({"error": "File not found"}), 404
 
-    if not file_path.exists():
-        raise NotFoundError("File", safe_filename)
+        return send_file(file_path, as_attachment=True, download_name=filename)
 
-    return send_file(file_path, as_attachment=True, download_name=safe_filename)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/ve-data/<run_id>", methods=["GET"])
-@with_error_handling
+@rate_limit("120/minute")  # Read-only - permissive
 def get_ve_data(run_id):
     """
-    Get VE table data for 3D visualization.
+    Get VE table data for 3D visualization
 
     Args:
         run_id: Unique run identifier
@@ -435,106 +409,111 @@ def get_ve_data(run_id):
     Returns:
         JSON with VE data in format expected by frontend
     """
-    # Sanitize and validate run_id
-    safe_run_id = secure_filename(run_id)
-    if not safe_run_id:
-        raise ValidationError(f"Invalid run_id: {run_id}")
-
-    ve_delta_file = None
-
-    # Try Jetstream run manager first
     try:
-        from api.services.run_manager import get_run_manager
+        run_id = secure_filename(run_id)
+        ve_delta_file = None
 
-        manager = get_run_manager()
-        run_output_dir = manager.get_run_output_dir(safe_run_id)
-        print(f"[DEBUG] Jetstream run output dir: {run_output_dir}")
-        if run_output_dir and run_output_dir.exists():
-            ve_delta_file = run_output_dir / "VE_Correction_Delta_DYNO.csv"
-            print(
-                f"[DEBUG] VE file path: {ve_delta_file}, exists: {ve_delta_file.exists()}"
-            )
+        # Try Jetstream run manager first
+        try:
+            from api.services.run_manager import get_run_manager
+
+            manager = get_run_manager()
+            run_output_dir = manager.get_run_output_dir(run_id)
+            print(f"[DEBUG] Jetstream run output dir: {run_output_dir}")
+            if run_output_dir and run_output_dir.exists():
+                ve_delta_file = run_output_dir / "VE_Correction_Delta_DYNO.csv"
+                print(
+                    f"[DEBUG] VE file path: {ve_delta_file}, exists: {ve_delta_file.exists()}"
+                )
+        except Exception as e:
+            print(f"[DEBUG] Exception in Jetstream path: {e}")
+            pass
+
+        # Fall back to old outputs folder if not found
+        if not ve_delta_file or not ve_delta_file.exists():
+            output_dir = OUTPUT_FOLDER / run_id
+            ve_delta_file = output_dir / "VE_Correction_Delta_DYNO.csv"
+
+        if not ve_delta_file.exists():
+            return jsonify({"error": "VE data not found"}), 404
+
+        # Parse VE delta CSV
+        import csv
+
+        with open(ve_delta_file, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+
+            # Extract kPa bins from header (skip first "RPM" column)
+            load_points = [int(h) for h in header[1:]]
+
+            rpm_points = []
+            corrections = []
+
+            for row in reader:
+                rpm_points.append(int(row[0]))
+                # Remove '+' prefix and convert to float
+                corrections.append(
+                    [float(val.replace("+", "").replace("'", "")) for val in row[1:]]
+                )
+
+        # Generate before/after data from corrections
+        # Assume baseline VE of 100 for all cells
+        baseline_ve = 100.0
+        before_data = [[baseline_ve for _ in load_points] for _ in rpm_points]
+        after_data = [
+            [baseline_ve + corrections[i][j] for j in range(len(load_points))]
+            for i in range(len(rpm_points))
+        ]
+
+        return (
+            jsonify(
+                {
+                    "rpm": rpm_points,
+                    "load": load_points,
+                    "corrections": corrections,
+                    "before": before_data,
+                    "after": after_data,
+                }
+            ),
+            200,
+        )
+
     except Exception as e:
-        print(f"[DEBUG] Exception in Jetstream path: {e}")
-
-    # Fall back to old outputs folder if not found
-    if not ve_delta_file or not ve_delta_file.exists():
-        output_dir = config.storage.output_folder / safe_run_id
-        ve_delta_file = output_dir / "VE_Correction_Delta_DYNO.csv"
-
-    if not ve_delta_file.exists():
-        raise NotFoundError("VE data", safe_run_id)
-
-    # Parse VE delta CSV
-    import csv
-
-    with open(ve_delta_file, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-
-        # Extract kPa bins from header (skip first "RPM" column)
-        load_points = [int(h) for h in header[1:]]
-
-        rpm_points = []
-        corrections = []
-
-        for row in reader:
-            rpm_points.append(int(row[0]))
-            # Remove '+' prefix and convert to float
-            corrections.append(
-                [float(val.replace("+", "").replace("'", "")) for val in row[1:]]
-            )
-
-    # Generate before/after data from corrections
-    # Assume baseline VE of 100 for all cells
-    baseline_ve = 100.0
-    before_data = [[baseline_ve for _ in load_points] for _ in rpm_points]
-    after_data = [
-        [baseline_ve + corrections[i][j] for j in range(len(load_points))]
-        for i in range(len(rpm_points))
-    ]
-
-    return (
-        jsonify(
-            {
-                "rpm": rpm_points,
-                "load": load_points,
-                "corrections": corrections,
-                "before": before_data,
-                "after": after_data,
-            }
-        ),
-        200,
-    )
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/runs", methods=["GET"])
-@with_error_handling
+@rate_limit("120/minute")  # Read-only - permissive
 def list_runs():
-    """List all available analysis runs."""
-    runs = []
-    for run_dir in config.storage.output_folder.iterdir():
-        if run_dir.is_dir():
-            manifest_path = run_dir / "manifest.json"
-            if manifest_path.exists():
-                with open(manifest_path, "r") as f:
-                    manifest = json.load(f)
-                runs.append(
-                    {
-                        "runId": run_dir.name,
-                        "timestamp": manifest.get("timing", {}).get("start"),
-                        "inputFile": manifest.get("input", {}).get("path"),
-                    }
-                )
+    """List all available analysis runs"""
+    try:
+        runs = []
+        for run_dir in OUTPUT_FOLDER.iterdir():
+            if run_dir.is_dir():
+                manifest_path = run_dir / "manifest.json"
+                if manifest_path.exists():
+                    with open(manifest_path, "r") as f:
+                        manifest = json.load(f)
+                    runs.append(
+                        {
+                            "runId": run_dir.name,
+                            "timestamp": manifest.get("timing", {}).get("start"),
+                            "inputFile": manifest.get("input", {}).get("path"),
+                        }
+                    )
 
-    return jsonify({"runs": runs}), 200
+        return jsonify({"runs": runs}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/diagnostics/<run_id>", methods=["GET"])
-@with_error_handling
+@rate_limit("120/minute")  # Read-only - permissive
 def get_diagnostics(run_id):
     """
-    Get diagnostics and anomaly detection results.
+    Get diagnostics and anomaly detection results
 
     Args:
         run_id: Unique run identifier
@@ -542,38 +521,38 @@ def get_diagnostics(run_id):
     Returns:
         JSON with diagnostics data
     """
-    # Sanitize and validate run_id
-    safe_run_id = secure_filename(run_id)
-    if not safe_run_id:
-        raise ValidationError(f"Invalid run_id: {run_id}")
+    try:
+        run_id = secure_filename(run_id)
+        output_dir = OUTPUT_FOLDER / run_id
 
-    output_dir = config.storage.output_folder / safe_run_id
+        # Look for diagnostics files
+        diagnostics_file = output_dir / "Diagnostics_Report.txt"
+        anomalies_file = output_dir / "Anomaly_Hypotheses.json"
 
-    # Look for diagnostics files
-    diagnostics_file = output_dir / "Diagnostics_Report.txt"
-    anomalies_file = output_dir / "Anomaly_Hypotheses.json"
+        result = {}
 
-    result = {}
+        if diagnostics_file.exists():
+            with open(diagnostics_file, "r") as f:
+                result["report"] = f.read()
 
-    if diagnostics_file.exists():
-        with open(diagnostics_file, "r") as f:
-            result["report"] = f.read()
+        if anomalies_file.exists():
+            with open(anomalies_file, "r") as f:
+                result["anomalies"] = json.load(f)
 
-    if anomalies_file.exists():
-        with open(anomalies_file, "r") as f:
-            result["anomalies"] = json.load(f)
+        if not result:
+            return jsonify({"error": "Diagnostics data not found"}), 404
 
-    if not result:
-        raise NotFoundError("Diagnostics data", safe_run_id)
+        return jsonify(result), 200
 
-    return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/coverage/<run_id>", methods=["GET"])
-@with_error_handling
+@rate_limit("120/minute")  # Read-only - permissive
 def get_coverage(run_id):
     """
-    Get coverage data for heatmap visualization.
+    Get coverage data for heatmap visualization
 
     Args:
         run_id: Unique run identifier
@@ -581,78 +560,81 @@ def get_coverage(run_id):
     Returns:
         JSON with coverage data for front and rear cylinders
     """
-    # Sanitize and validate run_id
-    safe_run_id = secure_filename(run_id)
-    if not safe_run_id:
-        raise ValidationError(f"Invalid run_id: {run_id}")
+    try:
+        run_id = secure_filename(run_id)
+        output_dir = OUTPUT_FOLDER / run_id
 
-    output_dir = config.storage.output_folder / safe_run_id
+        # Look for coverage files
+        coverage_front = output_dir / "Coverage_Front.csv"
+        coverage_rear = output_dir / "Coverage_Rear.csv"
 
-    # Look for coverage files
-    coverage_front = output_dir / "Coverage_Front.csv"
-    coverage_rear = output_dir / "Coverage_Rear.csv"
+        result = {}
 
-    result = {}
+        # Parse coverage CSV files
+        import csv
 
-    # Parse coverage CSV files
-    import csv
+        if coverage_front.exists():
+            with open(coverage_front, "r") as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                load_points = [int(h) for h in header[1:]]
 
-    if coverage_front.exists():
-        with open(coverage_front, "r") as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            load_points = [int(h) for h in header[1:]]
+                rpm_points = []
+                coverage_data = []
 
-            rpm_points = []
-            coverage_data = []
+                for row in reader:
+                    rpm_points.append(int(row[0]))
+                    coverage_data.append([int(val) if val else 0 for val in row[1:]])
 
-            for row in reader:
-                rpm_points.append(int(row[0]))
-                coverage_data.append([int(val) if val else 0 for val in row[1:]])
+                result["front"] = {
+                    "rpm": rpm_points,
+                    "load": load_points,
+                    "data": coverage_data,
+                }
 
-            result["front"] = {
-                "rpm": rpm_points,
-                "load": load_points,
-                "data": coverage_data,
-            }
+        if coverage_rear.exists():
+            with open(coverage_rear, "r") as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                load_points = [int(h) for h in header[1:]]
 
-    if coverage_rear.exists():
-        with open(coverage_rear, "r") as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            load_points = [int(h) for h in header[1:]]
+                rpm_points = []
+                coverage_data = []
 
-            rpm_points = []
-            coverage_data = []
+                for row in reader:
+                    rpm_points.append(int(row[0]))
+                    coverage_data.append([int(val) if val else 0 for val in row[1:]])
 
-            for row in reader:
-                rpm_points.append(int(row[0]))
-                coverage_data.append([int(val) if val else 0 for val in row[1:]])
+                result["rear"] = {
+                    "rpm": rpm_points,
+                    "load": load_points,
+                    "data": coverage_data,
+                }
 
-            result["rear"] = {
-                "rpm": rpm_points,
-                "load": load_points,
-                "data": coverage_data,
-            }
+        if not result:
+            return jsonify({"error": "Coverage data not found"}), 404
 
-    if not result:
-        raise NotFoundError("Coverage data", safe_run_id)
+        return jsonify(result), 200
 
-    return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-def print_startup_banner():
-    """Print startup information banner."""
+if __name__ == "__main__":
+    # See docs/test_failures_baseline.md - Issue #2: Use ASCII for Windows compatibility
     print("\n" + "=" * 60)
-    print(f"[*] {config.app_name} API Server v{config.version}")
+    print("[*] DynoAI API Server")
     print("=" * 60)
-    print(f"[>] Upload folder: {config.storage.upload_folder.absolute()}")
-    print(f"[>] Output folder: {config.storage.output_folder.absolute()}")
-    print(f"[>] Runs folder: {config.storage.runs_folder.absolute()}")
+    print(f"[>] Upload folder: {UPLOAD_FOLDER.absolute()}")
+    print(f"[>] Output folder: {OUTPUT_FOLDER.absolute()}")
     print(f"[>] Python: {sys.executable}")
-    print(f"\n[*] Server running on http://{config.server.host}:{config.server.port}")
+    rate_limit_status = "ENABLED" if limiter else "DISABLED"
+    print(f"[>] Rate limiting: {rate_limit_status}")
+    print("\n[*] Server running on http://localhost:5001")
     print("\n[*] Available endpoints:")
-    print("  GET  /api/health              - Health check")
+    print("  GET  /api/health              - Detailed health check")
+    print("  GET  /api/health/live         - Liveness probe")
+    print("  GET  /api/health/ready        - Readiness probe")
     print("  POST /api/analyze             - Upload and analyze CSV (async)")
     print("  GET  /api/status/<run_id>     - Get analysis status")
     print("  GET  /api/download/<run>/<f>  - Download output file")
@@ -671,12 +653,5 @@ def print_startup_banner():
     print("  GET  /api/jetstream/progress/<id> - SSE progress stream")
     print("\n" + "=" * 60 + "\n")
 
-
-if __name__ == "__main__":
-    print_startup_banner()
-    app.run(
-        debug=config.server.debug,
-        host=config.server.host,
-        port=config.server.port,
-        threaded=config.server.threaded,
-    )
+    debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")
+    app.run(debug=debug_flag, host="0.0.0.0", port=5001, threaded=True)

@@ -33,7 +33,6 @@ function App() {
               <Route path="/results/:runId" element={<Results />} />
               <Route path="/history" element={<History />} />
               <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/jetstream" replace />} />
             </Routes>
           </Layout>

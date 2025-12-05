@@ -9,7 +9,7 @@ import traceback
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,10 @@ class APIError(Exception):
                 "message": self.message,
             }
         }
+        # Add request ID for tracing
+        request_id = getattr(g, "request_id", None)
+        if request_id:
+            response["error"]["request_id"] = request_id
         if self.details:
             response["error"]["details"] = self.details
         return response
@@ -142,6 +146,10 @@ def error_response(
             "message": message,
         }
     }
+    # Add request ID for tracing
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        response["error"]["request_id"] = request_id
     if details:
         response["error"]["details"] = details
     return jsonify(response), status_code

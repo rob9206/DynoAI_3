@@ -11,7 +11,11 @@ from typing import Any, Dict, List, Optional
 from api.jetstream.models import RunError, RunStatus
 from api.services.run_manager import get_run_manager
 
-STUB_ENV = os.getenv("JETSTREAM_STUB_DATA") or os.getenv("JETSTREAM_USE_STUBS")
+STUB_ENV = (
+    os.getenv("JETSTREAM_STUB_DATA")
+    or os.getenv("JETSTREAM_STUB_MODE")
+    or os.getenv("JETSTREAM_USE_STUBS")
+)
 _STUB_ENABLED = bool(
     STUB_ENV and STUB_ENV.strip().lower() in {"1", "true", "yes", "on"}
 )

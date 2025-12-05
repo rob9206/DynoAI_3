@@ -10,15 +10,55 @@ sync_bp = Blueprint("jetstream_sync", __name__)
 @sync_bp.route("/sync", methods=["POST"])
 def trigger_sync():
     """
-    Force an immediate poll of the Jetstream API.
-
-    Returns list of newly found run IDs.
-
-    Response:
-    {
-        "new_runs_found": 2,
-        "run_ids": ["run_abc123", "run_def456"]
-    }
+    Trigger Jetstream sync.
+    ---
+    tags:
+      - Jetstream
+    summary: Force an immediate poll of the Jetstream API
+    description: |
+      Triggers an immediate synchronization with the Jetstream API,
+      regardless of the scheduled poll interval. Returns any newly
+      discovered runs.
+    responses:
+      200:
+        description: Sync completed successfully
+        schema:
+          $ref: '#/definitions/SyncResponse'
+        examples:
+          application/json:
+            new_runs_found: 2
+            run_ids:
+              - "run_abc123"
+              - "run_def456"
+      500:
+        description: Sync failed
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+            new_runs_found:
+              type: integer
+              example: 0
+            run_ids:
+              type: array
+              items:
+                type: string
+      503:
+        description: Jetstream poller not initialized
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Jetstream poller not initialized"
+            new_runs_found:
+              type: integer
+              example: 0
+            run_ids:
+              type: array
+              items:
+                type: string
     """
     if is_stub_mode_enabled():
         return jsonify(get_stub_sync_response()), 200

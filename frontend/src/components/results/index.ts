@@ -6,3 +6,5 @@ export type { MetricCardProps } from './MetricCard';
 
 export { DiagnosticsDetail } from './DiagnosticsDetail';
 export type { DiagnosticsDetailProps } from './DiagnosticsDetail';
+
+export { FilePreview, useFileContent } from './FilePreview';

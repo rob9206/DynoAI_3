@@ -2,6 +2,7 @@
  * Run detail page showing full run information
  */
 
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -15,6 +16,9 @@ import {
   Thermometer,
   Gauge,
   Table,
+  ChevronDown,
+  ChevronRight,
+  Eye,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -24,10 +28,12 @@ import { Progress } from '../components/ui/progress';
 import { useJetstreamRun } from '../hooks/useJetstream';
 import { useJetstreamProgress } from '../hooks/useJetstreamProgress';
 import { downloadRunFile } from '../api/jetstream';
-import type { RunStatus } from '../api/jetstream';
+import type { RunStatus, OutputFile } from '../api/jetstream';
 import { VEHeatmap } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { useVEData } from '../hooks/useVEData';
+import { FilePreview, useFileContent } from '../components/results/FilePreview';
+import { cn } from '../lib/utils';
 
 const statusConfig: Record<
   RunStatus,
@@ -281,74 +287,22 @@ export default function RunDetailPage() {
         </Card>
       </div>
 
-      {/* Output Files */}
+      {/* Output Files with Visual Previews */}
       {run.status === 'complete' && run.output_files && run.output_files.length > 0 && (
         <div>
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Output Files
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {run.output_files.map((file) => {
-              const fileIcon = file.name.endsWith('.csv') ? (
-                <Table className="h-8 w-8 text-blue-500" />
-              ) : file.name.endsWith('.json') ? (
-                <FileText className="h-8 w-8 text-green-500" />
-              ) : file.name.includes('Anomaly') ? (
-                <AlertCircle className="h-8 w-8 text-yellow-500" />
-              ) : (
-                <FileText className="h-8 w-8 text-purple-500" />
-              );
-
-              return (
-                <Card
-                  key={file.name}
-                  className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer overflow-hidden"
-                  onClick={() => void handleDownload(file.name)}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="p-3 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                        {fileIcon}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDownload(file.name);
-                        }}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm text-foreground line-clamp-2 min-h-[2.5rem]">
-                        {file.name}
-                      </h3>
-
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          {file.name.split('.').pop()?.toUpperCase() ?? 'FILE'}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <div className="flex items-center text-xs text-primary font-medium group-hover:translate-x-1 transition-transform">
-                        <Download className="h-3 w-3 mr-1" />
-                        Click to download
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div className="space-y-4">
+            {run.output_files.map((file) => (
+              <ExpandableFileCard
+                key={file.name}
+                file={file}
+                runId={run.run_id}
+                onDownload={handleDownload}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -393,6 +347,125 @@ export default function RunDetailPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Expandable file card with visual preview
+ */
+function ExpandableFileCard({
+  file,
+  runId,
+  onDownload,
+}: {
+  file: OutputFile;
+  runId: string;
+  onDownload: (filename: string) => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { content, isLoading, error } = useFileContent(
+    isExpanded ? runId : undefined,
+    isExpanded ? file.name : undefined
+  );
+
+  const fileIcon = file.name.endsWith('.csv') ? (
+    <Table className="h-5 w-5 text-blue-500" />
+  ) : file.name.endsWith('.json') ? (
+    <FileText className="h-5 w-5 text-green-500" />
+  ) : file.name.includes('Anomaly') ? (
+    <AlertCircle className="h-5 w-5 text-yellow-500" />
+  ) : (
+    <FileText className="h-5 w-5 text-purple-500" />
+  );
+
+  const fileType = file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
+  const fileDescription = getFileDescription(file.name);
+
+  return (
+    <Card className={cn(
+      "transition-all duration-200",
+      isExpanded && "ring-1 ring-primary/50"
+    )}>
+      <div
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            {fileIcon}
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-foreground">{file.name}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{fileDescription}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Badge variant="secondary" className="text-xs font-normal">
+            {fileType}
+          </Badge>
+          <span className="text-xs text-muted-foreground font-mono">
+            {(file.size / 1024).toFixed(1)} KB
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownload(file.name);
+            }}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+          <div className="text-muted-foreground">
+            {isExpanded ? (
+              <ChevronDown className="h-5 w-5" />
+            ) : (
+              <ChevronRight className="h-5 w-5" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="border-t border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+              <Eye className="h-3 w-3" />
+              <span>Data Preview</span>
+            </div>
+            <FilePreview
+              filename={file.name}
+              content={content}
+              isLoading={isLoading}
+              error={error}
+            />
+          </CardContent>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Get human-readable description for a file
+ */
+function getFileDescription(filename: string): string {
+  const descriptions: Record<string, string> = {
+    'VE_Correction_Delta_DYNO.csv': 'Volumetric Efficiency correction values',
+    'Spark_Adjust_Suggestion_Front.csv': 'Front cylinder spark advance suggestions',
+    'Spark_Adjust_Suggestion_Rear.csv': 'Rear cylinder spark advance suggestions',
+    'AFR_Error_Map_Front.csv': 'Front cylinder air-fuel ratio error mapping',
+    'AFR_Error_Map_Rear.csv': 'Rear cylinder air-fuel ratio error mapping',
+    'Coverage_Front.csv': 'Front cylinder data coverage analysis',
+    'Coverage_Rear.csv': 'Rear cylinder data coverage analysis',
+    'VE_Delta_PasteReady.txt': 'VE corrections formatted for tuning software',
+    'Spark_Front_PasteReady.txt': 'Front spark values formatted for tuning software',
+    'Spark_Rear_PasteReady.txt': 'Rear spark values formatted for tuning software',
+    'Diagnostics_Report.txt': 'Analysis summary and diagnostic metrics',
+    'Anomaly_Hypotheses.json': 'Detected anomalies and possible causes',
+  };
+
+  return descriptions[filename] ?? 'Analysis output file';
 }
 
 /**

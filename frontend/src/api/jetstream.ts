@@ -179,6 +179,19 @@ export async function downloadRunFile(
   return response.data as Blob;
 }
 
+/**
+ * Fetch file content as text for preview
+ */
+export async function getFileContent(
+  runId: string,
+  filename: string
+): Promise<string> {
+  const response = await api.get<string>(`/api/jetstream/runs/${runId}/files/${filename}`, {
+    responseType: 'text',
+  });
+  return response.data;
+}
+
 // Export the API object for direct use
 export const jetstreamApi = {
   getStatus: getJetstreamStatus,
@@ -188,6 +201,7 @@ export const jetstreamApi = {
   getRun: getJetstreamRun,
   triggerSync: triggerJetstreamSync,
   downloadFile: downloadRunFile,
+  getFileContent: getFileContent,
 };
 
 export default jetstreamApi;

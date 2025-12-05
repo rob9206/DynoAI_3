@@ -77,9 +77,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose the API port
 EXPOSE 5001
 
-# Health check
+# Health check - uses readiness probe for accurate container status
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5001/api/health || exit 1
+    CMD curl -f http://localhost:5001/api/health/ready || exit 1
 
 # Switch to non-root user
 USER dynoai
