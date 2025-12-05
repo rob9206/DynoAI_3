@@ -2,19 +2,12 @@
 
 import json
 import os
-import sys
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
-from jetstream.models import JetstreamConfig
-from jetstream.poller import get_poller, init_poller
-
+from api.jetstream.models import JetstreamConfig
+from api.jetstream.poller import get_poller, init_poller
 from io_contracts import safe_path
-
-# Add parent paths for imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 config_bp = Blueprint("jetstream_config", __name__)
 

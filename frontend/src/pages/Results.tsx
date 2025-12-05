@@ -227,46 +227,74 @@ export default function Results() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Files</CardTitle>
-              <CardDescription>Download individual analysis results.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {manifest.outputFiles.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="p-2 bg-background rounded-md border border-border">
-                      {file.name.endsWith('.csv') ? (
-                        <Table className="h-6 w-6 text-primary" />
-                      ) : (
-                        <FileText className="h-6 w-6 text-green-500" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{file.name}</p>
-                      <Badge variant="secondary" className="mt-1 text-xs font-normal">
-                        {file.type}
-                      </Badge>
-                    </div>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {manifest.outputFiles.map((file, index) => {
+              const fileIcon = file.name.endsWith('.csv') ? (
+                <Table className="h-8 w-8 text-blue-500" />
+              ) : file.name.endsWith('.json') ? (
+                <FileText className="h-8 w-8 text-green-500" />
+              ) : file.name.includes('Anomaly') ? (
+                <AlertCircle className="h-8 w-8 text-yellow-500" />
+              ) : (
+                <FileText className="h-8 w-8 text-purple-500" />
+              );
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDownloadFile(file.name)}
-                    className="text-primary hover:text-primary/80 hover:bg-primary/10"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+              const fileSize = typeof file === 'object' && 'size' in file ? 
+                `${((file.size as number) / 1024).toFixed(1)} KB` : 
+                '';
+
+              return (
+                <Card
+                  key={index}
+                  className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer overflow-hidden"
+                  onClick={() => handleDownloadFile(file.name)}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="p-3 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
+                        {fileIcon}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadFile(file.name);
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm text-foreground line-clamp-2 min-h-[2.5rem]">
+                        {file.name}
+                      </h3>
+                      
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          {file.type}
+                        </Badge>
+                        {fileSize && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {fileSize}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="flex items-center text-xs text-primary font-medium group-hover:translate-x-1 transition-transform">
+                        <Download className="h-3 w-3 mr-1" />
+                        Click to download
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </TabsContent>
 
         {/* Visualizations Tab */}

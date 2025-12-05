@@ -56,9 +56,9 @@ def test_requirement_1_clamping():
     _, _, base_values = read_ve_table(base_path)
     _, _, updated_values = read_ve_table(output_path)
 
-    for i in range(len(base_values)):
+    for i, item in enumerate(base_values):
         for j in range(len(base_values[0])):
-            multiplier = updated_values[i][j] / base_values[i][j]
+            multiplier = updated_values[i][j] / item[j]
             # Use small epsilon for floating point comparison
             if not 0.92999 <= multiplier <= 1.07001:
                 raise AssertionError(
@@ -185,9 +185,9 @@ def test_requirement_4_rollback():
     _, _, base_values = read_ve_table(base_path)
     _, _, restored_values = read_ve_table(restored_path)
 
-    for i in range(len(base_values)):
+    for i, item in enumerate(base_values):
         for j in range(len(base_values[0])):
-            if abs(base_values[i][j] - restored_values[i][j]) >= 0.0001:
+            if abs(item[j] - restored_values[i][j]) >= 0.0001:
                 raise AssertionError(f"Rollback failed at [{i}][{j}]")
 
     # Test hash verification - modify factor file and try rollback
@@ -276,9 +276,9 @@ def test_requirement_6_multiplier_bounds():
     _, _, base_values = read_ve_table(base_path)
     _, _, updated_values = read_ve_table(output_path)
 
-    for i in range(len(base_values)):
+    for i, item in enumerate(base_values):
         for j in range(len(base_values[0])):
-            multiplier = updated_values[i][j] / base_values[i][j]
+            multiplier = updated_values[i][j] / item[j]
             if not 0.93 <= multiplier <= 1.07:
                 raise AssertionError(
                     f"Multiplier {multiplier} out of [0.93, 1.07] at [{i}][{j}]"
@@ -334,9 +334,9 @@ def test_requirement_7_roundtrip_tolerance():
     _, _, restored_values = read_ve_table(restored_path)
 
     max_diff = 0.0
-    for i in range(len(base_values)):
+    for i, item in enumerate(base_values):
         for j in range(len(base_values[0])):
-            diff = abs(base_values[i][j] - restored_values[i][j])
+            diff = abs(item[j] - restored_values[i][j])
             max_diff = max(max_diff, diff)
             if diff >= 0.0001:
                 raise AssertionError(

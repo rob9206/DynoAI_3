@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface VEHeatmapProps {
@@ -8,8 +8,18 @@ interface VEHeatmapProps {
   title: string;
 }
 
+interface TooltipData {
+  value: number;
+  rpm: number;
+  load: number;
+  x: number;
+  y: number;
+}
+
 export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current || !data.length) return;
@@ -83,14 +93,49 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
 
   }, [data, rpm, load]);
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const cellWidth = canvas.width / load.length;
+    const cellHeight = canvas.height / rpm.length;
+
+    const loadIdx = Math.floor(x / cellWidth);
+    const rpmIdx = Math.floor(y / cellHeight);
+
+    if (
+      loadIdx >= 0 && loadIdx < load.length &&
+      rpmIdx >= 0 && rpmIdx < rpm.length &&
+      data[rpmIdx] && data[rpmIdx][loadIdx] !== null && !isNaN(data[rpmIdx][loadIdx])
+    ) {
+      setTooltip({
+        value: data[rpmIdx][loadIdx],
+        rpm: rpm[rpmIdx],
+        load: load[loadIdx],
+        x: e.clientX,
+        y: e.clientY,
+      });
+    } else {
+      setTooltip(null);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip(null);
+  };
+
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-visible">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <div className="relative min-w-[670px]" style={{ paddingLeft: '70px', paddingTop: '40px' }}>
+          <div ref={containerRef} className="relative min-w-[670px]" style={{ paddingLeft: '70px', paddingTop: '40px' }}>
             {/* Y-axis labels (RPM) */}
             <div className="absolute left-0 top-[40px] w-[60px] h-[400px] flex flex-col justify-between text-xs text-muted-foreground font-mono pr-2 border-r border-border">
               {rpm.map((val, i) => (
@@ -113,7 +158,9 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
               ref={canvasRef}
               width={600}
               height={400}
-              className="border border-border rounded bg-muted/10 shadow-inner"
+              className="border border-border rounded bg-muted/10 shadow-inner cursor-crosshair"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
             />
             
             {/* Axis Titles */}
@@ -125,6 +172,27 @@ export default function VEHeatmap({ data, rpm, load, title }: VEHeatmapProps) {
                 RPM
               </div>
             </div>
+
+            {/* Tooltip */}
+            {tooltip && (
+              <div
+                className="fixed z-[9999] pointer-events-none"
+                style={{
+                  left: `${tooltip.x + 15}px`,
+                  top: `${tooltip.y - 10}px`,
+                }}
+              >
+                <div className="bg-popover border border-border rounded-lg shadow-xl px-3 py-2 text-sm animate-in fade-in zoom-in-95 duration-100">
+                  <div className="font-semibold text-foreground mb-1">
+                    Correction: {tooltip.value > 0 ? '+' : ''}{tooltip.value.toFixed(2)}%
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <div>RPM: {tooltip.rpm}</div>
+                    <div>Load: {tooltip.load} kPa</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         

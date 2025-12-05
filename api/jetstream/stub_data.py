@@ -8,23 +8,71 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from jetstream.models import RunError, RunStatus
-from services.run_manager import get_run_manager
+from api.jetstream.models import RunError, RunStatus
+from api.services.run_manager import get_run_manager
 
 STUB_ENV = os.getenv("JETSTREAM_STUB_DATA") or os.getenv("JETSTREAM_USE_STUBS")
 _STUB_ENABLED = bool(
     STUB_ENV and STUB_ENV.strip().lower() in {"1", "true", "yes", "on"}
 )
 
-VE_DELTA_SAMPLE = """RPM,0,10,20,30,40,50,60,70,80,100
-1000,-2.5,-1.8,-0.3,0.5,1.2,2.8,4.5,6.2,8.1,10.5
-1500,-3.2,-2.1,-0.8,0.2,0.8,2.1,3.8,5.5,7.8,9.2
-2000,-4.1,-2.8,-1.5,-0.3,0.5,1.5,3.0,4.8,6.5,8.0
-2500,-5.2,-3.5,-2.0,-0.8,0.1,1.0,2.5,4.0,5.5,7.0
-3000,-6.5,-4.2,-2.5,-1.2,-0.2,0.8,2.0,3.5,5.0,6.5
-3500,-8.0,-5.5,-3.2,-1.8,-0.5,0.5,1.5,3.0,4.5,6.0
-4000,-10.2,-7.0,-4.5,-2.5,-1.0,0.2,1.2,2.5,4.0,5.5
+# Original run - slightly lean baseline with some rich areas
+VE_DELTA_SAMPLE_ALPHA = """RPM,0,10,20,30,40,50,60,70,80,100
+1000,-2.5,-1.8,-0.3,0.5,1.2,2.8,4.5,6.2,7.2,6.8
+1500,-3.2,-2.1,-0.8,0.2,0.8,2.1,3.8,5.5,6.5,5.9
+2000,-4.1,-2.8,-1.5,-0.3,0.5,1.5,3.0,4.8,5.8,5.2
+2500,-5.2,-3.5,-2.0,-0.8,0.1,1.0,2.5,4.0,4.8,4.5
+3000,-5.4,-4.2,-2.5,-1.2,-0.2,0.8,2.0,3.5,4.2,3.8
+3500,-4.8,-3.8,-2.2,-1.0,-0.3,0.5,1.5,3.0,3.5,3.2
+4000,-4.2,-3.2,-1.8,-0.8,-0.2,0.2,1.2,2.5,3.0,2.8
 """
+
+# Stage 3 build - needs more fuel everywhere (rich baseline needed)
+VE_DELTA_SAMPLE_STAGE3 = """RPM,0,10,20,30,40,50,60,70,80,100
+1000,0.5,1.2,2.5,3.8,4.5,5.2,6.8,8.2,9.5,9.8
+1500,0.8,1.5,2.8,4.0,4.8,5.8,7.2,8.8,9.2,8.5
+2000,-0.2,0.8,2.2,3.5,4.2,5.2,6.8,8.0,8.8,7.8
+2500,-1.0,0.2,1.8,3.0,3.8,4.8,6.2,7.5,8.2,7.2
+3000,-1.5,-0.5,1.2,2.5,3.2,4.2,5.8,7.0,7.8,6.8
+3500,-2.0,-1.0,0.8,2.0,2.8,3.8,5.2,6.5,7.2,6.2
+4000,-3.2,-2.2,-0.2,1.2,2.2,3.2,4.5,5.8,6.5,5.5
+"""
+
+# Lean factory tune - needs less fuel (negative corrections)
+VE_DELTA_SAMPLE_LEAN = """RPM,0,10,20,30,40,50,60,70,80,100
+1000,-1.5,-2.2,-3.5,-4.8,-5.5,-6.2,-7.0,-7.8,-8.5,-8.9
+1500,-1.8,-2.5,-3.8,-5.0,-5.8,-6.5,-7.2,-8.0,-8.2,-7.5
+2000,-2.2,-2.8,-4.0,-5.2,-6.0,-6.8,-7.5,-8.2,-7.8,-6.8
+2500,-2.5,-3.2,-4.2,-5.5,-6.2,-7.0,-7.8,-8.0,-7.2,-6.2
+3000,-3.0,-3.8,-4.8,-6.0,-6.8,-7.5,-8.0,-7.5,-6.5,-5.5
+3500,-3.5,-4.2,-5.2,-6.2,-7.0,-7.8,-7.5,-6.8,-5.8,-4.8
+4000,-4.0,-4.8,-5.8,-6.8,-7.5,-7.2,-6.5,-5.5,-4.5,4.1
+"""
+
+# Well-tuned stock - minimal changes needed
+VE_DELTA_SAMPLE_MINIMAL = """RPM,0,10,20,30,40,50,60,70,80,100
+1000,0.2,0.5,0.8,1.0,1.2,1.5,1.8,2.2,2.5,2.8
+1500,0.1,0.3,0.5,0.8,1.0,1.2,1.5,1.8,2.0,2.2
+2000,-0.2,0.0,0.2,0.5,0.8,1.0,1.2,1.5,1.8,2.0
+2500,-0.5,-0.2,0.0,0.2,0.5,0.8,1.0,1.2,1.5,1.8
+3000,-0.8,-0.5,-0.2,0.0,0.2,0.5,0.8,1.0,1.2,1.5
+3500,-1.2,-0.8,-0.5,-0.2,0.0,0.2,0.5,0.8,1.0,1.2
+4000,-2.1,-1.5,-1.0,-0.5,-0.2,0.0,0.2,0.5,0.8,1.0
+"""
+
+# Rich aftermarket tune - needs significant fuel additions
+VE_DELTA_SAMPLE_RICH = """RPM,0,10,20,30,40,50,60,70,80,100
+1000,2.5,3.2,4.5,5.8,6.8,7.8,8.5,9.8,10.5,11.2
+1500,2.0,2.8,4.0,5.2,6.2,7.2,8.0,9.2,10.0,10.8
+2000,1.5,2.2,3.5,4.8,5.8,6.8,7.5,8.8,9.5,10.2
+2500,0.8,1.5,2.8,4.0,5.0,6.0,7.0,8.2,9.0,9.8
+3000,0.2,1.0,2.2,3.5,4.5,5.5,6.5,7.8,8.5,9.2
+3500,-0.5,0.5,1.8,3.0,4.0,5.0,6.0,7.2,8.0,8.8
+4000,-1.8,-0.5,1.0,2.5,3.5,4.5,5.5,6.8,7.5,11.5
+"""
+
+# Keep original for backward compatibility
+VE_DELTA_SAMPLE = VE_DELTA_SAMPLE_ALPHA
 
 DIAGNOSTICS_REPORT = """DynoAI Diagnostics Summary
 - Cells corrected: 132 / 256 (52%)
@@ -135,7 +183,7 @@ _SAMPLE_RUNS: List[Dict[str, Any]] = [
             {
                 "name": "VE_Correction_Delta_DYNO.csv",
                 "type": "csv",
-                "content": VE_DELTA_SAMPLE,
+                "content": VE_DELTA_SAMPLE_ALPHA,
             },
             {
                 "name": "Diagnostics_Report.txt",
@@ -149,6 +197,186 @@ _SAMPLE_RUNS: List[Dict[str, Any]] = [
             },
         ],
         "stats": {"rows_read": 18432, "front_accepted": 58, "rear_accepted": 54},
+    },
+    {
+        "run_id": "run_jetstream_stage3_complete",
+        "jetstream_id": "JS-DELTA-087",
+        "status": RunStatus.COMPLETE,
+        "current_stage": "export",
+        "progress_percent": 100,
+        "age_minutes": 120,
+        "metadata": {
+            "vehicle": "2022 Road Glide CVO",
+            "dyno_type": "Dynojet 250i",
+            "engine_type": "Milwaukee-Eight 121",
+            "ambient_temp_f": 71.0,
+            "ambient_pressure_inhg": 29.48,
+            "humidity_percent": 42.0,
+            "duration_seconds": 16,
+            "data_points": 2145,
+            "peak_hp": 128.3,
+            "peak_torque": 131.2,
+        },
+        "results_summary": {
+            "avg_correction": 2.4,
+            "max_correction": 9.8,
+            "min_correction": -3.2,
+            "cells_corrected": 156,
+            "cells_clamped": 12,
+        },
+        "files": [
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "type": "csv",
+                "content": VE_DELTA_SAMPLE_STAGE3,
+            },
+            {
+                "name": "Diagnostics_Report.txt",
+                "type": "text",
+                "content": DIAGNOSTICS_REPORT,
+            },
+            {
+                "name": "Anomaly_Hypotheses.json",
+                "type": "json",
+                "content": ANOMALY_SAMPLE,
+            },
+        ],
+        "stats": {"rows_read": 21450, "front_accepted": 72, "rear_accepted": 68},
+    },
+    {
+        "run_id": "run_jetstream_lean_tune",
+        "jetstream_id": "JS-EPSILON-142",
+        "status": RunStatus.COMPLETE,
+        "current_stage": "export",
+        "progress_percent": 100,
+        "age_minutes": 75,
+        "metadata": {
+            "vehicle": "2023 Street Glide ST",
+            "dyno_type": "Dynojet 224xLC",
+            "engine_type": "Milwaukee-Eight 114",
+            "ambient_temp_f": 65.0,
+            "ambient_pressure_inhg": 29.65,
+            "humidity_percent": 35.0,
+            "duration_seconds": 13,
+            "data_points": 1678,
+            "peak_hp": 95.7,
+            "peak_torque": 109.4,
+        },
+        "results_summary": {
+            "avg_correction": -3.6,
+            "max_correction": 4.1,
+            "min_correction": -8.9,
+            "cells_corrected": 148,
+            "cells_clamped": 18,
+        },
+        "files": [
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "type": "csv",
+                "content": VE_DELTA_SAMPLE_LEAN,
+            },
+            {
+                "name": "Diagnostics_Report.txt",
+                "type": "text",
+                "content": DIAGNOSTICS_REPORT,
+            },
+            {
+                "name": "Anomaly_Hypotheses.json",
+                "type": "json",
+                "content": ANOMALY_SAMPLE,
+            },
+        ],
+        "stats": {"rows_read": 16780, "front_accepted": 64, "rear_accepted": 60},
+    },
+    {
+        "run_id": "run_jetstream_minimal_changes",
+        "jetstream_id": "JS-ZETA-205",
+        "status": RunStatus.COMPLETE,
+        "current_stage": "export",
+        "progress_percent": 100,
+        "age_minutes": 30,
+        "metadata": {
+            "vehicle": "2020 Softail Slim",
+            "dyno_type": "Dynojet 200",
+            "engine_type": "Milwaukee-Eight 107",
+            "ambient_temp_f": 69.0,
+            "ambient_pressure_inhg": 29.55,
+            "humidity_percent": 40.0,
+            "duration_seconds": 12,
+            "data_points": 1523,
+            "peak_hp": 82.6,
+            "peak_torque": 98.3,
+        },
+        "results_summary": {
+            "avg_correction": 0.4,
+            "max_correction": 2.8,
+            "min_correction": -2.1,
+            "cells_corrected": 87,
+            "cells_clamped": 3,
+        },
+        "files": [
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "type": "csv",
+                "content": VE_DELTA_SAMPLE_MINIMAL,
+            },
+            {
+                "name": "Diagnostics_Report.txt",
+                "type": "text",
+                "content": DIAGNOSTICS_REPORT,
+            },
+            {
+                "name": "Anomaly_Hypotheses.json",
+                "type": "json",
+                "content": ANOMALY_SAMPLE,
+            },
+        ],
+        "stats": {"rows_read": 15230, "front_accepted": 48, "rear_accepted": 42},
+    },
+    {
+        "run_id": "run_jetstream_rich_tune",
+        "jetstream_id": "JS-ETA-318",
+        "status": RunStatus.COMPLETE,
+        "current_stage": "export",
+        "progress_percent": 100,
+        "age_minutes": 95,
+        "metadata": {
+            "vehicle": "2019 Fat Boy 114",
+            "dyno_type": "Dynojet 224xLC",
+            "engine_type": "Milwaukee-Eight 114",
+            "ambient_temp_f": 73.0,
+            "ambient_pressure_inhg": 29.38,
+            "humidity_percent": 48.0,
+            "duration_seconds": 15,
+            "data_points": 1945,
+            "peak_hp": 91.2,
+            "peak_torque": 106.8,
+        },
+        "results_summary": {
+            "avg_correction": 4.2,
+            "max_correction": 11.5,
+            "min_correction": -1.8,
+            "cells_corrected": 168,
+            "cells_clamped": 22,
+        },
+        "files": [
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "type": "csv",
+                "content": VE_DELTA_SAMPLE_RICH,
+            },
+            {
+                "name": "Diagnostics_Report.txt",
+                "type": "text",
+                "content": DIAGNOSTICS_REPORT,
+            },
+            {
+                "name": "Anomaly_Hypotheses.json",
+                "type": "json",
+                "content": ANOMALY_SAMPLE,
+            },
+        ],
+        "stats": {"rows_read": 19450, "front_accepted": 78, "rear_accepted": 71},
     },
     {
         "run_id": "run_jetstream_demo_processing",

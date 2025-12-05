@@ -31,6 +31,33 @@ try:
 except Exception:  # pragma: no cover
     pass
 
+# Register Jetstream blueprint
+try:
+    from api.jetstream.models import JetstreamConfig
+    from api.jetstream.poller import init_poller
+    from api.jetstream.stub_data import initialize_stub_data, is_stub_mode_enabled
+    from api.routes.jetstream import jetstream_bp
+
+    app.register_blueprint(jetstream_bp, url_prefix="/api/jetstream")
+
+    # Initialize Jetstream poller with config from environment
+    jetstream_config = JetstreamConfig(
+        api_url=os.environ.get("JETSTREAM_API_URL", ""),
+        api_key=os.environ.get("JETSTREAM_API_KEY", ""),
+        poll_interval_seconds=int(os.environ.get("JETSTREAM_POLL_INTERVAL", "30")),
+        auto_process=os.environ.get("JETSTREAM_AUTO_PROCESS", "true").lower() == "true",
+        enabled=os.environ.get("JETSTREAM_ENABLED", "false").lower() == "true",
+    )
+    if is_stub_mode_enabled():
+        initialize_stub_data()
+        poller = None
+    else:
+        poller = init_poller(jetstream_config)
+        if jetstream_config.enabled:
+            poller.start()
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
+
 # Configuration
 UPLOAD_FOLDER = Path("uploads")
 OUTPUT_FOLDER = Path("outputs")
@@ -357,10 +384,28 @@ def get_ve_data(run_id):
     """
     try:
         run_id = secure_filename(run_id)
-        output_dir = OUTPUT_FOLDER / run_id
+        ve_delta_file = None
 
-        # Look for VE correction files
-        ve_delta_file = output_dir / "VE_Correction_Delta_DYNO.csv"
+        # Try Jetstream run manager first
+        try:
+            from services.run_manager import get_run_manager
+
+            manager = get_run_manager()
+            run_output_dir = manager.get_run_output_dir(run_id)
+            print(f"[DEBUG] Jetstream run output dir: {run_output_dir}")
+            if run_output_dir and run_output_dir.exists():
+                ve_delta_file = run_output_dir / "VE_Correction_Delta_DYNO.csv"
+                print(
+                    f"[DEBUG] VE file path: {ve_delta_file}, exists: {ve_delta_file.exists()}"
+                )
+        except Exception as e:
+            print(f"[DEBUG] Exception in Jetstream path: {e}")
+            pass
+
+        # Fall back to old outputs folder if not found
+        if not ve_delta_file or not ve_delta_file.exists():
+            output_dir = OUTPUT_FOLDER / run_id
+            ve_delta_file = output_dir / "VE_Correction_Delta_DYNO.csv"
 
         if not ve_delta_file.exists():
             return jsonify({"error": "VE data not found"}), 404
@@ -368,7 +413,7 @@ def get_ve_data(run_id):
         # Parse VE delta CSV
         import csv
 
-        with open(ve_delta_file, "r") as f:
+        with open(ve_delta_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f)
             header = next(reader)
 
@@ -385,30 +430,12 @@ def get_ve_data(run_id):
                     [float(val.replace("+", "").replace("'", "")) for val in row[1:]]
                 )
 
-        # Generate synthetic "before" data (would need base VE tables in real implementation)
-        # For now, create reasonable VE values
-        before = []
-        after = []
-        for i, rpm in enumerate(rpm_points):
-            before_row = []
-            after_row = []
-            for j, load in enumerate(load_points):
-                # Generate synthetic base VE (would load from base table in production)
-                base_ve = 75 + (rpm / 200) - (load / 10)
-                before_row.append(round(base_ve, 2))
-                # Apply correction
-                corrected_ve = base_ve * (1 + corrections[i][j] / 100)
-                after_row.append(round(corrected_ve, 2))
-            before.append(before_row)
-            after.append(after_row)
-
         return (
             jsonify(
                 {
                     "rpm": rpm_points,
                     "load": load_points,
-                    "before": before,
-                    "after": after,
+                    "corrections": corrections,
                 }
             ),
             200,
@@ -571,6 +598,14 @@ if __name__ == "__main__":
     print("  GET  /api/diagnostics/<id>    - Get diagnostics data")
     print("  GET  /api/coverage/<id>       - Get coverage data")
     print("  POST /api/xai/chat            - Proxy chat to xAI (Grok)")
+    print("\n[*] Jetstream endpoints:")
+    print("  GET  /api/jetstream/config    - Get Jetstream configuration")
+    print("  PUT  /api/jetstream/config    - Update Jetstream configuration")
+    print("  GET  /api/jetstream/status    - Get Jetstream poller status")
+    print("  GET  /api/jetstream/runs      - List Jetstream runs")
+    print("  GET  /api/jetstream/runs/<id> - Get specific run details")
+    print("  POST /api/jetstream/sync      - Force immediate poll")
+    print("  GET  /api/jetstream/progress/<id> - SSE progress stream")
     print("\n" + "=" * 60 + "\n")
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")

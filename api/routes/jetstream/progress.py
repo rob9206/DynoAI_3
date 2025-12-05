@@ -1,13 +1,7 @@
 """Jetstream progress SSE route for real-time updates."""
 
-import sys
-from pathlib import Path
-
 from flask import Blueprint, Response
-from services.progress_broadcaster import get_broadcaster
-
-# Add parent paths for imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from api.services.progress_broadcaster import get_broadcaster
 
 progress_bp = Blueprint("jetstream_progress", __name__)
 

@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from jetstream.models import RunError, RunState, RunStatus
-
+from api.jetstream.models import RunError, RunState, RunStatus
 from io_contracts import make_run_id, safe_path, utc_now_iso
 
 # Add parent directory to path for io_contracts import
