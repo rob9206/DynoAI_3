@@ -1,0 +1,398 @@
+{
+  "anomalies": [
+    {
+      "type": "Spatial discontinuity",
+      "score": 119737.3971151479,
+      "cell": {
+        "rpm": 2000,
+        "kpa": 35
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 170282.70558640157,
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 518745.27943326265,
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 629159.2864620903,
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    }
+  ],
+  "correction_diagnostics": {
+    "front": {
+      "accepted_wb": 250000,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 0,
+      "no_requested_afr": 0,
+      "total_records_processed": 250000,
+      "per_bin_stats": {
+        "mad": [
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            0.6102877070619037,
+            0.3447402487758282,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            0.5179047055341854,
+            0.7061902620686507,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            0.56720257234727,
+            0.3787410338857349,
+            0.47609794014767814
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7587052720339038
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.801639849103088
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7550852681323192
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.6132212671681074
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.5690263842437808
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7490708273219777
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7478537360890307
+          ]
+        ],
+        "hits": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            21,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            29,
+            22,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            5,
+            33,
+            12
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            49
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            48
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            249578
+          ]
+        ]
+      }
+    },
+    "rear": {
+      "accepted_wb": 250000,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 0,
+      "no_requested_afr": 0,
+      "total_records_processed": 250000,
+      "per_bin_stats": {
+        "mad": [
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            0.5218962704535013,
+            0.5227001194743028,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            0.5251228412360813,
+            1.0661244716445921,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            0.8353316891884326,
+            0.8406671961874466,
+            1.1942023183447663
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.6633325984459084
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.5644930059188589
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7538534024365617
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.8025950634670505
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7496464518216879
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.6538489399259646
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            0.7478537360890307
+          ]
+        ],
+        "hits": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            21,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            29,
+            22,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            5,
+            33,
+            12
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            49
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            50
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            48
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            249578
+          ]
+        ]
+      }
+    }
+  }
+}

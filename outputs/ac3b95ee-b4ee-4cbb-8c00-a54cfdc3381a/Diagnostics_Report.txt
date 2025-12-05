@@ -1,0 +1,43 @@
+Dyno AI Tuner v1.2 Diagnostics
+
+=== AFR Correction Data Quality ===
+
+FRONT CYLINDER:
+  Total records processed: 250000
+  Accepted WB records: 250000
+  No requested AFR: 0
+  Bad AFR or request AFR: 0
+  Temp out of range: 0
+  MAP out of range: 0
+  TPS out of range: 0
+  VE out of range: 0
+
+REAR CYLINDER:
+  Total records processed: 250000
+  Accepted WB records: 250000
+  No requested AFR: 0
+  Bad AFR or request AFR: 0
+  Temp out of range: 0
+  MAP out of range: 0
+  TPS out of range: 0
+  VE out of range: 0
+
+
+=== Anomaly Detection ===
+
+1. [Spatial discontinuity] score=119737.3971151479
+   cell: RPM 2000 / 35 kPa
+   why: Large VE change vs neighbors; could be data artifact or real airflow quirk.
+   next: Re-run steady-state in this cell, Inspect for vacuum leaks, throttle sync, or sensor noise
+2. [Spatial discontinuity] score=170282.70558640157
+   cell: RPM 2000 / 50 kPa
+   why: Large VE change vs neighbors; could be data artifact or real airflow quirk.
+   next: Re-run steady-state in this cell, Inspect for vacuum leaks, throttle sync, or sensor noise
+3. [Spatial discontinuity] score=518745.27943326265
+   cell: RPM 2500 / 50 kPa
+   why: Large VE change vs neighbors; could be data artifact or real airflow quirk.
+   next: Re-run steady-state in this cell, Inspect for vacuum leaks, throttle sync, or sensor noise
+4. [Spatial discontinuity] score=629159.2864620903
+   cell: RPM 2500 / 65 kPa
+   why: Large VE change vs neighbors; could be data artifact or real airflow quirk.
+   next: Re-run steady-state in this cell, Inspect for vacuum leaks, throttle sync, or sensor noise
