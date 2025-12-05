@@ -1,0 +1,12 @@
+[
+  {
+    "id": "afr_wobble",
+    "severity": "medium",
+    "message": "Detected AFR oscillation between 3.0-3.5 seconds"
+  },
+  {
+    "id": "knock_retard",
+    "severity": "low",
+    "message": "Rear cylinder knock retard spike @ 4800 RPM"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "vehicle": "2020 Softail Slim",
+  "dyno_type": "Dynojet 200",
+  "engine_type": "Milwaukee-Eight 107",
+  "ambient_temp_f": 69.0,
+  "ambient_pressure_inhg": 29.55,
+  "humidity_percent": 40.0,
+  "duration_seconds": 12,
+  "data_points": 1523,
+  "peak_hp": 82.6,
+  "peak_torque": 98.3
+}

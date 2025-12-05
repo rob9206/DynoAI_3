@@ -1,0 +1,12 @@
+{
+  "vehicle": "2019 Fat Boy 114",
+  "dyno_type": "Dynojet 224xLC",
+  "engine_type": "Milwaukee-Eight 114",
+  "ambient_temp_f": 73.0,
+  "ambient_pressure_inhg": 29.38,
+  "humidity_percent": 48.0,
+  "duration_seconds": 15,
+  "data_points": 1945,
+  "peak_hp": 91.2,
+  "peak_torque": 106.8
+}

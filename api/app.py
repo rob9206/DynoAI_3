@@ -430,12 +430,23 @@ def get_ve_data(run_id):
                     [float(val.replace("+", "").replace("'", "")) for val in row[1:]]
                 )
 
+        # Generate before/after data from corrections
+        # Assume baseline VE of 100 for all cells
+        baseline_ve = 100.0
+        before_data = [[baseline_ve for _ in load_points] for _ in rpm_points]
+        after_data = [
+            [baseline_ve + corrections[i][j] for j in range(len(load_points))]
+            for i in range(len(rpm_points))
+        ]
+
         return (
             jsonify(
                 {
                     "rpm": rpm_points,
                     "load": load_points,
                     "corrections": corrections,
+                    "before": before_data,
+                    "after": after_data,
                 }
             ),
             200,

@@ -1,0 +1,82 @@
+{
+  "schema_id": "dynoai.manifest@1",
+  "tool_version": "1.2.0",
+  "run_id": "run_jetstream_stage3_complete",
+  "status": {
+    "code": "success",
+    "message": "Completed",
+    "last_stage": "export"
+  },
+  "input": {
+    "path": "jetstream_raw/run_jetstream_stage3_complete.csv",
+    "size_bytes": 21450,
+    "sha256": "",
+    "dialect": {
+      "sep": ",",
+      "encoding": "utf-8",
+      "newline": "auto"
+    },
+    "required_columns_present": true,
+    "missing_columns": []
+  },
+  "config": {
+    "args": {
+      "clamp": 7,
+      "smooth_passes": 2
+    }
+  },
+  "env": {
+    "python": "3.11",
+    "os": "Windows"
+  },
+  "timing": {
+    "start": "2025-12-05T11:44:32.190637+00:00",
+    "end": "2025-12-05T11:45:32.190646+00:00",
+    "duration_ms": 42000
+  },
+  "stats": {
+    "rows_read": 21450,
+    "front_accepted": 72,
+    "rear_accepted": 68
+  },
+  "diagnostics": [],
+  "outputs": [
+    {
+      "name": "VE_Correction_Delta_DYNO.csv",
+      "path": "C:\\Dev\\DynoAI_3\\runs\\run_jetstream_stage3_complete\\output\\VE_Correction_Delta_DYNO.csv",
+      "type": "csv",
+      "schema": "dynoai_stub",
+      "rows": null,
+      "cols": null,
+      "size_bytes": 366,
+      "sha256": "",
+      "created": "2025-12-05T11:45:32.190646+00:00"
+    },
+    {
+      "name": "Diagnostics_Report.txt",
+      "path": "C:\\Dev\\DynoAI_3\\runs\\run_jetstream_stage3_complete\\output\\Diagnostics_Report.txt",
+      "type": "text",
+      "schema": "dynoai_stub",
+      "rows": null,
+      "cols": null,
+      "size_bytes": 177,
+      "sha256": "",
+      "created": "2025-12-05T11:45:32.190646+00:00"
+    },
+    {
+      "name": "Anomaly_Hypotheses.json",
+      "path": "C:\\Dev\\DynoAI_3\\runs\\run_jetstream_stage3_complete\\output\\Anomaly_Hypotheses.json",
+      "type": "json",
+      "schema": "dynoai_stub",
+      "rows": null,
+      "cols": null,
+      "size_bytes": 257,
+      "sha256": "",
+      "created": "2025-12-05T11:45:32.190646+00:00"
+    }
+  ],
+  "apply": {
+    "allowed": true,
+    "reasons_blocked": []
+  }
+}

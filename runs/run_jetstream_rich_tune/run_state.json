@@ -1,0 +1,22 @@
+{
+  "run_id": "run_jetstream_rich_tune",
+  "status": "complete",
+  "source": "jetstream",
+  "created_at": "2025-12-05T12:21:48.347Z",
+  "updated_at": "2025-12-05T13:44:32.204Z",
+  "jetstream_id": "JS-ETA-318",
+  "current_stage": "export",
+  "progress_percent": 100,
+  "files": [
+    "VE_Correction_Delta_DYNO.csv",
+    "Diagnostics_Report.txt",
+    "Anomaly_Hypotheses.json"
+  ],
+  "results_summary": {
+    "avg_correction": 4.2,
+    "max_correction": 11.5,
+    "min_correction": -1.8,
+    "cells_corrected": 168,
+    "cells_clamped": 22
+  }
+}

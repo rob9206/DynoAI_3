@@ -1,0 +1,10 @@
+{
+  "vehicle": "2019 Road Glide Special",
+  "dyno_type": "Dynojet 224xLC",
+  "engine_type": "M8 114",
+  "ambient_temp_f": 72.0,
+  "ambient_pressure_inhg": 29.4,
+  "humidity_percent": 41.0,
+  "duration_seconds": 11,
+  "data_points": 1430
+}

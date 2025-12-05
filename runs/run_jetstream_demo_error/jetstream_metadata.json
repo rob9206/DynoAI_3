@@ -1,0 +1,8 @@
+{
+  "vehicle": "2020 Softail Standard",
+  "dyno_type": "Dynojet 200",
+  "engine_type": "M8 107",
+  "ambient_temp_f": 75.0,
+  "ambient_pressure_inhg": 29.1,
+  "humidity_percent": 55.0
+}
