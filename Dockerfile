@@ -57,6 +57,7 @@ COPY --chown=dynoai:dynoai api/ ./api/
 COPY --chown=dynoai:dynoai dynoai/ ./dynoai/
 COPY --chown=dynoai:dynoai io_contracts.py .
 COPY --chown=dynoai:dynoai ai_tuner_toolkit_dyno_v1_2.py .
+COPY --chown=dynoai:dynoai ve_operations.py .
 COPY --chown=dynoai:dynoai tables/ ./tables/
 COPY --chown=dynoai:dynoai templates/ ./templates/
 
@@ -110,4 +111,3 @@ ENV DYNOAI_DEBUG=true
 
 # Override command for development with hot reload
 CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5001", "--reload"]
-
