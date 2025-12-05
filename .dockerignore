@@ -1,0 +1,114 @@
+# =============================================================================
+# DynoAI Docker Ignore File
+# Excludes files and directories from Docker build context
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js (frontend is built separately)
+frontend/node_modules/
+frontend/.npm/
+frontend/dist/
+
+# Test and temporary files
+temp_selftest/
+test_output/
+*.log
+*.tmp
+.temp/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Data files (mounted as volumes instead)
+uploads/
+outputs/
+runs/
+experiments/
+
+# Development files
+.pre-commit-config.yaml
+.env
+.env.*
+!.env.example
+
+# Docker files (prevent recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+
+# Large/unnecessary files
+*.zip
+*.tar
+*.tar.gz
+*.pdf
+opus_bundle.zip
+node.msi
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Nested duplicate directories
+DynoAI_3/
+DynoAI_3-main/
+
