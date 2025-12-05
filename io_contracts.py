@@ -40,10 +40,10 @@ def utc_now_iso() -> str:
 def make_run_id(prefix: str = "") -> str:
     """
     Generate a unique run ID with timestamp and random suffix.
-    
+
     Args:
         prefix: Optional prefix for the run ID
-        
+
     Returns:
         Unique run ID string (e.g., "run_2025-01-15T10-30-00Z-abc123")
     """
@@ -55,13 +55,13 @@ def make_run_id(prefix: str = "") -> str:
 def file_sha256(path: str, bufsize: int = 65536) -> str:
     """
     Compute SHA256 hash of a file.
-    
+
     Performance: Uses 64KB buffer size (optimal for most filesystems).
-    
+
     Args:
         path: Path to file to hash
         bufsize: Read buffer size in bytes (default: 64KB)
-        
+
     Returns:
         Hexadecimal SHA256 hash string
     """
@@ -116,9 +116,9 @@ def safe_path(path: str, allow_parent_dir: bool = False) -> Path:
 def write_json_atomic(data: Dict[str, Any], out_path: str) -> None:
     """
     Write JSON data to file atomically.
-    
+
     Uses a temporary file and atomic rename to prevent corruption.
-    
+
     Args:
         data: Dictionary to serialize as JSON
         out_path: Destination file path
@@ -147,12 +147,12 @@ def write_json_atomic(data: Dict[str, Any], out_path: str) -> None:
 def write_manifest_pair(manifest: Dict[str, Any], outdir: str, run_id: str) -> str:
     """
     Write manifest to both run-specific and latest manifest files.
-    
+
     Args:
         manifest: Manifest dictionary
         outdir: Output directory
         run_id: Run identifier
-        
+
     Returns:
         Path to the run-specific manifest file
     """
@@ -170,13 +170,13 @@ def write_manifest_pair(manifest: Dict[str, Any], outdir: str, run_id: str) -> s
 def csv_schema_check(path: str) -> Dict[str, Any]:
     """
     Check CSV file schema and extract metadata.
-    
+
     Args:
         path: Path to CSV file
-        
+
     Returns:
         Dictionary with file info, dialect, and column presence
-        
+
     Raises:
         FileNotFoundError: If CSV file doesn't exist
     """
@@ -186,7 +186,7 @@ def csv_schema_check(path: str) -> Dict[str, Any]:
             f"CSV file not found: '{path}'. "
             f"Please verify the file path and ensure the file exists."
         )
-    
+
     size = os.path.getsize(path)
     info: Dict[str, Any] = {
         "path": path,
@@ -214,7 +214,7 @@ def start_manifest(
 ) -> Dict[str, Any]:
     """
     Create initial manifest structure for a run.
-    
+
     Args:
         tool_version: Version of the DynoAI toolkit
         run_id: Unique run identifier
@@ -222,7 +222,7 @@ def start_manifest(
         args_cfg: Configuration arguments
         base_tables: Optional base table configuration
         session_id: Optional session identifier
-        
+
     Returns:
         Initial manifest dictionary
     """
@@ -262,7 +262,7 @@ def add_output_entry(
 ) -> None:
     """
     Add an output file entry to the manifest.
-    
+
     Args:
         manifest: Manifest dictionary to update
         name: Display name of the output
@@ -298,7 +298,7 @@ def finish_manifest(
 ) -> Dict[str, Any]:
     """
     Finalize manifest with completion status and timing.
-    
+
     Args:
         manifest: Manifest dictionary to finalize
         ok: Whether processing completed successfully
@@ -308,7 +308,7 @@ def finish_manifest(
         diagnostics: Diagnostic information
         apply_allowed: Whether changes can be applied
         reasons_blocked: Reasons changes are blocked
-        
+
     Returns:
         Finalized manifest dictionary
     """
@@ -325,10 +325,10 @@ def finish_manifest(
         manifest["apply"]["allowed"] = bool(apply_allowed)
     if reasons_blocked is not None:
         manifest["apply"]["reasons_blocked"] = reasons_blocked
-    
+
     start = manifest["timing"]["start"]
     manifest["timing"]["end"] = utc_now_iso()
-    
+
     try:
         start_time = datetime.fromisoformat(start.replace("Z", "+00:00"))
         end_time = datetime.fromisoformat(
@@ -339,7 +339,7 @@ def finish_manifest(
         )
     except Exception:
         manifest["timing"]["duration_ms"] = None
-    
+
     return manifest
 
 
@@ -462,10 +462,10 @@ MANIFEST_JSON_SCHEMA_V1: Dict[str, Any] = {
 def validate_manifest_schema(manifest: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Validate manifest against JSON schema.
-    
+
     Args:
         manifest: Manifest dictionary to validate
-        
+
     Returns:
         Tuple of (is_valid, error_message)
     """
@@ -498,11 +498,11 @@ def validate_input_values(
 ) -> Tuple[bool, str, Dict[str, int]]:
     """
     Validate numeric values in CSV are within expected ranges.
-    
+
     Args:
         csv_path: Path to CSV file
         sample_rows: Maximum rows to sample for validation
-        
+
     Returns:
         Tuple of (is_valid, message, stats_dict)
     """
@@ -545,11 +545,11 @@ def validate_outputs_against_manifest(
 ) -> Tuple[bool, str]:
     """
     Verify output files match manifest entries.
-    
+
     Args:
         outdir: Output directory path
         manifest: Manifest dictionary
-        
+
     Returns:
         Tuple of (is_valid, error_message)
     """
@@ -578,13 +578,13 @@ def validate_outputs_against_manifest(
 def sanitize_csv_cell(value: Any) -> Any:
     """
     Sanitizes a value to prevent CSV formula injection.
-    
+
     If the value is a string and starts with '=', '+', '-', or '@',
     it prepends a single quote.
-    
+
     Args:
         value: Value to sanitize
-        
+
     Returns:
         Sanitized value
     """

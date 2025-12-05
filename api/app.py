@@ -20,10 +20,6 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-# Load environment variables from .env if present
-load_dotenv()
-
-# Import centralized configuration and error handling
 from api.config import get_config
 from api.errors import (
     AnalysisError,
@@ -33,6 +29,11 @@ from api.errors import (
     register_error_handlers,
     with_error_handling,
 )
+
+# Load environment variables from .env if present
+load_dotenv()
+
+# Import centralized configuration and error handling
 
 # Get application configuration
 config = get_config()
@@ -85,7 +86,6 @@ try:
             poller.start()
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
-
 
 # Store active analysis jobs
 active_jobs = {}
