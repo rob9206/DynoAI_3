@@ -113,7 +113,8 @@ def parse_ideas(path: Path) -> List[str]:
         data = loaded if isinstance(loaded, dict) else {}
         raw_ideas = data.get("ideas", [])
         ideas = [i for i in raw_ideas if isinstance(i, dict)]
-        ids = [str(i["id"]) for i in ideas if "id" in i and i["id"] is not None]
+        # Only accept IDs that are already strings (not integers or other types)
+        ids = [i.get("id") for i in ideas if isinstance(i.get("id"), str)]
         # Keep unique and stable order
         seen: set[str] = set()
         out: List[str] = []
