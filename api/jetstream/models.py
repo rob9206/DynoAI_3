@@ -140,6 +140,11 @@ class TuningOptions:
     decel_severity: str = "medium"  # low, medium, high
     decel_rpm_min: int = 1500
     decel_rpm_max: int = 5500
+    
+    # Per-Cylinder Auto-Balancing
+    balance_cylinders: bool = False
+    balance_mode: str = "equalize"  # equalize, match_front, match_rear
+    balance_max_correction: float = 3.0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -148,6 +153,9 @@ class TuningOptions:
             "decel_severity": self.decel_severity,
             "decel_rpm_min": self.decel_rpm_min,
             "decel_rpm_max": self.decel_rpm_max,
+            "balance_cylinders": self.balance_cylinders,
+            "balance_mode": self.balance_mode,
+            "balance_max_correction": self.balance_max_correction,
         }
 
     @classmethod
@@ -158,6 +166,9 @@ class TuningOptions:
             decel_severity=data.get("decel_severity", "medium"),
             decel_rpm_min=data.get("decel_rpm_min", 1500),
             decel_rpm_max=data.get("decel_rpm_max", 5500),
+            balance_cylinders=data.get("balance_cylinders", False),
+            balance_mode=data.get("balance_mode", "equalize"),
+            balance_max_correction=data.get("balance_max_correction", 3.0),
         )
 
 

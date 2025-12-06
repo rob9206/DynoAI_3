@@ -21,6 +21,9 @@ export interface AnalysisParams {
   decelSeverity?: 'low' | 'medium' | 'high';
   decelRpmMin?: number;
   decelRpmMax?: number;
+  balanceCylinders?: boolean;
+  balanceMode?: 'equalize' | 'match_front' | 'match_rear';
+  balanceMaxCorrection?: number;
 }
 
 export interface AnalysisResponse {
@@ -129,6 +132,9 @@ export const uploadAndAnalyze = async (
     if (params.decelSeverity !== undefined) formData.append('decelSeverity', params.decelSeverity);
     if (params.decelRpmMin !== undefined) formData.append('decelRpmMin', params.decelRpmMin.toString());
     if (params.decelRpmMax !== undefined) formData.append('decelRpmMax', params.decelRpmMax.toString());
+    if (params.balanceCylinders !== undefined) formData.append('balanceCylinders', params.balanceCylinders.toString());
+    if (params.balanceMode !== undefined) formData.append('balanceMode', params.balanceMode);
+    if (params.balanceMaxCorrection !== undefined) formData.append('balanceMaxCorrection', params.balanceMaxCorrection.toString());
   }
 
   const response = await api.post('/api/analyze', formData, {

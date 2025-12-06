@@ -189,6 +189,14 @@ def run_dyno_analysis(
                 cmd.extend(["--decel-rpm-min", str(params["decel_rpm_min"])])
             if "decel_rpm_max" in params:
                 cmd.extend(["--decel-rpm-max", str(params["decel_rpm_max"])])
+        
+        # Per-Cylinder Auto-Balancing options
+        if params.get("balance_cylinders"):
+            cmd.append("--balance-cylinders")
+            if "balance_mode" in params:
+                cmd.extend(["--balance-mode", str(params["balance_mode"])])
+            if "balance_max_correction" in params:
+                cmd.extend(["--balance-max-correction", str(params["balance_max_correction"])])
     else:
         # Use default parameters from config
         cmd.extend(
@@ -377,12 +385,20 @@ def analyze():
     decel_severity = request.form.get("decelSeverity", "medium")
     decel_rpm_min = _get_int_form("decelRpmMin", 1500)
     decel_rpm_max = _get_int_form("decelRpmMax", 5500)
+    
+    # Extract cylinder balancing options from form data
+    balance_cylinders = _get_bool_form("balanceCylinders", False)
+    balance_mode = request.form.get("balanceMode", "equalize")
+    balance_max_correction = float(request.form.get("balanceMaxCorrection", "3.0"))
 
     tuning_options = {
         "decel_management": decel_management,
         "decel_severity": decel_severity,
         "decel_rpm_min": decel_rpm_min,
         "decel_rpm_max": decel_rpm_max,
+        "balance_cylinders": balance_cylinders,
+        "balance_mode": balance_mode,
+        "balance_max_correction": balance_max_correction,
     }
 
     # Initialize job tracking

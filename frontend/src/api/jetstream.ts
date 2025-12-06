@@ -29,6 +29,9 @@ export interface TuningOptions {
   decel_severity: 'low' | 'medium' | 'high';
   decel_rpm_min: number;
   decel_rpm_max: number;
+  balance_cylinders: boolean;
+  balance_mode: 'equalize' | 'match_front' | 'match_rear';
+  balance_max_correction: number;
 }
 
 export interface JetstreamConfig {

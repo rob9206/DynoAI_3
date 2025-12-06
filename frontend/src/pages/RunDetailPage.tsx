@@ -375,6 +375,11 @@ export default function RunDetailPage() {
             <DecelResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
           )}
 
+          {/* Per-Cylinder Balance Results */}
+          {run.output_files?.some((f) => f.name === 'Cylinder_Balance_Report.json') && (
+            <BalanceResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -466,6 +471,91 @@ function DecelResultsCard({ runId, outputFiles, onDownload }: DecelResultsCardPr
 
         <p className="text-xs text-muted-foreground">
           Apply the VE overlay to closed-throttle cells to eliminate exhaust popping during deceleration.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Balance Results Card Component
+interface BalanceResultsCardProps {
+  runId: string;
+  outputFiles: Array<{ name: string; size: number; url: string }>;
+  onDownload: (filename: string) => void;
+}
+
+function BalanceResultsCard({ runId, outputFiles, onDownload }: BalanceResultsCardProps) {
+  const frontFactor = outputFiles.find((f) => f.name === 'Front_Balance_Factor.csv');
+  const rearFactor = outputFiles.find((f) => f.name === 'Rear_Balance_Factor.csv');
+  const balanceReport = outputFiles.find((f) => f.name === 'Cylinder_Balance_Report.json');
+
+  return (
+    <Card className="border-blue-500/30 bg-blue-500/5">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-blue-500" />
+          Per-Cylinder Auto-Balancing
+        </CardTitle>
+        <CardDescription>
+          Automated AFR equalization between front and rear cylinders
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-2 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <span>Cylinder balance analysis completed successfully</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {frontFactor && (
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() => onDownload(frontFactor.name)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <div className="text-left">
+                <div className="font-medium">Front VE Factor</div>
+                <div className="text-xs text-muted-foreground">
+                  {(frontFactor.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </Button>
+          )}
+          {rearFactor && (
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() => onDownload(rearFactor.name)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <div className="text-left">
+                <div className="font-medium">Rear VE Factor</div>
+                <div className="text-xs text-muted-foreground">
+                  {(rearFactor.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </Button>
+          )}
+          {balanceReport && (
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() => onDownload(balanceReport.name)}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              <div className="text-left">
+                <div className="font-medium">Balance Report</div>
+                <div className="text-xs text-muted-foreground">
+                  {(balanceReport.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Apply front and rear correction factors simultaneously using dual-cylinder VE apply to equalize AFR between cylinders.
         </p>
       </CardContent>
     </Card>

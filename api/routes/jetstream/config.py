@@ -113,6 +113,16 @@ def update_config():
                 existing.tuning_options.decel_rpm_min = int(tuning_data["decel_rpm_min"])
             if "decel_rpm_max" in tuning_data:
                 existing.tuning_options.decel_rpm_max = int(tuning_data["decel_rpm_max"])
+            
+            # Per-Cylinder Auto-Balancing options
+            if "balance_cylinders" in tuning_data:
+                existing.tuning_options.balance_cylinders = bool(tuning_data["balance_cylinders"])
+            if "balance_mode" in tuning_data:
+                mode = tuning_data["balance_mode"]
+                if mode in ("equalize", "match_front", "match_rear"):
+                    existing.tuning_options.balance_mode = mode
+            if "balance_max_correction" in tuning_data:
+                existing.tuning_options.balance_max_correction = float(tuning_data["balance_max_correction"])
 
         # Validate
         if existing.enabled and (not existing.api_url or not existing.api_key):

@@ -79,6 +79,17 @@ class TuningOptionsConfig:
     decel_rpm_max: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_DECEL_RPM_MAX", 5500)
     )
+    
+    # Per-Cylinder Auto-Balancing
+    balance_cylinders: bool = field(
+        default_factory=lambda: _get_bool_env("DYNOAI_BALANCE_CYLINDERS", False)
+    )
+    balance_mode: str = field(
+        default_factory=lambda: os.environ.get("DYNOAI_BALANCE_MODE", "equalize")
+    )
+    balance_max_correction: float = field(
+        default_factory=lambda: float(os.environ.get("DYNOAI_BALANCE_MAX_CORRECTION", "3.0"))
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -87,6 +98,9 @@ class TuningOptionsConfig:
             "decel_severity": self.decel_severity,
             "decel_rpm_min": self.decel_rpm_min,
             "decel_rpm_max": self.decel_rpm_max,
+            "balance_cylinders": self.balance_cylinders,
+            "balance_mode": self.balance_mode,
+            "balance_max_correction": self.balance_max_correction,
         }
 
 

@@ -30,6 +30,9 @@ export function JetstreamConfig() {
   const [decelSeverity, setDecelSeverity] = useState<'low' | 'medium' | 'high'>('medium');
   const [decelRpmMin, setDecelRpmMin] = useState(1500);
   const [decelRpmMax, setDecelRpmMax] = useState(5500);
+  const [balanceCylinders, setBalanceCylinders] = useState(false);
+  const [balanceMode, setBalanceMode] = useState<'equalize' | 'match_front' | 'match_rear'>('equalize');
+  const [balanceMaxCorrection, setBalanceMaxCorrection] = useState(3.0);
 
   // Populate form when config loads
   useEffect(() => {
@@ -46,6 +49,9 @@ export function JetstreamConfig() {
         setDecelSeverity(config.tuning_options.decel_severity);
         setDecelRpmMin(config.tuning_options.decel_rpm_min);
         setDecelRpmMax(config.tuning_options.decel_rpm_max);
+        setBalanceCylinders(config.tuning_options.balance_cylinders);
+        setBalanceMode(config.tuning_options.balance_mode);
+        setBalanceMaxCorrection(config.tuning_options.balance_max_correction);
       }
     }
   }, [config]);
@@ -63,6 +69,9 @@ export function JetstreamConfig() {
           decel_severity: decelSeverity,
           decel_rpm_min: decelRpmMin,
           decel_rpm_max: decelRpmMax,
+          balance_cylinders: balanceCylinders,
+          balance_mode: balanceMode,
+          balance_max_correction: balanceMaxCorrection,
         },
       },
       {
@@ -273,6 +282,66 @@ export function JetstreamConfig() {
               <p className="text-xs text-muted-foreground">
                 RPM range where decel corrections are applied (default: 1500-5500)
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Per-Cylinder Auto-Balancing */}
+        <div className="space-y-3 pt-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="balance-cylinders" className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4 text-blue-500" />
+                Per-Cylinder Auto-Balancing
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically equalize AFR between front and rear cylinders.
+              </p>
+            </div>
+            <Switch
+              id="balance-cylinders"
+              checked={balanceCylinders}
+              onCheckedChange={setBalanceCylinders}
+            />
+          </div>
+
+          {balanceCylinders && (
+            <div className="space-y-4 pl-6 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="balance-mode">Balance Mode</Label>
+                <Select
+                  value={balanceMode}
+                  onValueChange={(value: 'equalize' | 'match_front' | 'match_rear') => setBalanceMode(value)}
+                >
+                  <SelectTrigger id="balance-mode">
+                    <SelectValue placeholder="Select mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="equalize">Equalize (Both toward average)</SelectItem>
+                    <SelectItem value="match_front">Match Front (Rear to front)</SelectItem>
+                    <SelectItem value="match_rear">Match Rear (Front to rear)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Strategy for balancing cylinder AFR.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="balance-max-correction">Max Correction (%)</Label>
+                <Input
+                  id="balance-max-correction"
+                  type="number"
+                  min={1.0}
+                  max={5.0}
+                  step={0.5}
+                  value={balanceMaxCorrection}
+                  onChange={(e) => setBalanceMaxCorrection(parseFloat(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Maximum VE adjustment per iteration (default: 3.0%).
+                </p>
+              </div>
             </div>
           )}
         </div>

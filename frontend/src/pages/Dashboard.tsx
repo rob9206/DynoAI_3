@@ -34,6 +34,11 @@ export default function Dashboard() {
   const [decelSeverity, setDecelSeverity] = useState<'low' | 'medium' | 'high'>('medium');
   const [decelRpmMin, setDecelRpmMin] = useState(1500);
   const [decelRpmMax, setDecelRpmMax] = useState(5500);
+  
+  // Cylinder balancing parameters
+  const [balanceCylinders, setBalanceCylinders] = useState(false);
+  const [balanceMode, setBalanceMode] = useState<'equalize' | 'match_front' | 'match_rear'>('equalize');
+  const [balanceMaxCorrection, setBalanceMaxCorrection] = useState(3.0);
 
   const handleFileSelect = (file: File) => {
     setCurrentFile(file);
@@ -50,13 +55,16 @@ export default function Dashboard() {
     setAnalysisMessage('Uploading file...');
 
     try {
-      // Combine params with decel options
+      // Combine params with decel and balance options
       const allParams: AnalysisParams = {
         ...params,
         decelManagement,
         decelSeverity,
         decelRpmMin,
         decelRpmMax,
+        balanceCylinders,
+        balanceMode,
+        balanceMaxCorrection,
       };
 
       // Upload file and start analysis
@@ -252,6 +260,66 @@ export default function Dashboard() {
                           />
                           <p className="text-xs text-muted-foreground">
                             Maximum RPM for decel zone.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Per-Cylinder Auto-Balancing */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          Per-Cylinder Auto-Balancing
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Automatically equalize AFR between front and rear cylinders.
+                        </p>
+                      </div>
+                      <Switch
+                        id="balance-cylinders"
+                        checked={balanceCylinders}
+                        onCheckedChange={setBalanceCylinders}
+                      />
+                    </div>
+
+                    {balanceCylinders && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                          <Label htmlFor="balance-mode">Balance Mode</Label>
+                          <Select
+                            value={balanceMode}
+                            onValueChange={(value: 'equalize' | 'match_front' | 'match_rear') => setBalanceMode(value)}
+                          >
+                            <SelectTrigger id="balance-mode">
+                              <SelectValue placeholder="Select mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="equalize">Equalize (Both toward average)</SelectItem>
+                              <SelectItem value="match_front">Match Front (Rear to front)</SelectItem>
+                              <SelectItem value="match_rear">Match Rear (Front to rear)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Strategy for balancing cylinder AFR.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="balance-max-correction">Max Correction (%)</Label>
+                          <Input
+                            id="balance-max-correction"
+                            type="number"
+                            min={1.0}
+                            max={5.0}
+                            step={0.5}
+                            value={balanceMaxCorrection}
+                            onChange={(e) => setBalanceMaxCorrection(parseFloat(e.target.value))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Maximum VE adjustment per iteration (1-5%).
                           </p>
                         </div>
                       </div>
