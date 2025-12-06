@@ -218,3 +218,7 @@ def reload_config() -> AppConfig:
     global _config
     _config = AppConfig.from_env()
     return _config
+
+
+# Convenience constants for direct imports
+RUNS_DIR = get_config().storage.runs_folder

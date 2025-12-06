@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "1e8de6fb-4b1e-4f5b-b080-16c4cdaf457e",
+  "created_at": "2025-12-06T00:00:29.439858+00:00",
+  "updated_at": "2025-12-06T00:00:29.441869+00:00",
+  "events": [
+    {
+      "id": "evt_cfd7b039",
+      "sequence": 1,
+      "type": "analysis",
+      "timestamp": "2025-12-06T00:00:29.441869+00:00",
+      "description": "Generated VE corrections from large_test_log.csv",
+      "snapshot_before": null,
+      "snapshot_after": {
+        "id": "snap_da1afd20",
+        "timestamp": "2025-12-06T00:00:29.439858+00:00",
+        "source_file": "VE_Correction_Delta_DYNO.csv",
+        "sha256": "79fc8de9c702bd0c68e7ea790d56e51a39340fda4f6c430a22faafd1df3badda",
+        "rows": 11,
+        "cols": 5
+      },
+      "metadata": {
+        "rows_processed": 50000,
+        "avg_correction": null,
+        "max_correction": null,
+        "config": {
+          "args": {
+            "csv": "uploads\\1e8de6fb-4b1e-4f5b-b080-16c4cdaf457e\\large_test_log.csv",
+            "outdir": "outputs\\1e8de6fb-4b1e-4f5b-b080-16c4cdaf457e",
+            "verbose": false,
+            "weighting": "torque",
+            "smooth_passes": 2,
+            "clamp": 15.0,
+            "rear_bias": 0.0,
+            "rear_rule_deg": 2.0,
+            "hot_extra": -1.0,
+            "base_front": null,
+            "base_rear": null
+          },
+          "base_tables": {
+            "front": null,
+            "rear": null
+          }
+        }
+      }
+    }
+  ],
+  "active_snapshot_id": null
+}

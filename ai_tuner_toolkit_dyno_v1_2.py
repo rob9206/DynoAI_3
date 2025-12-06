@@ -1653,6 +1653,30 @@ def main() -> int:
         "--base_rear",
         help="Rear VE base CSV (optional; if omitted, base_front is reused).",
     )
+    # Decel fuel management options
+    ap.add_argument(
+        "--decel-management",
+        action="store_true",
+        help="Enable decel fuel management to eliminate exhaust popping.",
+    )
+    ap.add_argument(
+        "--decel-severity",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="Decel enrichment severity: low (minimal), medium (balanced), high (aggressive).",
+    )
+    ap.add_argument(
+        "--decel-rpm-min",
+        type=int,
+        default=1500,
+        help="Minimum RPM for decel zone (default: 1500).",
+    )
+    ap.add_argument(
+        "--decel-rpm-max",
+        type=int,
+        default=5500,
+        help="Maximum RPM for decel zone (default: 5500).",
+    )
     args = ap.parse_args()
 
     # Configure logging level based on --verbose flag
@@ -1961,6 +1985,42 @@ def main() -> int:
             "front_accepted": diag_f["accepted_wb"],
             "rear_accepted": diag_r["accepted_wb"],
         }
+
+        # --- Decel Fuel Management ---
+        if args.decel_management:
+            print("\nPROGRESS:96:Running decel fuel management analysis...")
+            sys.stdout.flush()
+            try:
+                from decel_management import process_decel_management
+                
+                # Build decel config from args
+                decel_config = {
+                    'rpm_min': args.decel_rpm_min,
+                    'rpm_max': args.decel_rpm_max,
+                }
+                
+                decel_result = process_decel_management(
+                    recs,
+                    output_dir=outdir,
+                    severity=args.decel_severity,
+                    sample_rate_ms=10.0,  # Typical dyno log sample rate
+                    input_file=str(csv_path),
+                    config=decel_config,
+                )
+                
+                print(f"[OK] Decel management: {decel_result['events_detected']} events detected, "
+                      f"severity={decel_result['severity_used']}")
+                
+                # Add decel outputs to manifest
+                extra_specs.extend([
+                    ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
+                    ("Decel_Analysis_Report.json", "json", "decel_report", False),
+                ])
+                
+            except ImportError as e:
+                print(f"[WARN] Decel management module not available: {e}")
+            except Exception as e:
+                print(f"[WARN] Decel management failed: {e}")
 
         # --- Visualization Call ---
         # Always attempt to generate visualizations if the script exists
