@@ -1563,7 +1563,7 @@ def write_diagnostics(
         for i, anomaly_raw in enumerate(anomalies, 1):
             anomaly = anomaly_raw  # No need to cast if types are correct
             lines.append(
-                f"{i}. [{anomaly.get('type','')}] score={anomaly.get('score','')}"
+                f"{i}. [{anomaly.get('type', '')}] score={anomaly.get('score', '')}"
             )
             cell = cast(Optional[Dict[str, Any]], anomaly.get("cell"))
             if cell is not None:
@@ -1582,7 +1582,7 @@ def write_diagnostics(
                     ]
                 )
                 lines.append(f"   cells: {cells_s} ...")
-            lines.append(f"   why: {anomaly.get('explanation','')}")
+            lines.append(f"   why: {anomaly.get('explanation', '')}")
             next_checks = cast(Sequence[str], anomaly.get("next_checks", []))
             lines.append(f"   next: {', '.join(next_checks)}")
     safe_outdir = io_contracts.safe_path(str(outdir))
@@ -1992,13 +1992,13 @@ def main() -> int:
             sys.stdout.flush()
             try:
                 from decel_management import process_decel_management
-                
+
                 # Build decel config from args
                 decel_config = {
-                    'rpm_min': args.decel_rpm_min,
-                    'rpm_max': args.decel_rpm_max,
+                    "rpm_min": args.decel_rpm_min,
+                    "rpm_max": args.decel_rpm_max,
                 }
-                
+
                 decel_result = process_decel_management(
                     recs,
                     output_dir=outdir,
@@ -2007,16 +2007,20 @@ def main() -> int:
                     input_file=str(csv_path),
                     config=decel_config,
                 )
-                
-                print(f"[OK] Decel management: {decel_result['events_detected']} events detected, "
-                      f"severity={decel_result['severity_used']}")
-                
+
+                print(
+                    f"[OK] Decel management: {decel_result['events_detected']} events detected, "
+                    f"severity={decel_result['severity_used']}"
+                )
+
                 # Add decel outputs to manifest
-                extra_specs.extend([
-                    ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
-                    ("Decel_Analysis_Report.json", "json", "decel_report", False),
-                ])
-                
+                extra_specs.extend(
+                    [
+                        ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
+                        ("Decel_Analysis_Report.json", "json", "decel_report", False),
+                    ]
+                )
+
             except ImportError as e:
                 print(f"[WARN] Decel management module not available: {e}")
             except Exception as e:

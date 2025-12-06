@@ -15,10 +15,10 @@ import json
 import sys
 from pathlib import Path
 
+from api.services.session_logger import SessionLogger
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from api.services.session_logger import SessionLogger
 
 
 def find_complete_run() -> Path | None:
@@ -76,7 +76,7 @@ def seed_timeline(run_dir: Path) -> None:
     logger.record_analysis(
         correction_path=ve_correction,
         manifest=manifest,
-        description="Generated VE corrections from dyno log analysis"
+        description="Generated VE corrections from dyno log analysis",
     )
 
     # Create a simulated "apply" by copying the correction as if it was applied
@@ -121,9 +121,9 @@ def seed_timeline(run_dir: Path) -> None:
             "config": {
                 "args": {"clamp": 5, "smooth_passes": 3},
             },
-            "description": "Refined VE corrections with tighter clamping"
+            "description": "Refined VE corrections with tighter clamping",
         },
-        description="Refined VE corrections (tighter clamping, more smoothing)"
+        description="Refined VE corrections (tighter clamping, more smoothing)",
     )
 
     # Print summary
@@ -166,4 +166,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

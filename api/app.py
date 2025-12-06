@@ -210,7 +210,7 @@ def run_dyno_analysis(
             logger.record_analysis(
                 correction_path=ve_correction_path,
                 manifest=manifest,
-                description=f"Generated VE corrections from {Path(csv_path).name}"
+                description=f"Generated VE corrections from {Path(csv_path).name}",
             )
             print("[+] Recorded analysis in session timeline")
     except Exception as e:
@@ -749,6 +749,7 @@ def apply_ve_corrections():
 
     # Backup the base VE before applying
     import shutil
+
     shutil.copy2(base_ve_path, ve_backup_path)
 
     # Apply corrections
@@ -757,7 +758,7 @@ def apply_ve_corrections():
         base_ve_path=base_ve_path,
         factor_path=ve_correction_path,
         output_path=ve_output_path,
-        dry_run=False
+        dry_run=False,
     )
 
     # Record in session timeline
@@ -768,20 +769,25 @@ def apply_ve_corrections():
             ve_before_path=ve_backup_path,
             ve_after_path=ve_output_path,
             apply_metadata=apply_metadata,
-            description=f"Applied VE corrections (max ±{apply_metadata.get('max_adjust_pct', 7)}%)"
+            description=f"Applied VE corrections (max ±{apply_metadata.get('max_adjust_pct', 7)}%)",
         )
         timeline_event_id = event["id"]
         print(f"[+] Recorded apply event in timeline: {timeline_event_id}")
     except Exception as e:
         print(f"[!] Warning: Could not record timeline event: {e}")
 
-    return jsonify({
-        "success": True,
-        "applied_at": apply_metadata.get("applied_at_utc"),
-        "cells_modified": apply_metadata.get("cells_modified", 0),
-        "output_path": str(ve_output_path),
-        "timeline_event_id": timeline_event_id,
-    }), 200
+    return (
+        jsonify(
+            {
+                "success": True,
+                "applied_at": apply_metadata.get("applied_at_utc"),
+                "cells_modified": apply_metadata.get("cells_modified", 0),
+                "output_path": str(ve_output_path),
+                "timeline_event_id": timeline_event_id,
+            }
+        ),
+        200,
+    )
 
 
 @app.route("/api/rollback", methods=["POST"])
@@ -847,6 +853,7 @@ def rollback_ve_corrections():
     # Backup current state
     ve_before_rollback = output_dir / "VE_Before_Rollback.csv"
     import shutil
+
     shutil.copy2(ve_applied_path, ve_before_rollback)
 
     # Perform rollback
@@ -855,7 +862,7 @@ def rollback_ve_corrections():
         current_ve_path=ve_applied_path,
         metadata_path=metadata_path,
         output_path=ve_restored_path,
-        dry_run=False
+        dry_run=False,
     )
 
     # Record in session timeline
@@ -866,19 +873,24 @@ def rollback_ve_corrections():
             ve_before_path=ve_before_rollback,
             ve_after_path=ve_restored_path,
             rollback_info=rollback_info,
-            description="Rolled back VE corrections to previous state"
+            description="Rolled back VE corrections to previous state",
         )
         timeline_event_id = event["id"]
         print(f"[+] Recorded rollback event in timeline: {timeline_event_id}")
     except Exception as e:
         print(f"[!] Warning: Could not record timeline event: {e}")
 
-    return jsonify({
-        "success": True,
-        "rolled_back_at": rollback_info.get("rolled_back_at_utc"),
-        "restored_path": str(ve_restored_path),
-        "timeline_event_id": timeline_event_id,
-    }), 200
+    return (
+        jsonify(
+            {
+                "success": True,
+                "rolled_back_at": rollback_info.get("rolled_back_at_utc"),
+                "restored_path": str(ve_restored_path),
+                "timeline_event_id": timeline_event_id,
+            }
+        ),
+        200,
+    )
 
 
 def print_startup_banner():
