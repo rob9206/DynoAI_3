@@ -3,12 +3,14 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, Flame } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Separator } from '../ui/separator';
 import { useJetstreamConfig, useUpdateJetstreamConfig } from '../../hooks/useJetstream';
 import { toast } from 'sonner';
 
@@ -23,6 +25,12 @@ export function JetstreamConfig() {
   const [enabled, setEnabled] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // Tuning options state
+  const [decelManagement, setDecelManagement] = useState(false);
+  const [decelSeverity, setDecelSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [decelRpmMin, setDecelRpmMin] = useState(1500);
+  const [decelRpmMax, setDecelRpmMax] = useState(5500);
+
   // Populate form when config loads
   useEffect(() => {
     if (config) {
@@ -31,6 +39,14 @@ export function JetstreamConfig() {
       setPollInterval(config.poll_interval_seconds);
       setAutoProcess(config.auto_process);
       setEnabled(config.enabled);
+
+      // Load tuning options
+      if (config.tuning_options) {
+        setDecelManagement(config.tuning_options.decel_management);
+        setDecelSeverity(config.tuning_options.decel_severity);
+        setDecelRpmMin(config.tuning_options.decel_rpm_min);
+        setDecelRpmMax(config.tuning_options.decel_rpm_max);
+      }
     }
   }, [config]);
 
@@ -42,6 +58,12 @@ export function JetstreamConfig() {
         poll_interval_seconds: pollInterval,
         auto_process: autoProcess,
         enabled,
+        tuning_options: {
+          decel_management: decelManagement,
+          decel_severity: decelSeverity,
+          decel_rpm_min: decelRpmMin,
+          decel_rpm_max: decelRpmMax,
+        },
       },
       {
         onSuccess: () => {
@@ -71,8 +93,8 @@ export function JetstreamConfig() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col max-h-[calc(100vh-6rem)]">
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
           Jetstream Configuration
@@ -81,7 +103,7 @@ export function JetstreamConfig() {
           Configure your connection to Dynojet Jetstream cloud service
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 overflow-y-auto flex-1">
         {/* API URL */}
         <div className="space-y-2">
           <Label htmlFor="api-url">API URL</Label>
@@ -170,6 +192,92 @@ export function JetstreamConfig() {
             onCheckedChange={setEnabled}
           />
         </div>
+
+        <Separator className="my-4" />
+
+        {/* Tuning Options Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Flame className="h-5 w-5 text-orange-500" />
+            <h3 className="text-lg font-semibold">Tuning Options</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Configure automated tuning features applied during run processing
+          </p>
+
+          {/* Decel Fuel Management Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="decel-management">Decel Fuel Management</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically generate VE corrections to eliminate exhaust popping
+              </p>
+            </div>
+            <Switch
+              id="decel-management"
+              checked={decelManagement}
+              onCheckedChange={setDecelManagement}
+            />
+          </div>
+
+          {/* Decel Severity */}
+          {decelManagement && (
+            <div className="space-y-4 pl-4 border-l-2 border-orange-500/30">
+              <div className="space-y-2">
+                <Label htmlFor="decel-severity">Enrichment Severity</Label>
+                <Select
+                  value={decelSeverity}
+                  onValueChange={(value: 'low' | 'medium' | 'high') => setDecelSeverity(value)}
+                >
+                  <SelectTrigger id="decel-severity">
+                    <SelectValue placeholder="Select severity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low - Minimal enrichment, may have some popping</SelectItem>
+                    <SelectItem value="medium">Medium - Balanced (recommended)</SelectItem>
+                    <SelectItem value="high">High - Aggressive, eliminates all popping</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Higher severity = more fuel added during deceleration
+                </p>
+              </div>
+
+              {/* RPM Range */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="decel-rpm-min">Min RPM</Label>
+                  <Input
+                    id="decel-rpm-min"
+                    type="number"
+                    min={1000}
+                    max={decelRpmMax - 500}
+                    step={100}
+                    value={decelRpmMin}
+                    onChange={(e) => setDecelRpmMin(parseInt(e.target.value, 10))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="decel-rpm-max">Max RPM</Label>
+                  <Input
+                    id="decel-rpm-max"
+                    type="number"
+                    min={decelRpmMin + 500}
+                    max={7000}
+                    step={100}
+                    value={decelRpmMax}
+                    onChange={(e) => setDecelRpmMax(parseInt(e.target.value, 10))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                RPM range where decel corrections are applied (default: 1500-5500)
+              </p>
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-4" />
 
         {/* Save Button */}
         <Button

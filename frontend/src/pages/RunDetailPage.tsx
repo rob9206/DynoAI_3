@@ -15,6 +15,7 @@ import {
   Thermometer,
   Gauge,
   Table,
+  Flame,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -369,6 +370,11 @@ export default function RunDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Decel Fuel Management Results */}
+          {run.output_files?.some((f) => f.name === 'Decel_Fuel_Overlay.csv') && (
+            <DecelResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -392,6 +398,77 @@ export default function RunDetailPage() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Decel Fuel Management Results Card
+ */
+interface DecelResultsCardProps {
+  runId: string;
+  outputFiles: Array<{ name: string; size: number; url: string }>;
+  onDownload: (filename: string) => void;
+}
+
+function DecelResultsCard({ runId, outputFiles, onDownload }: DecelResultsCardProps) {
+  const decelOverlay = outputFiles.find((f) => f.name === 'Decel_Fuel_Overlay.csv');
+  const decelReport = outputFiles.find((f) => f.name === 'Decel_Analysis_Report.json');
+
+  return (
+    <Card className="border-orange-500/30 bg-orange-500/5">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Flame className="h-5 w-5 text-orange-500" />
+          Decel Fuel Management
+        </CardTitle>
+        <CardDescription>
+          Automated deceleration popping elimination
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-2 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <span>Decel analysis completed successfully</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {decelOverlay && (
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() => onDownload(decelOverlay.name)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <div className="text-left">
+                <div className="font-medium">VE Overlay</div>
+                <div className="text-xs text-muted-foreground">
+                  {(decelOverlay.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </Button>
+          )}
+          {decelReport && (
+            <Button
+              variant="outline"
+              className="justify-start"
+              onClick={() => onDownload(decelReport.name)}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              <div className="text-left">
+                <div className="font-medium">Analysis Report</div>
+                <div className="text-xs text-muted-foreground">
+                  {(decelReport.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Apply the VE overlay to closed-throttle cells to eliminate exhaust popping during deceleration.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

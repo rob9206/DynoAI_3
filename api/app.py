@@ -87,8 +87,31 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
 
+# Register Timeline blueprint (VE Table Time Machine)
+try:
+    from api.routes.timeline import timeline_bp
+
+    app.register_blueprint(timeline_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Timeline integration: {e}")
+
 # Store active analysis jobs
 active_jobs = {}
+
+
+# Helper functions for form data parsing
+def _get_bool_form(key: str, default: bool = False) -> bool:
+    """Parse boolean value from form data."""
+    value = request.form.get(key, str(default)).lower()
+    return value in ("true", "1", "yes")
+
+
+def _get_int_form(key: str, default: int) -> int:
+    """Parse integer value from form data."""
+    try:
+        return int(request.form.get(key, default))
+    except (ValueError, TypeError):
+        return default
 
 
 def allowed_file(filename: str) -> bool:
@@ -156,6 +179,16 @@ def run_dyno_analysis(
             cmd.extend(["--rear_rule_deg", str(params["rear_rule_deg"])])
         if "hot_extra" in params:
             cmd.extend(["--hot_extra", str(params["hot_extra"])])
+
+        # Decel Fuel Management options
+        if params.get("decel_management"):
+            cmd.append("--decel-management")
+            if "decel_severity" in params:
+                cmd.extend(["--decel-severity", str(params["decel_severity"])])
+            if "decel_rpm_min" in params:
+                cmd.extend(["--decel-rpm-min", str(params["decel_rpm_min"])])
+            if "decel_rpm_max" in params:
+                cmd.extend(["--decel-rpm-max", str(params["decel_rpm_max"])])
     else:
         # Use default parameters from config
         cmd.extend(
@@ -187,6 +220,27 @@ def run_dyno_analysis(
 
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
+
+    # Record analysis in session timeline (Time Machine)
+    try:
+        from api.services.session_logger import SessionLogger
+
+        # Determine run directory (may be outputs/{run_id} or runs/{run_id})
+        run_dir = output_dir.parent if output_dir.name == "output" else output_dir
+        logger = SessionLogger(run_dir)
+
+        # Look for VE correction file to snapshot
+        ve_correction_path = output_dir / "VE_Correction_Delta_DYNO.csv"
+        if ve_correction_path.exists():
+            logger.record_analysis(
+                correction_path=ve_correction_path,
+                manifest=manifest,
+                description=f"Generated VE corrections from {Path(csv_path).name}"
+            )
+            print("[+] Recorded analysis in session timeline")
+    except Exception as e:
+        # Don't fail the analysis if timeline logging fails
+        print(f"[!] Warning: Could not record timeline event: {e}")
 
     return manifest
 
@@ -318,6 +372,19 @@ def analyze():
         ),
     }
 
+    # Extract decel tuning options from form data
+    decel_management = _get_bool_form("decelManagement", False)
+    decel_severity = request.form.get("decelSeverity", "medium")
+    decel_rpm_min = _get_int_form("decelRpmMin", 1500)
+    decel_rpm_max = _get_int_form("decelRpmMax", 5500)
+
+    tuning_options = {
+        "decel_management": decel_management,
+        "decel_severity": decel_severity,
+        "decel_rpm_min": decel_rpm_min,
+        "decel_rpm_max": decel_rpm_max,
+    }
+
     # Initialize job tracking
     active_jobs[run_id] = {
         "status": "queued",
@@ -333,7 +400,7 @@ def analyze():
         try:
             active_jobs[run_id]["status"] = "running"
             active_jobs[run_id]["message"] = "Running analysis..."
-            manifest = run_dyno_analysis(upload_path, output_dir, run_id, params)
+            manifest = run_dyno_analysis(upload_path, output_dir, run_id, params, tuning_options)
             active_jobs[run_id]["manifest"] = manifest
             active_jobs[run_id]["status"] = "completed"
             active_jobs[run_id]["message"] = "Analysis complete"
@@ -641,6 +708,217 @@ def get_coverage(run_id):
     return jsonify(result), 200
 
 
+# =============================================================================
+# VE Apply/Rollback Endpoints (Time Machine)
+# =============================================================================
+
+
+@app.route("/api/apply", methods=["POST"])
+@with_error_handling
+def apply_ve_corrections():
+    """
+    Apply VE corrections from an analysis run to a base VE table.
+
+    Request body:
+        {
+            "run_id": "...",
+            "base_ve_path": "path/to/base_ve.csv" (optional, uses default if not provided)
+        }
+
+    Returns:
+        {
+            "success": true,
+            "applied_at": "...",
+            "cells_modified": N,
+            "output_path": "...",
+            "timeline_event_id": "..."
+        }
+    """
+    from api.services.session_logger import SessionLogger
+    from ve_operations import VEApply
+
+    data = request.get_json()
+    if not data or "run_id" not in data:
+        raise ValidationError("run_id is required")
+
+    run_id = secure_filename(data["run_id"])
+    if not run_id:
+        raise ValidationError("Invalid run_id")
+
+    # Find the run directory (check both outputs and runs folders)
+    run_dir = None
+    output_dir = None
+
+    # Check runs folder first (for Jetstream runs)
+    runs_path = config.storage.runs_folder / run_id
+    if runs_path.exists():
+        run_dir = runs_path
+        output_dir = runs_path / "output"
+    else:
+        # Check outputs folder (for direct uploads)
+        outputs_path = config.storage.output_folder / run_id
+        if outputs_path.exists():
+            run_dir = outputs_path
+            output_dir = outputs_path
+
+    if not run_dir or not output_dir:
+        raise NotFoundError("Run", run_id)
+
+    # Find VE correction file
+    ve_correction_path = output_dir / "VE_Correction_Delta_DYNO.csv"
+    if not ve_correction_path.exists():
+        raise NotFoundError("VE corrections", run_id)
+
+    # Get base VE path (from request or default)
+    base_ve_path = data.get("base_ve_path")
+    if base_ve_path:
+        base_ve_path = Path(base_ve_path)
+        if not base_ve_path.exists():
+            raise NotFoundError("Base VE file", str(base_ve_path))
+    else:
+        # Use default base VE from tables folder
+        base_ve_path = Path("tables/FXDLS_Wheelie_VE_Base_Front_fixed.csv")
+        if not base_ve_path.exists():
+            raise ValidationError("No base VE file specified and default not found")
+
+    # Create output paths
+    ve_output_path = output_dir / "VE_Applied.csv"
+    ve_backup_path = output_dir / "VE_Before_Apply.csv"
+
+    # Backup the base VE before applying
+    import shutil
+    shutil.copy2(base_ve_path, ve_backup_path)
+
+    # Apply corrections
+    applier = VEApply(max_adjust_pct=7.0)
+    apply_metadata = applier.apply(
+        base_ve_path=base_ve_path,
+        factor_path=ve_correction_path,
+        output_path=ve_output_path,
+        dry_run=False
+    )
+
+    # Record in session timeline
+    timeline_event_id = None
+    try:
+        logger = SessionLogger(run_dir)
+        event = logger.record_apply(
+            ve_before_path=ve_backup_path,
+            ve_after_path=ve_output_path,
+            apply_metadata=apply_metadata,
+            description=f"Applied VE corrections (max ±{apply_metadata.get('max_adjust_pct', 7)}%)"
+        )
+        timeline_event_id = event["id"]
+        print(f"[+] Recorded apply event in timeline: {timeline_event_id}")
+    except Exception as e:
+        print(f"[!] Warning: Could not record timeline event: {e}")
+
+    return jsonify({
+        "success": True,
+        "applied_at": apply_metadata.get("applied_at_utc"),
+        "cells_modified": apply_metadata.get("cells_modified", 0),
+        "output_path": str(ve_output_path),
+        "timeline_event_id": timeline_event_id,
+    }), 200
+
+
+@app.route("/api/rollback", methods=["POST"])
+@with_error_handling
+def rollback_ve_corrections():
+    """
+    Rollback VE corrections to restore previous VE table.
+
+    Request body:
+        {
+            "run_id": "..."
+        }
+
+    Returns:
+        {
+            "success": true,
+            "rolled_back_at": "...",
+            "restored_path": "...",
+            "timeline_event_id": "..."
+        }
+    """
+    from api.services.session_logger import SessionLogger
+    from ve_operations import VERollback
+
+    data = request.get_json()
+    if not data or "run_id" not in data:
+        raise ValidationError("run_id is required")
+
+    run_id = secure_filename(data["run_id"])
+    if not run_id:
+        raise ValidationError("Invalid run_id")
+
+    # Find the run directory
+    run_dir = None
+    output_dir = None
+
+    runs_path = config.storage.runs_folder / run_id
+    if runs_path.exists():
+        run_dir = runs_path
+        output_dir = runs_path / "output"
+    else:
+        outputs_path = config.storage.output_folder / run_id
+        if outputs_path.exists():
+            run_dir = outputs_path
+            output_dir = outputs_path
+
+    if not run_dir or not output_dir:
+        raise NotFoundError("Run", run_id)
+
+    # Find the applied VE and metadata
+    ve_applied_path = output_dir / "VE_Applied.csv"
+    metadata_path = output_dir / "VE_Applied_meta.json"
+
+    if not ve_applied_path.exists():
+        raise ValidationError("No VE corrections have been applied to this run")
+
+    if not metadata_path.exists():
+        raise ValidationError("Cannot rollback: metadata file not found")
+
+    # Create output path for restored VE
+    ve_restored_path = output_dir / "VE_Restored.csv"
+
+    # Backup current state
+    ve_before_rollback = output_dir / "VE_Before_Rollback.csv"
+    import shutil
+    shutil.copy2(ve_applied_path, ve_before_rollback)
+
+    # Perform rollback
+    roller = VERollback()
+    rollback_info = roller.rollback(
+        current_ve_path=ve_applied_path,
+        metadata_path=metadata_path,
+        output_path=ve_restored_path,
+        dry_run=False
+    )
+
+    # Record in session timeline
+    timeline_event_id = None
+    try:
+        logger = SessionLogger(run_dir)
+        event = logger.record_rollback(
+            ve_before_path=ve_before_rollback,
+            ve_after_path=ve_restored_path,
+            rollback_info=rollback_info,
+            description="Rolled back VE corrections to previous state"
+        )
+        timeline_event_id = event["id"]
+        print(f"[+] Recorded rollback event in timeline: {timeline_event_id}")
+    except Exception as e:
+        print(f"[!] Warning: Could not record timeline event: {e}")
+
+    return jsonify({
+        "success": True,
+        "rolled_back_at": rollback_info.get("rolled_back_at_utc"),
+        "restored_path": str(ve_restored_path),
+        "timeline_event_id": timeline_event_id,
+    }), 200
+
+
 def print_startup_banner():
     """Print startup information banner."""
     print("\n" + "=" * 60)
@@ -660,6 +938,8 @@ def print_startup_banner():
     print("  GET  /api/runs                - List all runs")
     print("  GET  /api/diagnostics/<id>    - Get diagnostics data")
     print("  GET  /api/coverage/<id>       - Get coverage data")
+    print("  POST /api/apply               - Apply VE corrections")
+    print("  POST /api/rollback            - Rollback VE corrections")
     print("  POST /api/xai/chat            - Proxy chat to xAI (Grok)")
     print("\n[*] Jetstream endpoints:")
     print("  GET  /api/jetstream/config    - Get Jetstream configuration")
@@ -669,6 +949,11 @@ def print_startup_banner():
     print("  GET  /api/jetstream/runs/<id> - Get specific run details")
     print("  POST /api/jetstream/sync      - Force immediate poll")
     print("  GET  /api/jetstream/progress/<id> - SSE progress stream")
+    print("\n[*] Timeline endpoints (VE Table Time Machine):")
+    print("  GET  /api/timeline/<run_id>           - Get session timeline")
+    print("  GET  /api/timeline/<run_id>/replay/<n>- Replay step N")
+    print("  GET  /api/timeline/<run_id>/snapshots/<id> - Get snapshot")
+    print("  GET  /api/timeline/<run_id>/diff      - Compute diff")
     print("\n" + "=" * 60 + "\n")
 
 
