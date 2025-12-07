@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "b40db727-5b62-448a-9d94-10f8a5ffb515",
+  "created_at": "2025-12-06T00:00:00.858519+00:00",
+  "updated_at": "2025-12-06T00:00:00.861043+00:00",
+  "events": [
+    {
+      "id": "evt_3bd39b0d",
+      "sequence": 1,
+      "type": "analysis",
+      "timestamp": "2025-12-06T00:00:00.861043+00:00",
+      "description": "Generated VE corrections from WinPEP_Sample_WithAFR.csv",
+      "snapshot_before": null,
+      "snapshot_after": {
+        "id": "snap_3dda2b22",
+        "timestamp": "2025-12-06T00:00:00.858519+00:00",
+        "source_file": "VE_Correction_Delta_DYNO.csv",
+        "sha256": "306ee9c4034ac12a601506e3b7ed3140c3a75ec485033d92803f2e9bcdf637c0",
+        "rows": 11,
+        "cols": 5
+      },
+      "metadata": {
+        "rows_processed": 17,
+        "avg_correction": null,
+        "max_correction": null,
+        "config": {
+          "args": {
+            "csv": "uploads\\b40db727-5b62-448a-9d94-10f8a5ffb515\\WinPEP_Sample_WithAFR.csv",
+            "outdir": "outputs\\b40db727-5b62-448a-9d94-10f8a5ffb515",
+            "verbose": false,
+            "weighting": "torque",
+            "smooth_passes": 2,
+            "clamp": 15.0,
+            "rear_bias": 0.0,
+            "rear_rule_deg": 2.0,
+            "hot_extra": -1.0,
+            "base_front": null,
+            "base_rear": null
+          },
+          "base_tables": {
+            "front": null,
+            "rear": null
+          }
+        }
+      }
+    }
+  ],
+  "active_snapshot_id": null
+}

@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Loader2, CheckCircle, Play, Activity, FileText, Clock, AlertCircle } from 'lucide-react';
 import { Loader2, CheckCircle, Settings, Play, Activity, Zap, FileSearch, Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
 import { uploadAndAnalyze, pollJobStatus, handleApiError, AnalysisParams } from '../lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Progress } from '../components/ui/progress';
+import { TuningConfiguration } from '../components/TuningConfiguration';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
@@ -18,7 +19,6 @@ export default function Dashboard() {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisMessage, setAnalysisMessage] = useState('');
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Tuning parameters
   const [params, setParams] = useState<AnalysisParams>({
@@ -91,6 +91,18 @@ export default function Dashboard() {
   };
 
   return (
+    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 md:p-6">
+      
+      {/* Header / Status Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Control Center</h1>
+          <p className="text-muted-foreground">System Ready. Waiting for log data.</p>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-card rounded-md border shadow-sm">
+                <Activity className="h-4 w-4 text-green-500" />
+                <span className="font-medium">Engine: Idle</span>
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Hero Section */}
       <div className="text-center py-8 space-y-4">
@@ -337,104 +349,98 @@ export default function Dashboard() {
                 Start Analysis
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Progress Section */}
-      {isAnalyzing && (
-        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500 border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle>Analysis in Progress</CardTitle>
-            <CardDescription>Processing your data, please wait...</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{analysisMessage}</span>
-                <span className="font-mono font-medium text-primary">{analysisProgress}%</span>
-              </div>
-              <Progress value={analysisProgress} className="h-2" />
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-card rounded-md border shadow-sm">
+                <Clock className="h-4 w-4 text-primary" />
+                <span className="font-medium">{new Date().toLocaleDateString()}</span>
             </div>
-
-            <div className="grid gap-3">
-              <div className="flex items-center gap-3 text-sm">
-                {analysisProgress > 0 ? (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                )}
-                <span className={analysisProgress > 0 ? 'text-foreground' : 'text-muted-foreground'}>
-                  File upload
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                {analysisProgress > 10 && analysisProgress < 100 ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                ) : analysisProgress === 100 ? (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                ) : (
-                  <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
-                )}
-                <span className={analysisProgress > 10 ? 'text-foreground' : 'text-muted-foreground'}>
-                  Data analysis
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                {analysisProgress === 100 ? (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                ) : (
-                  <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
-                )}
-                <span className={analysisProgress === 100 ? 'text-foreground' : 'text-muted-foreground'}>
-                  Generating results
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Features Section */}
-      {!isAnalyzing && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
-            <CardHeader>
-              <Activity className="h-8 w-8 text-primary mb-2" />
-              <CardTitle>VE Corrections</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Adaptive kernel smoothing with automatic clamping ensures safe, accurate Volumetric Efficiency adjustments.
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
-            <CardHeader>
-              <Zap className="h-8 w-8 text-accent mb-2" />
-              <CardTitle>Spark Timing</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Knock-aware spark timing suggestions with intelligent temperature compensation for optimal power.
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card/50 hover:bg-card transition-colors hover:shadow-md">
-            <CardHeader>
-              <FileSearch className="h-8 w-8 text-secondary-foreground mb-2" />
-              <CardTitle>Diagnostics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Comprehensive anomaly detection and data quality analysis to identify sensor issues before tuning.
-              </p>
-            </CardContent>
-          </Card>
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        {/* LEFT COLUMN: Upload & Action */}
+        <div className="lg:col-span-2 space-y-6">
+            <Card className="border-border/50 shadow-sm h-full">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        Log File Import
+                    </CardTitle>
+                    <CardDescription>
+                        Select a WinPEP, PowerVision, or Generic CSV log file.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <FileUpload onFileSelect={handleFileSelect} />
+                    
+                    {currentFile && !isAnalyzing && (
+                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                             <Button
+                                onClick={startAnalysis}
+                                size="lg"
+                                className="w-full text-lg font-semibold h-14 shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]"
+                            >
+                                <Play className="mr-2 h-6 w-6 fill-current" />
+                                Start Analysis
+                            </Button>
+                            <p className="text-center text-xs text-muted-foreground mt-2">
+                                Process using current configuration
+                            </p>
+                        </div>
+                    )}
+                    
+                     {/* Progress Section */}
+                    {isAnalyzing && (
+                        <div className="space-y-6 pt-4 border-t">
+                            <div className="space-y-2">
+                            <div className="flex justify-between text-sm font-medium">
+                                <span className="text-primary">{analysisMessage}</span>
+                                <span className="font-mono">{analysisProgress}%</span>
+                            </div>
+                            <Progress value={analysisProgress} className="h-3" />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                            <div className={`flex flex-col items-center p-3 rounded border ${analysisProgress > 0 ? 'bg-primary/10 border-primary/20' : 'bg-muted/50 border-transparent'}`}>
+                                {analysisProgress > 0 ? <CheckCircle className="h-5 w-5 text-green-500 mb-1" /> : <Loader2 className="h-5 w-5 text-muted-foreground animate-spin mb-1" />}
+                                <span className="text-xs font-medium">Upload</span>
+                            </div>
+                             <div className={`flex flex-col items-center p-3 rounded border ${analysisProgress > 10 ? 'bg-primary/10 border-primary/20' : 'bg-muted/50 border-transparent'}`}>
+                                {analysisProgress > 10 && analysisProgress < 100 ? <Loader2 className="h-5 w-5 text-primary animate-spin mb-1" /> : analysisProgress === 100 ? <CheckCircle className="h-5 w-5 text-green-500 mb-1" /> : <Activity className="h-5 w-5 text-muted-foreground mb-1" />}
+                                <span className="text-xs font-medium">Analysis</span>
+                            </div>
+                             <div className={`flex flex-col items-center p-3 rounded border ${analysisProgress === 100 ? 'bg-primary/10 border-primary/20' : 'bg-muted/50 border-transparent'}`}>
+                                {analysisProgress === 100 ? <CheckCircle className="h-5 w-5 text-green-500 mb-1" /> : <FileText className="h-5 w-5 text-muted-foreground mb-1" />}
+                                <span className="text-xs font-medium">Report</span>
+                            </div>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            
+            {/* Information / Hints Panel */}
+            {!isAnalyzing && !currentFile && (
+                 <Alert className="bg-muted/30 border-primary/10">
+                    <AlertCircle className="h-4 w-4 text-primary" />
+                    <AlertTitle>Operator Note</AlertTitle>
+                    <AlertDescription>
+                        Ensure log files contain RPM, MAP (kPa), and Torque/HP channels. For best results, log at 20Hz or higher.
+                    </AlertDescription>
+                </Alert>
+            )}
+        </div>
+
+        {/* RIGHT COLUMN: Configuration */}
+        <div className="lg:col-span-1">
+            <TuningConfiguration 
+                params={params} 
+                setParams={setParams} 
+                disabled={isAnalyzing} 
+            />
+        </div>
+
+      </div>
     </div>
   );
 }

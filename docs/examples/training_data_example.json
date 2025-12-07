@@ -1,0 +1,354 @@
+{
+  "dataset_id": "dynoai_example_v1",
+  "version": "1.0",
+  "created_at": "2025-01-06T18:30:00Z",
+  "contributor": "DynoAI Development Team",
+  "summary": {
+    "total_sessions": 3,
+    "total_dyno_hours": 12.5,
+    "engines_covered": 2,
+    "tuners_contributed": 2,
+    "pattern_counts": {
+      "ve_scaling": 2,
+      "afr_targets": 6,
+      "cylinder_imbalance": 1,
+      "decel_popping": 1,
+      "heat_soak": 0,
+      "knock_timing": 0
+    }
+  },
+  "tuning_sessions": [
+    {
+      "session_id": "run_20250106_001",
+      "timestamp_utc": "2025-01-06T14:30:00Z",
+      "tuner_id": "tuner_mike_smith",
+      "objective": "ve_optimization",
+      "build_config": {
+        "engine_family": "twin_cam",
+        "displacement_ci": 103,
+        "compression_ratio": 10.5,
+        "bore_in": 3.875,
+        "stroke_in": 4.375,
+        "stage": "stage_2",
+        "cam_spec": {
+          "profile": "s_and_s_475",
+          "intake_duration_deg": 228,
+          "exhaust_duration_deg": 228,
+          "intake_lift_in": 0.475,
+          "exhaust_lift_in": 0.475,
+          "lobe_separation_angle_deg": 106,
+          "overlap_deg_front": 34.7,
+          "overlap_deg_rear": 22.4,
+          "idle_rpm_target": 950
+        },
+        "air_cleaner": "S&S Stealth",
+        "throttle_body_mm": 55,
+        "header_type": "2-into-1",
+        "muffler_type": "Vance & Hines Pro Pipe",
+        "header_diameter_in": 1.875,
+        "injector_flow_lb_hr": 5.2,
+        "fuel_pump_type": "stock",
+        "octane_requirement": 91,
+        "ecm_type": "delphi",
+        "tuning_software": "power_vision",
+        "builder": "Dawson Dynamics",
+        "notes": "Customer complained of flat spot at 3000 RPM"
+      },
+      "conditions": {
+        "ambient_temp_f": 75.0,
+        "barometric_pressure_inhg": 29.92,
+        "humidity_percent": 45.0,
+        "altitude_ft": 500,
+        "correction_factor": 0.99
+      },
+      "dyno_metadata": {
+        "dyno_type": "Dynojet 250i",
+        "load_type": "inertia",
+        "fan_airflow_cfm": 5000,
+        "warmup_time_min": 10,
+        "cooldown_time_min": 5,
+        "runs_performed": 6,
+        "smoothing_factor": 4
+      },
+      "afr_targets": {
+        "idle": 14.0,
+        "cruise": 13.8,
+        "acceleration": 13.2,
+        "wot": 12.8
+      },
+      "results": {
+        "peak_hp": 92.5,
+        "peak_torque": 98.2,
+        "afr_accuracy_rms_error": 0.18,
+        "max_cylinder_afr_delta": 0.7,
+        "knock_events": 0,
+        "timing_retard_cells": 0,
+        "timing_advance_cells": 0,
+        "decel_pop_before": 0,
+        "decel_pop_after": 0,
+        "iat_start": 105.0,
+        "iat_end": 145.0,
+        "iat_peak": 152.0,
+        "hp_variation": 3.2,
+        "duration_hours": 4.5,
+        "iterations": 3,
+        "tuner_satisfaction": 8,
+        "customer_satisfaction": 9
+      },
+      "challenges_encountered": [
+        "Flat spot at 3000 RPM required additional VE adjustment",
+        "Minor IAT heat soak after 3rd pull required cooldown"
+      ],
+      "solutions_applied": [
+        "Increased VE by 8% at 3000 RPM, 60-70 kPa",
+        "Extended cooldown to 7 minutes between pulls"
+      ],
+      "notes": "Very responsive to VE changes. Customer extremely happy with power delivery."
+    },
+    {
+      "session_id": "run_20250106_002",
+      "timestamp_utc": "2025-01-06T16:15:00Z",
+      "tuner_id": "tuner_sarah_jones",
+      "objective": "cylinder_balance",
+      "build_config": {
+        "engine_family": "twin_cam",
+        "displacement_ci": 110,
+        "compression_ratio": 10.2,
+        "bore_in": 4.0,
+        "stroke_in": 4.375,
+        "stage": "stage_3",
+        "cam_spec": {
+          "profile": "s_and_s_585",
+          "intake_duration_deg": 242,
+          "exhaust_duration_deg": 248,
+          "intake_lift_in": 0.585,
+          "exhaust_lift_in": 0.590,
+          "lobe_separation_angle_deg": 103,
+          "overlap_deg_front": 48.2,
+          "overlap_deg_rear": 41.5,
+          "idle_rpm_target": 1000
+        },
+        "air_cleaner": "Kuryakyn Hypercharger",
+        "throttle_body_mm": 58,
+        "header_type": "true_dual",
+        "muffler_type": "Rinehart True Duals",
+        "header_diameter_in": 1.875,
+        "injector_flow_lb_hr": 6.0,
+        "fuel_pump_type": "upgraded",
+        "octane_requirement": 93,
+        "ecm_type": "delphi",
+        "tuning_software": "tts_mastertune",
+        "builder": "Fuel Moto",
+        "notes": "Big bore, aggressive cam - expect significant front/rear imbalance"
+      },
+      "conditions": {
+        "ambient_temp_f": 78.0,
+        "barometric_pressure_inhg": 29.88,
+        "humidity_percent": 52.0,
+        "altitude_ft": 350,
+        "correction_factor": 0.98
+      },
+      "dyno_metadata": {
+        "dyno_type": "DynoJet 250i",
+        "load_type": "inertia",
+        "fan_airflow_cfm": 6000,
+        "warmup_time_min": 12,
+        "cooldown_time_min": 6,
+        "runs_performed": 8,
+        "smoothing_factor": 3
+      },
+      "afr_targets": {
+        "idle": 13.8,
+        "cruise": 13.6,
+        "acceleration": 13.0,
+        "wot": 12.6
+      },
+      "results": {
+        "peak_hp": 108.3,
+        "peak_torque": 112.7,
+        "afr_accuracy_rms_error": 0.22,
+        "max_cylinder_afr_delta": 1.2,
+        "knock_events": 0,
+        "timing_retard_cells": 0,
+        "timing_advance_cells": 0,
+        "decel_pop_before": 6,
+        "decel_pop_after": 6,
+        "iat_start": 108.0,
+        "iat_end": 158.0,
+        "iat_peak": 165.0,
+        "hp_variation": 4.8,
+        "duration_hours": 5.5,
+        "iterations": 4,
+        "tuner_satisfaction": 7,
+        "customer_satisfaction": 8
+      },
+      "challenges_encountered": [
+        "Significant AFR imbalance - rear cylinder running 1.2 AFR points richer",
+        "Aggressive cam causing idle instability below 950 RPM",
+        "Heat soak affecting consistency after 4th pull"
+      ],
+      "solutions_applied": [
+        "Applied per-cylinder VE corrections - reduced rear VE by 3% in affected zones",
+        "Raised idle target to 1000 RPM",
+        "Increased cooldown time and fan airflow"
+      ],
+      "notes": "Cylinder imbalance typical for high-overlap cams with true dual exhaust. Correction successful."
+    },
+    {
+      "session_id": "run_20250106_003",
+      "timestamp_utc": "2025-01-06T19:45:00Z",
+      "tuner_id": "tuner_mike_smith",
+      "objective": "decel_pop_fix",
+      "build_config": {
+        "engine_family": "milwaukee_eight",
+        "displacement_ci": 114,
+        "compression_ratio": 10.8,
+        "bore_in": 4.016,
+        "stroke_in": 4.5,
+        "stage": "stage_1",
+        "cam_spec": {
+          "profile": "stock",
+          "intake_duration_deg": 214,
+          "exhaust_duration_deg": 218,
+          "intake_lift_in": 0.420,
+          "exhaust_lift_in": 0.425,
+          "lobe_separation_angle_deg": 108,
+          "overlap_deg_front": 18.5,
+          "overlap_deg_rear": 18.5,
+          "idle_rpm_target": 900
+        },
+        "air_cleaner": "Screamin' Eagle Heavy Breather",
+        "throttle_body_mm": 55,
+        "header_type": "2-into-1",
+        "muffler_type": "Vance & Hines FP4",
+        "header_diameter_in": 1.75,
+        "injector_flow_lb_hr": 5.0,
+        "fuel_pump_type": "stock",
+        "octane_requirement": 91,
+        "ecm_type": "delphi",
+        "tuning_software": "power_vision",
+        "builder": "Harley-Davidson",
+        "notes": "Customer complaint: loud popping on decel, embarrassing in parking lots"
+      },
+      "conditions": {
+        "ambient_temp_f": 72.0,
+        "barometric_pressure_inhg": 29.95,
+        "humidity_percent": 38.0,
+        "altitude_ft": 450,
+        "correction_factor": 1.00
+      },
+      "dyno_metadata": {
+        "dyno_type": "Dynojet 250i",
+        "load_type": "inertia",
+        "fan_airflow_cfm": 4500,
+        "warmup_time_min": 8,
+        "cooldown_time_min": 4,
+        "runs_performed": 4,
+        "smoothing_factor": 4
+      },
+      "afr_targets": {
+        "idle": 14.2,
+        "cruise": 14.0,
+        "acceleration": 13.4,
+        "wot": 12.9,
+        "decel": 13.5
+      },
+      "results": {
+        "peak_hp": 78.5,
+        "peak_torque": 95.8,
+        "afr_accuracy_rms_error": 0.15,
+        "max_cylinder_afr_delta": 0.4,
+        "knock_events": 0,
+        "timing_retard_cells": 0,
+        "timing_advance_cells": 0,
+        "decel_pop_before": 8,
+        "decel_pop_after": 1,
+        "iat_start": 102.0,
+        "iat_end": 132.0,
+        "iat_peak": 138.0,
+        "hp_variation": 2.1,
+        "duration_hours": 2.5,
+        "iterations": 2,
+        "tuner_satisfaction": 9,
+        "customer_satisfaction": 10
+      },
+      "challenges_encountered": [
+        "Severe decel popping (8/10) - PAIR valve still active",
+        "AFR spiking to 16.8 during throttle closure"
+      ],
+      "solutions_applied": [
+        "Applied +18% enrichment at 0-2% TPS, 1500-2500 RPM",
+        "Applied +12% enrichment at 0-2% TPS, 2500-3500 RPM",
+        "Recommended PAIR valve removal for complete elimination"
+      ],
+      "notes": "Decel pop reduced from 8/10 to 1/10. Slight fuel economy impact (-0.5 MPG est). Customer thrilled."
+    }
+  ],
+  "extracted_patterns": {
+    "ve_scaling_patterns": [
+      {
+        "engine_family": "twin_cam",
+        "stage": "stage_2",
+        "cam_overlap_category": "moderate",
+        "displacement_ci": 103,
+        "ve_delta_idle": 12.5,
+        "ve_delta_cruise": 15.2,
+        "ve_delta_midrange": 18.7,
+        "ve_delta_wot": 22.3,
+        "front_rear_ve_difference_pct": 2.1,
+        "sessions_observed": 1
+      },
+      {
+        "engine_family": "twin_cam",
+        "stage": "stage_3",
+        "cam_overlap_category": "high",
+        "displacement_ci": 110,
+        "ve_delta_idle": 18.3,
+        "ve_delta_cruise": 22.1,
+        "ve_delta_midrange": 28.5,
+        "ve_delta_wot": 33.8,
+        "front_rear_ve_difference_pct": 4.7,
+        "sessions_observed": 1
+      }
+    ],
+    "cylinder_imbalance_patterns": [
+      {
+        "engine_family": "twin_cam",
+        "cam_profile": "s_and_s_585",
+        "exhaust_type": "true_dual",
+        "header_length_delta_in": 2.5,
+        "imbalance_cells": [
+          {"rpm_idx": 4, "kpa_idx": 6, "afr_delta": 0.9},
+          {"rpm_idx": 5, "kpa_idx": 7, "afr_delta": 1.2},
+          {"rpm_idx": 6, "kpa_idx": 8, "afr_delta": 1.1},
+          {"rpm_idx": 7, "kpa_idx": 9, "afr_delta": 0.8}
+        ],
+        "primary_cause": "exhaust_scavenging",
+        "imbalance_before_max": 1.2,
+        "imbalance_after_max": 0.3,
+        "correction_success": true
+      }
+    ],
+    "decel_popping_patterns": [
+      {
+        "engine_family": "milwaukee_eight",
+        "cam_overlap_deg": 18.5,
+        "exhaust_type": "2-into-1",
+        "pair_valve_present": true,
+        "pop_severity": 8,
+        "pop_rpm_range": [1500, 3500],
+        "pop_throttle_position": 0.0,
+        "decel_afr_spike_max": 16.8,
+        "enrichment_zones": [
+          {"rpm_min": 1500, "rpm_max": 2500, "tps_min": 0, "tps_max": 2, "enrichment_pct": 18.0},
+          {"rpm_min": 2500, "rpm_max": 3500, "tps_min": 0, "tps_max": 2, "enrichment_pct": 12.0}
+        ],
+        "pop_eliminated": false,
+        "fuel_economy_impact_pct": -0.5,
+        "customer_satisfaction": 10,
+        "notes": "Reduced from 8/10 to 1/10. PAIR valve removal recommended for complete fix."
+      }
+    ]
+  }
+}
+

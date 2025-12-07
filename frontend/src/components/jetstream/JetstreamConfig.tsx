@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { Settings, Save, Loader2, Eye, EyeOff, Radio, Shield, Clock } from 'lucide-react';
 import { Settings, Save, Loader2, Eye, EyeOff, Flame } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -87,55 +88,66 @@ export function JetstreamConfig() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Jetstream Configuration
+          <CardTitle className="flex items-center gap-2 font-mono uppercase tracking-tight">
+            <Settings className="h-5 w-5 text-primary" />
+            Link Configuration
           </CardTitle>
         </CardHeader>
         <CardContent className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </CardContent>
       </Card>
     );
   }
 
   return (
+    <Card className="border-border/50 bg-card/30 backdrop-blur-sm h-full">
+      <CardHeader className="border-b border-border/40 pb-4">
+        <CardTitle className="flex items-center gap-2 font-mono uppercase tracking-tight">
+          <Settings className="h-5 w-5 text-primary" />
+          Link Configuration
     <Card className="flex flex-col max-h-[calc(100vh-6rem)]">
       <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
           Jetstream Configuration
         </CardTitle>
-        <CardDescription>
-          Configure your connection to Dynojet Jetstream cloud service
+        <CardDescription className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+          Establish Uplink to Jetstream Cloud Service
         </CardDescription>
       </CardHeader>
+      <CardContent className="space-y-6 pt-6">
       <CardContent className="space-y-6 overflow-y-auto flex-1">
         {/* API URL */}
         <div className="space-y-2">
-          <Label htmlFor="api-url">API URL</Label>
-          <Input
-            id="api-url"
-            type="url"
-            placeholder="https://api.jetstream.dynojet.com"
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
-          />
+          <Label htmlFor="api-url" className="font-mono uppercase text-xs tracking-wide text-muted-foreground">Endpoint URL</Label>
+          <div className="relative">
+            <Radio className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="api-url"
+              type="url"
+              placeholder="https://api.jetstream.dynojet.com"
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.target.value)}
+              className="pl-9 font-mono text-sm"
+            />
+          </div>
         </div>
 
         {/* API Key */}
         <div className="space-y-2">
-          <Label htmlFor="api-key">API Key</Label>
+          <Label htmlFor="api-key" className="font-mono uppercase text-xs tracking-wide text-muted-foreground">Access Key</Label>
           <div className="relative">
+            <Shield className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               id="api-key"
               type={showApiKey ? 'text' : 'password'}
               placeholder="Enter your API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="pr-10"
+              className="pl-9 pr-10 font-mono text-sm"
             />
             <Button
               type="button"
@@ -151,55 +163,61 @@ export function JetstreamConfig() {
               )}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Your API key will be masked when displayed
+          <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+            Credentials Masked for Security
           </p>
         </div>
 
         {/* Poll Interval */}
         <div className="space-y-2">
-          <Label htmlFor="poll-interval">Poll Interval (seconds)</Label>
-          <Input
-            id="poll-interval"
-            type="number"
-            min={10}
-            max={300}
-            value={pollInterval}
-            onChange={(e) => setPollInterval(parseInt(e.target.value, 10))}
-          />
-          <p className="text-xs text-muted-foreground">
-            How often to check for new runs (10-300 seconds)
+          <Label htmlFor="poll-interval" className="font-mono uppercase text-xs tracking-wide text-muted-foreground">Polling Cycle</Label>
+          <div className="relative">
+            <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="poll-interval"
+              type="number"
+              min={10}
+              max={300}
+              value={pollInterval}
+              onChange={(e) => setPollInterval(parseInt(e.target.value, 10))}
+              className="pl-9 font-mono text-sm"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+            Sync Frequency (Seconds)
           </p>
         </div>
 
-        {/* Auto Process */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="auto-process">Auto Process</Label>
-            <p className="text-xs text-muted-foreground">
-              Automatically process new runs when discovered
-            </p>
-          </div>
-          <Switch
-            id="auto-process"
-            checked={autoProcess}
-            onCheckedChange={setAutoProcess}
-          />
-        </div>
+        <div className="bg-muted/20 p-4 rounded-lg border border-border/50 space-y-4">
+            {/* Auto Process */}
+            <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+                <Label htmlFor="auto-process" className="font-mono uppercase text-xs tracking-wide font-bold">Auto-Processing</Label>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Analyze incoming telemetry immediately
+                </p>
+            </div>
+            <Switch
+                id="auto-process"
+                checked={autoProcess}
+                onCheckedChange={setAutoProcess}
+            />
+            </div>
 
-        {/* Enabled */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label htmlFor="enabled">Enable Jetstream</Label>
-            <p className="text-xs text-muted-foreground">
-              Start polling for new runs automatically
-            </p>
-          </div>
-          <Switch
-            id="enabled"
-            checked={enabled}
-            onCheckedChange={setEnabled}
-          />
+            {/* Enabled */}
+            <div className="flex items-center justify-between border-t border-border/30 pt-4">
+            <div className="space-y-0.5">
+                <Label htmlFor="enabled" className="font-mono uppercase text-xs tracking-wide font-bold text-primary">Link Active</Label>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Enable background polling service
+                </p>
+            </div>
+            <Switch
+                id="enabled"
+                checked={enabled}
+                onCheckedChange={setEnabled}
+            />
+            </div>
         </div>
 
         <Separator className="my-4" />
@@ -352,14 +370,14 @@ export function JetstreamConfig() {
         <Button
           onClick={handleSave}
           disabled={updateConfig.isPending}
-          className="w-full"
+          className="w-full font-mono uppercase tracking-wider h-12"
         >
           {updateConfig.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
           ) : (
             <Save className="h-4 w-4 mr-2" />
           )}
-          Save Configuration
+          Commit Configuration
         </Button>
       </CardContent>
     </Card>

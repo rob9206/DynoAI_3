@@ -1,0 +1,411 @@
+{
+  "anomalies": [
+    {
+      "type": "Spatial discontinuity",
+      "score": 4.65951811375495,
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 7.901214841628055,
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 5.747566563974902,
+      "cell": {
+        "rpm": 2000,
+        "kpa": 35
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 3.6278378983306507,
+      "cell": {
+        "rpm": 5000,
+        "kpa": 65
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 5.7612205250772535,
+      "cell": {
+        "rpm": 5500,
+        "kpa": 65
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    }
+  ],
+  "correction_diagnostics": {
+    "front": {
+      "accepted_wb": 3600,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 0,
+      "no_requested_afr": 0,
+      "total_records_processed": 3600,
+      "per_bin_stats": {
+        "mad": [
+          [
+            0.3072202065819501,
+            0.3756066046665284,
+            0.45730983386168633,
+            0.22605026430493302,
+            null
+          ],
+          [
+            0.3124819721939053,
+            0.3135142941495379,
+            0.39212137664766944,
+            0.5560985678640756,
+            0.23751940669632432
+          ],
+          [
+            0.45382821554746033,
+            0.6191950464396291,
+            0.6998578750161495,
+            0.5434076354234437,
+            0.39277153093750045
+          ],
+          [
+            0.1510448527690399,
+            0.38021701617383874,
+            0.7587005443968322,
+            0.7575426481942777,
+            0.28075331425829964
+          ],
+          [
+            0.6201517105751972,
+            0.42275922827224977,
+            0.5422127523672674,
+            0.7034919991360191,
+            0.38608874008385907
+          ],
+          [
+            0.19642616073000374,
+            0.6982115043772479,
+            0.3115152822208576,
+            0.7372526563263204,
+            0.3958666572648393
+          ],
+          [
+            null,
+            0.2250212039211339,
+            0.7598876057150429,
+            0.7021269445150866,
+            0.23021996798503075
+          ],
+          [
+            null,
+            0.14902120165277744,
+            0.22505114798817438,
+            0.830065782125391,
+            0.509017937987907
+          ],
+          [
+            null,
+            0.25892216041360117,
+            0.3782161264487166,
+            0.3115908675240757,
+            0.24053669750632012
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "hits": [
+          [
+            19,
+            45,
+            37,
+            37,
+            0
+          ],
+          [
+            30,
+            26,
+            31,
+            110,
+            38
+          ],
+          [
+            228,
+            185,
+            258,
+            184,
+            53
+          ],
+          [
+            30,
+            87,
+            277,
+            78,
+            10
+          ],
+          [
+            73,
+            82,
+            330,
+            289,
+            111
+          ],
+          [
+            16,
+            93,
+            41,
+            150,
+            59
+          ],
+          [
+            0,
+            13,
+            53,
+            92,
+            35
+          ],
+          [
+            0,
+            23,
+            25,
+            149,
+            92
+          ],
+          [
+            0,
+            34,
+            26,
+            30,
+            21
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    "rear": {
+      "accepted_wb": 3600,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 0,
+      "no_requested_afr": 0,
+      "total_records_processed": 3600,
+      "per_bin_stats": {
+        "mad": [
+          [
+            0.2349072116514066,
+            0.5413766434648127,
+            0.30440598391916196,
+            0.22570646122362514,
+            null
+          ],
+          [
+            0.3149184754796537,
+            0.2699724911238603,
+            0.604184676017587,
+            0.49162629445497036,
+            0.9252182633556223
+          ],
+          [
+            0.7020280811232438,
+            0.8546947245611727,
+            0.984063986285997,
+            0.9336119657127386,
+            0.6389058736913042
+          ],
+          [
+            0.22778111986542904,
+            0.7633587786259515,
+            0.9345637624099363,
+            0.495049504950498,
+            0.27654661695216753
+          ],
+          [
+            0.6005173688100524,
+            0.5274536739177078,
+            0.4510714682260669,
+            0.5464224938722642,
+            0.3214788024914683
+          ],
+          [
+            0.3025512635297213,
+            0.30347649837143365,
+            0.8352110981449061,
+            0.8548121462898284,
+            0.5524759679120008
+          ],
+          [
+            null,
+            0.30627781164504286,
+            0.31345316889098607,
+            0.5170752928746808,
+            0.24015640185670417
+          ],
+          [
+            null,
+            0.3808059931939502,
+            0.31194667129859543,
+            0.8805888938227395,
+            0.5123937904406615
+          ],
+          [
+            null,
+            0.3354385402083671,
+            0.2949344999631336,
+            0.22731732894551232,
+            0.31446309112304416
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "hits": [
+          [
+            19,
+            45,
+            37,
+            37,
+            0
+          ],
+          [
+            30,
+            26,
+            31,
+            110,
+            38
+          ],
+          [
+            228,
+            185,
+            258,
+            184,
+            53
+          ],
+          [
+            30,
+            87,
+            277,
+            78,
+            10
+          ],
+          [
+            73,
+            82,
+            330,
+            289,
+            111
+          ],
+          [
+            16,
+            93,
+            41,
+            150,
+            59
+          ],
+          [
+            0,
+            13,
+            53,
+            92,
+            35
+          ],
+          [
+            0,
+            23,
+            25,
+            149,
+            92
+          ],
+          [
+            0,
+            34,
+            26,
+            30,
+            21
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    }
+  }
+}

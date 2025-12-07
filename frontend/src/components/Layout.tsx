@@ -33,36 +33,36 @@ export default function Layout({ children }: LayoutProps) {
             <nav className="flex space-x-2">
               <Link
                 to="/jetstream"
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
                   isActive('/jetstream') || isActive('/runs')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                 }`}
               >
-                <Radio className="h-4 w-4" />
-                <span className="font-medium">Live Feed</span>
+                <Radio className="h-5 w-5" />
+                <span>Live Feed</span>
               </Link>
               <Link
                 to="/dashboard"
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
                   isActive('/dashboard')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                 }`}
               >
-                <Home className="h-4 w-4" />
-                <span className="font-medium">Dashboard</span>
+                <Home className="h-5 w-5" />
+                <span>Control Center</span>
               </Link>
               <Link
                 to="/history"
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
                   isActive('/history')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                 }`}
               >
-                <History className="h-4 w-4" />
-                <span className="font-medium">History</span>
+                <History className="h-5 w-5" />
+                <span>History</span>
               </Link>
             </nav>
           </div>
