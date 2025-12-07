@@ -1,6 +1,7 @@
 """Jetstream progress SSE route for real-time updates."""
 
 from flask import Blueprint, Response
+
 from api.services.progress_broadcaster import get_broadcaster
 
 progress_bp = Blueprint("jetstream_progress", __name__)

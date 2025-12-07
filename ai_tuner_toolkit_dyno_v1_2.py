@@ -1677,6 +1677,24 @@ def main() -> int:
         default=5500,
         help="Maximum RPM for decel zone (default: 5500).",
     )
+    # Cylinder balancing options
+    ap.add_argument(
+        "--balance-cylinders",
+        action="store_true",
+        help="Enable per-cylinder auto-balancing to equalize front/rear AFR.",
+    )
+    ap.add_argument(
+        "--balance-mode",
+        choices=["equalize", "match_front", "match_rear"],
+        default="equalize",
+        help="Balancing strategy: equalize (both toward average), match_front (rear to front), match_rear (front to rear).",
+    )
+    ap.add_argument(
+        "--balance-max-correction",
+        type=float,
+        default=3.0,
+        help="Maximum VE correction percentage for balancing (default: 3.0%%).",
+    )
     args = ap.parse_args()
 
     # Configure logging level based on --verbose flag
@@ -2025,6 +2043,50 @@ def main() -> int:
                 print(f"[WARN] Decel management module not available: {e}")
             except Exception as e:
                 print(f"[WARN] Decel management failed: {e}")
+
+        # --- Per-Cylinder Auto-Balancing ---
+        if args.balance_cylinders:
+            print("\nPROGRESS:97:Running per-cylinder auto-balancing...")
+            sys.stdout.flush()
+            try:
+                from cylinder_balancing import process_cylinder_balancing
+
+                balance_result = process_cylinder_balancing(
+                    records=recs,
+                    output_dir=outdir,
+                    mode=args.balance_mode,
+                    max_correction_pct=args.balance_max_correction,
+                    input_file=str(csv_path),
+                )
+
+                print(
+                    f"[OK] Cylinder balancing: {balance_result['cells_imbalanced']}/{balance_result['cells_analyzed']} cells imbalanced "
+                    f"(max delta: {balance_result['max_afr_delta']:.2f} AFR)"
+                )
+
+                # Add balance outputs to manifest
+                extra_specs.extend(
+                    [
+                        (
+                            "Front_Balance_Factor.csv",
+                            "csv",
+                            "front_balance_factor",
+                            True,
+                        ),
+                        ("Rear_Balance_Factor.csv", "csv", "rear_balance_factor", True),
+                        (
+                            "Cylinder_Balance_Report.json",
+                            "json",
+                            "balance_report",
+                            False,
+                        ),
+                    ]
+                )
+
+            except ImportError as e:
+                print(f"[WARN] Cylinder balancing module not available: {e}")
+            except Exception as e:
+                print(f"[WARN] Cylinder balancing failed: {e}")
 
         # --- Visualization Call ---
         # Always attempt to generate visualizations if the script exists

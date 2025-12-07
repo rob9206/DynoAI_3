@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
-from api.jetstream.models import JetstreamConfig
+
+from api.jetstream.models import JetstreamConfig, TuningOptions
 from api.jetstream.poller import get_poller, init_poller
 from io_contracts import safe_path
 
@@ -99,6 +100,40 @@ def update_config():
             existing.auto_process = bool(data["auto_process"])
         if "enabled" in data:
             existing.enabled = bool(data["enabled"])
+
+        # Update tuning options if provided
+        if "tuning_options" in data:
+            tuning_data = data["tuning_options"]
+            if "decel_management" in tuning_data:
+                existing.tuning_options.decel_management = bool(
+                    tuning_data["decel_management"]
+                )
+            if "decel_severity" in tuning_data:
+                severity = tuning_data["decel_severity"]
+                if severity in ("low", "medium", "high"):
+                    existing.tuning_options.decel_severity = severity
+            if "decel_rpm_min" in tuning_data:
+                existing.tuning_options.decel_rpm_min = int(
+                    tuning_data["decel_rpm_min"]
+                )
+            if "decel_rpm_max" in tuning_data:
+                existing.tuning_options.decel_rpm_max = int(
+                    tuning_data["decel_rpm_max"]
+                )
+
+            # Per-Cylinder Auto-Balancing options
+            if "balance_cylinders" in tuning_data:
+                existing.tuning_options.balance_cylinders = bool(
+                    tuning_data["balance_cylinders"]
+                )
+            if "balance_mode" in tuning_data:
+                mode = tuning_data["balance_mode"]
+                if mode in ("equalize", "match_front", "match_rear"):
+                    existing.tuning_options.balance_mode = mode
+            if "balance_max_correction" in tuning_data:
+                existing.tuning_options.balance_max_correction = float(
+                    tuning_data["balance_max_correction"]
+                )
 
         # Validate
         if existing.enabled and (not existing.api_url or not existing.api_key):

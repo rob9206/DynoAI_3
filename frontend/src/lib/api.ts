@@ -17,6 +17,13 @@ export interface AnalysisParams {
   rearBias?: number;
   rearRuleDeg?: number;
   hotExtra?: number;
+  decelManagement?: boolean;
+  decelSeverity?: 'low' | 'medium' | 'high';
+  decelRpmMin?: number;
+  decelRpmMax?: number;
+  balanceCylinders?: boolean;
+  balanceMode?: 'equalize' | 'match_front' | 'match_rear';
+  balanceMaxCorrection?: number;
 }
 
 export interface AnalysisResponse {
@@ -121,6 +128,13 @@ export const uploadAndAnalyze = async (
     if (params.rearBias !== undefined) formData.append('rearBias', params.rearBias.toString());
     if (params.rearRuleDeg !== undefined) formData.append('rearRuleDeg', params.rearRuleDeg.toString());
     if (params.hotExtra !== undefined) formData.append('hotExtra', params.hotExtra.toString());
+    if (params.decelManagement !== undefined) formData.append('decelManagement', params.decelManagement.toString());
+    if (params.decelSeverity !== undefined) formData.append('decelSeverity', params.decelSeverity);
+    if (params.decelRpmMin !== undefined) formData.append('decelRpmMin', params.decelRpmMin.toString());
+    if (params.decelRpmMax !== undefined) formData.append('decelRpmMax', params.decelRpmMax.toString());
+    if (params.balanceCylinders !== undefined) formData.append('balanceCylinders', params.balanceCylinders.toString());
+    if (params.balanceMode !== undefined) formData.append('balanceMode', params.balanceMode);
+    if (params.balanceMaxCorrection !== undefined) formData.append('balanceMaxCorrection', params.balanceMaxCorrection.toString());
   }
 
   const response = await api.post('/api/analyze', formData, {

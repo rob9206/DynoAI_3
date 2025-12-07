@@ -227,6 +227,7 @@ def detect_decel_events(
     tps_rate: List[float] = []
     # Ensure dt_sec is never 0
     dt_sec = max(sample_rate_ms / 1000.0, 0.001)
+    dt_sec = sample_rate_ms / 1000.0
 
     # Forward difference for first element
     tps_rate.append((tps_values[1] - tps_values[0]) / dt_sec)
@@ -272,6 +273,9 @@ def detect_decel_events(
 
             if (is_rapid_close or is_steady_closed) and (
                 cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
+            if (
+                rate <= cfg["tps_rate_threshold"]
+                and cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
             ):
                 in_event = True
                 event_start = i
@@ -283,6 +287,12 @@ def detect_decel_events(
             rpm_too_low = rpm_float < cfg["rpm_min"]
 
             if tps_rose or rpm_too_low or i == len(records) - 1:
+            # Event ends when TPS rate recovers (throttle stabilizing or opening)
+            # AND TPS has reached a low value (below threshold)
+            rate_recovered = rate > -5.0
+            tps_low_enough = tps_val <= cfg["tps_max_at_end"]
+
+            if rate_recovered and tps_low_enough:
                 duration_ms = (i - event_start) * sample_rate_ms
 
                 if cfg["duration_min_ms"] <= duration_ms <= cfg["duration_max_ms"]:
@@ -309,6 +319,10 @@ def detect_decel_events(
                         events.append(event)
 
                 in_event = False
+
+            # Also exit if TPS goes back up (throttle reopening) - abort event
+            elif tps_val > cfg["tps_max_at_end"] + 10 and rate > 5.0:
+                in_event = False  # Abort - not a valid decel, throttle reopened
 
     return events
 

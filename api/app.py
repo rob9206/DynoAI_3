@@ -99,6 +99,21 @@ except Exception as e:  # pragma: no cover
 active_jobs = {}
 
 
+# Helper functions for form data parsing
+def _get_bool_form(key: str, default: bool = False) -> bool:
+    """Parse boolean value from form data."""
+    value = request.form.get(key, str(default)).lower()
+    return value in ("true", "1", "yes")
+
+
+def _get_int_form(key: str, default: int) -> int:
+    """Parse integer value from form data."""
+    try:
+        return int(request.form.get(key, default))
+    except (ValueError, TypeError):
+        return default
+
+
 def allowed_file(filename: str) -> bool:
     """Check if file extension is allowed."""
     return (
@@ -164,6 +179,26 @@ def run_dyno_analysis(
             cmd.extend(["--rear_rule_deg", str(params["rear_rule_deg"])])
         if "hot_extra" in params:
             cmd.extend(["--hot_extra", str(params["hot_extra"])])
+
+        # Decel Fuel Management options
+        if params.get("decel_management"):
+            cmd.append("--decel-management")
+            if "decel_severity" in params:
+                cmd.extend(["--decel-severity", str(params["decel_severity"])])
+            if "decel_rpm_min" in params:
+                cmd.extend(["--decel-rpm-min", str(params["decel_rpm_min"])])
+            if "decel_rpm_max" in params:
+                cmd.extend(["--decel-rpm-max", str(params["decel_rpm_max"])])
+
+        # Per-Cylinder Auto-Balancing options
+        if params.get("balance_cylinders"):
+            cmd.append("--balance-cylinders")
+            if "balance_mode" in params:
+                cmd.extend(["--balance-mode", str(params["balance_mode"])])
+            if "balance_max_correction" in params:
+                cmd.extend(
+                    ["--balance-max-correction", str(params["balance_max_correction"])]
+                )
     else:
         # Use default parameters from config
         cmd.extend(
@@ -347,6 +382,27 @@ def analyze():
         ),
     }
 
+    # Extract decel tuning options from form data
+    decel_management = _get_bool_form("decelManagement", False)
+    decel_severity = request.form.get("decelSeverity", "medium")
+    decel_rpm_min = _get_int_form("decelRpmMin", 1500)
+    decel_rpm_max = _get_int_form("decelRpmMax", 5500)
+
+    # Extract cylinder balancing options from form data
+    balance_cylinders = _get_bool_form("balanceCylinders", False)
+    balance_mode = request.form.get("balanceMode", "equalize")
+    balance_max_correction = float(request.form.get("balanceMaxCorrection", "3.0"))
+
+    tuning_options = {
+        "decel_management": decel_management,
+        "decel_severity": decel_severity,
+        "decel_rpm_min": decel_rpm_min,
+        "decel_rpm_max": decel_rpm_max,
+        "balance_cylinders": balance_cylinders,
+        "balance_mode": balance_mode,
+        "balance_max_correction": balance_max_correction,
+    }
+
     # Initialize job tracking
     active_jobs[run_id] = {
         "status": "queued",
@@ -362,7 +418,9 @@ def analyze():
         try:
             active_jobs[run_id]["status"] = "running"
             active_jobs[run_id]["message"] = "Running analysis..."
-            manifest = run_dyno_analysis(upload_path, output_dir, run_id, params)
+            manifest = run_dyno_analysis(
+                upload_path, output_dir, run_id, params, tuning_options
+            )
             active_jobs[run_id]["manifest"] = manifest
             active_jobs[run_id]["status"] = "completed"
             active_jobs[run_id]["message"] = "Analysis complete"
