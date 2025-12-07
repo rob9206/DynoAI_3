@@ -4,7 +4,6 @@ import json
 import re
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
 from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
