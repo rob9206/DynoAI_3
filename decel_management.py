@@ -225,6 +225,8 @@ def detect_decel_events(
 
     # Calculate TPS rate of change using simple gradient
     tps_rate: List[float] = []
+    # Ensure dt_sec is never 0
+    dt_sec = max(sample_rate_ms / 1000.0, 0.001)
     dt_sec = sample_rate_ms / 1000.0
 
     # Forward difference for first element
@@ -254,6 +256,23 @@ def detect_decel_events(
 
         # Check if entering decel event
         if not in_event:
+            # Check both rate threshold AND just low TPS with dropping RPM
+            is_rapid_close = rate <= cfg["tps_rate_threshold"]
+
+            # Also catch "already closed" throttle during RPM drop (common in synthetic logs)
+            # If TPS is 0 and RPM is dropping, we are in decel
+            # Ensure we have valid RPM drop
+            rpm_drop = 0.0
+            if i > 0:
+                prev_rpm = float(records[i - 1].get("rpm", rpm_float))
+                rpm_drop = prev_rpm - rpm_float
+
+            is_steady_closed = (tps_val <= cfg["tps_max_at_end"]) and (
+                rpm_drop > 5.0
+            )  # Significant drop per sample
+
+            if (is_rapid_close or is_steady_closed) and (
+                cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
             if (
                 rate <= cfg["tps_rate_threshold"]
                 and cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
@@ -263,6 +282,11 @@ def detect_decel_events(
 
         # Check if exiting decel event
         else:
+            # Event ends when TPS rises OR RPM drops too low
+            tps_rose = tps_val > cfg["tps_max_at_end"]
+            rpm_too_low = rpm_float < cfg["rpm_min"]
+
+            if tps_rose or rpm_too_low or i == len(records) - 1:
             # Event ends when TPS rate recovers (throttle stabilizing or opening)
             # AND TPS has reached a low value (below threshold)
             rate_recovered = rate > -5.0
