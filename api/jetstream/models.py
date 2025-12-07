@@ -140,7 +140,7 @@ class TuningOptions:
     decel_severity: str = "medium"  # low, medium, high
     decel_rpm_min: int = 1500
     decel_rpm_max: int = 5500
-    
+
     # Per-Cylinder Auto-Balancing
     balance_cylinders: bool = False
     balance_mode: str = "equalize"  # equalize, match_front, match_rear
