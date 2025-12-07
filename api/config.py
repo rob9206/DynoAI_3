@@ -28,7 +28,7 @@ def _get_int_env(key: str, default: int) -> int:
 @dataclass
 class ServerConfig:
     """Flask server configuration."""
-    
+
     host: str = field(default_factory=lambda: os.environ.get("DYNOAI_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: _get_int_env("DYNOAI_PORT", 5001))
     debug: bool = field(default_factory=lambda: _get_bool_env("DYNOAI_DEBUG", True))
@@ -38,7 +38,7 @@ class ServerConfig:
 @dataclass
 class StorageConfig:
     """File storage configuration."""
-    
+
     upload_folder: Path = field(
         default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "uploads"))
     )
@@ -54,7 +54,7 @@ class StorageConfig:
     allowed_extensions: frozenset = field(
         default_factory=lambda: frozenset({"csv", "txt"})
     )
-    
+
     def __post_init__(self) -> None:
         """Ensure storage directories exist."""
         self.upload_folder.mkdir(exist_ok=True)
@@ -63,9 +63,51 @@ class StorageConfig:
 
 
 @dataclass
+class TuningOptionsConfig:
+    """Tuning options for run processing."""
+
+    # Decel Fuel Management
+    decel_management: bool = field(
+        default_factory=lambda: _get_bool_env("DYNOAI_DECEL_MANAGEMENT", False)
+    )
+    decel_severity: str = field(
+        default_factory=lambda: os.environ.get("DYNOAI_DECEL_SEVERITY", "medium")
+    )
+    decel_rpm_min: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_DECEL_RPM_MIN", 1500)
+    )
+    decel_rpm_max: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_DECEL_RPM_MAX", 5500)
+    )
+    
+    # Per-Cylinder Auto-Balancing
+    balance_cylinders: bool = field(
+        default_factory=lambda: _get_bool_env("DYNOAI_BALANCE_CYLINDERS", False)
+    )
+    balance_mode: str = field(
+        default_factory=lambda: os.environ.get("DYNOAI_BALANCE_MODE", "equalize")
+    )
+    balance_max_correction: float = field(
+        default_factory=lambda: float(os.environ.get("DYNOAI_BALANCE_MAX_CORRECTION", "3.0"))
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "decel_management": self.decel_management,
+            "decel_severity": self.decel_severity,
+            "decel_rpm_min": self.decel_rpm_min,
+            "decel_rpm_max": self.decel_rpm_max,
+            "balance_cylinders": self.balance_cylinders,
+            "balance_mode": self.balance_mode,
+            "balance_max_correction": self.balance_max_correction,
+        }
+
+
+@dataclass
 class JetstreamConfig:
     """Jetstream integration configuration."""
-    
+
     api_url: str = field(
         default_factory=lambda: os.environ.get("JETSTREAM_API_URL", "")
     )
@@ -84,7 +126,8 @@ class JetstreamConfig:
     stub_mode: bool = field(
         default_factory=lambda: _get_bool_env("JETSTREAM_STUB_MODE", False)
     )
-    
+    tuning_options: TuningOptionsConfig = field(default_factory=TuningOptionsConfig)
+
     def to_dict(self, mask_key: bool = True) -> Dict[str, Any]:
         """Convert to dictionary, optionally masking the API key."""
         return {
@@ -94,8 +137,9 @@ class JetstreamConfig:
             "auto_process": self.auto_process,
             "enabled": self.enabled,
             "stub_mode": self.stub_mode,
+            "tuning_options": self.tuning_options.to_dict(),
         }
-    
+
     def _mask_key(self) -> str:
         """Mask the API key for safe display."""
         if not self.api_key:
@@ -108,14 +152,12 @@ class JetstreamConfig:
 @dataclass
 class CORSConfig:
     """CORS configuration."""
-    
+
     origins: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "DYNOAI_CORS_ORIGINS", "*"
-        ).split(",")
+        default_factory=lambda: os.environ.get("DYNOAI_CORS_ORIGINS", "*").split(",")
     )
     resources: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self) -> None:
         """Set up CORS resources pattern."""
         if not self.resources:
@@ -125,7 +167,7 @@ class CORSConfig:
 @dataclass
 class AnalysisConfig:
     """Default analysis parameters."""
-    
+
     default_smooth_passes: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_SMOOTH_PASSES", 2)
     )
@@ -146,31 +188,25 @@ class AnalysisConfig:
 @dataclass
 class XAIConfig:
     """xAI (Grok) API configuration."""
-    
-    api_key: str = field(
-        default_factory=lambda: os.environ.get("XAI_API_KEY", "")
-    )
+
+    api_key: str = field(default_factory=lambda: os.environ.get("XAI_API_KEY", ""))
     api_url: str = field(
         default_factory=lambda: os.environ.get(
             "XAI_API_URL", "https://api.x.ai/v1/chat/completions"
         )
     )
-    model: str = field(
-        default_factory=lambda: os.environ.get("XAI_MODEL", "grok-beta")
-    )
-    enabled: bool = field(
-        default_factory=lambda: _get_bool_env("XAI_ENABLED", False)
-    )
+    model: str = field(default_factory=lambda: os.environ.get("XAI_MODEL", "grok-beta"))
+    enabled: bool = field(default_factory=lambda: _get_bool_env("XAI_ENABLED", False))
 
 
 @dataclass
 class AppConfig:
     """Main application configuration container."""
-    
+
     # Application metadata
     app_name: str = "DynoAI"
     version: str = "1.2.0"
-    
+
     # Sub-configurations
     server: ServerConfig = field(default_factory=ServerConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
@@ -178,12 +214,12 @@ class AppConfig:
     cors: CORSConfig = field(default_factory=CORSConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     xai: XAIConfig = field(default_factory=XAIConfig)
-    
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         """Create configuration from environment variables."""
         return cls()
-    
+
     def to_dict(self, include_secrets: bool = False) -> Dict[str, Any]:
         """Convert to dictionary for logging/debugging."""
         return {
@@ -227,3 +263,6 @@ def reload_config() -> AppConfig:
     _config = AppConfig.from_env()
     return _config
 
+
+# Convenience constants for direct imports
+RUNS_DIR = get_config().storage.runs_folder

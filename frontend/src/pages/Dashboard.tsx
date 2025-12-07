@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, Settings, Play, Activity, Zap, FileSearch } from 'lucide-react';
+import { Loader2, CheckCircle, Settings, Play, Activity, Zap, FileSearch, Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
 import { uploadAndAnalyze, pollJobStatus, handleApiError, AnalysisParams } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -9,6 +9,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Progress } from '../components/ui/progress';
+import { Switch } from '../components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -27,6 +29,17 @@ export default function Dashboard() {
     hotExtra: -1.0,
   });
 
+  // Decel management parameters
+  const [decelManagement, setDecelManagement] = useState(false);
+  const [decelSeverity, setDecelSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [decelRpmMin, setDecelRpmMin] = useState(1500);
+  const [decelRpmMax, setDecelRpmMax] = useState(5500);
+  
+  // Cylinder balancing parameters
+  const [balanceCylinders, setBalanceCylinders] = useState(false);
+  const [balanceMode, setBalanceMode] = useState<'equalize' | 'match_front' | 'match_rear'>('equalize');
+  const [balanceMaxCorrection, setBalanceMaxCorrection] = useState(3.0);
+
   const handleFileSelect = (file: File) => {
     setCurrentFile(file);
   };
@@ -42,8 +55,20 @@ export default function Dashboard() {
     setAnalysisMessage('Uploading file...');
 
     try {
+      // Combine params with decel and balance options
+      const allParams: AnalysisParams = {
+        ...params,
+        decelManagement,
+        decelSeverity,
+        decelRpmMin,
+        decelRpmMax,
+        balanceCylinders,
+        balanceMode,
+        balanceMaxCorrection,
+      };
+
       // Upload file and start analysis
-      const { runId } = await uploadAndAnalyze(currentFile, params);
+      const { runId } = await uploadAndAnalyze(currentFile, allParams);
       
       setAnalysisMessage('Analysis started...');
 
@@ -105,60 +130,200 @@ export default function Dashboard() {
               </Button>
 
               {showAdvanced && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-muted/30 rounded-lg border border-border">
-                  <div className="space-y-2">
-                    <Label htmlFor="smoothPasses">Smoothing Passes (0-5)</Label>
-                    <Input
-                      id="smoothPasses"
-                      type="number"
-                      min="0"
-                      max="5"
-                      value={params.smoothPasses}
-                      onChange={(e) => setParams({ ...params, smoothPasses: parseInt(e.target.value) })}
-                    />
-                    <p className="text-xs text-muted-foreground">Iterations of kernel smoothing to apply.</p>
+                <div className="space-y-6 p-6 bg-muted/30 rounded-lg border border-border">
+                  {/* VE Correction Parameters */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-sm text-foreground">VE Correction Parameters</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="smoothPasses">Smoothing Passes (0-5)</Label>
+                        <Input
+                          id="smoothPasses"
+                          type="number"
+                          min="0"
+                          max="5"
+                          value={params.smoothPasses}
+                          onChange={(e) => setParams({ ...params, smoothPasses: parseInt(e.target.value) })}
+                        />
+                        <p className="text-xs text-muted-foreground">Iterations of kernel smoothing to apply.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="clamp">Clamp (%)</Label>
+                        <Input
+                          id="clamp"
+                          type="number"
+                          min="5"
+                          max="20"
+                          step="0.5"
+                          value={params.clamp}
+                          onChange={(e) => setParams({ ...params, clamp: parseFloat(e.target.value) })}
+                        />
+                        <p className="text-xs text-muted-foreground">Maximum allowed correction percentage.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rearBias">Rear Bias (%)</Label>
+                        <Input
+                          id="rearBias"
+                          type="number"
+                          min="-5"
+                          max="5"
+                          step="0.5"
+                          value={params.rearBias}
+                          onChange={(e) => setParams({ ...params, rearBias: parseFloat(e.target.value) })}
+                        />
+                        <p className="text-xs text-muted-foreground">Offset applied to rear cylinder corrections.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rearRuleDeg">Rear Rule (deg)</Label>
+                        <Input
+                          id="rearRuleDeg"
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={params.rearRuleDeg}
+                          onChange={(e) => setParams({ ...params, rearRuleDeg: parseFloat(e.target.value) })}
+                        />
+                        <p className="text-xs text-muted-foreground">Timing retard for rear cylinder heat management.</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="clamp">Clamp (%)</Label>
-                    <Input
-                      id="clamp"
-                      type="number"
-                      min="5"
-                      max="20"
-                      step="0.5"
-                      value={params.clamp}
-                      onChange={(e) => setParams({ ...params, clamp: parseFloat(e.target.value) })}
-                    />
-                    <p className="text-xs text-muted-foreground">Maximum allowed correction percentage.</p>
+                  {/* Decel Fuel Management */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-orange-500" />
+                          Decel Fuel Management
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Automatically eliminate exhaust popping during deceleration.
+                        </p>
+                      </div>
+                      <Switch
+                        id="decel-management"
+                        checked={decelManagement}
+                        onCheckedChange={setDecelManagement}
+                      />
+                    </div>
+
+                    {decelManagement && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                          <Label htmlFor="decel-severity">Enrichment Severity</Label>
+                          <Select
+                            value={decelSeverity}
+                            onValueChange={(value: 'low' | 'medium' | 'high') => setDecelSeverity(value)}
+                          >
+                            <SelectTrigger id="decel-severity">
+                              <SelectValue placeholder="Select severity" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low (Minimal)</SelectItem>
+                              <SelectItem value="medium">Medium (Balanced)</SelectItem>
+                              <SelectItem value="high">High (Aggressive)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Adjust fuel enrichment intensity during deceleration.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="decel-rpm-min">Min RPM</Label>
+                          <Input
+                            id="decel-rpm-min"
+                            type="number"
+                            min={0}
+                            max={10000}
+                            value={decelRpmMin}
+                            onChange={(e) => setDecelRpmMin(parseInt(e.target.value, 10))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Minimum RPM for decel zone.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="decel-rpm-max">Max RPM</Label>
+                          <Input
+                            id="decel-rpm-max"
+                            type="number"
+                            min={0}
+                            max={10000}
+                            value={decelRpmMax}
+                            onChange={(e) => setDecelRpmMax(parseInt(e.target.value, 10))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Maximum RPM for decel zone.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="rearBias">Rear Bias (%)</Label>
-                    <Input
-                      id="rearBias"
-                      type="number"
-                      min="-5"
-                      max="5"
-                      step="0.5"
-                      value={params.rearBias}
-                      onChange={(e) => setParams({ ...params, rearBias: parseFloat(e.target.value) })}
-                    />
-                    <p className="text-xs text-muted-foreground">Offset applied to rear cylinder corrections.</p>
-                  </div>
+                  {/* Per-Cylinder Auto-Balancing */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          Per-Cylinder Auto-Balancing
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Automatically equalize AFR between front and rear cylinders.
+                        </p>
+                      </div>
+                      <Switch
+                        id="balance-cylinders"
+                        checked={balanceCylinders}
+                        onCheckedChange={setBalanceCylinders}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="rearRuleDeg">Rear Rule (deg)</Label>
-                    <Input
-                      id="rearRuleDeg"
-                      type="number"
-                      min="0"
-                      max="5"
-                      step="0.5"
-                      value={params.rearRuleDeg}
-                      onChange={(e) => setParams({ ...params, rearRuleDeg: parseFloat(e.target.value) })}
-                    />
-                    <p className="text-xs text-muted-foreground">Timing retard for rear cylinder heat management.</p>
+                    {balanceCylinders && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                          <Label htmlFor="balance-mode">Balance Mode</Label>
+                          <Select
+                            value={balanceMode}
+                            onValueChange={(value: 'equalize' | 'match_front' | 'match_rear') => setBalanceMode(value)}
+                          >
+                            <SelectTrigger id="balance-mode">
+                              <SelectValue placeholder="Select mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="equalize">Equalize (Both toward average)</SelectItem>
+                              <SelectItem value="match_front">Match Front (Rear to front)</SelectItem>
+                              <SelectItem value="match_rear">Match Rear (Front to rear)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Strategy for balancing cylinder AFR.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="balance-max-correction">Max Correction (%)</Label>
+                          <Input
+                            id="balance-max-correction"
+                            type="number"
+                            min={1.0}
+                            max={5.0}
+                            step={0.5}
+                            value={balanceMaxCorrection}
+                            onChange={(e) => setBalanceMaxCorrection(parseFloat(e.target.value))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Maximum VE adjustment per iteration (1-5%).
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -24,12 +24,23 @@ export interface JetstreamStatus {
   error: string | null;
 }
 
+export interface TuningOptions {
+  decel_management: boolean;
+  decel_severity: 'low' | 'medium' | 'high';
+  decel_rpm_min: number;
+  decel_rpm_max: number;
+  balance_cylinders: boolean;
+  balance_mode: 'equalize' | 'match_front' | 'match_rear';
+  balance_max_correction: number;
+}
+
 export interface JetstreamConfig {
   api_url: string;
   api_key: string;
   poll_interval_seconds: number;
   auto_process: boolean;
   enabled: boolean;
+  tuning_options?: TuningOptions;
 }
 
 export type RunStatus =
