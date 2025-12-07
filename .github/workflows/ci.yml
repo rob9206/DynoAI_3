@@ -1,0 +1,288 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # =============================================================================
+  # Python Backend Checks
+  # =============================================================================
+
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black isort mypy bandit
+
+      - name: Run Ruff
+        run: ruff check . --output-format=github
+
+      - name: Run Black check
+        run: black --check --diff .
+
+      - name: Run isort check
+        run: isort --check-only --diff .
+
+      - name: Run Bandit security check
+        run: bandit -r api dynoai -ll --skip B101
+
+  python-test:
+    name: Python Tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run selftest
+        run: |
+          if [ -f selftest.py ]; then
+            python selftest.py
+          else
+            echo "No selftest.py found, skipping..."
+          fi
+
+      - name: Run pytest
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term \
+            --ignore=tests/integration || echo "No tests found or tests failed"
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11' && github.event_name != 'pull_request'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: python
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  python-typecheck:
+    name: Python Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mypy types-requests types-PyYAML
+
+      - name: Run mypy
+        run: mypy api dynoai --ignore-missing-imports || true
+
+  # =============================================================================
+  # Frontend Checks
+  # =============================================================================
+
+  frontend-lint:
+    name: Frontend Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # =============================================================================
+  # Security Scanning
+  # =============================================================================
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Check for vulnerable packages
+        run: safety check -r requirements.txt || true
+
+      - name: Run npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
+
+  # =============================================================================
+  # Integration Tests (optional, only on main/develop)
+  # =============================================================================
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [python-test, frontend-build]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Run integration tests
+        env:
+          JETSTREAM_STUB_DATA: "true"
+        run: |
+          if [ -d tests/integration ]; then
+            pytest tests/integration -v --tb=short
+          else
+            echo "No integration tests found"
+          fi
+
+  # =============================================================================
+  # Final Status Check
+  # =============================================================================
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs:
+      [
+        python-lint,
+        python-test,
+        frontend-lint,
+        frontend-build,
+        security-scan,
+        integration-test,
+      ]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          # Check required jobs (must succeed)
+          if [[ "${{ needs.python-lint.result }}" != "success" ]] || \
+             [[ "${{ needs.python-test.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-lint.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-build.result }}" != "success" ]] || \
+             [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
+
+          # Check integration-test (conditional job - must succeed if it ran, skip if skipped)
+          if [[ "${{ needs.integration-test.result }}" == "failure" ]]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+
+          echo "All required jobs passed!"

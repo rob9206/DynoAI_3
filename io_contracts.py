@@ -1,3 +1,14 @@
+"""
+DynoAI IO Contracts - Schema validation and manifest management.
+
+This module provides standardized interfaces for:
+- File path validation and security
+- Manifest creation and validation
+- CSV schema checking
+- Input value validation
+- Atomic file writing
+"""
+
 from __future__ import annotations
 
 import csv
@@ -18,6 +29,7 @@ REQUIRED_COLUMNS = ("rpm", "map_kpa", "torque")
 
 
 def utc_now_iso() -> str:
+    """Return current UTC timestamp in ISO format with milliseconds."""
     return (
         datetime.now(timezone.utc)
         .isoformat(timespec="milliseconds")
@@ -26,26 +38,33 @@ def utc_now_iso() -> str:
 
 
 def make_run_id(prefix: str = "") -> str:
+    """
+    Generate a unique run ID with timestamp and random suffix.
+
+    Args:
+        prefix: Optional prefix for the run ID
+
+    Returns:
+        Unique run ID string (e.g., "run_2025-01-15T10-30-00Z-abc123")
+    """
     tail = hashlib.sha256(os.urandom(16)).hexdigest()[:6]
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
     return f"{prefix}{timestamp}-{tail}" if prefix else f"{timestamp}-{tail}"
 
 
 def file_sha256(path: str, bufsize: int = 65536) -> str:
-    """Compute SHA256 hash of a file.
-    
+    """
+    Compute SHA256 hash of a file.
+
     Performance: Uses 64KB buffer size (optimal for most filesystems).
-    Previous default was 1MB which is less efficient for smaller files.
-    
+
     Args:
         path: Path to file to hash
         bufsize: Read buffer size in bytes (default: 64KB)
-        
+
     Returns:
         Hexadecimal SHA256 hash string
     """
-    h = hashlib.sha256()
-def file_sha256(path: str, bufsize: int = 1 << 20) -> str:
     hasher = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(bufsize), b""):
@@ -81,9 +100,6 @@ def safe_path(path: str, allow_parent_dir: bool = False) -> Path:
         # For most operations, we must ensure the path is within the project root.
         if not allow_parent_dir:
             # This is the primary security check.
-            # Path.is_relative_to() was added in Python 3.9.
-            # For broader compatibility, we check if the resolved path string
-            # starts with the root path string.
             if not str(resolved_path).startswith(str(root)):
                 raise ValueError(
                     f"Path '{path}' is outside the allowed project directory '{root}'."
@@ -98,6 +114,15 @@ def safe_path(path: str, allow_parent_dir: bool = False) -> Path:
 
 
 def write_json_atomic(data: Dict[str, Any], out_path: str) -> None:
+    """
+    Write JSON data to file atomically.
+
+    Uses a temporary file and atomic rename to prevent corruption.
+
+    Args:
+        data: Dictionary to serialize as JSON
+        out_path: Destination file path
+    """
     safe_out_path = safe_path(out_path)
     outdir = safe_out_path.parent
     outdir.mkdir(parents=True, exist_ok=True)
@@ -120,6 +145,17 @@ def write_json_atomic(data: Dict[str, Any], out_path: str) -> None:
 
 
 def write_manifest_pair(manifest: Dict[str, Any], outdir: str, run_id: str) -> str:
+    """
+    Write manifest to both run-specific and latest manifest files.
+
+    Args:
+        manifest: Manifest dictionary
+        outdir: Output directory
+        run_id: Run identifier
+
+    Returns:
+        Path to the run-specific manifest file
+    """
     safe_outdir = safe_path(outdir)
 
     final_for_run = safe_outdir / f"{run_id}.manifest.json"
@@ -132,13 +168,25 @@ def write_manifest_pair(manifest: Dict[str, Any], outdir: str, run_id: str) -> s
 
 
 def csv_schema_check(path: str) -> Dict[str, Any]:
+    """
+    Check CSV file schema and extract metadata.
+
+    Args:
+        path: Path to CSV file
+
+    Returns:
+        Dictionary with file info, dialect, and column presence
+
+    Raises:
+        FileNotFoundError: If CSV file doesn't exist
+    """
     # Check if file exists before attempting to access it
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"CSV file not found: '{path}'. "
             f"Please verify the file path and ensure the file exists."
         )
-    
+
     size = os.path.getsize(path)
     info: Dict[str, Any] = {
         "path": path,
@@ -164,6 +212,20 @@ def start_manifest(
     base_tables: Optional[Dict[str, Any]] = None,
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    Create initial manifest structure for a run.
+
+    Args:
+        tool_version: Version of the DynoAI toolkit
+        run_id: Unique run identifier
+        input_info: Input file information from csv_schema_check
+        args_cfg: Configuration arguments
+        base_tables: Optional base table configuration
+        session_id: Optional session identifier
+
+    Returns:
+        Initial manifest dictionary
+    """
     return {
         "schema_id": SCHEMA_ID,
         "tool_version": tool_version,
@@ -186,12 +248,6 @@ def start_manifest(
         "diagnostics": [],
         "outputs": [],
         "apply": {"allowed": False, "reasons_blocked": ["pending"]},
-        "schema_id": SCHEMA_ID, "tool_version": tool_version, "run_id": run_id, "session_id": session_id,
-        "status":{"code":"running","message":"Processing","last_stage":"load"},
-        "input": input_info, "config":{"args":args_cfg, "base_tables": base_tables or {"front":None,"rear":None}},
-        "env":{"python":platform.python_version(),"os":platform.system(),"platform":platform.machine(),"hostname":platform.node()},
-        "timing":{"start": utc_now_iso(), "end": None, "duration_ms": None},
-        "stats":{}, "diagnostics":{}, "outputs":[], "apply":{"allowed": False, "reasons_blocked":["pending"]}
     }
 
 
@@ -203,7 +259,19 @@ def add_output_entry(
     schema: str,
     rows: Optional[int] = None,
     cols: Optional[int] = None,
-):
+) -> None:
+    """
+    Add an output file entry to the manifest.
+
+    Args:
+        manifest: Manifest dictionary to update
+        name: Display name of the output
+        path: File path relative to output directory
+        ftype: File type (csv, json, text, png, zip)
+        schema: Schema identifier for the output
+        rows: Number of rows (for tabular data)
+        cols: Number of columns (for tabular data)
+    """
     entry: Dict[str, Any] = {
         "name": name,
         "path": path,
@@ -228,6 +296,22 @@ def finish_manifest(
     apply_allowed: Optional[bool] = None,
     reasons_blocked: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    """
+    Finalize manifest with completion status and timing.
+
+    Args:
+        manifest: Manifest dictionary to finalize
+        ok: Whether processing completed successfully
+        last_stage: Last processing stage reached
+        message: Status message
+        stats: Processing statistics
+        diagnostics: Diagnostic information
+        apply_allowed: Whether changes can be applied
+        reasons_blocked: Reasons changes are blocked
+
+    Returns:
+        Finalized manifest dictionary
+    """
     manifest["status"] = {
         "code": "success" if ok else ("partial" if last_stage == "export" else "error"),
         "message": message,
@@ -241,18 +325,10 @@ def finish_manifest(
         manifest["apply"]["allowed"] = bool(apply_allowed)
     if reasons_blocked is not None:
         manifest["apply"]["reasons_blocked"] = reasons_blocked
+
     start = manifest["timing"]["start"]
     manifest["timing"]["end"] = utc_now_iso()
-def finish_manifest(manifest: Dict, ok: bool, last_stage: str, message: str="OK",
-                    stats: Optional[Dict]=None, diagnostics: Optional[Dict]=None,
-                    apply_allowed: Optional[bool]=None, reasons_blocked: Optional[List[str]]=None) -> Dict:
-    manifest["status"]={"code":"success" if ok else ("partial" if last_stage=="export" else "error"),
-                        "message":message,"last_stage":last_stage}
-    if stats: manifest["stats"]=stats
-    if diagnostics is not None: manifest["diagnostics"]=diagnostics
-    if apply_allowed is not None: manifest["apply"]["allowed"]=bool(apply_allowed)
-    if reasons_blocked is not None: manifest["apply"]["reasons_blocked"]=reasons_blocked
-    start = manifest["timing"]["start"]; manifest["timing"]["end"]=utc_now_iso()
+
     try:
         start_time = datetime.fromisoformat(start.replace("Z", "+00:00"))
         end_time = datetime.fromisoformat(
@@ -263,9 +339,11 @@ def finish_manifest(manifest: Dict, ok: bool, last_stage: str, message: str="OK"
         )
     except Exception:
         manifest["timing"]["duration_ms"] = None
+
     return manifest
 
 
+# JSON Schema for manifest validation
 MANIFEST_JSON_SCHEMA_V1: Dict[str, Any] = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "DynoAI Run Manifest v1",
@@ -338,7 +416,7 @@ MANIFEST_JSON_SCHEMA_V1: Dict[str, Any] = {
             },
         },
         "stats": {"type": "object"},
-        "diagnostics": {"type": "array"},
+        "diagnostics": {"type": ["array", "object"]},
         "outputs": {
             "type": "array",
             "minItems": 1,
@@ -379,43 +457,18 @@ MANIFEST_JSON_SCHEMA_V1: Dict[str, Any] = {
         },
     },
 }
-MANIFEST_JSON_SCHEMA_V1 = {
-  "$schema":"http://json-schema.org/draft-07/schema#","title":"DynoAI Run Manifest v1",
-  "type":"object",
-  "required":["schema_id","tool_version","run_id","status","input","config","timing","outputs"],
-  "properties":{
-    "schema_id":{"type":"string","const":SCHEMA_ID},
-    "tool_version":{"type":"string"},"run_id":{"type":"string"},"session_id":{"type":["string","null"]},
-    "status":{"type":"object","required":["code","message","last_stage"],
-      "properties":{"code":{"type":"string","enum":["queued","running","success","error","partial"]},
-                    "message":{"type":"string"},"last_stage":{"type":"string","enum":["load","validate","compute","export"]}}},
-    "input":{"type":"object","required":["path","size_bytes","sha256","dialect","required_columns_present","missing_columns"],
-      "properties":{"path":{"type":"string"},"size_bytes":{"type":"integer","minimum":0},
-                    "sha256":{"type":"string"},"dialect":{"type":"object",
-                      "properties":{"sep":{"type":"string"},"encoding":{"type":"string"},"newline":{"type":"string"}}},
-                    "required_columns_present":{"type":"boolean"},
-                    "missing_columns":{"type":"array","items":{"type":"string"}}}},
-    "config":{"type":"object"},"env":{"type":"object"},
-    "timing":{"type":"object","required":["start","end","duration_ms"],
-              "properties":{"start":{"type":"string"},"end":{"type":"string"},
-                            "duration_ms":{"type":["integer","null"],"minimum":0}}},
-    "stats":{"type":"object"},"diagnostics":{"type":"object"},
-    "outputs":{"type":"array","minItems":1,"items":{"type":"object",
-      "required":["name","path","type","schema","size_bytes","sha256","created"],
-      "properties":{"name":{"type":"string"},"path":{"type":"string"},
-                    "type":{"type":"string","enum":["csv","json","text","png","zip"]},
-                    "schema":{"type":"string"},"rows":{"type":["integer","null"],"minimum":0},
-                    "cols":{"type":["integer","null"],"minimum":0},
-                    "size_bytes":{"type":"integer","minimum":0},"sha256":{"type":"string"},
-                    "created":{"type":"string"}}}},
-    "apply":{"type":"object","required":["allowed","reasons_blocked"],
-             "properties":{"allowed":{"type":"boolean"},
-                           "reasons_blocked":{"type":"array","items":{"type":"string"}}}}
-  }
-}
 
 
 def validate_manifest_schema(manifest: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Validate manifest against JSON schema.
+
+    Args:
+        manifest: Manifest dictionary to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
     try:
         js_validate(instance=manifest, schema=MANIFEST_JSON_SCHEMA_V1)
         return True, "OK"
@@ -423,6 +476,7 @@ def validate_manifest_schema(manifest: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"Manifest schema error: {e.message}"
 
 
+# Numeric value ranges for validation
 NUMERIC_RANGES: Dict[str, Tuple[float, float]] = {
     "rpm": (400, 8000),
     "map_kpa": (10, 110),
@@ -442,6 +496,16 @@ NUMERIC_RANGES: Dict[str, Tuple[float, float]] = {
 def validate_input_values(
     csv_path: str, sample_rows: int = 50000
 ) -> Tuple[bool, str, Dict[str, int]]:
+    """
+    Validate numeric values in CSV are within expected ranges.
+
+    Args:
+        csv_path: Path to CSV file
+        sample_rows: Maximum rows to sample for validation
+
+    Returns:
+        Tuple of (is_valid, message, stats_dict)
+    """
     stats: Dict[str, int] = {"rows_read": 0, "nan_ct": 0, "out_of_range_ct": 0}
     try:
         with open(csv_path, "r", encoding="utf-8", newline="") as f:
@@ -479,6 +543,16 @@ def validate_input_values(
 def validate_outputs_against_manifest(
     outdir: str, manifest: Dict[str, Any]
 ) -> Tuple[bool, str]:
+    """
+    Verify output files match manifest entries.
+
+    Args:
+        outdir: Output directory path
+        manifest: Manifest dictionary
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
     safe_outdir = safe_path(outdir)
 
     for out in manifest.get("outputs", []):
@@ -504,8 +578,15 @@ def validate_outputs_against_manifest(
 def sanitize_csv_cell(value: Any) -> Any:
     """
     Sanitizes a value to prevent CSV formula injection.
+
     If the value is a string and starts with '=', '+', '-', or '@',
     it prepends a single quote.
+
+    Args:
+        value: Value to sanitize
+
+    Returns:
+        Sanitized value
     """
     if isinstance(value, str):
         if value.startswith(("=", "+", "-", "@")):

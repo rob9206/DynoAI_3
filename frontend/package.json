@@ -1,7 +1,8 @@
 {
-    "name": "spark-template",
+    "name": "@dynoai/frontend",
     "private": true,
-    "version": "0.0.0",
+    "version": "1.2.0",
+    "description": "DynoAI Web Frontend - AI-powered dyno tuning dashboard",
     "type": "module",
     "scripts": {
         "dev": "vite",
