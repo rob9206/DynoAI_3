@@ -31,12 +31,15 @@ def xai_chat():
             temperature=temperature,
         )
 
-        return jsonify(
-            {
-                "content": extract_content(result),
-                "raw": result,
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "content": extract_content(result),
+                    "raw": result,
+                }
+            ),
+            200,
+        )
 
     except XAIError as e:
         return jsonify({"error": str(e)}), 502

@@ -1563,7 +1563,7 @@ def write_diagnostics(
         for i, anomaly_raw in enumerate(anomalies, 1):
             anomaly = anomaly_raw  # No need to cast if types are correct
             lines.append(
-                f"{i}. [{anomaly.get('type','')}] score={anomaly.get('score','')}"
+                f"{i}. [{anomaly.get('type', '')}] score={anomaly.get('score', '')}"
             )
             cell = cast(Optional[Dict[str, Any]], anomaly.get("cell"))
             if cell is not None:
@@ -1582,7 +1582,7 @@ def write_diagnostics(
                     ]
                 )
                 lines.append(f"   cells: {cells_s} ...")
-            lines.append(f"   why: {anomaly.get('explanation','')}")
+            lines.append(f"   why: {anomaly.get('explanation', '')}")
             next_checks = cast(Sequence[str], anomaly.get("next_checks", []))
             lines.append(f"   next: {', '.join(next_checks)}")
     safe_outdir = io_contracts.safe_path(str(outdir))
