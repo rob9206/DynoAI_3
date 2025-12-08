@@ -1,12 +1,13 @@
 """Test the auto-tune workflow with real Power Vision data."""
+
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from api.services.autotune_workflow import AutoTuneWorkflow
 from api.services.powercore_integration import find_log_files
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_full_workflow():
@@ -80,4 +81,3 @@ def test_full_workflow():
 
 if __name__ == "__main__":
     test_full_workflow()
-

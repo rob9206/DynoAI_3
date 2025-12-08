@@ -13,6 +13,7 @@ This orchestrator can:
 3. Aggregate results from parallel agent work
 4. Enforce safety rules across all agents
 """
+
 from __future__ import annotations
 
 import json
@@ -485,10 +486,10 @@ class AgentOrchestrator:
 {task.description}
 
 ### Files Affected
-{chr(10).join(f'- {f}' for f in task.files_affected) if task.files_affected else 'None specified'}
+{chr(10).join(f"- {f}" for f in task.files_affected) if task.files_affected else "None specified"}
 
 ### Dependencies
-{chr(10).join(f'- {d}' for d in task.depends_on) if task.depends_on else 'None - ready to start'}
+{chr(10).join(f"- {d}" for d in task.depends_on) if task.depends_on else "None - ready to start"}
 
 ### Instructions
 1. Review the task description carefully
@@ -497,10 +498,10 @@ class AgentOrchestrator:
 4. Mark task complete when finished
 
 ### Agent Capabilities
-{chr(10).join(f'- {c}' for c in agent.get('capabilities', []))}
+{chr(10).join(f"- {c}" for c in agent.get("capabilities", []))}
 
 ### Agent Restrictions
-{chr(10).join(f'- DO NOT: {f}' for f in agent.get('forbidden', []))}
+{chr(10).join(f"- DO NOT: {f}" for f in agent.get("forbidden", []))}
 """
         return prompt.strip()
 
@@ -610,7 +611,6 @@ connections. I use DynoAI's VE operations but never modify the core math.
 - "Bypass safety review for corrections"
 """
 
-
 # =============================================================================
 # Exports
 # =============================================================================
@@ -624,4 +624,3 @@ __all__ = [
     "TaskPriority",
     "TaskStatus",
 ]
-

@@ -14,6 +14,7 @@ The server provides:
     - REST status endpoint at http://localhost:PORT/status
     - Test page at http://localhost:PORT/
 """
+
 import argparse
 import socket
 import sys
@@ -33,7 +34,9 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
                 return port
         except OSError:
             continue
-    raise RuntimeError(f"No available port found in range {start_port}-{start_port + max_attempts}")
+    raise RuntimeError(
+        f"No available port found in range {start_port}-{start_port + max_attempts}"
+    )
 
 
 def main():
@@ -81,4 +84,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

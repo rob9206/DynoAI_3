@@ -20,10 +20,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from defusedxml import ElementTree as DefusedET
 
 import numpy as np
 import pandas as pd
+from defusedxml import ElementTree as DefusedET
 
 # NOTE: We don't use safe_path here because Power Core files are in user Documents,
 # outside the project directory. These functions only READ files, never write.

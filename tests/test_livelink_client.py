@@ -4,9 +4,9 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from api.services.livelink_client import LiveLinkClient
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_simulation_mode():

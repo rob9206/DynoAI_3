@@ -20,7 +20,6 @@ from typing import BinaryIO, Optional
 import numpy as np
 import pandas as pd
 
-
 # WP8 Magic header
 WP8_MAGIC = b"\xfe\xce\xfa\xce"
 
@@ -118,7 +117,7 @@ def _parse_channel_def(data: bytes) -> Optional[WP8Channel]:
                 i += 1
                 if i + str_len > len(data):
                     break
-                string_data = data[i : i + str_len].decode("utf-8", errors="replace")
+                string_data = data[i: i + str_len].decode("utf-8", errors="replace")
                 i += str_len
 
                 # Map fields based on typical order
@@ -205,7 +204,7 @@ def parse_wp8_file(wp8_path: str) -> WP8Run:
             try:
                 msg_len = content[i + 1]
                 if msg_len > 5 and msg_len < 200 and i + 2 + msg_len <= len(content):
-                    msg_data = content[i + 2 : i + 2 + msg_len]
+                    msg_data = content[i + 2: i + 2 + msg_len]
 
                     # Try to parse as channel definition
                     channel = _parse_channel_def(msg_data)
@@ -237,7 +236,7 @@ def parse_wp8_file(wp8_path: str) -> WP8Run:
     float_scan_start = len(content) // 3  # Data usually in latter part
     for scan_pos in range(float_scan_start, len(content) - 4, 4):
         try:
-            val = struct.unpack("<f", content[scan_pos : scan_pos + 4])[0]
+            val = struct.unpack("<f", content[scan_pos: scan_pos + 4])[0]
             # Check if it's a reasonable value (not NaN, not extreme)
             if not np.isnan(val) and not np.isinf(val) and abs(val) < 100000:
                 pass  # Could collect these for pattern analysis

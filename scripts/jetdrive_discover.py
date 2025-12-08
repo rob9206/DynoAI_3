@@ -14,12 +14,11 @@ Usage:
 """
 
 import argparse
+import json
 import socket
 import struct
-import json
 import time
 from datetime import datetime
-
 
 # Common multicast addresses to scan
 MULTICAST_ADDRESSES = [
@@ -182,7 +181,7 @@ def listen_continuous(multicast_group: str, port: int, interface: str = "0.0.0.0
             if len(data) >= 4:
                 try:
                     floats = struct.unpack(
-                        f"<{len(data)//4}f", data[: len(data) // 4 * 4]
+                        f"<{len(data) // 4}f", data[: len(data) // 4 * 4]
                     )
                     if all(-1e6 < f < 1e6 for f in floats):  # Sanity check
                         print(f"  Floats: {floats[:10]}...")

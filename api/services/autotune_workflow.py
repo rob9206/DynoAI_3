@@ -10,6 +10,7 @@ Orchestrates the complete auto-tuning workflow:
 This workflow uses the existing VE operations but coordinates
 the end-to-end process for Power Core integration.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -218,9 +219,7 @@ class AutoTuneWorkflow:
         rpm_bins = pd.cut(
             df["Engine RPM"], bins=[0] + self.rpm_axis + [99999], labels=False
         )
-        map_bins = pd.cut(
-            df["MAP kPa"], bins=[0] + self.map_axis + [999], labels=False
-        )
+        map_bins = pd.cut(df["MAP kPa"], bins=[0] + self.map_axis + [999], labels=False)
 
         # Create error matrix
         error_matrix = np.full((len(self.rpm_axis), len(self.map_axis)), np.nan)
@@ -252,9 +251,7 @@ class AutoTuneWorkflow:
         valid_errors = error_matrix[~np.isnan(error_matrix)]
         zones_lean = int(np.sum(valid_errors > self.AFR_ERROR_TOLERANCE))
         zones_rich = int(np.sum(valid_errors < -self.AFR_ERROR_TOLERANCE))
-        zones_ok = int(
-            np.sum(np.abs(valid_errors) <= self.AFR_ERROR_TOLERANCE)
-        )
+        zones_ok = int(np.sum(np.abs(valid_errors) <= self.AFR_ERROR_TOLERANCE))
 
         result = AFRAnalysisResult(
             mean_error_pct=float(np.nanmean(error_matrix)),
@@ -514,4 +511,3 @@ __all__ = [
     "AutoTuneWorkflow",
     "VECorrectionResult",
 ]
-

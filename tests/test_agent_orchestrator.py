@@ -1,10 +1,11 @@
 """Test the agent orchestrator."""
+
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from api.services.agent_orchestrator import AGENTS, AgentOrchestrator
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_agent_orchestrator():
@@ -31,7 +32,7 @@ def test_agent_orchestrator():
     print("Task Classification:")
     for task in test_tasks:
         agent = orchestrator.classify_task(task)
-        print(f"  \"{task[:50]}...\"")
+        print(f'  "{task[:50]}..."')
         print(f"    -> {AGENTS[agent]['name']}")
     print()
 
@@ -55,4 +56,3 @@ def test_agent_orchestrator():
 
 if __name__ == "__main__":
     test_agent_orchestrator()
-
