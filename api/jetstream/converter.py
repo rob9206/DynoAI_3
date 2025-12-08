@@ -175,7 +175,7 @@ def convert_jetstream_to_dynoai(raw_path: str, output_path: str) -> str:
 
     # Detect unit conversions
     conversions: Dict[str, float] = {}
-    for orig_col in column_map.keys():
+    for orig_col in column_map:
         sample_vals = [row.get(orig_col, "") for row in rows[:10] if row.get(orig_col)]
         multiplier = _detect_unit_conversion(orig_col, sample_vals)
         if multiplier is not None:
