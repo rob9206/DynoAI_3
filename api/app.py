@@ -349,7 +349,7 @@ def analyze():
 
         # Save uploaded file
         filename = secure_filename(file.filename)
-        upload_path = UPLOAD_FOLDER / run_id / filename
+        upload_path = config.storage.upload_folder / run_id / filename
         upload_path.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"[>] Saving uploaded file to: {upload_path}")
@@ -357,22 +357,51 @@ def analyze():
 
         # Verify file was saved
         if not upload_path.exists():
-            raise Exception(f"File upload failed - file not found at {upload_path}")
+            raise AnalysisError(f"File upload failed - file not found at {upload_path}")
 
         file_size = upload_path.stat().st_size
         print(f"[+] File saved successfully ({file_size} bytes)")
 
         # Create output directory
-        output_dir = OUTPUT_FOLDER / run_id
+        output_dir = config.storage.output_folder / run_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Extract tuning parameters from form data
         params = {
-            "smooth_passes": int(request.form.get("smoothPasses", 2)),
-            "clamp": float(request.form.get("clamp", 15.0)),
-            "rear_bias": float(request.form.get("rearBias", 0.0)),
-            "rear_rule_deg": float(request.form.get("rearRuleDeg", 2.0)),
-            "hot_extra": float(request.form.get("hotExtra", -1.0)),
+            "smooth_passes": int(
+                request.form.get("smoothPasses", config.analysis.default_smooth_passes)
+            ),
+            "clamp": float(request.form.get("clamp", config.analysis.default_clamp)),
+            "rear_bias": float(
+                request.form.get("rearBias", config.analysis.default_rear_bias)
+            ),
+            "rear_rule_deg": float(
+                request.form.get("rearRuleDeg", config.analysis.default_rear_rule_deg)
+            ),
+            "hot_extra": float(
+                request.form.get("hotExtra", config.analysis.default_hot_extra)
+            ),
+        }
+
+        # Extract decel tuning options from form data
+        decel_management = _get_bool_form("decelManagement", False)
+        decel_severity = request.form.get("decelSeverity", "medium")
+        decel_rpm_min = _get_int_form("decelRpmMin", 1500)
+        decel_rpm_max = _get_int_form("decelRpmMax", 5500)
+
+        # Extract cylinder balancing options from form data
+        balance_cylinders = _get_bool_form("balanceCylinders", False)
+        balance_mode = request.form.get("balanceMode", "equalize")
+        balance_max_correction = float(request.form.get("balanceMaxCorrection", "3.0"))
+
+        tuning_options = {
+            "decel_management": decel_management,
+            "decel_severity": decel_severity,
+            "decel_rpm_min": decel_rpm_min,
+            "decel_rpm_max": decel_rpm_max,
+            "balance_cylinders": balance_cylinders,
+            "balance_mode": balance_mode,
+            "balance_max_correction": balance_max_correction,
         }
 
         # Initialize job tracking
@@ -384,98 +413,15 @@ def analyze():
             "params": params,
             "started_at": datetime.utcnow().isoformat(),
         }
-    # Generate unique run ID
-    run_id = str(uuid.uuid4())
-
-    # Save uploaded file
-    filename = secure_filename(file.filename)
-    upload_path = config.storage.upload_folder / run_id / filename
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
-
-    print(f"[>] Saving uploaded file to: {upload_path}")
-    file.save(str(upload_path))
-
-    # Verify file was saved
-    if not upload_path.exists():
-        raise AnalysisError(f"File upload failed - file not found at {upload_path}")
-
-    file_size = upload_path.stat().st_size
-    print(f"[+] File saved successfully ({file_size} bytes)")
-
-    # Create output directory
-    output_dir = config.storage.output_folder / run_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Extract tuning parameters from form data
-    params = {
-        "smooth_passes": int(
-            request.form.get("smoothPasses", config.analysis.default_smooth_passes)
-        ),
-        "clamp": float(request.form.get("clamp", config.analysis.default_clamp)),
-        "rear_bias": float(
-            request.form.get("rearBias", config.analysis.default_rear_bias)
-        ),
-        "rear_rule_deg": float(
-            request.form.get("rearRuleDeg", config.analysis.default_rear_rule_deg)
-        ),
-        "hot_extra": float(
-            request.form.get("hotExtra", config.analysis.default_hot_extra)
-        ),
-    }
-
-    # Extract decel tuning options from form data
-    decel_management = _get_bool_form("decelManagement", False)
-    decel_severity = request.form.get("decelSeverity", "medium")
-    decel_rpm_min = _get_int_form("decelRpmMin", 1500)
-    decel_rpm_max = _get_int_form("decelRpmMax", 5500)
-
-    # Extract cylinder balancing options from form data
-    balance_cylinders = _get_bool_form("balanceCylinders", False)
-    balance_mode = request.form.get("balanceMode", "equalize")
-    balance_max_correction = float(request.form.get("balanceMaxCorrection", "3.0"))
-
-    tuning_options = {
-        "decel_management": decel_management,
-        "decel_severity": decel_severity,
-        "decel_rpm_min": decel_rpm_min,
-        "decel_rpm_max": decel_rpm_max,
-        "balance_cylinders": balance_cylinders,
-        "balance_mode": balance_mode,
-        "balance_max_correction": balance_max_correction,
-    }
-
-    # Initialize job tracking
-    active_jobs[run_id] = {
-        "status": "queued",
-        "progress": 0,
-        "message": "Starting analysis...",
-        "filename": filename,
-        "params": params,
-        "started_at": datetime.utcnow().isoformat(),
-    }
-
-    # Run analysis in background thread
-    def run_analysis_thread():
-        try:
-            active_jobs[run_id]["status"] = "running"
-            active_jobs[run_id]["message"] = "Running analysis..."
-            manifest = run_dyno_analysis(
-                upload_path, output_dir, run_id, params, tuning_options
-            )
-            active_jobs[run_id]["manifest"] = manifest
-            active_jobs[run_id]["status"] = "completed"
-            active_jobs[run_id]["message"] = "Analysis complete"
-        except Exception as e:
-            active_jobs[run_id]["status"] = "error"
-            active_jobs[run_id]["error"] = str(e)
-            active_jobs[run_id]["message"] = f"Error: {str(e)}"
 
         # Run analysis in background thread
         def run_analysis_thread():
             try:
                 active_jobs[run_id]["status"] = "running"
                 active_jobs[run_id]["message"] = "Running analysis..."
-                manifest = run_dyno_analysis(upload_path, output_dir, run_id, params)
+                manifest = run_dyno_analysis(
+                    upload_path, output_dir, run_id, params, tuning_options
+                )
                 active_jobs[run_id]["manifest"] = manifest
                 active_jobs[run_id]["status"] = "completed"
                 active_jobs[run_id]["message"] = "Analysis complete"
@@ -785,8 +731,6 @@ def get_coverage(run_id):
         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == "__main__":
-    # See docs/test_failures_baseline.md - Issue #2: Use ASCII for Windows compatibility
 # =============================================================================
 # VE Apply/Rollback Endpoints (Time Machine)
 # =============================================================================

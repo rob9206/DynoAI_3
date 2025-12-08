@@ -453,6 +453,11 @@ function ExpandableFileCard({
           </CardContent>
         </div>
       )}
+    </Card>
+  );
+}
+
+/**
  * Decel Fuel Management Results Card
  */
 interface DecelResultsCardProps {
@@ -543,7 +548,11 @@ function getFileDescription(filename: string): string {
   };
 
   return descriptions[filename] ?? 'Analysis output file';
-// Balance Results Card Component
+}
+
+/**
+ * Balance Results Card Component
+ */
 interface BalanceResultsCardProps {
   runId: string;
   outputFiles: Array<{ name: string; size: number; url: string }>;
