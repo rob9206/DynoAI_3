@@ -105,9 +105,10 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
 
-# Configuration
-UPLOAD_FOLDER = Path("uploads")
-OUTPUT_FOLDER = Path("outputs")
+# Configuration - use absolute paths from project root
+PROJECT_ROOT = Path(__file__).parent.parent
+UPLOAD_FOLDER = PROJECT_ROOT / "uploads"
+OUTPUT_FOLDER = PROJECT_ROOT / "outputs"
 ALLOWED_EXTENSIONS = {"csv", "txt"}
 
 UPLOAD_FOLDER.mkdir(exist_ok=True)
