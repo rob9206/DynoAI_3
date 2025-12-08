@@ -8,6 +8,7 @@ import History from './pages/History';
 import VEHeatmapDemo from './pages/VEHeatmapDemo';
 import JetstreamPage from './pages/JetstreamPage';
 import RunDetailPage from './pages/RunDetailPage';
+import TimeMachinePage from './pages/TimeMachinePage';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -31,6 +32,7 @@ function App() {
               <Route path="/runs/:runId" element={<RunDetailPage />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/results/:runId" element={<Results />} />
+              <Route path="/time-machine/:runId" element={<TimeMachinePage />} />
               <Route path="/history" element={<History />} />
               <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
               <Route path="*" element={<Navigate to="/jetstream" replace />} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle } from 'lucide-react';
+import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { getJobStatus, getVEData, getCoverageData, getDiagnostics, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest } from '../lib/api';
 import VEHeatmap from '../components/VEHeatmap';
@@ -137,13 +137,23 @@ export default function Results() {
           <span>Back to Dashboard</span>
         </Button>
 
-        <Button
-          onClick={downloadAll}
-          className="flex items-center gap-2 shadow-sm"
-        >
-          <Download className="h-4 w-4" />
-          <span>Download All</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/time-machine/${runId}`)}
+            className="flex items-center gap-2"
+          >
+            <Clock className="h-4 w-4" />
+            <span>Time Machine</span>
+          </Button>
+          <Button
+            onClick={downloadAll}
+            className="flex items-center gap-2 shadow-sm"
+          >
+            <Download className="h-4 w-4" />
+            <span>Download All</span>
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

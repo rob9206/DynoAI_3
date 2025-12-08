@@ -231,7 +231,7 @@ class RunManager:
         filtered.sort(key=lambda r: r.get("created_at", ""), reverse=True)
 
         total = len(filtered)
-        runs = filtered[offset : offset + limit]
+        runs = filtered[offset: offset + limit]
 
         return {"runs": runs, "total": total}
 

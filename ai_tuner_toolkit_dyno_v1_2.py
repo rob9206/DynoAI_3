@@ -1563,7 +1563,7 @@ def write_diagnostics(
         for i, anomaly_raw in enumerate(anomalies, 1):
             anomaly = anomaly_raw  # No need to cast if types are correct
             lines.append(
-                f"{i}. [{anomaly.get('type','')}] score={anomaly.get('score','')}"
+                f"{i}. [{anomaly.get('type', '')}] score={anomaly.get('score', '')}"
             )
             cell = cast(Optional[Dict[str, Any]], anomaly.get("cell"))
             if cell is not None:
@@ -1582,7 +1582,7 @@ def write_diagnostics(
                     ]
                 )
                 lines.append(f"   cells: {cells_s} ...")
-            lines.append(f"   why: {anomaly.get('explanation','')}")
+            lines.append(f"   why: {anomaly.get('explanation', '')}")
             next_checks = cast(Sequence[str], anomaly.get("next_checks", []))
             lines.append(f"   next: {', '.join(next_checks)}")
     safe_outdir = io_contracts.safe_path(str(outdir))
@@ -1652,6 +1652,48 @@ def main() -> int:
     ap.add_argument(
         "--base_rear",
         help="Rear VE base CSV (optional; if omitted, base_front is reused).",
+    )
+    # Decel fuel management options
+    ap.add_argument(
+        "--decel-management",
+        action="store_true",
+        help="Enable decel fuel management to eliminate exhaust popping.",
+    )
+    ap.add_argument(
+        "--decel-severity",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="Decel enrichment severity: low (minimal), medium (balanced), high (aggressive).",
+    )
+    ap.add_argument(
+        "--decel-rpm-min",
+        type=int,
+        default=1500,
+        help="Minimum RPM for decel zone (default: 1500).",
+    )
+    ap.add_argument(
+        "--decel-rpm-max",
+        type=int,
+        default=5500,
+        help="Maximum RPM for decel zone (default: 5500).",
+    )
+    # Cylinder balancing options
+    ap.add_argument(
+        "--balance-cylinders",
+        action="store_true",
+        help="Enable per-cylinder auto-balancing to equalize front/rear AFR.",
+    )
+    ap.add_argument(
+        "--balance-mode",
+        choices=["equalize", "match_front", "match_rear"],
+        default="equalize",
+        help="Balancing strategy: equalize (both toward average), match_front (rear to front), match_rear (front to rear).",
+    )
+    ap.add_argument(
+        "--balance-max-correction",
+        type=float,
+        default=3.0,
+        help="Maximum VE correction percentage for balancing (default: 3.0%%).",
     )
     args = ap.parse_args()
 
@@ -1961,6 +2003,90 @@ def main() -> int:
             "front_accepted": diag_f["accepted_wb"],
             "rear_accepted": diag_r["accepted_wb"],
         }
+
+        # --- Decel Fuel Management ---
+        if args.decel_management:
+            print("\nPROGRESS:96:Running decel fuel management analysis...")
+            sys.stdout.flush()
+            try:
+                from decel_management import process_decel_management
+
+                # Build decel config from args
+                decel_config = {
+                    "rpm_min": args.decel_rpm_min,
+                    "rpm_max": args.decel_rpm_max,
+                }
+
+                decel_result = process_decel_management(
+                    recs,
+                    output_dir=outdir,
+                    severity=args.decel_severity,
+                    sample_rate_ms=10.0,  # Typical dyno log sample rate
+                    input_file=str(csv_path),
+                    config=decel_config,
+                )
+
+                print(
+                    f"[OK] Decel management: {decel_result['events_detected']} events detected, "
+                    f"severity={decel_result['severity_used']}"
+                )
+
+                # Add decel outputs to manifest
+                extra_specs.extend(
+                    [
+                        ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
+                        ("Decel_Analysis_Report.json", "json", "decel_report", False),
+                    ]
+                )
+
+            except ImportError as e:
+                print(f"[WARN] Decel management module not available: {e}")
+            except Exception as e:
+                print(f"[WARN] Decel management failed: {e}")
+
+        # --- Per-Cylinder Auto-Balancing ---
+        if args.balance_cylinders:
+            print("\nPROGRESS:97:Running per-cylinder auto-balancing...")
+            sys.stdout.flush()
+            try:
+                from cylinder_balancing import process_cylinder_balancing
+
+                balance_result = process_cylinder_balancing(
+                    records=recs,
+                    output_dir=outdir,
+                    mode=args.balance_mode,
+                    max_correction_pct=args.balance_max_correction,
+                    input_file=str(csv_path),
+                )
+
+                print(
+                    f"[OK] Cylinder balancing: {balance_result['cells_imbalanced']}/{balance_result['cells_analyzed']} cells imbalanced "
+                    f"(max delta: {balance_result['max_afr_delta']:.2f} AFR)"
+                )
+
+                # Add balance outputs to manifest
+                extra_specs.extend(
+                    [
+                        (
+                            "Front_Balance_Factor.csv",
+                            "csv",
+                            "front_balance_factor",
+                            True,
+                        ),
+                        ("Rear_Balance_Factor.csv", "csv", "rear_balance_factor", True),
+                        (
+                            "Cylinder_Balance_Report.json",
+                            "json",
+                            "balance_report",
+                            False,
+                        ),
+                    ]
+                )
+
+            except ImportError as e:
+                print(f"[WARN] Cylinder balancing module not available: {e}")
+            except Exception as e:
+                print(f"[WARN] Cylinder balancing failed: {e}")
 
         # --- Visualization Call ---
         # Always attempt to generate visualizations if the script exists

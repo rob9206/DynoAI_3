@@ -63,6 +63,50 @@ class StorageConfig:
 
 
 @dataclass
+class TuningOptionsConfig:
+    """Tuning options for run processing."""
+
+    # Decel Fuel Management
+    decel_management: bool = field(
+        default_factory=lambda: _get_bool_env("DYNOAI_DECEL_MANAGEMENT", False)
+    )
+    decel_severity: str = field(
+        default_factory=lambda: os.environ.get("DYNOAI_DECEL_SEVERITY", "medium")
+    )
+    decel_rpm_min: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_DECEL_RPM_MIN", 1500)
+    )
+    decel_rpm_max: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_DECEL_RPM_MAX", 5500)
+    )
+
+    # Per-Cylinder Auto-Balancing
+    balance_cylinders: bool = field(
+        default_factory=lambda: _get_bool_env("DYNOAI_BALANCE_CYLINDERS", False)
+    )
+    balance_mode: str = field(
+        default_factory=lambda: os.environ.get("DYNOAI_BALANCE_MODE", "equalize")
+    )
+    balance_max_correction: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNOAI_BALANCE_MAX_CORRECTION", "3.0")
+        )
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "decel_management": self.decel_management,
+            "decel_severity": self.decel_severity,
+            "decel_rpm_min": self.decel_rpm_min,
+            "decel_rpm_max": self.decel_rpm_max,
+            "balance_cylinders": self.balance_cylinders,
+            "balance_mode": self.balance_mode,
+            "balance_max_correction": self.balance_max_correction,
+        }
+
+
+@dataclass
 class JetstreamConfig:
     """Jetstream integration configuration."""
 
@@ -84,6 +128,7 @@ class JetstreamConfig:
     stub_mode: bool = field(
         default_factory=lambda: _get_bool_env("JETSTREAM_STUB_MODE", False)
     )
+    tuning_options: TuningOptionsConfig = field(default_factory=TuningOptionsConfig)
 
     def to_dict(self, mask_key: bool = True) -> Dict[str, Any]:
         """Convert to dictionary, optionally masking the API key."""
@@ -94,6 +139,7 @@ class JetstreamConfig:
             "auto_process": self.auto_process,
             "enabled": self.enabled,
             "stub_mode": self.stub_mode,
+            "tuning_options": self.tuning_options.to_dict(),
         }
 
     def _mask_key(self) -> str:
@@ -253,3 +299,7 @@ def reload_config() -> AppConfig:
     global _config
     _config = AppConfig.from_env()
     return _config
+
+
+# Convenience constants for direct imports
+RUNS_DIR = get_config().storage.runs_folder
