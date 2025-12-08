@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Clock,
@@ -79,8 +80,10 @@ export default function RunDetailPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      toast.success(`Downloaded ${filename}`);
     } catch (err) {
       console.error('Download failed:', err);
+      toast.error(`Failed to download ${filename}`);
     }
   };
 

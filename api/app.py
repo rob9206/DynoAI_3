@@ -498,7 +498,24 @@ def download_file(run_id, filename):
         run_id = secure_filename(run_id)
         filename = secure_filename(filename)
 
-        file_path = OUTPUT_FOLDER / run_id / filename
+        file_path = None
+
+        # Try Jetstream runs folder first
+        try:
+            from api.services.run_manager import get_run_manager
+
+            manager = get_run_manager()
+            run_output_dir = manager.get_run_output_dir(run_id)
+            if run_output_dir and run_output_dir.exists():
+                jetstream_file = run_output_dir / filename
+                if jetstream_file.exists():
+                    file_path = jetstream_file
+        except Exception:
+            pass
+
+        # Fall back to outputs folder
+        if not file_path:
+            file_path = OUTPUT_FOLDER / run_id / filename
 
         if not file_path.exists():
             return jsonify({"error": "File not found"}), 404
