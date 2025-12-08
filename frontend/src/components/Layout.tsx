@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, History, Home, Radio } from 'lucide-react';
+import { Activity, History, Home, Radio, Zap } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -52,6 +52,17 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <Home className="h-5 w-5" />
                 <span>Control Center</span>
+              </Link>
+              <Link
+                to="/livelink"
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
+                  isActive('/livelink')
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                }`}
+              >
+                <Zap className="h-5 w-5" />
+                <span>LiveLink</span>
               </Link>
               <Link
                 to="/history"

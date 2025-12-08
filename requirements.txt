@@ -1,6 +1,10 @@
 numpy==1.26.4
 pandas==2.2.2
 matplotlib==3.9.2
+beautifulsoup4==4.12.3
+requests==2.32.3
+pillow==10.4.0
+pytesseract==0.3.10
 pyyaml==6.0.2
 jsonschema==4.23.0
 ruff==0.6.2

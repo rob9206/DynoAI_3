@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynoAI LiveLink Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            color: #e94560;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        }
+        .subtitle { color: #888; margin-bottom: 30px; }
+        
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .status-item.connected { border-color: #4ade80; background: rgba(74, 222, 128, 0.1); }
+        .status-item.disconnected { border-color: #f87171; background: rgba(248, 113, 113, 0.1); }
+        .status-label { font-size: 0.8rem; color: #888; text-transform: uppercase; }
+        .status-value { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
+        
+        .controls {
+            margin-bottom: 30px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        .btn-connect { background: #4ade80; color: #000; }
+        .btn-disconnect { background: #f87171; color: #fff; }
+        .btn-snapshot { background: #60a5fa; color: #fff; }
+        
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+        }
+        .channel-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s;
+        }
+        .channel-card:hover {
+            border-color: #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.2);
+        }
+        .channel-name {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .channel-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+        }
+        .channel-units {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .log {
+            margin-top: 30px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-time { color: #666; }
+        .log-event { color: #60a5fa; }
+        .log-data { color: #4ade80; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏍️ DynoAI LiveLink</h1>
+        <p class="subtitle">Real-time dyno data streaming</p>
+        
+        <div class="status-bar">
+            <div class="status-item" id="ws-status">
+                <div class="status-label">WebSocket</div>
+                <div class="status-value" id="ws-status-value">Disconnected</div>
+            </div>
+            <div class="status-item" id="ll-status">
+                <div class="status-label">LiveLink</div>
+                <div class="status-value" id="ll-status-value">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Mode</div>
+                <div class="status-value" id="mode-value">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Samples/sec</div>
+                <div class="status-value" id="rate-value">0</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-connect" onclick="connect()">Connect</button>
+            <button class="btn-disconnect" onclick="disconnect()">Disconnect</button>
+            <button class="btn-snapshot" onclick="requestSnapshot()">Get Snapshot</button>
+        </div>
+        
+        <div class="channels-grid" id="channels"></div>
+        
+        <div class="log" id="log"></div>
+    </div>
+    
+    <script>
+        // Configuration - update port if server started on different port
+        const SERVER_URL = 'http://127.0.0.1:5003';
+        const NAMESPACE = '/livelink';
+        
+        let socket = null;
+        let channels = {};
+        let sampleCount = 0;
+        let lastRateUpdate = Date.now();
+        
+        function log(event, data) {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-event">${event}</span> <span class="log-data">${JSON.stringify(data).substring(0, 100)}</span>`;
+            logEl.insertBefore(entry, logEl.firstChild);
+            
+            // Keep only last 50 entries
+            while (logEl.children.length > 50) {
+                logEl.removeChild(logEl.lastChild);
+            }
+        }
+        
+        function updateStatus(wsConnected, llConnected, mode) {
+            const wsStatus = document.getElementById('ws-status');
+            const wsValue = document.getElementById('ws-status-value');
+            const llValue = document.getElementById('ll-status-value');
+            const modeValue = document.getElementById('mode-value');
+            
+            wsStatus.className = 'status-item ' + (wsConnected ? 'connected' : 'disconnected');
+            wsValue.textContent = wsConnected ? 'Connected' : 'Disconnected';
+            llValue.textContent = llConnected ? 'Connected' : 'Disconnected';
+            modeValue.textContent = mode || '--';
+        }
+        
+        function updateChannel(name, value, units) {
+            let card = channels[name];
+            if (!card) {
+                card = document.createElement('div');
+                card.className = 'channel-card';
+                card.innerHTML = `
+                    <div class="channel-name">${name}</div>
+                    <div class="channel-value">--</div>
+                    <div class="channel-units">${units || ''}</div>
+                `;
+                document.getElementById('channels').appendChild(card);
+                channels[name] = card;
+            }
+            card.querySelector('.channel-value').textContent = 
+                typeof value === 'number' ? value.toFixed(2) : value;
+        }
+        
+        function updateRate() {
+            const now = Date.now();
+            const elapsed = (now - lastRateUpdate) / 1000;
+            if (elapsed >= 1) {
+                const rate = Math.round(sampleCount / elapsed);
+                document.getElementById('rate-value').textContent = rate;
+                sampleCount = 0;
+                lastRateUpdate = now;
+            }
+        }
+        
+        function connect() {
+            if (socket && socket.connected) {
+                log('info', 'Already connected');
+                return;
+            }
+            
+            log('connect', { url: SERVER_URL, namespace: NAMESPACE });
+            
+            socket = io(SERVER_URL + NAMESPACE, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+            
+            socket.on('connect', () => {
+                log('socket', 'Connected to WebSocket');
+                updateStatus(true, false, null);
+                
+                // Start LiveLink streaming
+                socket.emit('start', { mode: 'simulation' }, (response) => {
+                    log('start_response', response);
+                });
+            });
+            
+            socket.on('disconnect', (reason) => {
+                log('socket', { event: 'disconnect', reason });
+                updateStatus(false, false, null);
+            });
+            
+            socket.on('connect_error', (error) => {
+                log('error', { message: error.message });
+            });
+            
+            socket.on('status', (data) => {
+                log('status', data);
+                updateStatus(true, data.connected, data.mode);
+            });
+            
+            socket.on('data', (data) => {
+                updateChannel(data.channel, data.value, data.units);
+                sampleCount++;
+                updateRate();
+            });
+            
+            socket.on('snapshot', (data) => {
+                log('snapshot', { channels: Object.keys(data.channels).length });
+                for (const [name, value] of Object.entries(data.channels)) {
+                    updateChannel(name, value, data.units[name] || '');
+                }
+            });
+        }
+        
+        function disconnect() {
+            if (socket) {
+                socket.emit('stop');
+                socket.disconnect();
+                socket = null;
+            }
+            updateStatus(false, false, null);
+            log('disconnect', 'Disconnected');
+        }
+        
+        function requestSnapshot() {
+            if (socket && socket.connected) {
+                socket.emit('get_snapshot', {}, (response) => {
+                    log('snapshot_response', response);
+                    if (response.success) {
+                        for (const [name, value] of Object.entries(response.channels)) {
+                            updateChannel(name, value, response.units[name] || '');
+                        }
+                    }
+                });
+            } else {
+                log('error', 'Not connected');
+            }
+        }
+        
+        // Auto-connect on page load
+        window.onload = () => {
+            log('init', 'Page loaded, click Connect to start');
+        };
+    </script>
+</body>
+</html>
+
