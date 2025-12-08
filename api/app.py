@@ -19,6 +19,16 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+from api.config import get_config
+from api.errors import (
+    AnalysisError,
+    FileNotAllowedError,
+    NotFoundError,
+    ValidationError,
+    register_error_handlers,
+    with_error_handling,
+)
+
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all API routes
@@ -31,15 +41,6 @@ try:
     limiter = init_rate_limiter(app)
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize rate limiter: {e}")
-from api.config import get_config
-from api.errors import (
-    AnalysisError,
-    FileNotAllowedError,
-    NotFoundError,
-    ValidationError,
-    register_error_handlers,
-    with_error_handling,
-)
 
 # Load environment variables from .env if present
 load_dotenv()

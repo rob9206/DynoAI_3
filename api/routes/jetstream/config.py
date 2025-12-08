@@ -6,7 +6,6 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
-from api.jetstream.models import JetstreamConfig
 from api.jetstream.models import JetstreamConfig, TuningOptions
 from api.jetstream.poller import get_poller, init_poller
 from io_contracts import safe_path
