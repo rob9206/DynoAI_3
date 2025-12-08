@@ -22,8 +22,8 @@ _enabled: bool = False
 # Import prometheus_flask_exporter only if metrics are enabled
 # This allows graceful degradation when the package isn't installed
 try:
+    from prometheus_client import Counter, Gauge, Histogram, Info
     from prometheus_flask_exporter import PrometheusMetrics
-    from prometheus_client import Counter, Histogram, Gauge, Info
 
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -33,7 +33,6 @@ except ImportError:
     Histogram = None  # type: ignore
     Gauge = None  # type: ignore
     Info = None  # type: ignore
-
 
 # Custom business metrics (created after init)
 _analysis_counter: Optional["Counter"] = None
@@ -298,7 +297,3 @@ def track_file_upload() -> Callable[[F], F]:
         return wrapped  # type: ignore
 
     return decorator
-
-
-
-

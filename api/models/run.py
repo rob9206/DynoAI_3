@@ -153,7 +153,10 @@ class RunFile(Base):
 
     # Foreign key to run
     run_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False, index=True
+        String(64),
+        ForeignKey("runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # File metadata
@@ -187,7 +190,3 @@ class RunFile(Base):
 
     def __repr__(self) -> str:
         return f"<RunFile(id={self.id}, run_id={self.run_id!r}, filename={self.filename!r})>"
-
-
-
-

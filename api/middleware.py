@@ -45,4 +45,3 @@ def init_request_id_middleware(app: Flask) -> None:
 def get_request_id() -> Optional[str]:
     """Get current request ID, if available."""
     return getattr(g, "request_id", None)
-

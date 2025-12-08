@@ -130,9 +130,7 @@ class LoggerAdapter(logging.LoggerAdapter):
         logger.info("File saved", path="/uploads/file.csv", size_bytes=1024)
     """
 
-    def process(
-        self, msg: str, kwargs: Dict[str, Any]
-    ) -> tuple[str, Dict[str, Any]]:
+    def process(self, msg: str, kwargs: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
         # Extract extra_data from kwargs
         extra_data = {}
         keys_to_remove = []
@@ -164,4 +162,3 @@ def get_structured_logger(name: str) -> LoggerAdapter:
         logger.error("Analysis failed", error=str(e), stage="validation")
     """
     return LoggerAdapter(logging.getLogger(name), {})
-

@@ -345,9 +345,7 @@ class TestAuthIntegrationWithMainApp:
         )
         assert response.status_code == 403
 
-    def test_analyze_works_with_valid_key(
-        self, client_auth_enabled, tmp_path
-    ):
+    def test_analyze_works_with_valid_key(self, client_auth_enabled, tmp_path):
         """Analyze endpoint works with valid API key."""
         # Create a sample CSV file
         csv_content = "timestamp,rpm,afr_front,afr_rear\n0,1000,14.7,14.7"
@@ -442,4 +440,3 @@ class TestGlobalAuthInstance:
         reset_auth()
         auth2 = get_auth()
         assert auth1 is not auth2
-

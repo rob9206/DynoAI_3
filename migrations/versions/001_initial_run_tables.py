@@ -1,7 +1,7 @@
 """Initial run tables
 
 Revision ID: 001_initial
-Revises: 
+Revises:
 Create Date: 2024-12-05
 
 Creates the initial database schema for DynoAI run tracking:
@@ -11,8 +11,8 @@ Creates the initial database schema for DynoAI run tracking:
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "001_initial"
@@ -95,7 +95,3 @@ def downgrade() -> None:
     op.drop_index("ix_runs_source_created", table_name="runs")
     op.drop_index("ix_runs_status_created", table_name="runs")
     op.drop_table("runs")
-
-
-
-

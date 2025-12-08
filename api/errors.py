@@ -170,13 +170,14 @@ def handle_exception(error: Exception) -> Tuple[Response, int]:
         f"Unhandled exception: {str(error)}",
         exc_info=True,
     )
-    
+
     # In debug mode, include traceback
     from flask import current_app
+
     details = {}
     if current_app.debug:
         details["traceback"] = traceback.format_exc()
-    
+
     return error_response(
         message="An unexpected error occurred",
         status_code=500,
@@ -187,19 +188,23 @@ def handle_exception(error: Exception) -> Tuple[Response, int]:
 
 def register_error_handlers(app: Flask) -> None:
     """Register error handlers with Flask app."""
-    
+
     @app.errorhandler(APIError)
     def api_error_handler(error: APIError) -> Tuple[Response, int]:
         return handle_api_error(error)
-    
+
     @app.errorhandler(400)
     def bad_request_handler(error: Exception) -> Tuple[Response, int]:
         return error_response(
-            message=str(error.description) if hasattr(error, "description") else "Bad request",
+            message=(
+                str(error.description)
+                if hasattr(error, "description")
+                else "Bad request"
+            ),
             status_code=400,
             error_code="BAD_REQUEST",
         )
-    
+
     @app.errorhandler(404)
     def not_found_handler(error: Exception) -> Tuple[Response, int]:
         return error_response(
@@ -208,7 +213,7 @@ def register_error_handlers(app: Flask) -> None:
             error_code="NOT_FOUND",
             details={"path": request.path},
         )
-    
+
     @app.errorhandler(405)
     def method_not_allowed_handler(error: Exception) -> Tuple[Response, int]:
         return error_response(
@@ -216,7 +221,7 @@ def register_error_handlers(app: Flask) -> None:
             status_code=405,
             error_code="METHOD_NOT_ALLOWED",
         )
-    
+
     @app.errorhandler(413)
     def request_too_large_handler(error: Exception) -> Tuple[Response, int]:
         return error_response(
@@ -224,15 +229,16 @@ def register_error_handlers(app: Flask) -> None:
             status_code=413,
             error_code="REQUEST_TOO_LARGE",
         )
-    
+
     @app.errorhandler(500)
     def internal_error_handler(error: Exception) -> Tuple[Response, int]:
         return handle_exception(error)
-    
+
     @app.errorhandler(Exception)
     def generic_error_handler(error: Exception) -> Tuple[Response, int]:
         # Don't catch HTTPException subclasses - let Flask handle them
         from werkzeug.exceptions import HTTPException
+
         if isinstance(error, HTTPException):
             return error_response(
                 message=error.description or str(error),
@@ -244,7 +250,7 @@ def register_error_handlers(app: Flask) -> None:
 def with_error_handling(f: F) -> F:
     """
     Decorator for route handlers with standardized error handling.
-    
+
     Usage:
         @app.route("/api/example")
         @with_error_handling
@@ -252,6 +258,7 @@ def with_error_handling(f: F) -> F:
             # Your code here
             pass
     """
+
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         try:
@@ -269,5 +276,5 @@ def with_error_handling(f: F) -> F:
                 status_code=500,
                 error_code="UNEXPECTED_ERROR",
             )
-    return decorated  # type: ignore
 
+    return decorated  # type: ignore

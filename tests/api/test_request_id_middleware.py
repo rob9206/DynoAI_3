@@ -44,20 +44,14 @@ class TestRequestIDMiddleware:
     def test_client_provided_request_id(self, client):
         """Test that client-provided X-Request-ID is passed through."""
         custom_id = "my-custom-id-123"
-        response = client.get(
-            "/api/health",
-            headers={"X-Request-ID": custom_id}
-        )
+        response = client.get("/api/health", headers={"X-Request-ID": custom_id})
         assert response.status_code == 200
         assert response.headers["X-Request-ID"] == custom_id
 
     def test_client_provided_id_with_special_chars(self, client):
         """Test client-provided ID with various characters."""
         custom_id = "trace-abc_123.xyz"
-        response = client.get(
-            "/api/health",
-            headers={"X-Request-ID": custom_id}
-        )
+        response = client.get("/api/health", headers={"X-Request-ID": custom_id})
         assert response.headers["X-Request-ID"] == custom_id
 
     def test_request_id_in_error_response(self, client):
@@ -65,11 +59,11 @@ class TestRequestIDMiddleware:
         # Request a non-existent endpoint to trigger 404
         response = client.get("/api/nonexistent")
         assert response.status_code == 404
-        
+
         # Check header
         assert "X-Request-ID" in response.headers
         header_id = response.headers["X-Request-ID"]
-        
+
         # Check response body contains request_id
         data = response.get_json()
         assert "error" in data
@@ -79,15 +73,12 @@ class TestRequestIDMiddleware:
     def test_client_id_in_error_response(self, client):
         """Test that client-provided ID appears in error responses."""
         custom_id = "client-trace-456"
-        response = client.get(
-            "/api/nonexistent",
-            headers={"X-Request-ID": custom_id}
-        )
+        response = client.get("/api/nonexistent", headers={"X-Request-ID": custom_id})
         assert response.status_code == 404
-        
+
         # Check header matches custom ID
         assert response.headers["X-Request-ID"] == custom_id
-        
+
         # Check response body contains custom ID
         data = response.get_json()
         assert data["error"]["request_id"] == custom_id
@@ -103,7 +94,7 @@ class TestRequestIDMiddleware:
         # Use a run status endpoint with invalid run_id to trigger validation error
         response = client.get("/api/status/invalid-run-id")
         assert response.status_code == 404
-        
+
         data = response.get_json()
         assert "error" in data
         assert "request_id" in data["error"]
@@ -111,10 +102,7 @@ class TestRequestIDMiddleware:
 
     def test_empty_client_id_generates_new(self, client):
         """Test that empty X-Request-ID header generates new ID."""
-        response = client.get(
-            "/api/health",
-            headers={"X-Request-ID": ""}
-        )
+        response = client.get("/api/health", headers={"X-Request-ID": ""})
         # Empty string should trigger auto-generation
         request_id = response.headers["X-Request-ID"]
         assert request_id != ""
@@ -127,20 +115,25 @@ class TestRequestIDHelper:
     def test_get_request_id_import(self):
         """Test that get_request_id can be imported."""
         from api.middleware import get_request_id
+
         assert callable(get_request_id)
 
     def test_get_request_id_raises_outside_context(self):
         """Test get_request_id raises RuntimeError outside request context."""
         import pytest
+
         from api.middleware import get_request_id
+
         # Outside request context, Flask g raises RuntimeError
-        with pytest.raises(RuntimeError, match="Working outside of application context"):
+        with pytest.raises(
+            RuntimeError, match="Working outside of application context"
+        ):
             get_request_id()
 
     def test_generate_request_id_format(self):
         """Test that generate_request_id produces correct format."""
         from api.middleware import generate_request_id
-        
+
         request_id = generate_request_id()
         assert isinstance(request_id, str)
         assert len(request_id) == 12
@@ -149,7 +142,6 @@ class TestRequestIDHelper:
     def test_generate_request_id_uniqueness(self):
         """Test that generate_request_id produces unique IDs."""
         from api.middleware import generate_request_id
-        
+
         ids = {generate_request_id() for _ in range(100)}
         assert len(ids) == 100  # All unique
-

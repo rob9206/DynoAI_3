@@ -207,5 +207,3 @@ def require_api_key(f: F) -> F:
         return f(*args, **kwargs)
 
     return decorated  # type: ignore
-
-

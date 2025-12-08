@@ -9,6 +9,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Ensure the project root is in the path for imports BEFORE any other imports
 PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
 if PROJECT_ROOT not in sys.path:
@@ -18,8 +20,6 @@ if PROJECT_ROOT not in sys.path:
 os.environ["DYNOAI_DEBUG"] = "false"
 os.environ["JETSTREAM_STUB_MODE"] = "true"
 os.environ["JETSTREAM_ENABLED"] = "false"
-
-import pytest
 
 
 @pytest.fixture
@@ -70,7 +70,10 @@ def temp_output_dir(tmp_path):
         "input": {"path": "test_log.csv"},
         "stats": {"rows_read": 100, "front_accepted": 50, "rear_accepted": 40},
         "outputs": [
-            {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "path": "VE_Correction_Delta_DYNO.csv",
+            }
         ],
         "config": {"args": {"smooth_passes": 2}},
     }
@@ -149,7 +152,10 @@ def mock_output_folder(tmp_path):
         "input": {"path": "test_log.csv"},
         "stats": {"rows_read": 100, "front_accepted": 50, "rear_accepted": 40},
         "outputs": [
-            {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "path": "VE_Correction_Delta_DYNO.csv",
+            }
         ],
         "config": {"args": {"smooth_passes": 2}},
     }
