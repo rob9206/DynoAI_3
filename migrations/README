@@ -1,0 +1,40 @@
+DynoAI Database Migrations
+===========================
+
+This directory contains Alembic database migrations for DynoAI.
+
+Quick Start
+-----------
+
+1. Initialize the database (creates tables):
+   python -c "from api.services.database import init_database; init_database()"
+
+2. Create a new migration after model changes:
+   alembic revision --autogenerate -m "Description of changes"
+
+3. Apply all pending migrations:
+   alembic upgrade head
+
+4. Rollback the last migration:
+   alembic downgrade -1
+
+5. View migration history:
+   alembic history
+
+Configuration
+-------------
+
+The database URL is configured via:
+- Environment variable: DATABASE_URL
+- Default: sqlite:///./dynoai.db
+
+Supported databases:
+- SQLite (default, for development)
+- PostgreSQL (for production)
+
+Example PostgreSQL URL:
+  DATABASE_URL=postgresql://user:pass@localhost:5432/dynoai
+
+
+
+

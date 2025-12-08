@@ -1,0 +1,3 @@
+timestamp,rpm,afr_front,afr_rear,ect,iat
+0,1000,14.7,14.7,180,95
+1,1500,14.5,14.6,182,96

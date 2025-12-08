@@ -1,0 +1,31 @@
+Dyno AI Tuner v1.2 Diagnostics
+
+=== AFR Correction Data Quality ===
+
+FRONT CYLINDER:
+  Total records processed: 95
+  Accepted WB records: 95
+  No requested AFR: 0
+  Bad AFR or request AFR: 0
+  Temp out of range: 0
+  MAP out of range: 0
+  TPS out of range: 0
+  VE out of range: 0
+
+REAR CYLINDER:
+  Total records processed: 95
+  Accepted WB records: 95
+  No requested AFR: 0
+  Bad AFR or request AFR: 0
+  Temp out of range: 0
+  MAP out of range: 0
+  TPS out of range: 0
+  VE out of range: 0
+
+
+=== Anomaly Detection ===
+
+1. [Spatial discontinuity] score=6.698160645557834
+   cell: RPM 2500 / 95 kPa
+   why: Large VE change vs neighbors; could be data artifact or real airflow quirk.
+   next: Re-run steady-state in this cell, Inspect for vacuum leaks, throttle sync, or sensor noise
