@@ -204,10 +204,14 @@ def generate_timing_corrections(
 def write_timing_grid_csv(
     grid: List[List[float]],
     output_path: Path,
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> str:
     """Write timing corrections to CSV."""
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["RPM"] + [str(k) for k in kpa_bins])

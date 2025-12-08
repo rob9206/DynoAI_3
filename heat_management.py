@@ -229,12 +229,16 @@ def detect_soak_events(
 
 def generate_heat_correction_overlay(
     events: List[SoakEvent],
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> List[List[float]]:
     """
     Generate a VE correction overlay (negative factors) to compensate for heat soak.
     """
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     # Initialize empty grid
     overlay = [[0.0 for _ in kpa_bins] for _ in rpm_bins]
 
@@ -290,10 +294,14 @@ def generate_heat_correction_overlay(
 def write_heat_overlay_csv(
     overlay: List[List[float]],
     output_path: Path,
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> str:
     """Write the correction overlay to CSV."""
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["RPM"] + [str(k) for k in kpa_bins])
