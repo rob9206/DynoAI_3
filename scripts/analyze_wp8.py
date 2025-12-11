@@ -1,4 +1,5 @@
 """Analyze WP8 file structure for reverse engineering."""
+
 import re
 import struct
 from pathlib import Path
@@ -39,9 +40,14 @@ other = []
 
 for s in strings:
     text = s.decode("ascii", errors="ignore")
-    if any(unit in text.lower() for unit in ["rpm", "kpa", "deg", "mph", "%", "volts", "ms"]):
+    if any(
+        unit in text.lower()
+        for unit in ["rpm", "kpa", "deg", "mph", "%", "volts", "ms"]
+    ):
         units.append(text)
-    elif "channel" in text.lower() or any(ch in text for ch in ["AFR", "MAP", "TPS", "VE", "RPM"]):
+    elif "channel" in text.lower() or any(
+        ch in text for ch in ["AFR", "MAP", "TPS", "VE", "RPM"]
+    ):
         channels.append(text)
     elif "dyno" in text.lower() or "drum" in text.lower() or "cpu" in text.lower():
         devices.append(text)
@@ -67,7 +73,7 @@ for s in other[:15]:
 # Hex dump of header
 print(f"\n=== Header Hex Dump (first 256 bytes) ===")
 for i in range(0, min(256, len(data)), 16):
-    chunk = data[i : i + 16]
+    chunk = data[i: i + 16]
     hex_str = " ".join(f"{b:02X}" for b in chunk)
     ascii_str = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
     print(f"{i:04X}: {hex_str:<48} {ascii_str}")
@@ -78,7 +84,7 @@ print(f"\n=== Looking for data patterns ===")
 float_candidates = []
 for i in range(0, len(data) - 4, 4):
     try:
-        val = struct.unpack("<f", data[i : i + 4])[0]
+        val = struct.unpack("<f", data[i: i + 4])[0]
         # Typical dyno values: RPM 0-10000, HP 0-300, Torque 0-200, Speed 0-200
         if 0 < val < 10000 and val == val:  # not NaN
             if i not in [c[0] for c in float_candidates[-10:]]:  # avoid duplicates
@@ -103,4 +109,3 @@ common_bytes = sorted(freq.items(), key=lambda x: -x[1])[:20]
 print("Most common bytes in first 5000:")
 for b, count in common_bytes:
     print(f"  0x{b:02X} ({chr(b) if 32 <= b < 127 else '.'}) : {count}")
-

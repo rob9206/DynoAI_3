@@ -41,7 +41,9 @@ class TestPeakInfo:
     def test_invalid_hp_peak(self) -> None:
         """Test that negative hp_peak raises ValueError."""
         with pytest.raises(ValueError, match="hp_peak must be positive"):
-            PeakInfo(hp_peak=-10.0, hp_peak_rpm=5800.0, tq_peak=160.0, tq_peak_rpm=3800.0)
+            PeakInfo(
+                hp_peak=-10.0, hp_peak_rpm=5800.0, tq_peak=160.0, tq_peak_rpm=3800.0
+            )
 
     def test_invalid_tq_peak(self) -> None:
         """Test that zero tq_peak raises ValueError."""
@@ -166,9 +168,7 @@ class TestEngineFamily:
         df = generate_winpep8_like_run(peak, engine_family="M8")
 
         # M8 should have broad torque plateau
-        mid_range = df[
-            (df["Engine RPM"] > 3000) & (df["Engine RPM"] < 5000)
-        ]
+        mid_range = df[(df["Engine RPM"] > 3000) & (df["Engine RPM"] < 5000)]
         torque_variation = mid_range["Torque"].std() / mid_range["Torque"].mean()
 
         # Torque should be relatively flat in mid-range
@@ -234,4 +234,3 @@ class TestWriteRunCSV:
         Path(path).unlink()
         Path(path).parent.rmdir()
         Path(path).parent.parent.rmdir()
-

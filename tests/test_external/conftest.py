@@ -24,4 +24,3 @@ def mock_network_in_tests(monkeypatch):
 
     # Only block fetch, not the module-level imports
     monkeypatch.setattr(http_utils, "fetch", _blocked_fetch)
-
