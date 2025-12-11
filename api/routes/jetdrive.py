@@ -738,9 +738,9 @@ def discover_providers():
         sys.path.insert(0, str(project_root))
 
         from synthetic.jetdrive_client import (
-            discover_providers as async_discover,
             JetDriveConfig,
         )
+        from synthetic.jetdrive_client import discover_providers as async_discover
 
         config = JetDriveConfig(
             multicast_group=JETDRIVE_MCAST_GROUP,
@@ -817,9 +817,9 @@ def _monitor_loop():
     sys.path.insert(0, str(project_root))
 
     from synthetic.jetdrive_client import (
-        discover_providers as async_discover,
         JetDriveConfig,
     )
+    from synthetic.jetdrive_client import discover_providers as async_discover
 
     config = JetDriveConfig(
         multicast_group=JETDRIVE_MCAST_GROUP,
