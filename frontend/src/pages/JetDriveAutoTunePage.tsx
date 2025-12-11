@@ -127,23 +127,32 @@ function HardwareTab() {
     const [providers, setProviders] = useState<Provider[]>([]);
 
     // Fetch diagnostics
-    const { data: diagnostics, refetch: refetchDiagnostics, isLoading: diagLoading } = useQuery<DiagnosticsResult>({
+    const { data: diagnostics, refetch: refetchDiagnostics, isLoading: diagLoading, isError: diagError } = useQuery<DiagnosticsResult>({
         queryKey: ['jetdrive-diagnostics'],
         queryFn: async () => {
             const res = await fetch(`${API_BASE}/hardware/diagnostics`);
+            if (!res.ok) {
+                throw new Error('Diagnostics endpoint not available');
+            }
             return res.json();
         },
         refetchOnWindowFocus: false,
+        enabled: false, // Only fetch when user clicks
+        retry: 1,
     });
 
     // Fetch monitor status
-    const { data: monitorStatus, refetch: refetchMonitor } = useQuery<MonitorStatus>({
+    const { data: monitorStatus, refetch: refetchMonitor, isError: monitorError } = useQuery<MonitorStatus>({
         queryKey: ['jetdrive-monitor'],
         queryFn: async () => {
             const res = await fetch(`${API_BASE}/hardware/monitor/status`);
+            if (!res.ok) {
+                throw new Error('Monitor endpoint not available');
+            }
             return res.json();
         },
-        refetchInterval: (query) => query.state.data?.running ? 2000 : false,
+        refetchInterval: (query) => query.state.data?.running ? 2000 : 5000,
+        retry: 1,
     });
 
     // Discover providers
@@ -151,15 +160,19 @@ function HardwareTab() {
         setIsDiscovering(true);
         try {
             const res = await fetch(`${API_BASE}/hardware/discover?timeout=5`);
+            if (!res.ok) {
+                throw new Error('Discovery endpoint not available');
+            }
             const data = await res.json();
-            setProviders(data.providers || []);
+            setProviders(data.providers ?? []);
             if (data.providers_found > 0) {
                 toast.success(`Found ${data.providers_found} provider(s)`);
             } else {
                 toast.warning('No providers found');
             }
         } catch (err) {
-            toast.error('Discovery failed');
+            toast.error('Discovery failed - restart backend server');
+            console.error('Discovery error:', err);
         } finally {
             setIsDiscovering(false);
         }
@@ -168,9 +181,21 @@ function HardwareTab() {
     // Toggle monitor
     const toggleMonitor = async () => {
         const action = monitorStatus?.running ? 'stop' : 'start';
-        await fetch(`${API_BASE}/hardware/monitor/${action}`, { method: 'POST' });
-        refetchMonitor();
-        toast.info(`Monitor ${action}ed`);
+        try {
+            const res = await fetch(`${API_BASE}/hardware/monitor/${action}`, { method: 'POST' });
+            if (!res.ok) {
+                throw new Error(`Failed to ${action} monitor`);
+            }
+            const data = await res.json();
+            toast.success(`Monitor ${data.status}`);
+            // Wait a bit then refetch
+            setTimeout(() => {
+                refetchMonitor();
+            }, 500);
+        } catch (err) {
+            toast.error(`Failed to ${action} monitor - restart backend server`);
+            console.error('Monitor toggle error:', err);
+        }
     };
 
     const getStatusIcon = (status: string) => {
@@ -184,12 +209,23 @@ function HardwareTab() {
 
     return (
         <div className="space-y-6">
+            {/* Backend restart warning */}
+            {monitorError && (
+                <Alert className="bg-yellow-500/10 border-yellow-500/30">
+                    <AlertCircle className="h-4 w-4 text-yellow-500" />
+                    <AlertTitle>Backend Restart Required</AlertTitle>
+                    <AlertDescription>
+                        The hardware diagnostics endpoints are not available. Please restart the backend server
+                        to enable hardware testing features.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/* Connection Status Banner */}
-            <div className={`p-4 rounded-lg border ${
-                monitorStatus?.connected 
-                    ? 'bg-green-500/10 border-green-500/30' 
-                    : 'bg-muted/30 border-border'
-            }`}>
+            <div className={`p-4 rounded-lg border ${monitorStatus?.connected
+                ? 'bg-green-500/10 border-green-500/30'
+                : 'bg-muted/30 border-border'
+                }`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         {monitorStatus?.connected ? (
@@ -199,12 +235,12 @@ function HardwareTab() {
                         )}
                         <div>
                             <h3 className="font-semibold">
-                                {monitorStatus?.connected 
+                                {monitorStatus?.connected
                                     ? `Connected to ${monitorStatus.providers.length} provider(s)`
                                     : 'Not Connected'}
                             </h3>
                             <p className="text-sm text-muted-foreground">
-                                {monitorStatus?.last_check 
+                                {monitorStatus?.last_check
                                     ? `Last check: ${new Date(monitorStatus.last_check).toLocaleTimeString()}`
                                     : 'Monitor not running'}
                             </p>
@@ -213,7 +249,8 @@ function HardwareTab() {
                     <Button
                         variant={monitorStatus?.running ? "destructive" : "default"}
                         size="sm"
-                        onClick={toggleMonitor}
+                        onClick={() => void toggleMonitor()}
+                        disabled={monitorError}
                     >
                         <Activity className={`h-4 w-4 mr-2 ${monitorStatus?.running ? 'animate-pulse' : ''}`} />
                         {monitorStatus?.running ? 'Stop Monitor' : 'Start Monitor'}
@@ -249,7 +286,11 @@ function HardwareTab() {
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                onClick={() => refetchDiagnostics()}
+                                onClick={() => {
+                                    refetchDiagnostics().catch(() => {
+                                        toast.error('Diagnostics failed - restart backend server');
+                                    });
+                                }}
                                 disabled={diagLoading}
                             >
                                 <RefreshCw className={`h-4 w-4 mr-2 ${diagLoading ? 'animate-spin' : ''}`} />
@@ -267,7 +308,13 @@ function HardwareTab() {
                         )}
                     </CardHeader>
                     <CardContent>
-                        {diagnostics ? (
+                        {diagError ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <XCircle className="h-12 w-12 mx-auto mb-3 text-red-500/50" />
+                                <p className="text-red-400">Backend server needs restart</p>
+                                <p className="text-xs mt-2">New endpoints are not available</p>
+                            </div>
+                        ) : diagnostics ? (
                             <div className="space-y-3">
                                 {diagnostics.checks.map((check) => (
                                     <div 
@@ -285,7 +332,7 @@ function HardwareTab() {
                                         {/* Network interfaces detail */}
                                         {check.name === 'network_interfaces' && Array.isArray(check.details) && (
                                             <div className="mt-2 text-xs space-y-1">
-                                                {check.details.map((iface: any) => (
+                                                {check.details.map((iface: { ip: string; name: string; is_loopback: boolean }) => (
                                                     <div key={iface.ip} className="flex items-center gap-2">
                                                         <div className={`w-2 h-2 rounded-full ${iface.is_loopback ? 'bg-yellow-500' : 'bg-green-500'}`} />
                                                         <span className="font-mono">{iface.ip}</span>
@@ -298,7 +345,7 @@ function HardwareTab() {
                                         {/* Environment config detail */}
                                         {check.name === 'environment' && check.details && (
                                             <div className="mt-2 text-xs font-mono space-y-1">
-                                                {Object.entries(check.details).map(([key, val]) => (
+                                                {Object.entries(check.details as Record<string, unknown>).map(([key, val]) => (
                                                     <div key={key} className="flex gap-2">
                                                         <span className="text-muted-foreground">{key}:</span>
                                                         <span>{String(val)}</span>
@@ -326,7 +373,7 @@ function HardwareTab() {
                                 <Search className="h-5 w-5" />
                                 Provider Discovery
                             </CardTitle>
-                            <Button 
+                            <Button
                                 onClick={handleDiscover}
                                 disabled={isDiscovering}
                                 className="bg-orange-600 hover:bg-orange-700"
@@ -349,7 +396,7 @@ function HardwareTab() {
                         ) : providers.length > 0 ? (
                             <div className="space-y-4">
                                 {providers.map((provider) => (
-                                    <div 
+                                    <div
                                         key={provider.provider_id}
                                         className="p-4 rounded-lg bg-green-500/10 border border-green-500/30"
                                     >
@@ -365,7 +412,7 @@ function HardwareTab() {
                                         <p className="text-sm text-muted-foreground mb-3">
                                             {provider.host}:{provider.port}
                                         </p>
-                                        
+
                                         <div className="border-t border-green-500/20 pt-3">
                                             <p className="text-xs font-medium mb-2">
                                                 Channels ({provider.channel_count}):
@@ -550,314 +597,314 @@ export default function JetDriveAutoTunePage() {
 
                 {/* Auto-Tune Tab */}
                 <TabsContent value="autotune" className="mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column - Controls */}
-                <div className="space-y-4">
-                    {/* New Analysis Card */}
-                    <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Play className="h-5 w-5 text-orange-500" />
-                                New Analysis
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="run-id">Run ID</Label>
-                                <Input
-                                    id="run-id"
-                                    value={runId}
-                                    onChange={(e) => setRunId(e.target.value)}
-                                    placeholder="my_dyno_run"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                                <Button
-                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                    disabled={analyzeMutation.isPending}
-                                    className="bg-orange-600 hover:bg-orange-700"
-                                >
-                                    {analyzeMutation.isPending ? (
-                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                        <Zap className="h-4 w-4 mr-2" />
-                                    )}
-                                    Simulate
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    disabled={true}
-                                    title="Upload CSV first"
-                                >
-                                    <Upload className="h-4 w-4 mr-2" />
-                                    CSV
-                                </Button>
-                            </div>
-
-                            {analyzeMutation.isPending && (
-                                <div className="space-y-2">
-                                    <Progress value={66} className="h-2" />
-                                    <p className="text-xs text-muted-foreground text-center">
-                                        Running analysis...
-                                    </p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Recent Runs */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Grid3X3 className="h-5 w-5" />
-                                Recent Runs
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {runs.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No runs yet</p>
-                            ) : (
-                                <div className="space-y-2 max-h-64 overflow-y-auto">
-                                    {runs.map((run) => (
-                                        <button
-                                            key={run.run_id}
-                                            onClick={() => setSelectedRun(run.run_id)}
-                                            className={`w-full text-left p-3 rounded-lg border transition-all ${selectedRun === run.run_id
-                                                    ? 'border-orange-500 bg-orange-500/10'
-                                                    : 'border-border hover:border-orange-500/50 hover:bg-muted/50'
-                                                }`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="font-medium text-sm">{run.run_id}</span>
-                                                <StatusBadge status={run.status} />
-                                            </div>
-                                            <div className="text-xs text-muted-foreground mt-1">
-                                                {run.peak_hp > 0 && `${run.peak_hp.toFixed(0)} HP`}
-                                                {run.peak_tq > 0 && ` / ${run.peak_tq.toFixed(0)} ft-lb`}
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Right Column - Results */}
-                <div className="lg:col-span-2 space-y-4">
-                    {selectedRun && runData ? (
-                        <>
-                            {/* Analysis Summary */}
-                            <Card>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Left Column - Controls */}
+                        <div className="space-y-4">
+                            {/* New Analysis Card */}
+                            <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="flex items-center gap-2">
-                                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                            {selectedRun}
-                                        </CardTitle>
-                                        <StatusBadge status={analysis?.overall_status || 'Unknown'} />
-                                    </div>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Play className="h-5 w-5 text-orange-500" />
+                                        New Analysis
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                            <div className="text-2xl font-bold text-orange-500">
-                                                {analysis?.peak_hp?.toFixed(1)}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Peak HP @ {analysis?.peak_hp_rpm} RPM
-                                            </div>
-                                        </div>
-                                        <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                            <div className="text-2xl font-bold text-blue-500">
-                                                {analysis?.peak_tq?.toFixed(1)}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Peak TQ @ {analysis?.peak_tq_rpm} RPM
-                                            </div>
-                                        </div>
-                                        <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                            <div className="text-2xl font-bold">
-                                                {analysis?.total_samples}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Samples
-                                            </div>
-                                        </div>
-                                        <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                            <div className="flex justify-center gap-1">
-                                                <span className="text-green-500">{analysis?.ok_cells}</span>
-                                                <span className="text-muted-foreground">/</span>
-                                                <span className="text-red-500">{analysis?.lean_cells}</span>
-                                                <span className="text-muted-foreground">/</span>
-                                                <span className="text-blue-500">{analysis?.rich_cells}</span>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                OK / Lean / Rich
-                                            </div>
-                                        </div>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="run-id">Run ID</Label>
+                                        <Input
+                                            id="run-id"
+                                            value={runId}
+                                            onChange={(e) => setRunId(e.target.value)}
+                                            placeholder="my_dyno_run"
+                                        />
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button
+                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                            disabled={analyzeMutation.isPending}
+                                            className="bg-orange-600 hover:bg-orange-700"
+                                        >
+                                            {analyzeMutation.isPending ? (
+                                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                                <Zap className="h-4 w-4 mr-2" />
+                                            )}
+                                            Simulate
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            disabled={true}
+                                            title="Upload CSV first"
+                                        >
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            CSV
+                                        </Button>
+                                    </div>
+
+                                    {analyzeMutation.isPending && (
+                                        <div className="space-y-2">
+                                            <Progress value={66} className="h-2" />
+                                            <p className="text-xs text-muted-foreground text-center">
+                                                Running analysis...
+                                            </p>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
 
-                            {/* Tabs for Grid and Export */}
-                            <Tabs defaultValue="grid" className="w-full">
-                                <TabsList className="grid w-full grid-cols-3">
-                                    <TabsTrigger value="grid">
-                                        <Grid3X3 className="h-4 w-4 mr-2" />
-                                        VE Grid
-                                    </TabsTrigger>
-                                    <TabsTrigger value="pvv">
-                                        <FileDown className="h-4 w-4 mr-2" />
-                                        PVV Export
-                                    </TabsTrigger>
-                                    <TabsTrigger value="report">
-                                        <FileText className="h-4 w-4 mr-2" />
-                                        Report
-                                    </TabsTrigger>
-                                </TabsList>
+                            {/* Recent Runs */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Grid3X3 className="h-5 w-5" />
+                                        Recent Runs
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {runs.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">No runs yet</p>
+                                    ) : (
+                                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                                            {runs.map((run) => (
+                                                <button
+                                                    key={run.run_id}
+                                                    onClick={() => setSelectedRun(run.run_id)}
+                                                    className={`w-full text-left p-3 rounded-lg border transition-all ${selectedRun === run.run_id
+                                                        ? 'border-orange-500 bg-orange-500/10'
+                                                        : 'border-border hover:border-orange-500/50 hover:bg-muted/50'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-medium text-sm">{run.run_id}</span>
+                                                        <StatusBadge status={run.status} />
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                        {run.peak_hp > 0 && `${run.peak_hp.toFixed(0)} HP`}
+                                                        {run.peak_tq > 0 && ` / ${run.peak_tq.toFixed(0)} ft-lb`}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
 
-                                {/* VE Correction Grid */}
-                                <TabsContent value="grid">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-sm">
-                                                VE Correction Grid (% change)
-                                            </CardTitle>
-                                            <CardDescription>
-                                                {grid?.rpm_bins?.length} RPM × {grid?.map_bins?.length} MAP bins
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-xs">
-                                                    <thead>
-                                                        <tr>
-                                                            <th className="p-2 text-left bg-muted/50">RPM \ MAP</th>
-                                                            {grid?.map_bins?.map((m: number) => (
-                                                                <th key={m} className="p-2 text-center bg-muted/50 min-w-[60px]">
-                                                                    {m} kPa
-                                                                </th>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {veGrid.map((row, i) => (
-                                                            <tr key={row.rpm}>
-                                                                <td className="p-2 font-medium bg-muted/30">
-                                                                    {row.rpm}
-                                                                </td>
-                                                                {row.values.map((val, j) => {
-                                                                    const delta = ((val - 1) * 100);
-                                                                    return (
-                                                                        <td
-                                                                            key={j}
-                                                                            className={`p-2 text-center font-mono ${getCellColor(val)}`}
-                                                                        >
-                                                                            {delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
-                                                                        </td>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-
-                                            <div className="mt-4 flex items-center justify-center gap-4 text-xs">
-                                                <div className="flex items-center gap-1">
-                                                    <div className="w-4 h-4 bg-red-500/40 rounded" />
-                                                    <span>Lean (+)</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <div className="w-4 h-4 bg-green-500/20 rounded" />
-                                                    <span>OK</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <div className="w-4 h-4 bg-blue-500/40 rounded" />
-                                                    <span>Rich (−)</span>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
-
-                                {/* PVV Export */}
-                                <TabsContent value="pvv">
+                        {/* Right Column - Results */}
+                        <div className="lg:col-span-2 space-y-4">
+                            {selectedRun && runData ? (
+                                <>
+                                    {/* Analysis Summary */}
                                     <Card>
                                         <CardHeader>
                                             <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle className="text-sm">Power Vision PVV Export</CardTitle>
-                                                    <CardDescription>
-                                                        Import directly into Power Core
-                                                    </CardDescription>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                                    {selectedRun}
+                                                </CardTitle>
+                                                <StatusBadge status={analysis?.overall_status || 'Unknown'} />
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-orange-500">
+                                                        {analysis?.peak_hp?.toFixed(1)}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Peak HP @ {analysis?.peak_hp_rpm} RPM
+                                                    </div>
                                                 </div>
-                                                <Button onClick={downloadPvv} size="sm">
-                                                    <Download className="h-4 w-4 mr-2" />
-                                                    Download .pvv
-                                                </Button>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-blue-500">
+                                                        {analysis?.peak_tq?.toFixed(1)}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Peak TQ @ {analysis?.peak_tq_rpm} RPM
+                                                    </div>
+                                                </div>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold">
+                                                        {analysis?.total_samples}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Samples
+                                                    </div>
+                                                </div>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="flex justify-center gap-1">
+                                                        <span className="text-green-500">{analysis?.ok_cells}</span>
+                                                        <span className="text-muted-foreground">/</span>
+                                                        <span className="text-red-500">{analysis?.lean_cells}</span>
+                                                        <span className="text-muted-foreground">/</span>
+                                                        <span className="text-blue-500">{analysis?.rich_cells}</span>
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        OK / Lean / Rich
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96">
-                                                {pvvContent || 'Loading...'}
-                                            </pre>
                                         </CardContent>
                                     </Card>
-                                </TabsContent>
 
-                                {/* Report */}
-                                <TabsContent value="report">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-sm">Diagnostics Report</CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
-                                                {runData?.manifest ? (
-                                                    JSON.stringify(runData.manifest, null, 2)
-                                                ) : (
-                                                    'Loading...'
-                                                )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
-                            </Tabs>
-                        </>
-                    ) : (
-                        <Card className="h-full flex items-center justify-center min-h-[400px]">
-                            <CardContent className="text-center">
-                                <Gauge className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
-                                <h3 className="text-lg font-medium mb-2">No Run Selected</h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    Run a simulation or select a previous run to view results
-                                </p>
-                                <Button
-                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                    className="bg-orange-600 hover:bg-orange-700"
-                                >
-                                    <Zap className="h-4 w-4 mr-2" />
-                                    Run Simulation
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-            </div>
+                                    {/* Tabs for Grid and Export */}
+                                    <Tabs defaultValue="grid" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-3">
+                                            <TabsTrigger value="grid">
+                                                <Grid3X3 className="h-4 w-4 mr-2" />
+                                                VE Grid
+                                            </TabsTrigger>
+                                            <TabsTrigger value="pvv">
+                                                <FileDown className="h-4 w-4 mr-2" />
+                                                PVV Export
+                                            </TabsTrigger>
+                                            <TabsTrigger value="report">
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Report
+                                            </TabsTrigger>
+                                        </TabsList>
 
-            {/* Info Alert */}
-            <Alert className="bg-orange-500/10 border-orange-500/30">
-                <AlertCircle className="h-4 w-4 text-orange-500" />
-                <AlertTitle>JetDrive Auto-Tune</AlertTitle>
-                <AlertDescription>
-                    This tool analyzes dyno captures using a 2D RPM × MAP grid and calculates
-                    VE corrections using DynoAI's "7% per AFR point" formula. Export corrections
-                    directly to Power Vision PVV format for immediate application.
-                </AlertDescription>
-            </Alert>
+                                        {/* VE Correction Grid */}
+                                        <TabsContent value="grid">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle className="text-sm">
+                                                        VE Correction Grid (% change)
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        {grid?.rpm_bins?.length} RPM × {grid?.map_bins?.length} MAP bins
+                                                    </CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-xs">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th className="p-2 text-left bg-muted/50">RPM \ MAP</th>
+                                                                    {grid?.map_bins?.map((m: number) => (
+                                                                        <th key={m} className="p-2 text-center bg-muted/50 min-w-[60px]">
+                                                                            {m} kPa
+                                                                        </th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {veGrid.map((row, i) => (
+                                                                    <tr key={row.rpm}>
+                                                                        <td className="p-2 font-medium bg-muted/30">
+                                                                            {row.rpm}
+                                                                        </td>
+                                                                        {row.values.map((val, j) => {
+                                                                            const delta = ((val - 1) * 100);
+                                                                            return (
+                                                                                <td
+                                                                                    key={j}
+                                                                                    className={`p-2 text-center font-mono ${getCellColor(val)}`}
+                                                                                >
+                                                                                    {delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
+                                                                                </td>
+                                                                            );
+                                                                        })}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    <div className="mt-4 flex items-center justify-center gap-4 text-xs">
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-red-500/40 rounded" />
+                                                            <span>Lean (+)</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-green-500/20 rounded" />
+                                                            <span>OK</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-blue-500/40 rounded" />
+                                                            <span>Rich (−)</span>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
+                                        {/* PVV Export */}
+                                        <TabsContent value="pvv">
+                                            <Card>
+                                                <CardHeader>
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <CardTitle className="text-sm">Power Vision PVV Export</CardTitle>
+                                                            <CardDescription>
+                                                                Import directly into Power Core
+                                                            </CardDescription>
+                                                        </div>
+                                                        <Button onClick={downloadPvv} size="sm">
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Download .pvv
+                                                        </Button>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96">
+                                                        {pvvContent || 'Loading...'}
+                                                    </pre>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
+                                        {/* Report */}
+                                        <TabsContent value="report">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle className="text-sm">Diagnostics Report</CardTitle>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
+                                                        {runData?.manifest ? (
+                                                            JSON.stringify(runData.manifest, null, 2)
+                                                        ) : (
+                                                            'Loading...'
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                    </Tabs>
+                                </>
+                            ) : (
+                                <Card className="h-full flex items-center justify-center min-h-[400px]">
+                                    <CardContent className="text-center">
+                                        <Gauge className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
+                                        <h3 className="text-lg font-medium mb-2">No Run Selected</h3>
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Run a simulation or select a previous run to view results
+                                        </p>
+                                        <Button
+                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                            className="bg-orange-600 hover:bg-orange-700"
+                                        >
+                                            <Zap className="h-4 w-4 mr-2" />
+                                            Run Simulation
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Info Alert */}
+                    <Alert className="bg-orange-500/10 border-orange-500/30">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        <AlertTitle>JetDrive Auto-Tune</AlertTitle>
+                        <AlertDescription>
+                            This tool analyzes dyno captures using a 2D RPM × MAP grid and calculates
+                            VE corrections using DynoAI's "7% per AFR point" formula. Export corrections
+                            directly to Power Vision PVV format for immediate application.
+                        </AlertDescription>
+                    </Alert>
                 </TabsContent>
             </Tabs>
         </div>
