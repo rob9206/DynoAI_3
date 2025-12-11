@@ -27,18 +27,17 @@ import asyncio
 import csv
 import json
 import random
-import struct
 import socket
+import struct
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
-
 
 # =============================================================================
 # Standard DynoAI Grid Configuration (matches dynoai/constants.py)
@@ -764,14 +763,12 @@ def generate_outputs(
 
 
 def print_banner():
-    print(
-        """
+    print("""
 +==============================================================+
 |                    DYNOAI AUTO-TUNE                          |
 |          JetDrive -> Analysis -> Tuning Corrections          |
 +==============================================================+
-"""
-    )
+""")
 
 
 def print_results(result: AnalysisResult, outputs: dict[str, Path]):
