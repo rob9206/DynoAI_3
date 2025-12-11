@@ -1,7 +1,0 @@
-DynoAI Diagnostics Summary
-- Cells corrected: 132 / 256 (52%)
-- Clamp limit: ±7%
-- Max correction: +7.2%
-- Min correction: -5.4%
-- Avg correction: -1.8%
-- Clamp hits: 8
