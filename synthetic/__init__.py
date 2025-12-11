@@ -27,4 +27,3 @@ __all__: Iterable[str] = [
     "generate_winpep8_like_run",
     "save_winpep8_run",
 ]
-

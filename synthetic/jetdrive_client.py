@@ -119,7 +119,7 @@ class _Wire:
             return None
         if len(data) < cls.HEADER.size + length:
             return None
-        value = data[cls.HEADER.size : cls.HEADER.size + length]
+        value = data[cls.HEADER.size: cls.HEADER.size + length]
         return key, length, host, seq, dest, value
 
 
@@ -155,11 +155,11 @@ def _parse_channel_info(
     idx = PROVIDER_NAME_LEN
     channels: dict[int, ChannelInfo] = {}
     while idx + CHANNEL_INFO_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx : idx + 2], "little")
+        chan_id = int.from_bytes(value[idx: idx + 2], "little")
         idx += 2
         vendor = value[idx]
         idx += 1
-        raw_name = value[idx : idx + CHANNEL_NAME_LEN]
+        raw_name = value[idx: idx + CHANNEL_NAME_LEN]
         idx += CHANNEL_NAME_LEN
         unit = value[idx]
         idx += 1
@@ -184,9 +184,9 @@ def _parse_channel_values(
     samples: list[JetDriveSample] = []
     idx = 0
     while idx + CHANNEL_VALUES_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx : idx + 2], "little")
+        chan_id = int.from_bytes(value[idx: idx + 2], "little")
         idx += 2
-        ts = int.from_bytes(value[idx : idx + 4], "little")
+        ts = int.from_bytes(value[idx: idx + 4], "little")
         idx += 4
         try:
             val = struct.unpack_from("<f", value, idx)[0]
