@@ -283,9 +283,9 @@ function HardwareTab() {
                                 <MonitorCheck className="h-5 w-5" />
                                 System Diagnostics
                             </CardTitle>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => {
                                     refetchDiagnostics().catch(() => {
                                         toast.error('Diagnostics failed - restart backend server');
@@ -317,7 +317,7 @@ function HardwareTab() {
                         ) : diagnostics ? (
                             <div className="space-y-3">
                                 {diagnostics.checks.map((check) => (
-                                    <div 
+                                    <div
                                         key={check.name}
                                         className="p-3 rounded-lg bg-muted/30 border border-border"
                                     >
@@ -328,7 +328,7 @@ function HardwareTab() {
                                             </span>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{check.message}</p>
-                                        
+
                                         {/* Network interfaces detail */}
                                         {check.name === 'network_interfaces' && Array.isArray(check.details) && (
                                             <div className="mt-2 text-xs space-y-1">
