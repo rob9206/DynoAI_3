@@ -287,12 +287,13 @@ def detect_decel_events(
             rate_recovered = rate > -5.0
             tps_low_enough = tps_val <= cfg["tps_max_at_end"]
 
-            # Also check if RPM dropped too low or TPS opened back up
-            tps_rose = tps_val > cfg["tps_max_at_end"]
+            # Check if throttle opened back up (rate positive AND TPS above threshold)
+            # Only trigger if TPS is actually rising, not just above threshold while dropping
+            tps_reopened = tps_val > cfg["tps_max_at_end"] and rate > 5.0
             rpm_too_low = rpm_float < cfg["rpm_min"]
             at_end = i == len(records) - 1
 
-            if (rate_recovered and tps_low_enough) or tps_rose or rpm_too_low or at_end:
+            if (rate_recovered and tps_low_enough) or tps_reopened or rpm_too_low or at_end:
                 duration_ms = (i - event_start) * sample_rate_ms
 
                 if cfg["duration_min_ms"] <= duration_ms <= cfg["duration_max_ms"]:

@@ -42,6 +42,14 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize rate limiter: {e}")
 
+# Initialize request ID middleware for request tracing
+try:
+    from api.middleware import init_request_id_middleware
+
+    init_request_id_middleware(app)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize request ID middleware: {e}")
+
 # Load environment variables from .env if present
 load_dotenv()
 

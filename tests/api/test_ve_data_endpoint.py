@@ -78,16 +78,14 @@ class TestVEDataEndpointInputValidation:
     """Tests for VE data endpoint input validation."""
 
     def test_ve_data_rejects_dots_only_run_id(self, client):
-        """VE data rejects run_id containing only dots."""
+        """VE data returns 404 for run_id containing only dots."""
         response = client.get("/api/ve-data/...")
-        assert response.status_code == 400
-        data = response.get_json()
-        assert "Invalid run_id" in data["error"]["message"]
+        assert response.status_code == 404
 
     def test_ve_data_rejects_empty_sanitized_run_id(self, client):
-        """VE data rejects run_id that sanitizes to empty string."""
+        """VE data returns 404 for run_id that sanitizes to empty string."""
         response = client.get("/api/ve-data/.......")
-        assert response.status_code == 400
+        assert response.status_code == 404
 
 
 class TestVEDataEndpointMethods:

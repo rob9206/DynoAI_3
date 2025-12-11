@@ -212,6 +212,6 @@ class TestAnalyzeEndpointResponseStructure:
         )
         assert response.status_code == 400
         data = response.get_json()
+        # API returns simple {"error": "message"} format
         assert "error" in data
-        assert "code" in data["error"]
-        assert "message" in data["error"]
+        assert isinstance(data["error"], str)

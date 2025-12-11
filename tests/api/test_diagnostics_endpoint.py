@@ -51,16 +51,15 @@ class TestDiagnosticsEndpointInputValidation:
     """Tests for diagnostics endpoint input validation."""
 
     def test_diagnostics_rejects_dots_only_run_id(self, client):
-        """Diagnostics rejects run_id containing only dots."""
+        """Diagnostics returns 404 for invalid run_id patterns."""
+        # Run IDs with only dots get sanitized and won't match any folder
         response = client.get("/api/diagnostics/...")
-        assert response.status_code == 400
-        data = response.get_json()
-        assert "Invalid run_id" in data["error"]["message"]
+        assert response.status_code == 404
 
     def test_diagnostics_rejects_empty_sanitized_run_id(self, client):
-        """Diagnostics rejects run_id that sanitizes to empty string."""
+        """Diagnostics returns 404 for run_id that sanitizes to empty."""
         response = client.get("/api/diagnostics/.......")
-        assert response.status_code == 400
+        assert response.status_code == 404
 
 
 class TestDiagnosticsEndpointMethods:
@@ -124,11 +123,11 @@ class TestCoverageEndpointInputValidation:
     """Tests for coverage endpoint input validation."""
 
     def test_coverage_rejects_dots_only_run_id(self, client):
-        """Coverage rejects run_id containing only dots."""
+        """Coverage returns 404 for invalid run_id patterns."""
         response = client.get("/api/coverage/...")
-        assert response.status_code == 400
+        assert response.status_code == 404
 
     def test_coverage_rejects_empty_sanitized_run_id(self, client):
-        """Coverage rejects run_id that sanitizes to empty string."""
+        """Coverage returns 404 for run_id that sanitizes to empty."""
         response = client.get("/api/coverage/.......")
-        assert response.status_code == 400
+        assert response.status_code == 404

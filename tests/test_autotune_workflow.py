@@ -39,8 +39,8 @@ def test_full_workflow():
     # Print summary
     summary = workflow.get_session_summary(session)
     print("=== Session Summary ===")
-    print(f"ID: {summary['id']}")
-    print(f"Status: {summary['status']}")
+    print(f"ID: {summary.get('run_id', 'N/A')}")
+    print(f"Status: {summary.get('status', 'unknown')}")
     print()
 
     if "afr_analysis" in summary:

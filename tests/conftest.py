@@ -18,6 +18,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.environ["DYNOAI_DEBUG"] = "false"
 os.environ["JETSTREAM_STUB_MODE"] = "true"
 os.environ["JETSTREAM_ENABLED"] = "false"
+# CRITICAL: Disable rate limiting for tests
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 
 def pytest_configure(config):

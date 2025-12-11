@@ -17,6 +17,8 @@ if _project_root not in _sys.path:
 _os.environ["DYNOAI_DEBUG"] = "false"
 _os.environ["JETSTREAM_STUB_MODE"] = "true"
 _os.environ["JETSTREAM_ENABLED"] = "false"
+# CRITICAL: Disable rate limiting for tests
+_os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 # Now do regular imports
 import json  # noqa: E402
@@ -27,12 +29,20 @@ import pytest  # noqa: E402
 @pytest.fixture
 def app():
     """Create Flask app instance for testing."""
-    from api.app import app as flask_app
+    from api.app import app as flask_app, limiter
 
     flask_app.config["TESTING"] = True
     flask_app.config["WTF_CSRF_ENABLED"] = False
 
+    # Disable rate limiting for tests
+    if limiter is not None:
+        limiter.enabled = False
+
     yield flask_app
+
+    # Re-enable after test (in case of module-level caching)
+    if limiter is not None:
+        limiter.enabled = True
 
 
 @pytest.fixture
@@ -125,12 +135,13 @@ def sample_txt_file(tmp_path):
 
 
 @pytest.fixture
-def mock_output_folder(tmp_path):
+def mock_output_folder(tmp_path, monkeypatch):
     """
     Mock the output folder configuration to use a temporary directory.
     Creates test run data in the temporary folder.
     """
     from api.config import get_config
+    import api.app
 
     config = get_config()
 
@@ -178,8 +189,10 @@ def mock_output_folder(tmp_path):
     (run_dir / "Coverage_Front.csv").write_text(coverage_content)
     (run_dir / "Coverage_Rear.csv").write_text(coverage_content)
 
+    # Patch both the config AND the global OUTPUT_FOLDER in app module
     original_output_folder = config.storage.output_folder
     config.storage.output_folder = output_dir
+    monkeypatch.setattr(api.app, "OUTPUT_FOLDER", output_dir)
 
     yield {"output_dir": output_dir, "run_id": run_id, "run_dir": run_dir}
 
