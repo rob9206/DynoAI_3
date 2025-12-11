@@ -47,3 +47,12 @@ To reduce clutter:
 3. Auto-generate dashboard docs excerpt once HTML spec stabilizes.
 
 If adding new docs, link them here rather than creating isolated files.
+
+## JetDrive live capture workflow
+
+- Prerequisites: Power Core running on the dyno PC with JetDrive enabled and broadcasting RPM/Torque/AFR; DynoAI on the same LAN/subnet; firewall allows UDP multicast `224.0.2.10:22344`.
+- Run capture: `python -m synthetic.winpep8_cli jetdrive-run --provider <PowerCoreProviderName> --run-id <run_id>` (add `--trigger button` to manually start/stop).
+- What happens: the CLI discovers the provider, subscribes to RPM/Torque/AFR, detects a single pull (auto via RPM threshold or via button), and writes `runs/<run_id>/run.csv` using the existing WinPEP/Power Core–compatible format.
+- After the pull: import `run.csv` into WinPEP/Power Core if desired, and use it with DynoAI VE/AFR analysis; tuning math and kernels remain unchanged—JetDrive only replaces the source log.
+- Overrides: multicast group/port can be changed via `JETDRIVE_MCAST_GROUP` / `JETDRIVE_PORT`; set `JETDRIVE_IFACE` to bind a specific interface if needed.
+- Troubleshooting: if no providers are found, ensure JetDrive is enabled, machines share a subnet, and firewall rules allow UDP multicast; if channels are missing, confirm RPM/Torque/AFR are broadcast by Power Core.

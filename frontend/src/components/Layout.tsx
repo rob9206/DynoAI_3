@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, History, Home, Radio, Zap } from 'lucide-react';
+import { Activity, History, Home, Radio, Zap, Sparkles } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -33,44 +33,50 @@ export default function Layout({ children }: LayoutProps) {
             <nav className="flex space-x-2">
               <Link
                 to="/jetstream"
-                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
-                  isActive('/jetstream') || isActive('/runs')
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                }`}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/jetstream') || isActive('/runs')
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  }`}
               >
                 <Radio className="h-5 w-5" />
                 <span>Live Feed</span>
               </Link>
               <Link
                 to="/dashboard"
-                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
-                  isActive('/dashboard')
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                }`}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/dashboard')
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  }`}
               >
                 <Home className="h-5 w-5" />
                 <span>Control Center</span>
               </Link>
               <Link
                 to="/livelink"
-                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
-                  isActive('/livelink')
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                }`}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/livelink')
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  }`}
               >
                 <Zap className="h-5 w-5" />
                 <span>LiveLink</span>
               </Link>
               <Link
+                to="/wizards"
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/wizards')
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25'
+                  : 'text-muted-foreground hover:bg-orange-500/10 hover:text-orange-300'
+                  }`}
+              >
+                <Sparkles className="h-5 w-5" />
+                <span>Wizards</span>
+              </Link>
+              <Link
                 to="/history"
-                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
-                  isActive('/history')
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                }`}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/history')
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  }`}
               >
                 <History className="h-5 w-5" />
                 <span>History</span>

@@ -10,6 +10,7 @@ import JetstreamPage from './pages/JetstreamPage';
 import RunDetailPage from './pages/RunDetailPage';
 import TimeMachinePage from './pages/TimeMachinePage';
 import LiveLinkPage from './pages/LiveLinkPage';
+import TuningWizardsPage from './pages/TuningWizardsPage';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -36,6 +37,7 @@ function App() {
               <Route path="/time-machine/:runId" element={<TimeMachinePage />} />
               <Route path="/history" element={<History />} />
               <Route path="/livelink" element={<LiveLinkPage />} />
+              <Route path="/wizards" element={<TuningWizardsPage />} />
               <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
               <Route path="*" element={<Navigate to="/jetstream" replace />} />
             </Routes>

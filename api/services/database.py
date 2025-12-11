@@ -146,7 +146,12 @@ def init_database(create_tables: bool = True) -> None:
 
     if create_tables:
         # Import models to ensure they're registered
-        from api.models import Run, RunFile  # noqa: F401
+        from api.models import (  # noqa: F401
+            ExternalDynoChart,
+            Run,
+            RunFile,
+            SyntheticWinpepRun,
+        )
 
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized")

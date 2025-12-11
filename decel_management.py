@@ -41,7 +41,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from dynoai.constants import KPA_BINS, KPA_INDEX, RPM_BINS, RPM_INDEX
+from dynoai.constants import KPA_BINS, RPM_BINS
 
 # ============================================================================
 # Configuration Constants
@@ -261,38 +261,38 @@ def detect_decel_events(
 
             # Also catch "already closed" throttle during RPM drop (common in synthetic logs)
             # If TPS is 0 and RPM is dropping, we are in decel
-            # Ensure we have valid RPM drop
             rpm_drop = 0.0
             if i > 0:
-                prev_rpm = float(records[i - 1].get("rpm", rpm_float))
+                prev_rpm_val = records[i - 1].get("rpm")
+                prev_rpm = (
+                    float(prev_rpm_val) if prev_rpm_val is not None else rpm_float
+                )
                 rpm_drop = prev_rpm - rpm_float
 
             is_steady_closed = (tps_val <= cfg["tps_max_at_end"]) and (
                 rpm_drop > 5.0
             )  # Significant drop per sample
 
+            # Enter decel event if rapid throttle close or steady closed throttle with RPM drop
             if (is_rapid_close or is_steady_closed) and (
                 cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
-            if (
-                rate <= cfg["tps_rate_threshold"]
-                and cfg["rpm_min"] <= rpm_float <= cfg["rpm_max"]
             ):
                 in_event = True
                 event_start = i
 
         # Check if exiting decel event
         else:
-            # Event ends when TPS rises OR RPM drops too low
-            tps_rose = tps_val > cfg["tps_max_at_end"]
-            rpm_too_low = rpm_float < cfg["rpm_min"]
-
-            if tps_rose or rpm_too_low or i == len(records) - 1:
             # Event ends when TPS rate recovers (throttle stabilizing or opening)
             # AND TPS has reached a low value (below threshold)
             rate_recovered = rate > -5.0
             tps_low_enough = tps_val <= cfg["tps_max_at_end"]
 
-            if rate_recovered and tps_low_enough:
+            # Also check if RPM dropped too low or TPS opened back up
+            tps_rose = tps_val > cfg["tps_max_at_end"]
+            rpm_too_low = rpm_float < cfg["rpm_min"]
+            at_end = i == len(records) - 1
+
+            if (rate_recovered and tps_low_enough) or tps_rose or rpm_too_low or at_end:
                 duration_ms = (i - event_start) * sample_rate_ms
 
                 if cfg["duration_min_ms"] <= duration_ms <= cfg["duration_max_ms"]:
@@ -621,9 +621,7 @@ def generate_decel_report(
     fuel_impact = (
         "-0.5 to -1.0 MPG"
         if severity == DecelSeverity.MEDIUM
-        else "-0.3 to -0.5 MPG"
-        if severity == DecelSeverity.LOW
-        else "-1.0 to -2.0 MPG"
+        else "-0.3 to -0.5 MPG" if severity == DecelSeverity.LOW else "-1.0 to -2.0 MPG"
     )
     report.tradeoffs = {
         "fuel_economy_impact": f"{fuel_impact} estimated during mixed driving",

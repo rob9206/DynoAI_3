@@ -125,6 +125,14 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Timeline integration: {e}")
 
+# Register Tuning Wizards blueprint (Decel Pop, Stage Config, Cam Presets, Heat Soak)
+try:
+    from api.routes.wizards import wizards_bp
+
+    app.register_blueprint(wizards_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Tuning Wizards: {e}")
+
 # Store active analysis jobs
 active_jobs = {}
 
@@ -1011,6 +1019,13 @@ def print_startup_banner():
     print("  GET  /api/timeline/<run_id>/replay/<n>- Replay step N")
     print("  GET  /api/timeline/<run_id>/snapshots/<id> - Get snapshot")
     print("  GET  /api/timeline/<run_id>/diff      - Compute diff")
+    print("\n[*] Tuning Wizard endpoints:")
+    print("  GET  /api/wizards/config              - Get all wizard options")
+    print("  POST /api/wizards/decel/preview       - Preview decel fix")
+    print("  POST /api/wizards/decel/apply         - Apply decel fix (one-click)")
+    print("  GET  /api/wizards/stages              - List stage presets")
+    print("  GET  /api/wizards/cams                - List cam family presets")
+    print("  POST /api/wizards/heat-soak/analyze   - Analyze heat soak")
     print("\n" + "=" * 60 + "\n")
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")
