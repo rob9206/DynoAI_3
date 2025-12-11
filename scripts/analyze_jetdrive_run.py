@@ -112,11 +112,7 @@ def analyze_run(csv_path: Path) -> dict:
         for zone, mult in corrections.items():
             rpm_min, rpm_max = zone_rpm[zone]
             action = (
-                "increase"
-                if mult > 1.01
-                else "decrease"
-                if mult < 0.99
-                else "keep"
+                "increase" if mult > 1.01 else "decrease" if mult < 0.99 else "keep"
             )
             writer.writerow([zone, rpm_min, rpm_max, f"{mult:.4f}", action])
 
@@ -187,4 +183,3 @@ if __name__ == "__main__":
         sys.exit(1)
 
     analyze_run(csv_path)
-
