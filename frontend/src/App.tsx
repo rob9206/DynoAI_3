@@ -11,6 +11,7 @@ import RunDetailPage from './pages/RunDetailPage';
 import TimeMachinePage from './pages/TimeMachinePage';
 import LiveLinkPage from './pages/LiveLinkPage';
 import TuningWizardsPage from './pages/TuningWizardsPage';
+import JetDriveAutoTunePage from './pages/JetDriveAutoTunePage';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ function App() {
               <Route path="/history" element={<History />} />
               <Route path="/livelink" element={<LiveLinkPage />} />
               <Route path="/wizards" element={<TuningWizardsPage />} />
+              <Route path="/jetdrive" element={<JetDriveAutoTunePage />} />
               <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
               <Route path="*" element={<Navigate to="/jetstream" replace />} />
             </Routes>

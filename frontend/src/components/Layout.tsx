@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, History, Home, Radio, Zap, Sparkles } from 'lucide-react';
+import { Activity, History, Home, Radio, Zap, Sparkles, Gauge } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -60,6 +60,16 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <Zap className="h-5 w-5" />
                 <span>LiveLink</span>
+              </Link>
+              <Link
+                to="/jetdrive"
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive('/jetdrive')
+                  ? 'bg-gradient-to-r from-orange-600 to-red-500 text-white shadow-md shadow-orange-500/25'
+                  : 'text-muted-foreground hover:bg-orange-500/10 hover:text-orange-300'
+                  }`}
+              >
+                <Gauge className="h-5 w-5" />
+                <span>JetDrive</span>
               </Link>
               <Link
                 to="/wizards"

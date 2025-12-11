@@ -133,6 +133,14 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Tuning Wizards: {e}")
 
+# Register JetDrive Auto-Tune blueprint
+try:
+    from api.routes.jetdrive import jetdrive_bp
+
+    app.register_blueprint(jetdrive_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize JetDrive Auto-Tune: {e}")
+
 # Store active analysis jobs
 active_jobs = {}
 
