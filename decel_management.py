@@ -293,7 +293,12 @@ def detect_decel_events(
             rpm_too_low = rpm_float < cfg["rpm_min"]
             at_end = i == len(records) - 1
 
-            if (rate_recovered and tps_low_enough) or tps_reopened or rpm_too_low or at_end:
+            if (
+                (rate_recovered and tps_low_enough)
+                or tps_reopened
+                or rpm_too_low
+                or at_end
+            ):
                 duration_ms = (i - event_start) * sample_rate_ms
 
                 if cfg["duration_min_ms"] <= duration_ms <= cfg["duration_max_ms"]:
@@ -622,7 +627,9 @@ def generate_decel_report(
     fuel_impact = (
         "-0.5 to -1.0 MPG"
         if severity == DecelSeverity.MEDIUM
-        else "-0.3 to -0.5 MPG" if severity == DecelSeverity.LOW else "-1.0 to -2.0 MPG"
+        else "-0.3 to -0.5 MPG"
+        if severity == DecelSeverity.LOW
+        else "-1.0 to -2.0 MPG"
     )
     report.tradeoffs = {
         "fuel_economy_impact": f"{fuel_impact} estimated during mixed driving",
