@@ -17,7 +17,6 @@ from external_scrapers.fuelmoto_university_scraper import (
     _parse_engine_info,
 )
 
-
 # Sample HTML fixture simulating the Fuel Moto dyno-charts page
 SAMPLE_FUELMOTO_HTML = """
 <!DOCTYPE html>
@@ -203,4 +202,3 @@ class TestFuelMotoChartMetaFields:
         assert entry.category  # Not empty
         assert entry.title  # Not empty
         assert entry.page_url.startswith("http")
-

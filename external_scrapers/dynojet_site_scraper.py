@@ -33,7 +33,6 @@ from io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 
-
 # Fixed list of known Dynojet pages containing dyno chart images.
 # This list should be curated manually—no crawling.
 DYNOJET_SAMPLE_PAGES: List[str] = [
@@ -191,7 +190,9 @@ class DynojetSiteScraper:
 
             page_title_tag = soup.find("title")
             page_title = (
-                page_title_tag.get_text(strip=True) if page_title_tag else "Dynojet Chart"
+                page_title_tag.get_text(strip=True)
+                if page_title_tag
+                else "Dynojet Chart"
             )
 
             category = _infer_category_from_page(soup, page_url)
@@ -295,4 +296,3 @@ __all__ = [
     "run_dynojet_scrape",
     "DYNOJET_SAMPLE_PAGES",
 ]
-
