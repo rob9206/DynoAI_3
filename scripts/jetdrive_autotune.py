@@ -756,7 +756,7 @@ def print_results(result: AnalysisResult, outputs: dict[str, Path]):
     key_files = ["pvv_file", "ve_corrections_2d", "paste_ready", "report"]
     for name in key_files:
         if name in outputs:
-            print(f"  ★ {name:20s} → {outputs[name]}")
+            print(f"  * {name:20s} -> {outputs[name]}")
     print(f"  ... and {len(outputs) - len(key_files)} more files")
     
     print("\n" + "=" * 70)

@@ -140,9 +140,21 @@ class AutoTuneWorkflow:
         workflow.export_all(session, "path/to/output")
     """
 
-    # Standard DynoAI grid (matches dynoai/constants.py)
-    DEFAULT_RPM_AXIS = [1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500]
-    DEFAULT_MAP_AXIS = [35, 50, 65, 80, 95]
+    # Standard DynoAI grid - 11 RPM x 9 MAP = 99 cells
+    DEFAULT_RPM_AXIS = [
+        1500,
+        2000,
+        2500,
+        3000,
+        3500,
+        4000,
+        4500,
+        5000,
+        5500,
+        6000,
+        6500,
+    ]
+    DEFAULT_MAP_AXIS = [20, 30, 40, 50, 60, 70, 80, 90, 100]
 
     # DynoAI standard correction formula
     VE_PCT_PER_AFR_POINT = 7.0  # 7% VE change per 1 AFR point
@@ -152,13 +164,17 @@ class AutoTuneWorkflow:
     MIN_HITS_PER_ZONE = 3  # Minimum samples needed per zone
     AFR_ERROR_TOLERANCE = 0.3  # AFR points considered "OK" (±0.3)
 
-    # AFR targets by MAP load (kPa)
+    # AFR targets by MAP load (kPa) - richer at higher loads
     AFR_TARGETS_BY_MAP = {
-        35: 14.7,  # Vacuum / idle
-        50: 14.0,  # Light load
-        65: 13.0,  # Mid load
-        80: 12.5,  # High load
-        95: 12.5,  # WOT
+        20: 14.7,  # Deep vacuum / decel
+        30: 14.7,  # Idle
+        40: 14.5,  # Light cruise
+        50: 14.0,  # Cruise
+        60: 13.5,  # Part throttle
+        70: 13.0,  # Mid load
+        80: 12.8,  # Heavy load
+        90: 12.5,  # High load
+        100: 12.2,  # WOT / boost
     }
 
     def __init__(
@@ -176,7 +192,9 @@ class AutoTuneWorkflow:
         self, run_id: Optional[str] = None, data_source: DataSource = DataSource.CSV
     ) -> AutoTuneSession:
         """Create a new auto-tune session."""
-        session_id = run_id or f"autotune_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        session_id = (
+            run_id or f"autotune_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        )
         session = AutoTuneSession(id=session_id, data_source=data_source)
         self.sessions[session_id] = session
         return session
@@ -227,7 +245,9 @@ class AutoTuneWorkflow:
                 "Horsepower": "Horsepower",
                 "AFR": "AFR Meas",
             }
-            df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+            df = df.rename(
+                columns={k: v for k, v in column_map.items() if k in df.columns}
+            )
 
             # If no MAP column, estimate from RPM
             if "MAP kPa" not in df.columns:
@@ -243,7 +263,10 @@ class AutoTuneWorkflow:
             return False
 
     def import_dataframe(
-        self, session: AutoTuneSession, df: pd.DataFrame, source: DataSource = DataSource.CSV
+        self,
+        session: AutoTuneSession,
+        df: pd.DataFrame,
+        source: DataSource = DataSource.CSV,
     ) -> bool:
         """
         Import a pandas DataFrame directly.
@@ -263,7 +286,9 @@ class AutoTuneWorkflow:
                 "MAP": "MAP kPa",
                 "AFR": "AFR Meas",
             }
-            df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+            df = df.rename(
+                columns={k: v for k, v in column_map.items() if k in df.columns}
+            )
 
             # If no MAP column, estimate from RPM
             if "MAP kPa" not in df.columns and "Engine RPM" in df.columns:
@@ -309,9 +334,7 @@ class AutoTuneWorkflow:
                 session.peak_hp_rpm = float(df.loc[peak_idx, rpm_col])
 
         # Look for torque column
-        tq_col = next(
-            (c for c in df.columns if "Torque" in c or "TQ" in c), None
-        )
+        tq_col = next((c for c in df.columns if "Torque" in c or "TQ" in c), None)
         if tq_col and tq_col in df.columns:
             peak_idx = df[tq_col].idxmax()
             session.peak_tq = float(df.loc[peak_idx, tq_col])
@@ -350,9 +373,7 @@ class AutoTuneWorkflow:
         df = session.dynoai_data.copy()
 
         # Find RPM column
-        rpm_col = next(
-            (c for c in df.columns if c in ["Engine RPM", "RPM"]), None
-        )
+        rpm_col = next((c for c in df.columns if c in ["Engine RPM", "RPM"]), None)
         if rpm_col is None:
             session.errors.append("No RPM column found in data")
             return None
@@ -372,9 +393,7 @@ class AutoTuneWorkflow:
             session.errors.append("No AFR columns found in data")
             return None
 
-        afr_meas_col = next(
-            (c for c in afr_cols if "Meas" in c), afr_cols[0]
-        )
+        afr_meas_col = next((c for c in afr_cols if "Meas" in c), afr_cols[0])
 
         # Convert AFR to numeric
         df[afr_meas_col] = pd.to_numeric(df[afr_meas_col], errors="coerce")
@@ -384,7 +403,7 @@ class AutoTuneWorkflow:
         n_rpm = len(self.rpm_axis)
         n_map = len(self.map_axis)
         afr_error_matrix = np.full((n_rpm, n_map), np.nan)  # AFR points
-        ve_delta_matrix = np.full((n_rpm, n_map), np.nan)   # VE %
+        ve_delta_matrix = np.full((n_rpm, n_map), np.nan)  # VE %
         hit_matrix = np.zeros((n_rpm, n_map), dtype=int)
         afr_sum = np.zeros((n_rpm, n_map))
 
@@ -461,8 +480,12 @@ class AutoTuneWorkflow:
             zones_lean=zones_lean,
             zones_ok=zones_ok,
             zones_no_data=zones_no_data,
-            max_lean_pct=float(np.nanmax(ve_delta_matrix)) if valid_ve_deltas.size else 0.0,
-            max_rich_pct=float(np.nanmin(ve_delta_matrix)) if valid_ve_deltas.size else 0.0,
+            max_lean_pct=(
+                float(np.nanmax(ve_delta_matrix)) if valid_ve_deltas.size else 0.0
+            ),
+            max_rich_pct=(
+                float(np.nanmin(ve_delta_matrix)) if valid_ve_deltas.size else 0.0
+            ),
             error_by_zone=error_df,
             ve_delta_by_zone=ve_delta_df,
             hit_count_by_zone=hit_df,
@@ -506,7 +529,9 @@ class AutoTuneWorkflow:
 
         clamped_corrections = np.clip(raw_corrections, min_mult, max_mult)
         clipped_count = int(
-            np.sum(valid_mask & (np.abs(raw_corrections - clamped_corrections) > 0.0001))
+            np.sum(
+                valid_mask & (np.abs(raw_corrections - clamped_corrections) > 0.0001)
+            )
         )
 
         # Only apply where valid
@@ -520,8 +545,16 @@ class AutoTuneWorkflow:
             rpm_axis=list(self.rpm_axis),
             map_axis=list(self.map_axis),
             zones_adjusted=int(np.sum(valid_mask)),
-            max_correction_pct=float((np.nanmax(correction_matrix[valid_mask]) - 1) * 100) if np.any(valid_mask) else 0.0,
-            min_correction_pct=float((np.nanmin(correction_matrix[valid_mask]) - 1) * 100) if np.any(valid_mask) else 0.0,
+            max_correction_pct=(
+                float((np.nanmax(correction_matrix[valid_mask]) - 1) * 100)
+                if np.any(valid_mask)
+                else 0.0
+            ),
+            min_correction_pct=(
+                float((np.nanmin(correction_matrix[valid_mask]) - 1) * 100)
+                if np.any(valid_mask)
+                else 0.0
+            ),
             clipped_zones=clipped_count,
         )
 
@@ -641,7 +674,10 @@ class AutoTuneWorkflow:
             with open(ve_csv_path, "w") as f:
                 f.write("RPM\\MAP," + ",".join(str(m) for m in corr.map_axis) + "\n")
                 for i, rpm in enumerate(corr.rpm_axis):
-                    row = [str(rpm)] + [f"{corr.correction_table[i, j]:.4f}" for j in range(len(corr.map_axis))]
+                    row = [str(rpm)] + [
+                        f"{corr.correction_table[i, j]:.4f}"
+                        for j in range(len(corr.map_axis))
+                    ]
                     f.write(",".join(row) + "\n")
             outputs["ve_corrections_csv"] = str(ve_csv_path)
 
@@ -720,7 +756,11 @@ class AutoTuneWorkflow:
             "status": session.status,
             "created_at": session.created_at,
             "timestamp": session.created_at,
-            "data_source": session.data_source.value if isinstance(session.data_source, DataSource) else session.data_source,
+            "data_source": (
+                session.data_source.value
+                if isinstance(session.data_source, DataSource)
+                else session.data_source
+            ),
             "log_file": session.log_file,
             "tune_file": session.tune_file,
             "errors": session.errors,
