@@ -2,10 +2,12 @@
 JetDrive Auto-Tune API Routes
 
 Provides REST endpoints for:
-- Running JetDrive autotune analysis
+- Running JetDrive autotune analysis (unified workflow)
 - Simulating dyno runs
 - Analyzing existing CSV data
 - Exporting PVV corrections
+
+Uses the unified AutoTuneWorkflow engine for all analysis.
 """
 
 from __future__ import annotations
@@ -19,7 +21,20 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
+from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+
 jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
+
+# Singleton workflow instance for unified analysis
+_workflow: AutoTuneWorkflow | None = None
+
+
+def get_workflow() -> AutoTuneWorkflow:
+    """Get or create the unified workflow instance."""
+    global _workflow
+    if _workflow is None:
+        _workflow = AutoTuneWorkflow()
+    return _workflow
 
 
 def get_project_root() -> Path:
@@ -242,6 +257,94 @@ def analyze_run():
         return jsonify({"success": False, "error": "Analysis timed out"}), 500
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/analyze-unified", methods=["POST"])
+def analyze_unified():
+    """
+    Run JetDrive analysis using the unified AutoTuneWorkflow engine.
+
+    This uses the same analysis engine as Power Vision logs,
+    ensuring consistent results across all data sources.
+
+    Request body:
+    {
+        "run_id": "my_run",
+        "csv_path": "path/to/file.csv"  // Path to JetDrive CSV
+    }
+    """
+    data = request.get_json()
+    if not data or "run_id" not in data or "csv_path" not in data:
+        return jsonify({"error": "Missing 'run_id' or 'csv_path' in request body"}), 400
+
+    try:
+        run_id = sanitize_run_id(data["run_id"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    csv_path = data["csv_path"]
+    project_root = get_project_root()
+    output_dir = project_root / "runs" / run_id
+
+    try:
+        workflow = get_workflow()
+
+        # Run the unified workflow with JetDrive data source
+        session = workflow.run_full_workflow(
+            log_path=csv_path,
+            output_dir=str(output_dir),
+            data_source=DataSource.JETDRIVE,
+        )
+
+        if session.status == "error":
+            return (
+                jsonify({"success": False, "errors": session.errors}),
+                500,
+            )
+
+        # Get session summary (which includes all the analysis results)
+        summary = workflow.get_session_summary(session)
+
+        return jsonify(
+            {
+                "success": True,
+                "run_id": run_id,
+                "output_dir": str(output_dir),
+                **summary,
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/workflow/session", methods=["POST"])
+def create_workflow_session():
+    """Create a new unified workflow session."""
+    data = request.get_json() or {}
+    run_id = data.get("run_id")
+
+    try:
+        if run_id:
+            run_id = sanitize_run_id(run_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    workflow = get_workflow()
+    session = workflow.create_session(run_id=run_id, data_source=DataSource.JETDRIVE)
+
+    return jsonify({"success": True, "session_id": session.id})
+
+
+@jetdrive_bp.route("/workflow/session/<session_id>", methods=["GET"])
+def get_workflow_session(session_id: str):
+    """Get the status of a workflow session."""
+    workflow = get_workflow()
+    session = workflow.sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    return jsonify(workflow.get_session_summary(session))
 
 
 @jetdrive_bp.route("/run/<run_id>", methods=["GET"])
