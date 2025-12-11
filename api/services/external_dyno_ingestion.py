@@ -10,7 +10,9 @@ from external_scrapers.dyno_models import DynoChartMeta, meta_from_row
 from io_contracts import safe_path
 from synthetic.winpep8_synthesizer import (
     EngineFamily,
-    PeakInfo as SynthPeakInfo,
+)
+from synthetic.winpep8_synthesizer import PeakInfo as SynthPeakInfo
+from synthetic.winpep8_synthesizer import (
     generate_winpep8_like_run,
     save_winpep8_run,
 )

@@ -621,7 +621,9 @@ def generate_decel_report(
     fuel_impact = (
         "-0.5 to -1.0 MPG"
         if severity == DecelSeverity.MEDIUM
-        else "-0.3 to -0.5 MPG" if severity == DecelSeverity.LOW else "-1.0 to -2.0 MPG"
+        else "-0.3 to -0.5 MPG"
+        if severity == DecelSeverity.LOW
+        else "-1.0 to -2.0 MPG"
     )
     report.tradeoffs = {
         "fuel_economy_impact": f"{fuel_impact} estimated during mixed driving",

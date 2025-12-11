@@ -6,9 +6,9 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
+
 from external_scrapers.dyno_models import DynoCurveSpec
 from external_scrapers.winpep_synthesizer import generate_synthetic_pull
-
 from io_contracts import safe_path
 
 

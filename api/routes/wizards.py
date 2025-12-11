@@ -17,6 +17,7 @@ from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
 from tuning_wizards import (
+    PullMetrics,
     analyze_heat_soak,
     generate_decel_fix_overlay,
     generate_idle_ve_overlay,
@@ -24,14 +25,12 @@ from tuning_wizards import (
     get_stage_preset,
     list_cam_presets,
     list_stage_presets,
-    PullMetrics,
 )
 
 wizards_bp = Blueprint("wizards", __name__, url_prefix="/api/wizards")
 
 # Output folder for generated overlays
 OUTPUT_FOLDER = Path(__file__).parent.parent.parent / "outputs"
-
 
 # ============================================================================
 # Decel Pop Wizard Endpoints

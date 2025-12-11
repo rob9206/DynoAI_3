@@ -1,4 +1,5 @@
 """Test the LiveLink WebSocket module."""
+
 import sys
 from pathlib import Path
 
@@ -85,4 +86,3 @@ if __name__ == "__main__":
     print()
     test_websocket_manager()
     print("\n=== All Tests Passed ===")
-
