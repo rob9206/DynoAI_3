@@ -6,17 +6,26 @@ Provides REST endpoints for:
 - Simulating dyno runs
 - Analyzing existing CSV data
 - Exporting PVV corrections
+- Hardware diagnostics and discovery
 
 Uses the unified AutoTuneWorkflow engine for all analysis.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
+import socket
+import struct
 import subprocess
 import sys
+import threading
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
@@ -515,3 +524,399 @@ def upload_csv():
             "path": str(filepath),
         }
     )
+
+
+# =============================================================================
+# Hardware Diagnostics Routes
+# =============================================================================
+
+# JetDrive defaults
+JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
+JETDRIVE_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
+JETDRIVE_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
+
+
+def get_network_interfaces() -> list[dict[str, Any]]:
+    """Get available network interfaces."""
+    interfaces = []
+
+    try:
+        import netifaces
+
+        for iface_name in netifaces.interfaces():
+            addrs = netifaces.ifaddresses(iface_name)
+            if netifaces.AF_INET in addrs:
+                for addr in addrs[netifaces.AF_INET]:
+                    ip = addr.get("addr", "")
+                    if ip:
+                        interfaces.append(
+                            {
+                                "name": iface_name,
+                                "ip": ip,
+                                "is_loopback": ip.startswith("127."),
+                            }
+                        )
+    except ImportError:
+        # Fallback: use socket
+        try:
+            hostname = socket.gethostname()
+            ip = socket.gethostbyname(hostname)
+            interfaces.append(
+                {
+                    "name": "default",
+                    "ip": ip,
+                    "is_loopback": ip.startswith("127."),
+                }
+            )
+        except socket.error:
+            pass
+
+        interfaces.append(
+            {
+                "name": "loopback",
+                "ip": "127.0.0.1",
+                "is_loopback": True,
+            }
+        )
+
+    return interfaces
+
+
+def test_multicast_support(interface_ip: str = "0.0.0.0") -> tuple[bool, str]:
+    """Test if multicast is supported."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        mreq = struct.pack(
+            "4s4s",
+            socket.inet_aton(JETDRIVE_MCAST_GROUP),
+            socket.inet_aton(interface_ip),
+        )
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        sock.close()
+        return True, "Multicast join successful"
+    except OSError as e:
+        return False, f"Multicast error: {e}"
+    except Exception as e:
+        return False, f"Unknown error: {e}"
+
+
+def test_port_available(port: int) -> tuple[bool, str]:
+    """Test if port is available."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", port))
+        sock.close()
+        return True, f"Port {port} is available"
+    except OSError as e:
+        return False, f"Port {port} unavailable: {e}"
+
+
+@jetdrive_bp.route("/hardware/diagnostics", methods=["GET"])
+def run_diagnostics():
+    """
+    Run hardware diagnostics for JetDrive connectivity.
+
+    Returns diagnostic information about:
+    - Network interfaces
+    - Multicast support
+    - Port availability
+    - Environment configuration
+    """
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "overall_status": "ok",
+        "checks": [],
+    }
+
+    errors = 0
+
+    # 1. Network interfaces
+    interfaces = get_network_interfaces()
+    results["checks"].append(
+        {
+            "name": "network_interfaces",
+            "status": "ok" if interfaces else "error",
+            "message": f"Found {len(interfaces)} interface(s)",
+            "details": interfaces,
+        }
+    )
+    if not interfaces:
+        errors += 1
+
+    # 2. Multicast support
+    multicast_results = []
+    multicast_ok = False
+
+    for iface in interfaces:
+        if iface["is_loopback"]:
+            continue
+        ok, msg = test_multicast_support(iface["ip"])
+        multicast_results.append(
+            {
+                "interface": iface["ip"],
+                "status": "ok" if ok else "warning",
+                "message": msg,
+            }
+        )
+        if ok:
+            multicast_ok = True
+
+    # Also test 0.0.0.0
+    ok, msg = test_multicast_support("0.0.0.0")
+    multicast_results.append(
+        {
+            "interface": "0.0.0.0 (any)",
+            "status": "ok" if ok else "error",
+            "message": msg,
+        }
+    )
+    if ok:
+        multicast_ok = True
+    else:
+        errors += 1
+
+    results["checks"].append(
+        {
+            "name": "multicast_support",
+            "status": "ok" if multicast_ok else "error",
+            "message": f"Multicast group: {JETDRIVE_MCAST_GROUP}",
+            "details": multicast_results,
+        }
+    )
+
+    # 3. Port availability
+    ok, msg = test_port_available(JETDRIVE_PORT)
+    results["checks"].append(
+        {
+            "name": "port_availability",
+            "status": "ok" if ok else "error",
+            "message": msg,
+            "details": {"port": JETDRIVE_PORT},
+        }
+    )
+    if not ok:
+        errors += 1
+
+    # 4. Environment configuration
+    results["checks"].append(
+        {
+            "name": "environment",
+            "status": "ok",
+            "message": "Environment configuration",
+            "details": {
+                "JETDRIVE_MCAST_GROUP": JETDRIVE_MCAST_GROUP,
+                "JETDRIVE_PORT": JETDRIVE_PORT,
+                "JETDRIVE_IFACE": JETDRIVE_IFACE,
+            },
+        }
+    )
+
+    # Overall status
+    if errors > 0:
+        results["overall_status"] = "error"
+        results["error_count"] = errors
+
+    return jsonify(results)
+
+
+@jetdrive_bp.route("/hardware/discover", methods=["GET"])
+def discover_providers():
+    """
+    Discover JetDrive providers on the network.
+
+    Query params:
+    - timeout: Discovery timeout in seconds (default: 3)
+    """
+    timeout = float(request.args.get("timeout", 3.0))
+
+    try:
+        # Import the async discover function
+        project_root = get_project_root()
+        sys.path.insert(0, str(project_root))
+
+        from synthetic.jetdrive_client import (
+            discover_providers as async_discover,
+            JetDriveConfig,
+        )
+
+        config = JetDriveConfig(
+            multicast_group=JETDRIVE_MCAST_GROUP,
+            port=JETDRIVE_PORT,
+            iface=JETDRIVE_IFACE,
+        )
+
+        # Run async discovery
+        providers = asyncio.run(async_discover(config, timeout=timeout))
+
+        # Convert to JSON-serializable format
+        provider_list = []
+        for p in providers:
+            channels = []
+            for chan_id, chan in p.channels.items():
+                channels.append(
+                    {
+                        "id": chan_id,
+                        "name": chan.name,
+                        "unit": chan.unit,
+                    }
+                )
+
+            provider_list.append(
+                {
+                    "provider_id": p.provider_id,
+                    "provider_id_hex": f"0x{p.provider_id:04X}",
+                    "name": p.name,
+                    "host": p.host,
+                    "port": p.port,
+                    "channels": channels,
+                    "channel_count": len(channels),
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "timeout": timeout,
+                "providers_found": len(provider_list),
+                "providers": provider_list,
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                    "providers_found": 0,
+                    "providers": [],
+                }
+            ),
+            500,
+        )
+
+
+# Global state for connection monitoring
+_monitor_state: dict[str, Any] = {
+    "running": False,
+    "last_check": None,
+    "providers": [],
+    "history": [],
+}
+_monitor_lock = threading.Lock()
+
+
+def _monitor_loop():
+    """Background thread for connection monitoring."""
+    global _monitor_state
+
+    project_root = get_project_root()
+    sys.path.insert(0, str(project_root))
+
+    from synthetic.jetdrive_client import (
+        discover_providers as async_discover,
+        JetDriveConfig,
+    )
+
+    config = JetDriveConfig(
+        multicast_group=JETDRIVE_MCAST_GROUP,
+        port=JETDRIVE_PORT,
+        iface=JETDRIVE_IFACE,
+    )
+
+    while True:
+        with _monitor_lock:
+            if not _monitor_state["running"]:
+                break
+
+        try:
+            providers = asyncio.run(async_discover(config, timeout=2.0))
+
+            provider_list = []
+            for p in providers:
+                provider_list.append(
+                    {
+                        "provider_id": p.provider_id,
+                        "name": p.name,
+                        "host": p.host,
+                        "channel_count": len(p.channels),
+                    }
+                )
+
+            with _monitor_lock:
+                _monitor_state["last_check"] = datetime.now().isoformat()
+                _monitor_state["providers"] = provider_list
+                _monitor_state["history"].append(
+                    {
+                        "timestamp": _monitor_state["last_check"],
+                        "connected": len(provider_list) > 0,
+                        "provider_count": len(provider_list),
+                    }
+                )
+                # Keep only last 60 entries (about 3 minutes at 3s interval)
+                if len(_monitor_state["history"]) > 60:
+                    _monitor_state["history"] = _monitor_state["history"][-60:]
+
+        except Exception:
+            with _monitor_lock:
+                _monitor_state["last_check"] = datetime.now().isoformat()
+                _monitor_state["providers"] = []
+                _monitor_state["history"].append(
+                    {
+                        "timestamp": _monitor_state["last_check"],
+                        "connected": False,
+                        "provider_count": 0,
+                        "error": True,
+                    }
+                )
+
+        time.sleep(3.0)
+
+
+@jetdrive_bp.route("/hardware/monitor/start", methods=["POST"])
+def start_monitor():
+    """Start the connection monitor."""
+    global _monitor_state
+
+    with _monitor_lock:
+        if _monitor_state["running"]:
+            return jsonify({"status": "already_running"})
+
+        _monitor_state["running"] = True
+        _monitor_state["history"] = []
+
+    thread = threading.Thread(target=_monitor_loop, daemon=True)
+    thread.start()
+
+    return jsonify({"status": "started"})
+
+
+@jetdrive_bp.route("/hardware/monitor/stop", methods=["POST"])
+def stop_monitor():
+    """Stop the connection monitor."""
+    global _monitor_state
+
+    with _monitor_lock:
+        _monitor_state["running"] = False
+
+    return jsonify({"status": "stopped"})
+
+
+@jetdrive_bp.route("/hardware/monitor/status", methods=["GET"])
+def get_monitor_status():
+    """Get current monitor status."""
+    global _monitor_state
+
+    with _monitor_lock:
+        return jsonify(
+            {
+                "running": _monitor_state["running"],
+                "last_check": _monitor_state["last_check"],
+                "providers": _monitor_state["providers"],
+                "connected": len(_monitor_state["providers"]) > 0,
+                "history": _monitor_state["history"][-20:],  # Last 20 entries
+            }
+        )

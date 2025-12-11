@@ -6,6 +6,7 @@
  * - 2D RPM × MAP grid AFR analysis
  * - VE correction calculation and export
  * - Power Vision PVV XML generation
+ * - Hardware diagnostics and connection monitoring
  */
 
 import { useState, useEffect } from 'react';
@@ -13,7 +14,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     Gauge, Play, FileDown, Upload, RefreshCw,
     CheckCircle2, XCircle, AlertCircle, Grid3X3,
-    FileText, Download, Zap
+    FileText, Download, Zap, Radio, Wifi, WifiOff,
+    Activity, Server, MonitorCheck, Settings, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,6 +63,38 @@ interface RunInfo {
     status: string;
 }
 
+interface DiagnosticsCheck {
+    name: string;
+    status: 'ok' | 'warning' | 'error';
+    message: string;
+    details: any;
+}
+
+interface DiagnosticsResult {
+    timestamp: string;
+    overall_status: 'ok' | 'error';
+    error_count?: number;
+    checks: DiagnosticsCheck[];
+}
+
+interface Provider {
+    provider_id: number;
+    provider_id_hex: string;
+    name: string;
+    host: string;
+    port: number;
+    channels: { id: number; name: string; unit: number }[];
+    channel_count: number;
+}
+
+interface MonitorStatus {
+    running: boolean;
+    last_check: string | null;
+    providers: { provider_id: number; name: string; host: string; channel_count: number }[];
+    connected: boolean;
+    history: { timestamp: string; connected: boolean; provider_count: number }[];
+}
+
 // VE Heatmap cell color based on correction value
 function getCellColor(value: number): string {
     const delta = (value - 1) * 100;
@@ -87,7 +121,304 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
+// Hardware Diagnostics Component
+function HardwareTab() {
+    const [isDiscovering, setIsDiscovering] = useState(false);
+    const [providers, setProviders] = useState<Provider[]>([]);
+
+    // Fetch diagnostics
+    const { data: diagnostics, refetch: refetchDiagnostics, isLoading: diagLoading } = useQuery<DiagnosticsResult>({
+        queryKey: ['jetdrive-diagnostics'],
+        queryFn: async () => {
+            const res = await fetch(`${API_BASE}/hardware/diagnostics`);
+            return res.json();
+        },
+        refetchOnWindowFocus: false,
+    });
+
+    // Fetch monitor status
+    const { data: monitorStatus, refetch: refetchMonitor } = useQuery<MonitorStatus>({
+        queryKey: ['jetdrive-monitor'],
+        queryFn: async () => {
+            const res = await fetch(`${API_BASE}/hardware/monitor/status`);
+            return res.json();
+        },
+        refetchInterval: (query) => query.state.data?.running ? 2000 : false,
+    });
+
+    // Discover providers
+    const handleDiscover = async () => {
+        setIsDiscovering(true);
+        try {
+            const res = await fetch(`${API_BASE}/hardware/discover?timeout=5`);
+            const data = await res.json();
+            setProviders(data.providers || []);
+            if (data.providers_found > 0) {
+                toast.success(`Found ${data.providers_found} provider(s)`);
+            } else {
+                toast.warning('No providers found');
+            }
+        } catch (err) {
+            toast.error('Discovery failed');
+        } finally {
+            setIsDiscovering(false);
+        }
+    };
+
+    // Toggle monitor
+    const toggleMonitor = async () => {
+        const action = monitorStatus?.running ? 'stop' : 'start';
+        await fetch(`${API_BASE}/hardware/monitor/${action}`, { method: 'POST' });
+        refetchMonitor();
+        toast.info(`Monitor ${action}ed`);
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'ok': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+            case 'warning': return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+            case 'error': return <XCircle className="h-4 w-4 text-red-500" />;
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* Connection Status Banner */}
+            <div className={`p-4 rounded-lg border ${
+                monitorStatus?.connected 
+                    ? 'bg-green-500/10 border-green-500/30' 
+                    : 'bg-muted/30 border-border'
+            }`}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        {monitorStatus?.connected ? (
+                            <Wifi className="h-6 w-6 text-green-500 animate-pulse" />
+                        ) : (
+                            <WifiOff className="h-6 w-6 text-muted-foreground" />
+                        )}
+                        <div>
+                            <h3 className="font-semibold">
+                                {monitorStatus?.connected 
+                                    ? `Connected to ${monitorStatus.providers.length} provider(s)`
+                                    : 'Not Connected'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                                {monitorStatus?.last_check 
+                                    ? `Last check: ${new Date(monitorStatus.last_check).toLocaleTimeString()}`
+                                    : 'Monitor not running'}
+                            </p>
+                        </div>
+                    </div>
+                    <Button
+                        variant={monitorStatus?.running ? "destructive" : "default"}
+                        size="sm"
+                        onClick={toggleMonitor}
+                    >
+                        <Activity className={`h-4 w-4 mr-2 ${monitorStatus?.running ? 'animate-pulse' : ''}`} />
+                        {monitorStatus?.running ? 'Stop Monitor' : 'Start Monitor'}
+                    </Button>
+                </div>
+
+                {/* Connected Providers */}
+                {monitorStatus?.connected && monitorStatus.providers.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-green-500/20">
+                        {monitorStatus.providers.map((p) => (
+                            <div key={p.provider_id} className="flex items-center gap-2 text-sm">
+                                <Server className="h-4 w-4 text-green-500" />
+                                <span className="font-medium">{p.name}</span>
+                                <span className="text-muted-foreground">({p.host})</span>
+                                <Badge variant="secondary" className="ml-auto">
+                                    {p.channel_count} channels
+                                </Badge>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Diagnostics Card */}
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <MonitorCheck className="h-5 w-5" />
+                                System Diagnostics
+                            </CardTitle>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => refetchDiagnostics()}
+                                disabled={diagLoading}
+                            >
+                                <RefreshCw className={`h-4 w-4 mr-2 ${diagLoading ? 'animate-spin' : ''}`} />
+                                Run
+                            </Button>
+                        </div>
+                        {diagnostics && (
+                            <CardDescription>
+                                Status: {diagnostics.overall_status === 'ok' ? (
+                                    <span className="text-green-500">All Checks Passed</span>
+                                ) : (
+                                    <span className="text-red-500">{diagnostics.error_count} Error(s)</span>
+                                )}
+                            </CardDescription>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {diagnostics ? (
+                            <div className="space-y-3">
+                                {diagnostics.checks.map((check) => (
+                                    <div 
+                                        key={check.name}
+                                        className="p-3 rounded-lg bg-muted/30 border border-border"
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            {getStatusIcon(check.status)}
+                                            <span className="font-medium capitalize">
+                                                {check.name.replace(/_/g, ' ')}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">{check.message}</p>
+                                        
+                                        {/* Network interfaces detail */}
+                                        {check.name === 'network_interfaces' && Array.isArray(check.details) && (
+                                            <div className="mt-2 text-xs space-y-1">
+                                                {check.details.map((iface: any) => (
+                                                    <div key={iface.ip} className="flex items-center gap-2">
+                                                        <div className={`w-2 h-2 rounded-full ${iface.is_loopback ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                                                        <span className="font-mono">{iface.ip}</span>
+                                                        <span className="text-muted-foreground">({iface.name})</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Environment config detail */}
+                                        {check.name === 'environment' && check.details && (
+                                            <div className="mt-2 text-xs font-mono space-y-1">
+                                                {Object.entries(check.details).map(([key, val]) => (
+                                                    <div key={key} className="flex gap-2">
+                                                        <span className="text-muted-foreground">{key}:</span>
+                                                        <span>{String(val)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <MonitorCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                                <p>Click "Run" to check system configuration</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Provider Discovery Card */}
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <Search className="h-5 w-5" />
+                                Provider Discovery
+                            </CardTitle>
+                            <Button 
+                                onClick={handleDiscover}
+                                disabled={isDiscovering}
+                                className="bg-orange-600 hover:bg-orange-700"
+                            >
+                                <Radio className={`h-4 w-4 mr-2 ${isDiscovering ? 'animate-pulse' : ''}`} />
+                                {isDiscovering ? 'Scanning...' : 'Discover'}
+                            </Button>
+                        </div>
+                        <CardDescription>
+                            Scan network for JetDrive providers (dynos)
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {isDiscovering ? (
+                            <div className="text-center py-8">
+                                <Radio className="h-12 w-12 mx-auto mb-3 text-orange-500 animate-pulse" />
+                                <p className="text-muted-foreground">Scanning for JetDrive providers...</p>
+                                <Progress value={66} className="h-2 mt-4 max-w-xs mx-auto" />
+                            </div>
+                        ) : providers.length > 0 ? (
+                            <div className="space-y-4">
+                                {providers.map((provider) => (
+                                    <div 
+                                        key={provider.provider_id}
+                                        className="p-4 rounded-lg bg-green-500/10 border border-green-500/30"
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <Server className="h-5 w-5 text-green-500" />
+                                                <span className="font-semibold">{provider.name}</span>
+                                            </div>
+                                            <Badge variant="outline" className="font-mono">
+                                                {provider.provider_id_hex}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground mb-3">
+                                            {provider.host}:{provider.port}
+                                        </p>
+                                        
+                                        <div className="border-t border-green-500/20 pt-3">
+                                            <p className="text-xs font-medium mb-2">
+                                                Channels ({provider.channel_count}):
+                                            </p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {provider.channels.slice(0, 8).map((ch) => (
+                                                    <Badge key={ch.id} variant="secondary" className="text-xs">
+                                                        {ch.name}
+                                                    </Badge>
+                                                ))}
+                                                {provider.channels.length > 8 && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        +{provider.channels.length - 8} more
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                                <p>Click "Discover" to scan for JetDrive providers</p>
+                                <p className="text-xs mt-2">
+                                    Make sure Power Core is running with JetDrive enabled
+                                </p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Troubleshooting Guide */}
+            <Alert className="bg-blue-500/10 border-blue-500/30">
+                <Settings className="h-4 w-4 text-blue-500" />
+                <AlertTitle>Setup Guide</AlertTitle>
+                <AlertDescription className="mt-2">
+                    <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li>Ensure Dynojet Power Core is running</li>
+                        <li>Enable JetDrive in Power Core settings</li>
+                        <li>Configure channels: RPM, Torque, AFR, TPS, MAP</li>
+                        <li>Run diagnostics to verify network connectivity</li>
+                        <li>Use "Discover" to find your dyno on the network</li>
+                    </ol>
+                </AlertDescription>
+            </Alert>
+        </div>
+    );
+}
+
 export default function JetDriveAutoTunePage() {
+    const [activeMainTab, setActiveMainTab] = useState('autotune');
     const [runId, setRunId] = useState(`run_${Date.now()}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
@@ -183,7 +514,7 @@ export default function JetDriveAutoTunePage() {
                         JetDrive Auto-Tune
                     </h1>
                     <p className="text-muted-foreground">
-                        2D RPM × MAP grid analysis with Power Vision PVV export
+                        Hardware diagnostics, capture, and VE correction analysis
                     </p>
                 </div>
 
@@ -199,6 +530,26 @@ export default function JetDriveAutoTunePage() {
                 </div>
             </div>
 
+            {/* Main Tabs */}
+            <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                    <TabsTrigger value="hardware" className="flex items-center gap-2">
+                        <Radio className="h-4 w-4" />
+                        Hardware
+                    </TabsTrigger>
+                    <TabsTrigger value="autotune" className="flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Auto-Tune
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Hardware Tab */}
+                <TabsContent value="hardware" className="mt-6">
+                    <HardwareTab />
+                </TabsContent>
+
+                {/* Auto-Tune Tab */}
+                <TabsContent value="autotune" className="mt-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column - Controls */}
                 <div className="space-y-4">
@@ -507,6 +858,8 @@ export default function JetDriveAutoTunePage() {
                     directly to Power Vision PVV format for immediate application.
                 </AlertDescription>
             </Alert>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }
