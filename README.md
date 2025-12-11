@@ -1,44 +1,96 @@
 # DynoAI
 
-AI-powered dyno tuning toolkit for analyzing WinPEP logs and generating VE and spark correction recommendations.
+AI-powered dyno tuning toolkit for Harley-Davidson motorcycles. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision and Power Core systems.
+
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![React](https://img.shields.io/badge/react-18-blue.svg)
 
 ## Features
 
-- **🌐 Web Interface**: NEW - React/TypeScript frontend with 3D VE visualization
-- **VE Correction Analysis**: Analyze dyno logs to generate VE table corrections
-- **Adaptive Kernel Smoothing**: NEW - Two-stage kernel system that adapts smoothing based on correction magnitude
-  - Preserves large corrections (>3%) with minimal smoothing
-  - Smooths small corrections (<1%) aggressively
-  - Coverage-weighted neighbor averaging for optimal noise reduction
-- **Spark Timing Suggestions**: Generate spark advance/retard recommendations based on knock detection
-- **Safe Apply/Rollback System**: Apply VE corrections with automatic clamping, hash verification, and full rollback capability
-- **Diagnostics**: Detect anomalies and potential issues in tuning data
+### 🎯 Core Analysis
+- **VE Correction Analysis** - Analyze AFR data to generate volumetric efficiency corrections
+- **2D Grid Analysis** - RPM × MAP zone-based analysis (11×9 grid = 99 cells)
+- **Adaptive Kernel Smoothing** - Two-stage system preserving large corrections while smoothing noise
+- **Spark Timing Suggestions** - Generate spark advance/retard based on knock detection
+
+### 🔌 JetDrive Integration
+- **Live Data Capture** - Real-time dyno data via KLHDV multicast protocol
+- **Auto-Tune Workflow** - Automated capture → analysis → correction pipeline
+- **Hardware Testing** - Built-in diagnostics for network and multicast connectivity
+- **Provider Discovery** - Automatic detection of Dynojet systems on network
+
+### 📊 Power Vision Support
+- **PVV XML Export** - Direct export to Power Vision tune file format
+- **Log Import** - Parse Power Vision CSV logs for analysis
+- **Tune File Parsing** - Read existing PVV files for reference
+
+### 🛠️ Advanced Features
+- **Decel Fuel Management** - Automated deceleration popping elimination
+- **Cylinder Balancing** - Per-cylinder AFR equalization for V-twins
+- **Safe Apply/Rollback** - Hash-verified corrections with full undo capability
 
 ## Quick Start
 
 ### Web Application (Recommended)
 
-The easiest way to use DynoAI is through the web interface:
-
 ```powershell
-# One-command startup (starts both backend and frontend)
+# Start both backend and frontend
 .\start-web.ps1
 ```
 
-Then open your browser to `http://localhost:5173`
+Open your browser to `http://localhost:5173`
 
-**Features:**
-- Upload CSV files via drag-and-drop
-- Real-time analysis progress
-- Interactive 3D VE surface visualization
-- Download all output files
-- View manifest statistics
+**Or start manually:**
 
-See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for detailed setup instructions.
+```powershell
+# Terminal 1: Backend API
+cd C:\Dev\DynoAI_3
+$env:PYTHONPATH="."
+python -c "from api.app import app; app.run(host='127.0.0.1', port=5000)"
 
-### Command Line (Advanced)
+# Terminal 2: Frontend
+cd C:\Dev\DynoAI_3\frontend
+npm run dev
+```
 
-#### Standard Dyno Analysis
+### JetDrive Auto-Tune
+
+The JetDrive page provides a complete auto-tuning workflow:
+
+1. **Navigate to JetDrive** tab in the web UI
+2. **Run Simulation** or upload a CSV from a real dyno run
+3. **View Results** - 2D VE correction grid, AFR analysis, diagnostics
+4. **Export** - Download PVV XML for Power Vision or CSV for manual import
+
+### Hardware Testing
+
+Before connecting to real Dynojet hardware:
+
+1. Go to **JetDrive → Hardware** tab
+2. Click **Run Diagnostics** to verify:
+   - Network interfaces detected
+   - Multicast support working
+   - Port 22344 available
+3. Click **Discover** to scan for providers on network
+4. Use **Start Monitor** for continuous connection health checks
+
+### Command Line Tools
+
+#### JetDrive Auto-Tune Script
+
+```bash
+# Simulate a dyno run (no hardware needed)
+python scripts/jetdrive_autotune.py --simulate --run-id test_run
+
+# Analyze existing CSV
+python scripts/jetdrive_autotune.py --csv runs/my_run/data.csv --run-id my_analysis
+
+# Live capture from JetDrive (requires hardware)
+python scripts/jetdrive_autotune.py --live --duration 60 --run-id dyno_pull
+```
+
+#### Standard Analysis
 
 ```bash
 python ai_tuner_toolkit_dyno_v1_2.py \
@@ -48,15 +100,7 @@ python ai_tuner_toolkit_dyno_v1_2.py \
   --base_rear current_ve_rear.csv
 ```
 
-**Analysis Features:**
-- Adaptive kernel smoothing (0-2 passes based on correction magnitude)
-- Coverage-weighted neighbor averaging
-- Automatic clamping to ±7% for production safety
-- Comprehensive diagnostics and anomaly detection
-
-#### Apply VE Corrections
-
-The VE Operations system provides safe, reversible application of correction factors:
+#### VE Operations (Apply/Rollback)
 
 ```bash
 # Preview corrections (dry-run)
@@ -79,45 +123,144 @@ python ve_operations.py rollback \
   --output ve_restored.csv
 ```
 
-**Key Features:**
-- Automatic clamping to ±7% (default, configurable)
-- 4-decimal precision output
-- SHA-256 hash verification for rollback safety
-- Complete metadata tracking with timestamps
-- Dry-run mode for preview
+## Architecture
 
-See [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) for complete documentation.
+```
+DynoAI_3/
+├── api/                    # Flask REST API
+│   ├── app.py             # Main application
+│   ├── routes/            # API endpoints
+│   │   ├── jetdrive.py    # JetDrive auto-tune API
+│   │   ├── powercore.py   # Power Core integration
+│   │   └── ...
+│   └── services/          # Business logic
+│       ├── jetdrive_client.py    # KLHDV protocol
+│       ├── autotune_workflow.py  # Unified analysis engine
+│       └── ...
+├── frontend/              # React/TypeScript UI
+│   └── src/
+│       ├── pages/
+│       │   └── JetDriveAutoTunePage.tsx
+│       └── components/
+├── scripts/               # CLI tools
+│   ├── jetdrive_autotune.py      # Full auto-tune CLI
+│   ├── jetdrive_hardware_test.py # Hardware diagnostics
+│   └── ...
+├── docs/                  # Documentation
+└── tests/                 # Test suite
+```
+
+## API Endpoints
+
+### JetDrive Auto-Tune
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/jetdrive/status` | GET | Check JetDrive system status |
+| `/api/jetdrive/analyze` | POST | Run analysis on uploaded CSV |
+| `/api/jetdrive/analyze-unified` | POST | Run unified workflow analysis |
+| `/api/jetdrive/runs/<id>` | GET | Get run details and results |
+| `/api/jetdrive/runs/<id>/pvv` | GET | Download PVV XML export |
+| `/api/jetdrive/hardware/diagnostics` | GET | Run hardware diagnostics |
+| `/api/jetdrive/hardware/discover` | GET | Discover JetDrive providers |
+
+### Core Analysis
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/analyze` | POST | Analyze uploaded dyno log |
+| `/api/ve-data/<run_id>` | GET | Get VE correction data |
+| `/api/download/<run_id>/<file>` | GET | Download output files |
+| `/api/health` | GET | System health check |
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# JetDrive Network
+JETDRIVE_MCAST_GROUP=224.0.2.10  # Multicast group
+JETDRIVE_PORT=22344              # UDP port
+JETDRIVE_IFACE=0.0.0.0           # Network interface
+
+# API Settings
+RATE_LIMIT_ENABLED=true          # Enable rate limiting
+API_KEY=your-secret-key          # Optional API authentication
+```
+
+### AFR Targets (MAP-based)
+
+| MAP Range | Target AFR | Use Case |
+|-----------|------------|----------|
+| < 50 kPa | 14.7 | Cruise/light load |
+| 50-70 kPa | 13.8 | Part throttle |
+| 70-85 kPa | 13.2 | Acceleration |
+| > 85 kPa | 12.2 | WOT/power |
 
 ## Testing
 
 ```bash
-# Run self-test for main toolkit
-python selftest.py
+# Run all tests
+pytest tests/ -v
 
-# Run VE operations tests
-python -m unittest test_ve_operations -v
+# Run specific test modules
+pytest tests/api/ -v                    # API tests
+pytest tests/test_autotune_workflow.py  # Workflow tests
+pytest tests/test_jetdrive_client_protocol.py  # Protocol tests
+
+# Run with coverage
+pytest --cov=api --cov=scripts tests/
 ```
 
 ## Documentation
 
-- [docs/CLAUDE_RAILS.md](docs/CLAUDE_RAILS.md) - Claude Code team rails and workflow
-- [TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md) - Adaptive Kernel v1.3 implementation details
-- [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - Complete VE Apply/Rollback system documentation
-- [Dyno_AI_Tuner_v1_2_README.txt](Dyno_AI_Tuner_v1_2_README.txt) - Main toolkit documentation
+- [JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md) - Hardware setup guide
+- [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) - Web app setup
+- [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - VE apply/rollback system
+- [TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md) - Adaptive kernel details
 
-## DynoAI Coding Agent (Minimal, Local-First)
+## Requirements
 
-- Generate a patch:
+- Python 3.10+
+- Node.js 18+ (for frontend)
+- Network with multicast support (for JetDrive)
 
-  ```bash
-  python scripts/dynoai_make_patch.py --goal "..." --files ai_tuner_toolkit_dyno_v1_2.py
-  ```
+### Python Dependencies
 
-- Apply & test:
+```bash
+pip install -r requirements.txt
+```
 
-  ```bash
-  python scripts/dynoai_apply_patch.py patches/<generated>.diff
-  ```
+Key packages: Flask, pandas, numpy, scipy
 
-- See `docs/DYNOAI_AGENT_WORKFLOW.md` for details.
+### Frontend Dependencies
 
+```bash
+cd frontend
+npm install
+```
+
+## Safety Notes
+
+⚠️ **Always make backups before applying corrections to your ECU**
+
+- VE corrections are clamped to ±7% by default for safety
+- Use dry-run mode to preview changes before applying
+- The rollback system maintains full history with hash verification
+- Test on a dyno before street use
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Run tests: `pytest tests/ -v`
+4. Submit a pull request
+
+## Support
+
+- Issues: [GitHub Issues](https://github.com/rob9206/DynoAI_3/issues)
+- Documentation: See `/docs` folder
