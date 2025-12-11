@@ -119,12 +119,31 @@ class _Wire:
             return None
         if len(data) < cls.HEADER.size + length:
             return None
-        value = data[cls.HEADER.size: cls.HEADER.size + length]
+        value = data[cls.HEADER.size : cls.HEADER.size + length]
         return key, length, host, seq, dest, value
 
 
 def _clean_utf8(buf: bytes) -> str:
     return buf.decode("utf-8", errors="replace").split("\0", 1)[0].strip()
+
+
+def _resolve_iface_address(iface: str) -> str:
+    """
+    Resolve the configured interface to an IP address.
+    Accepts dotted-quad or resolvable hostname.
+    Raises a clear error on failure.
+    """
+    target = iface.strip() if iface else "0.0.0.0"
+    try:
+        # If already an IP, inet_aton will succeed.
+        socket.inet_aton(target)
+        return target
+    except OSError:
+        # Fall back to DNS/hosts resolution for names.
+        try:
+            return socket.gethostbyname(target)
+        except OSError as exc:
+            raise RuntimeError(f"Invalid interface '{iface}': {exc}") from exc
 
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
@@ -134,32 +153,51 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     if reuseport is not None:
         with contextlib.suppress(OSError):
             sock.setsockopt(socket.SOL_SOCKET, reuseport, 1)
-    bind_addr = cfg.iface or "0.0.0.0"
+
+    iface_ip = _resolve_iface_address(cfg.iface)
     try:
-        sock.bind((bind_addr, cfg.port))
-    except OSError:
-        sock.bind(("", cfg.port))
-    mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(bind_addr)
-    with contextlib.suppress(OSError):
+        sock.bind((iface_ip, cfg.port))
+    except OSError as exc:
+        sock.close()
+        raise RuntimeError(
+            f"Failed to bind JetDrive socket on {iface_ip}:{cfg.port}: {exc}"
+        ) from exc
+
+    # Join multicast on the specific interface if provided, otherwise INADDR_ANY.
+    mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(
+        iface_ip or "0.0.0.0"
+    )
+    try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    except OSError as exc:
+        sock.close()
+        raise RuntimeError(
+            f"Failed to join multicast group {cfg.multicast_group} on {iface_ip}: {exc}"
+        ) from exc
+
     sock.setblocking(False)
     return sock
 
 
 def _parse_channel_info(
-    host_id: int, host_ip: str, value: bytes
+    host_id: int,
+    host_ip: str,
+    value: bytes,
+    *,
+    port: int = DEFAULT_PORT,
 ) -> JetDriveProviderInfo | None:
+    """Parse a ChannelInfo payload into provider metadata."""
     if len(value) < PROVIDER_NAME_LEN:
         return None
     provider_name = _clean_utf8(value[:PROVIDER_NAME_LEN]) or "JetDrive Provider"
     idx = PROVIDER_NAME_LEN
     channels: dict[int, ChannelInfo] = {}
     while idx + CHANNEL_INFO_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx: idx + 2], "little")
+        chan_id = int.from_bytes(value[idx : idx + 2], "little")
         idx += 2
         vendor = value[idx]
         idx += 1
-        raw_name = value[idx: idx + CHANNEL_NAME_LEN]
+        raw_name = value[idx : idx + CHANNEL_NAME_LEN]
         idx += CHANNEL_NAME_LEN
         unit = value[idx]
         idx += 1
@@ -173,7 +211,7 @@ def _parse_channel_info(
         provider_id=host_id,
         name=provider_name,
         host=host_ip,
-        port=DEFAULT_PORT,
+        port=port,
         channels=channels,
     )
 
@@ -184,9 +222,9 @@ def _parse_channel_values(
     samples: list[JetDriveSample] = []
     idx = 0
     while idx + CHANNEL_VALUES_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx: idx + 2], "little")
+        chan_id = int.from_bytes(value[idx : idx + 2], "little")
         idx += 2
-        ts = int.from_bytes(value[idx: idx + 4], "little")
+        ts = int.from_bytes(value[idx : idx + 4], "little")
         idx += 4
         try:
             val = struct.unpack_from("<f", value, idx)[0]
@@ -212,13 +250,23 @@ def parse_frame(
     channel_lookup: dict[int, ChannelInfo] | None = None,
     *,
     host_ip: str = "",
-):
+    port: int = DEFAULT_PORT,
+) -> tuple[int, JetDriveProviderInfo | list[JetDriveSample] | None] | None:
+    """
+    Parse a JetDrive wire frame.
+
+    Returns:
+        None if frame is malformed, otherwise (key, payload) where payload is:
+        - JetDriveProviderInfo for KEY_CHANNEL_INFO
+        - list[JetDriveSample] for KEY_CHANNEL_VALUES
+        - None for other keys
+    """
     decoded = _Wire.decode(data)
     if not decoded:
         return None
     key, _, host, _, _, value = decoded
     if key == KEY_CHANNEL_INFO:
-        return key, _parse_channel_info(host, host_ip, value)
+        return key, _parse_channel_info(host, host_ip, value, port=port)
     if key == KEY_CHANNEL_VALUES:
         return key, _parse_channel_values(host, channel_lookup or {}, value)
     return key, None
@@ -271,7 +319,7 @@ async def discover_providers(
             key, _, host, _, _, value = decoded
             if key == KEY_CHANNEL_INFO:
                 try:
-                    info = _parse_channel_info(host, addr[0], value)
+                    info = _parse_channel_info(host, addr[0], value, port=cfg.port)
                 except Exception:
                     continue
                 if info:
@@ -290,6 +338,7 @@ async def subscribe(
     config: JetDriveConfig | None = None,
     stop_event: asyncio.Event | None = None,
     recv_timeout: float = 0.5,
+    debug: bool = False,
 ) -> None:
     """
     Listen for ChannelValues from a provider and invoke the callback.
@@ -306,6 +355,9 @@ async def subscribe(
             if meta.name.lower() in names:
                 allowed_ids.add(chan_id)
 
+    dropped_frames = 0
+    non_provider_frames = 0
+
     try:
         while True:
             if stop_event is not None and stop_event.is_set():
@@ -318,15 +370,18 @@ async def subscribe(
                 continue
             decoded = _Wire.decode(data)
             if not decoded:
+                dropped_frames += 1
                 continue
             key, _, host, _, _, value = decoded
             if key != KEY_CHANNEL_VALUES or host != provider.provider_id:
+                non_provider_frames += 1
                 continue
             try:
                 samples = _parse_channel_values(
                     provider.provider_id, channel_lookup, value
                 )
             except Exception:
+                dropped_frames += 1
                 # Skip malformed payloads
                 continue
             for sample in samples:
@@ -335,6 +390,12 @@ async def subscribe(
                 on_sample(sample)
     finally:
         sock.close()
+        if debug:
+            print(
+                f"[jetdrive_client.subscribe] dropped_frames={dropped_frames}, "
+                f"non_provider_frames={non_provider_frames}",
+                flush=True,
+            )
 
 
 async def run_until_cancelled(
@@ -364,19 +425,36 @@ async def publish_run(
 ) -> None:
     """
     Experimental: emit ChannelValues blocks back onto JetDrive.
+
+    Args:
+        provider: Provider info (provider_id must be 1-0xFFFE or 0 for random)
+        samples: Iterable of samples to publish
+        options: Playback options (rate, loop)
+        config: Network config (defaults to env)
+        stop_event: Optional event to signal stop
     """
     cfg = config or JetDriveConfig.from_env()
     opts = options or JetDrivePublishOptions()
     loop = asyncio.get_running_loop()
     sock = _make_socket(cfg)
-    host_id = provider.provider_id or random.randint(1, 0xFFFE)
+
+    # Validate and resolve provider_id
+    pid = provider.provider_id
+    if pid == 0:
+        pid = random.randint(1, 0xFFFE)
+    elif not (1 <= pid <= 0xFFFE):
+        raise ValueError(f"provider_id must be 0 (random) or 1-0xFFFE, got {pid}")
+    host_id = pid
     seq = random.randint(1, 0xFF)
+
+    # Convert iterable to list ONCE (outside loop for efficiency)
+    block = list(samples)
+    if not block:
+        sock.close()
+        return
 
     try:
         while True:
-            block = list(samples)
-            if not block:
-                return
             payload = bytearray()
             for sample in block:
                 payload.extend(

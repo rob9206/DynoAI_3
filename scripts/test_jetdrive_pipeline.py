@@ -12,9 +12,8 @@ import struct
 import socket
 from pathlib import Path
 
-from synthetic.jetdrive_client import (
+from api.services.jetdrive_client import (
     JetDriveProviderInfo,
-    JetDriveSample,
     ChannelInfo,
     JDUnit,
     JetDriveConfig,

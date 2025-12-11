@@ -43,7 +43,7 @@ DynoAI is an intelligent dyno tuning system that transforms WinPEP logs into pro
 - ChannelInfo payload: provider name (50 bytes, UTF-8, null padded) plus N channel blocks (34 bytes each: `chanId` u16, vendor byte, channelName 30-byte UTF-8, unit byte/JDUnit).
 - ChannelValues payload: repeated 10-byte samples (`chanId` u16, `ts_ms` u32, float32 value). Extra trailing bytes are ignored.
 - Components:
-  - `synthetic.jetdrive_client`: joins multicast, sends RequestChannelInfo to ALL_HOSTS, parses ChannelInfo into `JetDriveProviderInfo` with channel metadata, subscribes to ChannelValues and yields `JetDriveSample` records, with optional publish/re-stream helper.
+  - `api.services.jetdrive_client`: joins multicast, sends RequestChannelInfo to ALL_HOSTS, parses ChannelInfo into `JetDriveProviderInfo` with channel metadata, subscribes to ChannelValues and yields `JetDriveSample` records, with optional publish/re-stream helper.
   - `synthetic/winpep8_cli.py` (`jetdrive-run`): discovers providers by name/id, validates required channels (RPM/Torque/AFR default), collects a single run window (auto or button trigger), converts samples to the existing WinPEP-like CSV via `winpep8_synthesizer`.
 - Constraints/guarantees: tuning math, kernels (k1/k2/k3), clamp rules, and CSV format remain unchanged; behavior is deterministic for a given input stream; restreaming back onto JetDrive is guarded/experimental.
 

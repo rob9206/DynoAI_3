@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from typing import cast
 
-from synthetic.jetdrive_client import (
+from api.services.jetdrive_client import (
     JetDriveProviderInfo,
     JetDriveSample,
     discover_providers,
@@ -336,13 +336,23 @@ async def _collect_jetdrive_run(
                     state = "DONE"
                     stop_event.set()
 
-    await subscribe(
-        provider,
-        required_channels,
-        on_sample=on_sample,
-        stop_event=stop_event,
-        recv_timeout=0.5,
-    )
+    try:
+        await asyncio.wait_for(
+            subscribe(
+                provider,
+                required_channels,
+                on_sample=on_sample,
+                stop_event=stop_event,
+                recv_timeout=0.5,
+            ),
+            timeout=overall_timeout,
+        )
+    except asyncio.TimeoutError as exc:
+        stop_event.set()
+        raise RuntimeError(
+            f"No JetDrive data received within {overall_timeout:.1f}s; "
+            "verify the provider is streaming and the correct interface is selected."
+        ) from exc
 
     # Validate duration
     rpm_samples = buffers.get(rpm_key.lower(), [])

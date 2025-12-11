@@ -90,6 +90,33 @@ def safe_path_in_runs(run_id: str, filename: str) -> Path:
     return target_path
 
 
+def validate_csv_path(csv_path: str) -> Path:
+    """
+    Ensure the provided CSV path exists and is constrained to trusted directories.
+    Allowed roots: uploads/ or runs/ under the project root.
+    """
+    project_root = get_project_root()
+    allowed_dirs = [project_root / "uploads", project_root / "runs"]
+
+    path = Path(csv_path).expanduser()
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError:
+        raise ValueError("CSV path not found")
+
+    if not resolved.is_file():
+        raise ValueError("CSV path must be a file")
+
+    for allowed in allowed_dirs:
+        try:
+            resolved.relative_to(allowed.resolve())
+            return resolved
+        except ValueError:
+            continue
+
+    raise ValueError("CSV path must be under uploads/ or runs/")
+
+
 # =============================================================================
 # Status Routes
 # =============================================================================
@@ -291,7 +318,10 @@ def analyze_unified():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    csv_path = data["csv_path"]
+    try:
+        csv_path = validate_csv_path(data["csv_path"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     project_root = get_project_root()
     output_dir = project_root / "runs" / run_id
 
@@ -300,7 +330,7 @@ def analyze_unified():
 
         # Run the unified workflow with JetDrive data source
         session = workflow.run_full_workflow(
-            log_path=csv_path,
+            log_path=str(csv_path),
             output_dir=str(output_dir),
             data_source=DataSource.JETDRIVE,
         )
@@ -737,7 +767,7 @@ def discover_providers():
         project_root = get_project_root()
         sys.path.insert(0, str(project_root))
 
-        from synthetic.jetdrive_client import (
+        from api.services.jetdrive_client import (
             discover_providers as async_discover,
             JetDriveConfig,
         )
@@ -816,7 +846,7 @@ def _monitor_loop():
     project_root = get_project_root()
     sys.path.insert(0, str(project_root))
 
-    from synthetic.jetdrive_client import (
+    from api.services.jetdrive_client import (
         discover_providers as async_discover,
         JetDriveConfig,
     )
