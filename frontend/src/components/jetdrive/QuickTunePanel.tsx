@@ -294,4 +294,3 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
     </Card>
   );
 }
-
