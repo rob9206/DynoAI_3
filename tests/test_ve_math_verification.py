@@ -86,10 +86,12 @@ class TestVEApplyRollbackInverse:
         write_ve_table(path, rpm_bins, kpa_bins, factor_grid, precision=4)
         return path, rpm_bins, kpa_bins, factor_grid
 
-    def test_apply_then_rollback_exact_inverse(self, temp_dir, base_ve_table, factor_table):
+    def test_apply_then_rollback_exact_inverse(
+        self, temp_dir, base_ve_table, factor_table
+    ):
         """
         Core invariant: apply → rollback → exact original table.
-        
+
         This test verifies the mathematical property:
         rollback(apply(base, factor), factor) = base
         """
@@ -137,10 +139,12 @@ class TestVEApplyRollbackInverse:
                     f"diff={abs(original - restored):.6f}"
                 )
 
-    def test_determinism_same_input_same_output(self, temp_dir, base_ve_table, factor_table):
+    def test_determinism_same_input_same_output(
+        self, temp_dir, base_ve_table, factor_table
+    ):
         """
         Verify determinism: running apply twice with same inputs produces identical outputs.
-        
+
         No randomness, no time-based seeds, no cached state should affect results.
         """
         base_path, _, _, _ = base_ve_table
@@ -245,7 +249,7 @@ class TestApplyMathFormula:
     def test_apply_formula_positive_factor(self):
         """
         Verify formula: updated_ve = base_ve × (1 + factor/100)
-        
+
         Example: base=100, factor=5.0% → updated=100×1.05=105
         """
         base_ve = 100.0
@@ -264,7 +268,7 @@ class TestApplyMathFormula:
     def test_apply_formula_negative_factor(self):
         """
         Verify formula with negative correction.
-        
+
         Example: base=100, factor=-3.0% → updated=100×0.97=97
         """
         base_ve = 100.0
@@ -297,7 +301,7 @@ class TestRollbackMathFormula:
     def test_rollback_formula_inverse(self):
         """
         Verify rollback formula: restored_ve = current_ve / (1 + factor/100)
-        
+
         This must be exact inverse of apply formula.
         """
         base_ve = 100.0
@@ -312,7 +316,9 @@ class TestRollbackMathFormula:
         restored_ve = applied_ve / rollback_divisor
 
         assert restored_ve == base_ve, "Rollback must restore exact original"
-        assert apply_multiplier == rollback_divisor, "Apply and rollback use same multiplier"
+        assert apply_multiplier == rollback_divisor, (
+            "Apply and rollback use same multiplier"
+        )
 
     def test_rollback_formula_negative_factor(self):
         """Verify rollback works correctly with negative factors."""
@@ -397,7 +403,7 @@ class TestBinningRules:
     def test_rpm_bins_structure(self):
         """
         Document RPM binning structure.
-        
+
         Standard bins: 2000-6500 by 500 (10 bins)
         Extended bins: 1500-6500 (includes 1500 for low-end coverage)
         """
@@ -412,7 +418,7 @@ class TestBinningRules:
     def test_kpa_bins_structure(self):
         """
         Document kPa binning structure.
-        
+
         Actual bins: [35, 50, 65, 80, 95] (5 bins from 35-95 kPa by 15)
         This provides coverage for typical dyno operating ranges.
         """
@@ -566,7 +572,7 @@ class TestMetadataIntegrity:
 class TestKernelDeterminism:
     """
     Test kernel implementations (k1, k2, k3) for determinism.
-    
+
     Note: Kernels are smoothing operations applied to correction grids.
     They must be deterministic (same input → same output) with no randomness.
     """
@@ -574,7 +580,7 @@ class TestKernelDeterminism:
     def test_k1_gradient_limit_deterministic(self):
         """
         K1: Gradient-Limited Smoothing
-        
+
         Verifies:
         - Same input → same output
         - No randomness or time-based variation
@@ -598,7 +604,7 @@ class TestKernelDeterminism:
     def test_k2_coverage_adaptive_deterministic(self):
         """
         K2: Coverage-Adaptive Clamping
-        
+
         Verifies:
         - Same input → same output
         - Clamp limits deterministically calculated
@@ -612,15 +618,19 @@ class TestKernelDeterminism:
             [1.5, 1.0, 0.5, 0.0, -0.5],
         ]
 
-        result1 = kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0)
-        result2 = kernel_smooth(grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0)
+        result1 = kernel_smooth(
+            grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0
+        )
+        result2 = kernel_smooth(
+            grid, passes=2, low_confidence_threshold=1.0, high_confidence_threshold=3.0
+        )
 
         assert result1 == result2, "K2 must be deterministic"
 
     def test_k3_bilateral_deterministic(self):
         """
         K3: Bilateral Median+Mean
-        
+
         Verifies:
         - Same input → same output
         - Bilateral weighting is deterministic
@@ -719,7 +729,9 @@ class TestKernelClampingRules:
         # Medium coverage: 12.0 → 10.0 (clamped to ±10%)
         # Low coverage: 20.0 → 15.0 (clamped to ±15%)
         assert result[0][0] == 7.0, f"High coverage clamped to ±7%, got {result[0][0]}"
-        assert result[0][1] == 10.0, f"Medium coverage clamped to ±10%, got {result[0][1]}"
+        assert result[0][1] == 10.0, (
+            f"Medium coverage clamped to ±10%, got {result[0][1]}"
+        )
         assert result[0][2] == 15.0, f"Low coverage clamped to ±15%, got {result[0][2]}"
 
 
@@ -778,7 +790,6 @@ BREAKING CHANGES WOULD BE:
 6. Changing kernel parameters without versioning
 7. Modifying binning rules without migration
 """
-
 
 if __name__ == "__main__":
     print(VERIFICATION_SUMMARY)
