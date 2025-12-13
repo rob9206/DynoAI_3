@@ -29,11 +29,11 @@ from pathlib import Path
 from typing import Any
 
 from flask import Blueprint, jsonify, request
-
-logger = logging.getLogger(__name__)
 from werkzeug.utils import secure_filename
 
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+
+logger = logging.getLogger(__name__)
 
 jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
 
@@ -771,9 +771,9 @@ def discover_providers():
         sys.path.insert(0, str(project_root))
 
         from api.services.jetdrive_client import (
-            discover_providers as async_discover,
             JetDriveConfig,
         )
+        from api.services.jetdrive_client import discover_providers as async_discover
 
         config = JetDriveConfig(
             multicast_group=JETDRIVE_MCAST_GROUP,
@@ -850,9 +850,9 @@ def _monitor_loop():
     sys.path.insert(0, str(project_root))
 
     from api.services.jetdrive_client import (
-        discover_providers as async_discover,
         JetDriveConfig,
     )
+    from api.services.jetdrive_client import discover_providers as async_discover
 
     config = JetDriveConfig(
         multicast_group=JETDRIVE_MCAST_GROUP,
@@ -1013,7 +1013,9 @@ def _live_capture_loop():
                         stop_event.set()
 
                     asyncio.create_task(stop_after())
-                    await subscribe(provider, [], on_sample, config=config, stop_event=stop_event)
+                    await subscribe(
+                        provider, [], on_sample, config=config, stop_event=stop_event
+                    )
 
                 loop.run_until_complete(capture_brief())
 
@@ -1050,7 +1052,9 @@ def _live_capture_loop():
                 for task in pending:
                     task.cancel()
                 try:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
                 except Exception:
                     pass
 
