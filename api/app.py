@@ -1051,6 +1051,5 @@ def print_startup_banner():
 # Register error handlers
 register_error_handlers(app)
 
-
 if __name__ == "__main__":
     print_startup_banner()
