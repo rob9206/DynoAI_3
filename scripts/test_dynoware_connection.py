@@ -21,6 +21,7 @@ from datetime import datetime
 
 class Colors:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     RED = "\033[91m"
     GREEN = "\033[92m"
@@ -68,29 +69,35 @@ def test_network_reachability(ip: str, timeout: float = 2.0) -> tuple[bool, str]
         return False, f"Network unreachable: {e}"
 
 
-def test_tcp_connection(ip: str, port: int, timeout: float = 5.0) -> tuple[bool, str, bytes | None]:
+def test_tcp_connection(
+    ip: str, port: int, timeout: float = 5.0
+) -> tuple[bool, str, bytes | None]:
     """Test TCP connection to the Dynoware RT."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
-        
+
         print_info(f"Connecting to {ip}:{port}...")
         start_time = time.time()
         sock.connect((ip, port))
         connect_time = (time.time() - start_time) * 1000
-        
+
         # Try to receive any initial data
         try:
             sock.settimeout(2.0)
             initial_data = sock.recv(1024)
         except socket.timeout:
             initial_data = None
-        
+
         sock.close()
         return True, f"Connected successfully in {connect_time:.1f}ms", initial_data
-        
+
     except socket.timeout:
-        return False, "Connection timed out - device may be busy or firewall blocking", None
+        return (
+            False,
+            "Connection timed out - device may be busy or firewall blocking",
+            None,
+        )
     except ConnectionRefusedError:
         return False, "Connection refused - Dynoware service may not be running", None
     except socket.error as e:
@@ -112,9 +119,9 @@ def test_port_open(ip: str, port: int, timeout: float = 2.0) -> bool:
 def run_full_diagnostics(ip: str, port: int) -> int:
     """Run full connection diagnostics."""
     print_header("Dynoware RT Connection Test")
-    
+
     errors = 0
-    
+
     # Device info from Hardware Manager
     print(f"{Colors.BOLD}Target Device{Colors.RESET}")
     print("-" * 40)
@@ -123,7 +130,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
     print(f"   Protocol:      TCP")
     print(f"   Expected:      Dynoware RT (Model 150)")
     print()
-    
+
     # 1. Check local network interfaces
     print(f"{Colors.BOLD}1. Local Network Status{Colors.RESET}")
     print("-" * 40)
@@ -136,7 +143,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
         print_error(f"Could not determine local network: {e}")
         errors += 1
     print()
-    
+
     # 2. Test network route
     print(f"{Colors.BOLD}2. Network Reachability{Colors.RESET}")
     print("-" * 40)
@@ -147,7 +154,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
         print_error(msg)
         errors += 1
     print()
-    
+
     # 3. Test TCP connection
     print(f"{Colors.BOLD}3. TCP Connection Test{Colors.RESET}")
     print("-" * 40)
@@ -158,7 +165,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
             print_info(f"Received {len(data)} bytes of initial data")
             # Try to decode as ASCII for display
             try:
-                decoded = data.decode('ascii', errors='replace')[:100]
+                decoded = data.decode("ascii", errors="replace")[:100]
                 print_info(f"Data preview: {repr(decoded)}")
             except Exception:
                 print_info(f"Raw bytes: {data[:50].hex()}")
@@ -166,7 +173,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
         print_error(msg)
         errors += 1
     print()
-    
+
     # 4. Port scan for related services
     print(f"{Colors.BOLD}4. Related Port Scan{Colors.RESET}")
     print("-" * 40)
@@ -189,7 +196,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
             if p == port:
                 print_error(f"Port {p} is CLOSED (this is your main port!)")
     print()
-    
+
     # Summary
     print_header("Connection Summary")
     if errors == 0:
@@ -216,7 +223,7 @@ def run_full_diagnostics(ip: str, port: int) -> int:
         print("  3. Ensure you're on the same network (192.168.1.x)")
         print("  4. Check Windows Firewall allows port 63391")
         print("  5. Try restarting the Dynoware service")
-        
+
     return errors
 
 
@@ -229,33 +236,29 @@ Examples:
   %(prog)s                          Test default IP 192.168.1.115:63391
   %(prog)s --ip 192.168.1.115       Test specific IP with default port
   %(prog)s --ip 192.168.1.115 --port 63391  Test specific IP and port
-        """
+        """,
     )
-    
+
     # Default values from Hardware Manager screenshot
     parser.add_argument(
         "--ip",
         default="192.168.1.115",
-        help="Dynoware RT IP address (default: 192.168.1.115)"
+        help="Dynoware RT IP address (default: 192.168.1.115)",
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=63391,
-        help="Dynoware RT port (default: 63391)"
+        "--port", type=int, default=63391, help="Dynoware RT port (default: 63391)"
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=5.0,
-        help="Connection timeout in seconds (default: 5)"
+        help="Connection timeout in seconds (default: 5)",
     )
-    
+
     args = parser.parse_args()
-    
+
     return run_full_diagnostics(args.ip, args.port)
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -12,14 +12,14 @@ import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from api.services.jetdrive_client import (
     JetDriveConfig,
     JetDriveSample,
     discover_providers,
     subscribe,
 )
+
+sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Channel name mapping based on typical Dynojet setup
 CHANNEL_LABELS = {
@@ -73,14 +73,16 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
     """Display loop that updates the screen."""
     while not stop_event.is_set():
         await asyncio.sleep(0.4)
-        
+
         clear_screen()
         print("=" * 56)
         print("        LIVE DYNO DATA MONITOR - Dawson Dynamics")
         print("=" * 56)
-        print(f"  Time: {datetime.now().strftime('%H:%M:%S')}    Provider: {provider_name}")
+        print(
+            f"  Time: {datetime.now().strftime('%H:%M:%S')}    Provider: {provider_name}"
+        )
         print("-" * 56)
-        
+
         # Atmospheric section
         atmo_ids = [6, 7, 8, 9]
         has_atmo = any(ch in latest_values for ch in atmo_ids)
@@ -91,7 +93,7 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
                     name, val = latest_values[ch_id]
                     print(f"    {format_value(ch_id, name, val)}")
             print()
-        
+
         # Dyno section
         dyno_ids = [39, 40, 42, 43]
         has_dyno = any(ch in latest_values for ch in dyno_ids)
@@ -102,7 +104,7 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
                     name, val = latest_values[ch_id]
                     print(f"    {format_value(ch_id, name, val)}")
             print()
-        
+
         # AFR section
         afr_ids = [15, 23, 28, 30]
         has_afr = any(ch in latest_values for ch in afr_ids)
@@ -113,7 +115,7 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
                     name, val = latest_values[ch_id]
                     print(f"    {format_value(ch_id, name, val)}")
             print()
-        
+
         # Other channels
         known_ids = set(atmo_ids + dyno_ids + afr_ids + [41, 44])
         other_ids = [k for k in latest_values.keys() if k not in known_ids]
@@ -123,7 +125,7 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
                 name, val = latest_values[ch_id]
                 print(f"    {format_value(ch_id, name, val)}")
             print()
-        
+
         # Status
         print("-" * 56)
         age = time.time() - last_update
@@ -133,8 +135,10 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
             status = "[STALE]"
         else:
             status = "[NO DATA]"
-        
-        print(f"  Status: {status}  |  Channels: {len(latest_values)}  |  Age: {age:.1f}s")
+
+        print(
+            f"  Status: {status}  |  Channels: {len(latest_values)}  |  Age: {age:.1f}s"
+        )
         print("=" * 56)
         print("\nPress Ctrl+C to stop")
 
@@ -142,15 +146,15 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
 async def monitor():
     """Run the live monitor."""
     config = JetDriveConfig.from_env()
-    
+
     print("Discovering JetDrive providers...")
     providers = await discover_providers(config, timeout=5.0)
-    
+
     if not providers:
         print("[ERROR] No JetDrive providers found!")
         print("        Make sure Power Core is running with JetDrive enabled.")
         return
-    
+
     provider = providers[0]
     print(f"[OK] Connected to: {provider.name}")
     print(f"     Channels available: {len(provider.channels)}")
@@ -161,12 +165,12 @@ async def monitor():
     print()
     print("Starting live monitor in 2 seconds...")
     await asyncio.sleep(2)
-    
+
     stop_event = asyncio.Event()
-    
+
     # Start display task
     display_task = asyncio.create_task(display_loop(provider.name, stop_event))
-    
+
     try:
         # Subscribe to all channels
         await subscribe(

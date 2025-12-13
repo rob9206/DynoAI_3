@@ -768,9 +768,9 @@ def discover_providers():
         sys.path.insert(0, str(project_root))
 
         from api.services.jetdrive_client import (
-            discover_providers as async_discover,
             JetDriveConfig,
         )
+        from api.services.jetdrive_client import discover_providers as async_discover
 
         config = JetDriveConfig(
             multicast_group=JETDRIVE_MCAST_GROUP,
@@ -847,9 +847,9 @@ def _monitor_loop():
     sys.path.insert(0, str(project_root))
 
     from api.services.jetdrive_client import (
-        discover_providers as async_discover,
         JetDriveConfig,
     )
+    from api.services.jetdrive_client import discover_providers as async_discover
 
     config = JetDriveConfig(
         multicast_group=JETDRIVE_MCAST_GROUP,
@@ -1008,7 +1008,9 @@ def _live_capture_loop():
                         stop_event.set()
 
                     asyncio.create_task(stop_after())
-                    await subscribe(provider, [], on_sample, config=config, stop_event=stop_event)
+                    await subscribe(
+                        provider, [], on_sample, config=config, stop_event=stop_event
+                    )
 
                 loop.run_until_complete(capture_brief())
 
