@@ -203,6 +203,9 @@ API_KEY=your-secret-key          # Optional API authentication
 # Run all tests
 pytest tests/ -v
 
+# Run VE math verification suite (comprehensive)
+pytest tests/test_ve_math_verification.py -v
+
 # Run specific test modules
 pytest tests/api/ -v                    # API tests
 pytest tests/test_autotune_workflow.py  # Workflow tests
@@ -212,8 +215,17 @@ pytest tests/test_jetdrive_client_protocol.py  # Protocol tests
 pytest --cov=api --cov=scripts tests/
 ```
 
+### VE Math Verification
+A comprehensive test suite verifies all VE tuning math is deterministic and consistent:
+- **25 tests** covering apply/rollback operations, clamping, precision, and kernel behavior
+- **Inverse property**: apply → rollback → exact original (verified ±0.001)
+- **Determinism**: same input → bit-identical output
+- See `docs/VE_MATH_VERIFICATION_REPORT.md` for full verification report
+
 ## Documentation
 
+- [VE_MATH_VERIFICATION_REPORT.md](docs/VE_MATH_VERIFICATION_REPORT.md) - Complete math verification report
+- [VE_MATH_VERIFICATION_QUICKREF.md](docs/VE_MATH_VERIFICATION_QUICKREF.md) - Quick reference guide
 - [JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md) - Hardware setup guide
 - [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) - Web app setup
 - [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - VE apply/rollback system
