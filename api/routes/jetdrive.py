@@ -516,7 +516,7 @@ def get_report(run_id: str):
 def export_text(run_id: str):
     """
     Export a comprehensive text summary of the run for sharing with AI assistants.
-    
+
     This generates a human-readable text file containing:
     - Run metadata
     - Performance summary (peak HP, TQ)
@@ -542,7 +542,7 @@ def export_text(run_id: str):
     lines.append("DYNOAI AUTO-TUNE ANALYSIS REPORT")
     lines.append("=" * 80)
     lines.append("")
-    
+
     # Run metadata
     lines.append("RUN INFORMATION")
     lines.append("-" * 80)
@@ -550,18 +550,22 @@ def export_text(run_id: str):
     lines.append(f"Timestamp: {manifest.get('timestamp', 'N/A')}")
     lines.append(f"Data Source: {manifest.get('data_source', 'N/A')}")
     lines.append("")
-    
+
     # Performance summary
     analysis = manifest.get("analysis", {})
     if analysis:
         lines.append("PERFORMANCE SUMMARY")
         lines.append("-" * 80)
-        lines.append(f"Peak Horsepower: {analysis.get('peak_hp', 0):.2f} HP @ {analysis.get('peak_hp_rpm', 0):.0f} RPM")
-        lines.append(f"Peak Torque: {analysis.get('peak_tq', 0):.2f} lb-ft @ {analysis.get('peak_tq_rpm', 0):.0f} RPM")
+        lines.append(
+            f"Peak Horsepower: {analysis.get('peak_hp', 0):.2f} HP @ {analysis.get('peak_hp_rpm', 0):.0f} RPM"
+        )
+        lines.append(
+            f"Peak Torque: {analysis.get('peak_tq', 0):.2f} lb-ft @ {analysis.get('peak_tq_rpm', 0):.0f} RPM"
+        )
         lines.append(f"Total Samples: {analysis.get('total_samples', 0)}")
         lines.append(f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
         lines.append("")
-    
+
     # AFR analysis
     if analysis:
         lines.append("AFR ANALYSIS")
@@ -572,7 +576,7 @@ def export_text(run_id: str):
         lines.append(f"OK Cells: {analysis.get('ok_cells', 0)}")
         lines.append(f"No Data Cells: {analysis.get('no_data_cells', 0)}")
         lines.append("")
-    
+
     # VE correction grid
     ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
     if ve_csv_path.exists():
@@ -580,13 +584,13 @@ def export_text(run_id: str):
         lines.append("-" * 80)
         lines.append("Format: RPM | MAP bins (kPa)")
         lines.append("")
-        
+
         with open(ve_csv_path) as f:
             ve_lines = f.readlines()
             for line in ve_lines:
                 lines.append(line.rstrip())
         lines.append("")
-    
+
     # AFR error grid
     afr_csv_path = safe_path_in_runs(run_id, "AFR_Error_2D.csv")
     if afr_csv_path.exists():
@@ -594,13 +598,13 @@ def export_text(run_id: str):
         lines.append("-" * 80)
         lines.append("Format: RPM | AFR error in AFR points")
         lines.append("")
-        
+
         with open(afr_csv_path) as f:
             afr_lines = f.readlines()
             for line in afr_lines:
                 lines.append(line.rstrip())
         lines.append("")
-    
+
     # Hit count grid
     hits_csv_path = safe_path_in_runs(run_id, "Hit_Count_2D.csv")
     if hits_csv_path.exists():
@@ -608,13 +612,13 @@ def export_text(run_id: str):
         lines.append("-" * 80)
         lines.append("Format: RPM | Sample count per cell")
         lines.append("")
-        
+
         with open(hits_csv_path) as f:
             hit_lines = f.readlines()
             for line in hit_lines:
                 lines.append(line.rstrip())
         lines.append("")
-    
+
     # Diagnostics report
     report_path = safe_path_in_runs(run_id, "Diagnostics_Report.txt")
     if report_path.exists():
@@ -623,7 +627,7 @@ def export_text(run_id: str):
         with open(report_path, encoding="utf-8") as f:
             lines.append(f.read())
         lines.append("")
-    
+
     # Grid configuration
     grid = manifest.get("grid", {})
     if grid:
@@ -633,16 +637,18 @@ def export_text(run_id: str):
         map_bins = grid.get("map_bins", [])
         lines.append(f"RPM Bins: {rpm_bins}")
         lines.append(f"MAP Bins: {map_bins}")
-        lines.append(f"Grid Size: {len(rpm_bins)} x {len(map_bins)} = {len(rpm_bins) * len(map_bins)} cells")
+        lines.append(
+            f"Grid Size: {len(rpm_bins)} x {len(map_bins)} = {len(rpm_bins) * len(map_bins)} cells"
+        )
         lines.append("")
-    
+
     # Footer
     lines.append("=" * 80)
     lines.append("END OF REPORT")
     lines.append("=" * 80)
-    
+
     content = "\n".join(lines)
-    
+
     return jsonify(
         {
             "run_id": sanitize_run_id(run_id),
