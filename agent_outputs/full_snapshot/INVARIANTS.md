@@ -589,7 +589,7 @@ sha256sum /tmp/new_baseline/VE_Correction_Delta_DYNO.csv
 | O(1) Lookups | Dict-based indexing | O(n) list.index() |
 | Gated Logging | Debug checks enabled | Unconditional logging |
 
-**Total Invariants:** 17 core + 3 performance = 20
+**Total Invariants:** 15 core + 2 performance = 17
 
 **Verification:** All invariants tested in `experiments/` regression suite.
 
