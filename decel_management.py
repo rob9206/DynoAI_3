@@ -428,8 +428,8 @@ def calculate_decel_enrichment(
 
 def generate_decel_overlay(
     enrichment_map: Dict[Tuple[int, int, int, int], float],
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> List[List[float]]:
     """
     Generate VE correction overlay for decel fuel management.
@@ -445,6 +445,10 @@ def generate_decel_overlay(
     Returns:
         2D list of VE correction factors (enrichment percentages)
     """
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     overlay: List[List[float]] = [[0.0 for _ in kpa_bins] for _ in rpm_bins]
 
     for i, rpm in enumerate(rpm_bins):
@@ -476,8 +480,8 @@ def generate_decel_overlay(
 def write_decel_overlay_csv(
     overlay: List[List[float]],
     output_path: str | Path,
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> str:
     """
     Write decel VE overlay to CSV in standard format.
@@ -491,6 +495,10 @@ def write_decel_overlay_csv(
     Returns:
         Path to written file
     """
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
