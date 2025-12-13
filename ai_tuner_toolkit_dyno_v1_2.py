@@ -12,11 +12,11 @@ kernels applied in a fixed, documented order:
 1. K1: Gradient-Limited Adaptive Smoothing
    - Preserves large corrections (≥3.0%) while smoothing noise
    - Parameters: passes=2, gradient_threshold=1.0
-   
+
 2. K2: Coverage-Weighted Smoothing
    - Neighbor-weighted averaging with center bias
    - Parameters: alpha=0.20, center_bias=1.25, min_hits=1, dist_pow=1
-   
+
 3. K3: Tiered Spark Logic
    - Knock-based spark retard with hot IAT compensation
    - Parameters: extra_rule_deg=2.0, hot_extra=-1.0
