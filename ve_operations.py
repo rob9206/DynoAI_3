@@ -3,6 +3,28 @@ VE Correction Apply/Rollback System
 
 This module provides safe application and rollback of VE correction factors.
 All operations are designed to be predictable, capped, reversible, and audit-friendly.
+
+MATH VERSION: 1.0.0 (FROZEN)
+============================
+
+The algorithms in this module are FROZEN as part of DynoAI3's math version 1.0.0.
+Any modification to the core formulas constitutes a new math generation and requires:
+
+1. Major version increment (v1.0.0 → v2.0.0)
+2. Algorithm version tag in all metadata outputs
+3. Ability to run both versions alongside each other
+4. Full regression test suite for new version
+5. Documentation update and user notification
+6. Migration guide if automatic conversion is possible
+
+FROZEN ALGORITHMS:
+- VEApply formula: VE_new = VE_base × (1 + factor/100)
+- VERollback formula: VE_restored = VE_current / (1 + factor/100)
+- Clamping logic: max(-max_adjust_pct, min(max_adjust_pct, factor))
+- Hash verification: SHA-256 on all input/output files
+- Precision: 4 decimal places for VE output
+
+See docs/DETERMINISTIC_MATH_SPECIFICATION.md for complete details.
 """
 
 import csv
