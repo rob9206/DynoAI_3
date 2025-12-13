@@ -372,9 +372,9 @@ These boundaries are intentional and allow DynoAI3 to excel in its domain.
 
 **Math Version:** 1.0.0  
 **Kernel Configuration:**
-- K1: Gradient-limited smoothing (α=0.20, center_bias=1.25)
-- K2: Coverage-weighted smoothing (min_hits=1, dist_pow=1)
-- K3: Tiered spark logic (HOT_IAT_THRESHOLD_F defined in constants)
+- K1: Gradient-limited smoothing (passes=2, gradient_threshold=1.0)
+- K2: Coverage-weighted smoothing (alpha=0.20, center_bias=1.25, min_hits=1, dist_pow=1)
+- K3: Tiered spark logic (extra_rule_deg=2.0, hot_extra=-1.0)
 
 ### Version Stability Guarantee
 
