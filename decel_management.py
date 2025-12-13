@@ -293,7 +293,12 @@ def detect_decel_events(
             rpm_too_low = rpm_float < cfg["rpm_min"]
             at_end = i == len(records) - 1
 
-            if (rate_recovered and tps_low_enough) or tps_reopened or rpm_too_low or at_end:
+            if (
+                (rate_recovered and tps_low_enough)
+                or tps_reopened
+                or rpm_too_low
+                or at_end
+            ):
                 duration_ms = (i - event_start) * sample_rate_ms
 
                 if cfg["duration_min_ms"] <= duration_ms <= cfg["duration_max_ms"]:
@@ -428,8 +433,8 @@ def calculate_decel_enrichment(
 
 def generate_decel_overlay(
     enrichment_map: Dict[Tuple[int, int, int, int], float],
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> List[List[float]]:
     """
     Generate VE correction overlay for decel fuel management.
@@ -445,6 +450,10 @@ def generate_decel_overlay(
     Returns:
         2D list of VE correction factors (enrichment percentages)
     """
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     overlay: List[List[float]] = [[0.0 for _ in kpa_bins] for _ in rpm_bins]
 
     for i, rpm in enumerate(rpm_bins):
@@ -476,8 +485,8 @@ def generate_decel_overlay(
 def write_decel_overlay_csv(
     overlay: List[List[float]],
     output_path: str | Path,
-    rpm_bins: Sequence[int] = RPM_BINS,
-    kpa_bins: Sequence[int] = KPA_BINS,
+    rpm_bins: Sequence[int] = None,
+    kpa_bins: Sequence[int] = None,
 ) -> str:
     """
     Write decel VE overlay to CSV in standard format.
@@ -491,6 +500,10 @@ def write_decel_overlay_csv(
     Returns:
         Path to written file
     """
+    if rpm_bins is None:
+        rpm_bins = RPM_BINS
+    if kpa_bins is None:
+        kpa_bins = KPA_BINS
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -622,7 +635,9 @@ def generate_decel_report(
     fuel_impact = (
         "-0.5 to -1.0 MPG"
         if severity == DecelSeverity.MEDIUM
-        else "-0.3 to -0.5 MPG" if severity == DecelSeverity.LOW else "-1.0 to -2.0 MPG"
+        else "-0.3 to -0.5 MPG"
+        if severity == DecelSeverity.LOW
+        else "-1.0 to -2.0 MPG"
     )
     report.tradeoffs = {
         "fuel_economy_impact": f"{fuel_impact} estimated during mixed driving",
