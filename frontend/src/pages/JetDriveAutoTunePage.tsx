@@ -595,6 +595,7 @@ export default function JetDriveAutoTunePage() {
     const [runId, setRunId] = useState(`run_${Date.now()}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
+    const [textExportContent, setTextExportContent] = useState<string>('');
 
     // Fetch available runs
     const { data: statusData, refetch: refetchStatus } = useQuery({
@@ -654,6 +655,13 @@ export default function JetDriveAutoTunePage() {
         setPvvContent(data.content);
     };
 
+    // Fetch text export content
+    const fetchTextExport = async (rid: string) => {
+        const res = await fetch(`${API_BASE}/run/${rid}/export-text`);
+        const data = await res.json();
+        setTextExportContent(data.content);
+    };
+
     // Download PVV file
     const downloadPvv = () => {
         if (!pvvContent || !selectedRun) return;
@@ -666,9 +674,22 @@ export default function JetDriveAutoTunePage() {
         URL.revokeObjectURL(url);
     };
 
+    // Download text export file
+    const downloadTextExport = () => {
+        if (!textExportContent || !selectedRun) return;
+        const blob = new Blob([textExportContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `DynoAI_Analysis_${selectedRun}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     useEffect(() => {
         if (selectedRun) {
             fetchPvv(selectedRun);
+            fetchTextExport(selectedRun);
         }
     }, [selectedRun]);
 
@@ -890,7 +911,7 @@ export default function JetDriveAutoTunePage() {
 
                                     {/* Tabs for Grid and Export */}
                                     <Tabs defaultValue="grid" className="w-full">
-                                        <TabsList className="grid w-full grid-cols-3">
+                                        <TabsList className="grid w-full grid-cols-4">
                                             <TabsTrigger value="grid">
                                                 <Grid3X3 className="h-4 w-4 mr-2" />
                                                 VE Grid
@@ -899,9 +920,13 @@ export default function JetDriveAutoTunePage() {
                                                 <FileDown className="h-4 w-4 mr-2" />
                                                 PVV Export
                                             </TabsTrigger>
+                                            <TabsTrigger value="text">
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Text Export
+                                            </TabsTrigger>
                                             <TabsTrigger value="report">
                                                 <FileText className="h-4 w-4 mr-2" />
-                                                Report
+                                                JSON
                                             </TabsTrigger>
                                         </TabsList>
 
@@ -995,11 +1020,39 @@ export default function JetDriveAutoTunePage() {
                                             </Card>
                                         </TabsContent>
 
+                                        {/* Text Export */}
+                                        <TabsContent value="text">
+                                            <Card>
+                                                <CardHeader>
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <CardTitle className="text-sm">Text Export for AI Analysis</CardTitle>
+                                                            <CardDescription>
+                                                                Comprehensive text report for sharing with ChatGPT or other AI assistants
+                                                            </CardDescription>
+                                                        </div>
+                                                        <Button onClick={downloadTextExport} size="sm">
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Download .txt
+                                                        </Button>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96 whitespace-pre-wrap">
+                                                        {textExportContent || 'Loading...'}
+                                                    </pre>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
                                         {/* Report */}
                                         <TabsContent value="report">
                                             <Card>
                                                 <CardHeader>
-                                                    <CardTitle className="text-sm">Diagnostics Report</CardTitle>
+                                                    <CardTitle className="text-sm">JSON Manifest</CardTitle>
+                                                    <CardDescription>
+                                                        Raw JSON data from analysis
+                                                    </CardDescription>
                                                 </CardHeader>
                                                 <CardContent>
                                                     <div className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
