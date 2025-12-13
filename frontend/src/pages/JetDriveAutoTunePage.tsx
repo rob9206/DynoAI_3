@@ -28,6 +28,7 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
+import { JetDriveLiveDashboard } from '../components/jetdrive';
 
 // API base URL
 const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
@@ -704,10 +705,14 @@ export default function JetDriveAutoTunePage() {
 
             {/* Main Tabs */}
             <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg">
                     <TabsTrigger value="hardware" className="flex items-center gap-2">
                         <Radio className="h-4 w-4" />
                         Hardware
+                    </TabsTrigger>
+                    <TabsTrigger value="live" className="flex items-center gap-2">
+                        <Activity className="h-4 w-4" />
+                        Live
                     </TabsTrigger>
                     <TabsTrigger value="autotune" className="flex items-center gap-2">
                         <Zap className="h-4 w-4" />
@@ -718,6 +723,11 @@ export default function JetDriveAutoTunePage() {
                 {/* Hardware Tab */}
                 <TabsContent value="hardware" className="mt-6">
                     <HardwareTab />
+                </TabsContent>
+
+                {/* Live Dashboard Tab */}
+                <TabsContent value="live" className="mt-6">
+                    <JetDriveLiveDashboard apiUrl={API_BASE} />
                 </TabsContent>
 
                 {/* Auto-Tune Tab */}

@@ -55,6 +55,7 @@ export interface UseJetDriveLiveReturn {
 }
 
 // Channel configuration for display
+// Maps both JetDrive channel names and fallback chan_X names
 export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     label: string;
     units: string;
@@ -65,23 +66,61 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     warning?: number;
     critical?: number;
 }> = {
-    // Atmospheric
+    // === Atmospheric Probe (from JetDrive names) ===
     'Humidity': { label: 'Humidity', units: '%', min: 0, max: 100, decimals: 1, color: '#60a5fa' },
     'Pressure': { label: 'Pressure', units: 'kPa', min: 90, max: 110, decimals: 2, color: '#a78bfa' },
     'Temperature 1': { label: 'Temperature 1', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
     'Temperature 2': { label: 'Temperature 2', units: '°C', min: 0, max: 50, decimals: 1, color: '#fb923c' },
-    // Dyno
+    'Temperature': { label: 'Temperature', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
+    
+    // Fallback chan_X names (based on observed values from your dyno)
+    'chan_6': { label: 'Temperature 1', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
+    'chan_7': { label: 'Temperature 2', units: '°C', min: 0, max: 50, decimals: 1, color: '#fb923c' },
+    'chan_8': { label: 'Humidity', units: '%', min: 0, max: 100, decimals: 1, color: '#60a5fa' },
+    'chan_9': { label: 'Pressure', units: 'kPa', min: 90, max: 110, decimals: 2, color: '#a78bfa' },
+    
+    // === Dyno Channels ===
     'Force Drum 1': { label: 'Force', units: 'lbs', min: 0, max: 500, decimals: 1, color: '#4ade80' },
     'Acceleration': { label: 'Acceleration', units: 'g', min: -2, max: 2, decimals: 3, color: '#22d3ee' },
     'Digital RPM 1': { label: 'RPM 1', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80', warning: 6000, critical: 7000 },
     'Digital RPM 2': { label: 'RPM 2', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#22d3ee' },
-    // AFR / Lambda
+    'RPM': { label: 'RPM', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80', warning: 6000, critical: 7000 },
+    
+    // Fallback dyno chan_X names
+    'chan_39': { label: 'Force', units: 'lbs', min: 0, max: 500, decimals: 1, color: '#4ade80' },
+    'chan_40': { label: 'Acceleration', units: 'g', min: -2, max: 2, decimals: 3, color: '#22d3ee' },
+    'chan_42': { label: 'RPM 1', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80' },
+    'chan_43': { label: 'RPM 2', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#22d3ee' },
+    
+    // === AFR / Lambda Channels ===
     'Air/Fuel Ratio 1': { label: 'AFR Front', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6', warning: 15.5, critical: 16.5 },
     'Air/Fuel Ratio 2': { label: 'AFR Rear', units: ':1', min: 10, max: 18, decimals: 2, color: '#fb923c', warning: 15.5, critical: 16.5 },
+    'Air/Fuel Ratio': { label: 'AFR', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6', warning: 15.5, critical: 16.5 },
     'Lambda 1': { label: 'Lambda 1', units: 'λ', min: 0.7, max: 1.3, decimals: 3, color: '#f472b6' },
     'Lambda 2': { label: 'Lambda 2', units: 'λ', min: 0.7, max: 1.3, decimals: 3, color: '#fb923c' },
     'AFR 1': { label: 'AFR 1', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
     'AFR': { label: 'AFR', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
+    
+    // Fallback AFR chan_X names (based on observed data)
+    'chan_23': { label: 'AFR 1', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
+    'chan_28': { label: 'AFR 2', units: ':1', min: 10, max: 18, decimals: 2, color: '#fb923c' },
+    'chan_15': { label: 'Lambda', units: 'λ', min: 0.7, max: 1.3, decimals: 3, color: '#a78bfa' },
+    'chan_30': { label: 'Correction', units: '', min: 0, max: 2, decimals: 3, color: '#22d3ee' },
+    
+    // Other observed channels
+    'chan_0': { label: 'Channel 0', units: '', min: 0, max: 100, decimals: 2, color: '#888' },
+    'chan_1': { label: 'Channel 1', units: '', min: 0, max: 100, decimals: 2, color: '#888' },
+    'chan_2': { label: 'Channel 2', units: '', min: 0, max: 100, decimals: 2, color: '#888' },
+    'chan_3': { label: 'Channel 3', units: '', min: 0, max: 200, decimals: 2, color: '#888' },
+    'chan_14': { label: 'Channel 14', units: '', min: 0, max: 1, decimals: 0, color: '#888' },
+    'chan_16': { label: 'Channel 16', units: '', min: 0, max: 1, decimals: 0, color: '#888' },
+    'chan_17': { label: 'Voltage 1', units: 'V', min: 0, max: 5, decimals: 2, color: '#facc15' },
+    'chan_18': { label: 'Voltage 2', units: 'V', min: 0, max: 1, decimals: 3, color: '#facc15' },
+    'chan_20': { label: 'Flag 1', units: '', min: 0, max: 1, decimals: 0, color: '#888' },
+    'chan_22': { label: 'Voltage 3', units: 'V', min: 0, max: 5, decimals: 2, color: '#facc15' },
+    'chan_24': { label: 'Lambda Raw', units: 'λ', min: 0.7, max: 1.6, decimals: 3, color: '#a78bfa' },
+    'chan_26': { label: 'Flag 2', units: '', min: 0, max: 1, decimals: 0, color: '#888' },
+    'chan_29': { label: 'Sensor', units: '', min: 0, max: 1, decimals: 3, color: '#888' },
 };
 
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
@@ -107,7 +146,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const [history, setHistory] = useState<Record<string, { time: number; value: number }[]>>({});
 
     // Refs
-    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Check monitor status
     const checkConnection = useCallback(async () => {

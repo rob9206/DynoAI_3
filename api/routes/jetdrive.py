@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import socket
@@ -28,6 +29,8 @@ from pathlib import Path
 from typing import Any
 
 from flask import Blueprint, jsonify, request
+
+logger = logging.getLogger(__name__)
 from werkzeug.utils import secure_filename
 
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
@@ -982,11 +985,13 @@ def _live_capture_loop():
             if not _live_data["capturing"]:
                 break
 
+        # Create a fresh event loop per iteration (thread-local). Ensure it is
+        # always closed, even if discovery/capture throws.
+        loop = asyncio.new_event_loop()
         try:
-            # Discover and capture a quick sample
-            loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
+            # Discover and capture a quick sample
             providers = loop.run_until_complete(discover_providers(config, timeout=2.0))
 
             if providers:
@@ -1026,10 +1031,33 @@ def _live_capture_loop():
                     _live_data["channels"] = channel_values
                     _live_data["last_update"] = datetime.now().isoformat()
 
-            loop.close()
-
         except Exception as e:
-            logger.warning(f"Live capture error: {e}")
+            logger.warning("Live capture error: %s", e)
+        finally:
+            # Avoid leaving a closed loop as the thread's current loop.
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+
+            # Cancel any leftover tasks before closing to prevent warnings/leaks.
+            try:
+                pending = asyncio.all_tasks(loop)
+            except Exception:
+                pending = set()
+
+            if pending:
+                for task in pending:
+                    task.cancel()
+                try:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                except Exception:
+                    pass
+
+            try:
+                loop.close()
+            except Exception:
+                pass
 
         time.sleep(2.0)  # Update every 2 seconds
 
