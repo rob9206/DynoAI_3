@@ -28,7 +28,7 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
-import { JetDriveLiveDashboard, QuickTunePanel } from '../components/jetdrive';
+import { JetDriveLiveDashboard } from '../components/jetdrive';
 
 // API base URL
 const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
@@ -725,9 +725,9 @@ export default function JetDriveAutoTunePage() {
             </div>
 
             {/* Quick Tune Panel - Maximum Automation */}
-            <div className="mb-6">
+            {/* <div className="mb-6">
                 <QuickTunePanel apiUrl={API_BASE} />
-            </div>
+            </div> */}
 
             {/* Main Tabs */}
             <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
