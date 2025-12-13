@@ -1,0 +1,511 @@
+{
+  "summary": {
+    "generated_at": "2025-12-13T15:03:00Z",
+    "repository": "rob9206/DynoAI_3",
+    "analysis_scope": "Complete test surface, reproducibility contracts, OEM-style parity, and positioning claims"
+  },
+  "tests": {
+    "total_modules": 34,
+    "total_functions": 251,
+    "total_loc": 4343,
+    "categories": [
+      {
+        "name": "Core Math",
+        "modules": 8,
+        "functions": 47,
+        "loc": 850,
+        "focus": "VE correction, kernels, clamping"
+      },
+      {
+        "name": "API/Security",
+        "modules": 10,
+        "functions": 89,
+        "loc": 1200,
+        "focus": "Endpoints, auth, rate limiting"
+      },
+      {
+        "name": "Protocol",
+        "modules": 5,
+        "functions": 38,
+        "loc": 650,
+        "focus": "JetDrive KLHDV, LiveLink, WP8"
+      },
+      {
+        "name": "Workflow",
+        "modules": 6,
+        "functions": 42,
+        "loc": 900,
+        "focus": "AutoTune, decel mgmt, cylinder balance"
+      },
+      {
+        "name": "Infrastructure",
+        "modules": 5,
+        "functions": 35,
+        "loc": 700,
+        "focus": "Path safety, fingerprinting, manifests"
+      }
+    ]
+  },
+  "locked_behaviors": [
+    {
+      "test": "acceptance_test.py",
+      "behaviors": [
+        "Clamping enforcement: factors > ±7% capped to [0.93, 1.07] multipliers",
+        "Apply precision: 4 decimal places in VE output",
+        "Metadata generation: base_sha, factor_sha, applied_at_utc, max_adjust_pct, app_version",
+        "Rollback hash verification: tampered factor files block rollback",
+        "Dry-run mode: preview outputs without writing files",
+        "Roundtrip tolerance: Apply → Rollback within 0.0001 precision",
+        "Deterministic hashing: same file → same SHA-256"
+      ],
+      "protection_type": "Math correctness, data integrity, reversibility",
+      "risk_if_removed": "CRITICAL - User could apply unclamped corrections → engine damage"
+    },
+    {
+      "test": "selftest.py",
+      "behaviors": [
+        "CLI execution succeeds with synthetic CSV input",
+        "Manifest status = success",
+        "Required outputs exist: VE_Correction_Delta_DYNO.csv, Diagnostics_Report.txt",
+        "Minimum data volume: ≥1,000 rows read, bins_total > 0"
+      ],
+      "protection_type": "Output contracts, workflow integrity",
+      "risk_if_removed": "HIGH - No smoke test for basic workflow"
+    },
+    {
+      "test": "test_bin_alignment.py",
+      "behaviors": [
+        "Mismatched RPM/kPa grids → AssertionError",
+        "No silent grid mismatch tolerance"
+      ],
+      "protection_type": "Prevents VE table corruption via bin misalignment",
+      "risk_if_removed": "CRITICAL - Silent VE table corruption"
+    },
+    {
+      "test": "test_decel_management.py",
+      "behaviors": [
+        "Decel event detection via TPS rate-of-change threshold",
+        "Enrichment calculation with severity presets (BASE=5%, MAX=20%)",
+        "MAP ceiling for decel zone (DECEL_KPA_MAX = 80 kPa)"
+      ],
+      "protection_type": "Decel fuel management contracts, AFR enrichment logic",
+      "risk_if_removed": "HIGH - Incorrect decel enrichment → backfiring continues"
+    },
+    {
+      "test": "test_cylinder_balancing.py",
+      "behaviors": [
+        "AFR imbalance threshold (DEFAULT=0.3 AFR delta)",
+        "Correction modes: FRONT_ONLY, REAR_ONLY, BOTH, PROPORTIONAL",
+        "Max correction limits (DEFAULT=3%, MAX=5%)"
+      ],
+      "protection_type": "V-twin balancing math, AFR equalization contracts",
+      "risk_if_removed": "HIGH - Excessive correction → imbalance worsens"
+    },
+    {
+      "test": "test_fingerprint.py",
+      "behaviors": [
+        "Fingerprint file creation: kernel_fingerprint.txt",
+        "Content format: module:function param1=val1, param2=val2",
+        "Generated for all registered kernels (k1, k2) except baseline"
+      ],
+      "protection_type": "Experiment reproducibility, kernel audit trail",
+      "risk_if_removed": "MEDIUM - Loss of experiment reproducibility"
+    },
+    {
+      "test": "test_preflight_csv.py",
+      "behaviors": [
+        "Required columns check: rpm, map_kpa, torque",
+        "Schema compliance detection (schema_ok boolean)",
+        "Format detection: winpep, generic, powervision, unknown",
+        "JSON output structure: overall_ok = schema_ok AND values_ok AND parse_ok"
+      ],
+      "protection_type": "Input data contracts, CSV validation",
+      "risk_if_removed": "HIGH - Invalid CSV processed → garbage outputs"
+    },
+    {
+      "test": "test_jetdrive_client_protocol.py",
+      "behaviors": [
+        "KLHDV frame structure: [Key][Len][Host][Seq][Dest][Value...]",
+        "Multicast address: 224.0.2.10:22344",
+        "Message types: 0x01 ChannelInfo, 0x02 ChannelValues, 0x04 Ping, 0x05 Pong",
+        "ChannelInfo payload: 50-byte provider name + 34-byte channel blocks"
+      ],
+      "protection_type": "Protocol compliance, JetDrive integration contracts",
+      "risk_if_removed": "HIGH - Silent protocol mismatch → garbled data"
+    },
+    {
+      "test": "tests/api/test_security.py",
+      "behaviors": [
+        "Path traversal blocked in API endpoints",
+        "Malicious CSV cell sanitization",
+        "Reject paths with .. or absolute paths"
+      ],
+      "protection_type": "Security contracts, API integrity",
+      "risk_if_removed": "CRITICAL - Directory traversal, CSV injection attacks"
+    },
+    {
+      "test": "tests/api/test_authentication.py",
+      "behaviors": [
+        "API key required for protected endpoints",
+        "Token expiration enforced",
+        "Invalid keys rejected with 401"
+      ],
+      "protection_type": "API authentication enforcement",
+      "risk_if_removed": "CRITICAL - Unauthorized access to API"
+    }
+  ],
+  "gaps": {
+    "total_identified": 11,
+    "critical": [
+      {
+        "id": "GAP-1",
+        "title": "End-to-end reproducibility test",
+        "severity": "CRITICAL",
+        "category": "Determinism",
+        "description": "No test verifies running same CSV twice produces bit-identical VE deltas",
+        "impact": "Silent non-determinism could creep in without detection",
+        "recommended_action": "Add test_end_to_end_determinism() that runs same CSV twice and asserts equality"
+      }
+    ],
+    "high": [
+      {
+        "id": "GAP-2",
+        "title": "Preview vs. apply metadata parity",
+        "severity": "HIGH",
+        "category": "Contracts",
+        "description": "No test verifies dry-run metadata equals actual apply metadata",
+        "impact": "Dry-run preview could diverge from actual apply",
+        "recommended_action": "Add test_dry_run_apply_metadata_parity() comparing dry-run to apply metadata"
+      },
+      {
+        "id": "GAP-3",
+        "title": "Malformed CSV edge cases",
+        "severity": "HIGH",
+        "category": "Input Validation",
+        "description": "No tests for non-UTF8 encoding, duplicate headers, zero rows, NaN/Inf values",
+        "impact": "Real-world CSVs could crash workflow or produce invalid output",
+        "recommended_action": "Create tests/test_malformed_csv.py with 4 edge case tests"
+      }
+    ],
+    "medium": [
+      {
+        "id": "GAP-4",
+        "title": "Concurrent apply/rollback safety",
+        "severity": "MEDIUM",
+        "category": "Statelessness",
+        "description": "No test verifies two processes can run simultaneously",
+        "impact": "Race conditions in file I/O or global state",
+        "recommended_action": "Add test_concurrent_runs() using multiprocessing.Pool()"
+      },
+      {
+        "id": "GAP-5",
+        "title": "Kernel determinism verification",
+        "severity": "MEDIUM",
+        "category": "Determinism",
+        "description": "No test verifies K1/K2/K3 kernels produce identical output for same input",
+        "impact": "Future kernel changes could introduce randomness without detection",
+        "recommended_action": "Add test_kernel_determinism() running each kernel twice"
+      },
+      {
+        "id": "GAP-6",
+        "title": "Cross-platform reproducibility",
+        "severity": "MEDIUM",
+        "category": "Determinism",
+        "description": "No test verifies Windows/Linux/macOS produce bit-identical VE deltas",
+        "impact": "Floating-point differences or Python version variations",
+        "recommended_action": "Add OS matrix to CI workflow (ubuntu, windows, macos)"
+      },
+      {
+        "id": "GAP-7",
+        "title": "Artifact naming stability (backward compatibility)",
+        "severity": "MEDIUM",
+        "category": "Contracts",
+        "description": "No test verifies old manifest versions can be loaded",
+        "impact": "Future schema changes could break old manifests",
+        "recommended_action": "Add test_manifest_backward_compatibility() loading old schema"
+      },
+      {
+        "id": "GAP-8",
+        "title": "No hidden state verification",
+        "severity": "MEDIUM",
+        "category": "Statelessness",
+        "description": "No tests for temp cleanup, output overwrite behavior",
+        "impact": "Disk space accumulation or unpredictable overwrite behavior",
+        "recommended_action": "Add test_temp_cleanup() and test_output_overwrite_behavior()"
+      }
+    ],
+    "low": [
+      {
+        "id": "GAP-9",
+        "title": "Rollback missing metadata file",
+        "severity": "LOW",
+        "category": "Error Handling",
+        "description": "No test verifies rollback fails gracefully if metadata is missing",
+        "impact": "Unclear error message to user",
+        "recommended_action": "Add test_rollback_missing_metadata() with pytest.raises(FileNotFoundError)"
+      },
+      {
+        "id": "GAP-10",
+        "title": "Large CSV performance test",
+        "severity": "LOW",
+        "category": "Performance",
+        "description": "No test verifies performance with 100k+ row CSV files",
+        "impact": "Unknown performance ceiling for very large datasets",
+        "recommended_action": "Add test_large_csv_performance() with 100k row CSV and timeout"
+      },
+      {
+        "id": "GAP-11",
+        "title": "API rate limit edge cases",
+        "severity": "LOW",
+        "category": "API Security",
+        "description": "No tests for rate limit reset timing or burst allowance",
+        "impact": "Edge case behavior unclear",
+        "recommended_action": "Add test_rate_limit_reset() and test_rate_limit_per_endpoint()"
+      }
+    ]
+  },
+  "reproducibility": {
+    "deterministic_replay": {
+      "pass_rate": "57%",
+      "checks": {
+        "total": 7,
+        "pass": 4,
+        "partial": 1,
+        "fail": 2
+      },
+      "critical_passes": [
+        "Fixed random seeds for test data (seed=42)",
+        "No OS-dependent randomness in math",
+        "CSV parsing order is stable",
+        "Manifest timestamps are metadata-only"
+      ],
+      "critical_failures": [
+        "No automated end-to-end reproducibility test",
+        "Kernel smoothing determinism not verified by test"
+      ]
+    },
+    "preview_apply_parity": {
+      "pass_rate": "50%",
+      "checks": {
+        "total": 4,
+        "pass": 2,
+        "partial": 2,
+        "fail": 0
+      },
+      "notes": "Dry-run works but metadata parity with apply is not explicitly tested"
+    },
+    "apply_rollback_exactness": {
+      "pass_rate": "75%",
+      "checks": {
+        "total": 4,
+        "pass": 3,
+        "partial": 1,
+        "fail": 0
+      },
+      "notes": "Core apply/rollback contract is tested and enforced"
+    },
+    "stable_outputs": {
+      "pass_rate": "75%",
+      "checks": {
+        "total": 4,
+        "pass": 3,
+        "partial": 0,
+        "fail": 1
+      },
+      "notes": "Current output naming is stable and versioned; backward compatibility untested"
+    },
+    "robust_csv_handling": {
+      "pass_rate": "20%",
+      "checks": {
+        "total": 5,
+        "pass": 1,
+        "partial": 2,
+        "fail": 2
+      },
+      "notes": "Happy path covered; edge cases (non-UTF8, duplicate headers) need tests"
+    },
+    "no_hidden_state": {
+      "pass_rate": "25%",
+      "checks": {
+        "total": 4,
+        "pass": 1,
+        "partial": 3,
+        "fail": 0
+      },
+      "notes": "Stateless design but concurrency and cleanup not explicitly tested"
+    },
+    "overall": {
+      "pass_rate": "50%",
+      "total_checks": 28,
+      "pass": 14,
+      "partial": 9,
+      "fail": 5,
+      "assessment": "PARTIAL PASS - Core reproducibility mechanisms exist, but gaps in automated testing"
+    }
+  },
+  "oem_mapping": {
+    "deterministic_math_chains": {
+      "parity_level": "STRONG",
+      "evidence": "Fixed AFR→VE formulas, clamping, kernels with no randomness",
+      "gap": "Reproducibility test missing"
+    },
+    "formalized_data_contracts": {
+      "parity_level": "STRONG",
+      "evidence": "io_contracts.py, manifest schema versioning, CSV validation, SHA-256 hashing"
+    },
+    "scriptable_workflow": {
+      "parity_level": "STRONG",
+      "evidence": "CLI with --csv, --outdir, --dry-run args; fully automatable"
+    },
+    "batchability": {
+      "parity_level": "STRONG",
+      "evidence": "Single CSV → outputs in one pass; can be scripted in loops"
+    },
+    "regression_validation_discipline": {
+      "parity_level": "STRONG",
+      "evidence": "251 tests, acceptance criteria, safety rules, CI enforcement"
+    },
+    "version_controlled_calibrations": {
+      "parity_level": "STRONG",
+      "evidence": "Metadata with app_version, SHA hashes for audit trail"
+    },
+    "formal_error_propagation_analysis": {
+      "parity_level": "WEAK",
+      "evidence": "No uncertainty quantification or confidence intervals in outputs"
+    },
+    "certified_toolchain": {
+      "parity_level": "WEAK",
+      "evidence": "Open-source Python, not certified compilers (no ISO 26262)"
+    },
+    "dyno_control_integration": {
+      "parity_level": "N/A",
+      "evidence": "Intentionally out of scope (analyzes logs, doesn't control hardware)"
+    },
+    "ecu_flashing": {
+      "parity_level": "N/A",
+      "evidence": "Intentionally out of scope (exports PVV XML, user flashes via Power Vision)"
+    },
+    "closed_loop_auto_tuning": {
+      "parity_level": "N/A",
+      "evidence": "Intentionally out of scope (single-pass corrections, user iterates manually)"
+    }
+  },
+  "allowed_claims": [
+    {
+      "claim": "Deterministic VE corrections",
+      "precise_language": "DynoAI3 produces deterministic VE corrections for a given CSV input and parameter set, using fixed AFR-to-VE formulas and clamping rules.",
+      "evidence": "ai_tuner_toolkit_dyno_v1_2.py - no random() calls; acceptance_test.py:352-379"
+    },
+    {
+      "claim": "Hash-verified apply/rollback",
+      "precise_language": "VE table modifications are hash-verified using SHA-256, ensuring exact rollback capability (≤0.0001 precision).",
+      "evidence": "acceptance_test.py:292-349, ve_operations.py:38-44,276-281"
+    },
+    {
+      "claim": "Production-grade test coverage",
+      "precise_language": "DynoAI3 has comprehensive regression test coverage with 251 test functions validating math correctness, API security, and protocol compliance.",
+      "evidence": "34 test modules, 4,343 LOC"
+    },
+    {
+      "claim": "Formalized data contracts",
+      "precise_language": "Data inputs and outputs are governed by formalized contracts including schema validation, required CSV columns, and versioned manifest formats.",
+      "evidence": "io_contracts.py:27 - SCHEMA_ID"
+    },
+    {
+      "claim": "Safety-clamped corrections",
+      "precise_language": "VE corrections are safety-clamped to ±7% by default (configurable to ±15%) to prevent excessive adjustments that could damage the engine.",
+      "evidence": "acceptance_test.py:28-69, ve_operations.py:22"
+    },
+    {
+      "claim": "Scriptable batch workflow",
+      "precise_language": "DynoAI3 supports fully scriptable batch processing of dyno logs via command-line interface, enabling automated calibration workflows.",
+      "evidence": "ai_tuner_toolkit_dyno_v1_2.py CLI"
+    },
+    {
+      "claim": "Protocol-compliant JetDrive integration",
+      "precise_language": "JetDrive integration is protocol-compliant with Dynojet KLHDV multicast specification (224.0.2.10:22344).",
+      "evidence": "test_jetdrive_client_protocol.py"
+    },
+    {
+      "claim": "Reproducible kernel experiments",
+      "precise_language": "Experimental kernel runs produce audit-ready fingerprints tracking module, function, and parameters for reproducibility.",
+      "evidence": "test_fingerprint.py:14-95"
+    }
+  ],
+  "disallowed_claims": [
+    {
+      "claim": "Bit-for-bit identical VE corrections across all platforms",
+      "reason": "No cross-platform reproducibility test (GAP-6)",
+      "safe_alternative": "Deterministic math within a platform; cross-platform equivalence expected but not regression-tested"
+    },
+    {
+      "claim": "OEM-certified calibration tool",
+      "reason": "Not certified by any OEM or safety standard (ISO 26262)",
+      "safe_alternative": "OEM-style discipline in data contracts and regression testing, but not certified for safety-critical use"
+    },
+    {
+      "claim": "Fully automated closed-loop tuning",
+      "reason": "Requires dyno control and iterative workflow (out of scope)",
+      "safe_alternative": "Single-pass correction generation; iterative tuning requires manual dyno re-runs"
+    },
+    {
+      "claim": "Zero configuration required",
+      "reason": "Requires CSV input, optional base VE tables, parameter tuning",
+      "safe_alternative": "Minimal configuration: CSV input and output directory required; parameters have sensible defaults"
+    },
+    {
+      "claim": "Production-ready for ECU deployment",
+      "reason": "Outputs are suggestions; user must validate and flash ECU",
+      "safe_alternative": "Production-grade VE corrections for review and validation; user is responsible for ECU flashing"
+    },
+    {
+      "claim": "World-class adjacent accuracy",
+      "reason": "No benchmarking data vs. industry leaders (Dynojet, HP Tuners)",
+      "safe_alternative": "High-quality corrections based on established AFR-to-VE formulas; accuracy depends on dyno data quality"
+    },
+    {
+      "claim": "Enterprise-grade multi-user collaboration",
+      "reason": "No user management, access control, or concurrent editing features",
+      "safe_alternative": "Single-user workflow with file-based outputs suitable for version control (Git)"
+    },
+    {
+      "claim": "Real-time tuning",
+      "reason": "Batch processing workflow, not real-time streaming",
+      "safe_alternative": "Post-run analysis of dyno logs; JetDrive capture is real-time, but analysis is batch"
+    }
+  ],
+  "recommendations": {
+    "critical_actions": [
+      "Add automated end-to-end reproducibility test (GAP-1)",
+      "Test dry-run metadata parity with actual apply (GAP-2)",
+      "Add non-UTF8 CSV handling and tests (GAP-3)"
+    ],
+    "high_priority": [
+      "Test duplicate header detection (GAP-3)",
+      "Add backward compatibility test for manifests (GAP-7)",
+      "Test concurrent run isolation (GAP-4)"
+    ],
+    "medium_priority": [
+      "Add cross-platform CI matrix (GAP-6)",
+      "Test kernel determinism (GAP-5)",
+      "Verify temp cleanup and overwrite behavior (GAP-8)"
+    ],
+    "general": [
+      "Document scope boundaries clearly (not a full ECU suite)",
+      "Avoid overreach in claims (stick to defensible, evidence-backed language)",
+      "Maintain claims matrix for all public statements"
+    ]
+  },
+  "metadata": {
+    "report_version": "1.0",
+    "files_analyzed": [
+      "34 test modules",
+      "15 core source files",
+      "6 documentation files"
+    ],
+    "total_source_loc": "~25,000",
+    "total_test_loc": "4,343",
+    "test_to_source_ratio": "~17%",
+    "audit_trail": "All claims tied to specific file/function references"
+  }
+}
