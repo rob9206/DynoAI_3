@@ -450,18 +450,40 @@ DynoAI3 is an intelligent dyno tuning system that transforms WinPEP logs into pr
 
 ### 6.1 Core API Endpoints
 
-**Base URL:** `http://localhost:5000/api`
+**Base URL:** `http://{HOST}:{PORT}/api` (default: `http://localhost:5000/api`)
 
 | Endpoint | Method | Purpose | Contract |
 |----------|--------|---------|----------|
 | `/health` | GET | System health check | Returns `{"status": "healthy"}` on success |
 | `/analyze` | POST | Upload CSV and run analysis | Accepts multipart/form-data with `csv` file |
 | `/ve-data/<run_id>` | GET | Retrieve VE correction data | Returns JSON with delta grid |
-| `/download/<run_id>/<file>` | GET | Download output files | Streams CSV/JSON/TXT files |
-| `/jetdrive/status` | GET | JetDrive system status | Returns provider list and connection state |
-| `/jetdrive/analyze` | POST | Run analysis on JetDrive CSV | Same as `/analyze` but JetDrive-specific |
-| `/jetdrive/runs/<id>` | GET | Get run details | Returns manifest + outputs metadata |
-| `/jetdrive/runs/<id>/pvv` | GET | Download PVV XML | Streams Power Vision XML export |
+| `/download/<run_id>/<filename>` | GET | Download output files | Streams CSV/JSON/TXT files |
+| `/status/<run_id>` | GET | Get run status | Returns manifest and status metadata |
+| `/runs` | GET | List all runs | Returns array of run metadata |
+| `/diagnostics/<run_id>` | GET | Get diagnostics report | Returns diagnostics text |
+| `/coverage/<run_id>` | GET | Get coverage maps | Returns coverage data |
+| `/apply` | POST | Apply VE corrections | VE table apply operation |
+| `/rollback` | POST | Rollback VE corrections | VE table rollback operation |
+
+**JetDrive Endpoints** (prefix: `/api/jetdrive/`):
+
+| Endpoint | Method | Purpose | Contract |
+|----------|--------|---------|----------|
+| `/status` | GET | Check JetDrive system status | Returns provider list and connection state |
+| `/analyze` | POST | Run analysis on uploaded CSV | Accepts multipart/form-data with `csv` file |
+| `/analyze-unified` | POST | Run unified workflow analysis | Unified analysis with autotune workflow |
+| `/run/<run_id>` | GET | Get run details | Returns manifest + outputs metadata |
+| `/run/<run_id>/pvv` | GET | Download PVV XML | Streams Power Vision XML export |
+| `/run/<run_id>/report` | GET | Get run report | Returns comprehensive run report |
+| `/upload` | POST | Upload dyno data | Upload and process CSV file |
+| `/hardware/diagnostics` | GET | Run hardware diagnostics | Tests network and multicast |
+| `/hardware/discover` | GET | Discover JetDrive providers | Scans network for providers |
+| `/hardware/monitor/start` | POST | Start connection monitor | Begins continuous health checks |
+| `/hardware/monitor/stop` | POST | Stop connection monitor | Stops health checks |
+| `/hardware/monitor/status` | GET | Get monitor status | Returns monitor state |
+| `/hardware/live/start` | POST | Start live data capture | Begins JetDrive capture |
+| `/hardware/live/stop` | POST | Stop live data capture | Stops capture |
+| `/hardware/live/data` | GET | Get live data stream | Returns captured samples |
 
 ### 6.2 Authentication and Rate Limiting
 
