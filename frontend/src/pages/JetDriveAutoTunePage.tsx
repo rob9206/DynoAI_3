@@ -724,11 +724,6 @@ export default function JetDriveAutoTunePage() {
                 </div>
             </div>
 
-            {/* Quick Tune Panel - Maximum Automation */}
-            {/* <div className="mb-6">
-                <QuickTunePanel apiUrl={API_BASE} />
-            </div> */}
-
             {/* Main Tabs */}
             <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 max-w-lg">

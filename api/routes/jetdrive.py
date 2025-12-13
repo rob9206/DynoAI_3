@@ -585,7 +585,7 @@ def export_text(run_id: str):
         lines.append("Format: RPM | MAP bins (kPa)")
         lines.append("")
 
-        with open(ve_csv_path) as f:
+        with open(ve_csv_path, encoding="utf-8") as f:
             ve_lines = f.readlines()
             for line in ve_lines:
                 lines.append(line.rstrip())
@@ -599,7 +599,7 @@ def export_text(run_id: str):
         lines.append("Format: RPM | AFR error in AFR points")
         lines.append("")
 
-        with open(afr_csv_path) as f:
+        with open(afr_csv_path, encoding="utf-8") as f:
             afr_lines = f.readlines()
             for line in afr_lines:
                 lines.append(line.rstrip())
@@ -613,7 +613,7 @@ def export_text(run_id: str):
         lines.append("Format: RPM | Sample count per cell")
         lines.append("")
 
-        with open(hits_csv_path) as f:
+        with open(hits_csv_path, encoding="utf-8") as f:
             hit_lines = f.readlines()
             for line in hit_lines:
                 lines.append(line.rstrip())
