@@ -149,15 +149,18 @@ DynoAI3 is an intelligent dyno tuning system that transforms WinPEP logs into pr
 ### 2.4 Test Invariants (Semantics Locked)
 
 **Test Harnesses (Cannot Modify Semantics):**
-- `tests/selftest.py` - CLI smoke test, manifest generation, VE delta output
-- `tests/acceptance_test.py` - 8 scenarios: clamping, metadata, hash verification, rollback
-- `tests/kernels/test_k*.py` - Kernel import/execution validation
+- `selftest.py` - CLI smoke test, manifest generation, VE delta output
+- `selftest_runner.py` - Legacy smoke test (alternative harness)
+- `acceptance_test.py` - VE operations validation and scenarios
+
+**Note:** Documentation references experimental kernel harnesses (`tests/kernels/test_k1.py`, `test_k2.py`, etc.) as planned infrastructure. These are not yet implemented. Current experimental kernel validation uses `tests/test_fingerprint.py` and the `experiments/` framework.
 
 **Execution Order:**
-1. Selftests (smoke tests)
-2. Acceptance tests (VE operations)
-3. Kernel harnesses (K1/K2/K3 experimental)
-4. PyTest suites (unit + integration)
+1. Selftests (smoke tests: selftest.py, selftest_runner.py)
+2. Acceptance tests (VE operations: acceptance_test.py)
+3. Unit tests (PyTest: tests/test_*.py)
+4. Integration tests (PyTest: tests/test_autotune_workflow.py, tests/test_jetdrive_*.py)
+5. API tests (PyTest: tests/api/test_*.py)
 
 **Pass Criteria:** All tests must pass before merge. No exceptions.
 
@@ -298,24 +301,26 @@ DynoAI3 is an intelligent dyno tuning system that transforms WinPEP logs into pr
 
 ### 4.1 Test Coverage Summary
 
-**Total Test Files:** 27
+**Total Test Files:** 29 (including conftest.py files)
 
 **Test Categories:**
 - API Tests: 11 files (health, security, authentication, rate limiting, endpoints)
-- Core Logic Tests: 8 files (bin alignment, delta floor, fingerprint, runner paths)
-- Integration Tests: 6 files (JetDrive, autotune workflow, decel management, cylinder balancing)
-- Agent Tests: 2 files (orchestrator, make_patch)
+- Core Logic Tests: 10 files (bin alignment, delta floor, fingerprint, runner paths, file handling)
+- Integration Tests: 6 files (JetDrive, autotune workflow, decel management, cylinder balancing, livelink)
+- Agent Tests: 1 file (orchestrator, make_patch)
+- Configuration: 2 conftest.py files (test setup and fixtures)
 
 ### 4.2 Test Execution Matrix
 
 | Test Suite | Files | Purpose | Pass Criteria |
 |------------|-------|---------|---------------|
-| Selftests | `tests/selftest.py` | Smoke test, CLI runs, manifest generated | 2/2 passing |
-| Acceptance | `tests/acceptance_test.py` | VE operations (8 scenarios) | 8/8 passing |
-| Kernel Harnesses | `tests/kernels/test_k*.py` | Experimental kernel validation | 4/4 passing (when kernels exist) |
+| Selftests | `selftest.py`, `selftest_runner.py` | Smoke test, CLI runs, manifest generated | Files execute successfully |
+| Acceptance | `acceptance_test.py` | VE operations validation | Validation tests pass |
 | Unit Tests | `tests/test_*.py` | Bin alignment, delta flooring, fingerprints, path validation | All passing |
-| Integration Tests | `tests/test_autotune*.py`, `tests/test_jetdrive*.py` | End-to-end workflows | All passing |
+| Integration Tests | `tests/test_autotune*.py`, `tests/test_jetdrive*.py`, etc. | End-to-end workflows | All passing |
 | API Tests | `tests/api/test_*.py` | REST endpoints, middleware, security | All passing |
+
+**Note:** Documentation references kernel harness tests (`tests/kernels/test_k*.py`) that are planned but not yet implemented. Current kernel validation is handled through `tests/test_fingerprint.py` and experimental framework tests.
 
 ### 4.3 Reproducibility Guarantees
 
@@ -338,16 +343,19 @@ DynoAI3 is an intelligent dyno tuning system that transforms WinPEP logs into pr
 ### 4.4 Regression Test Evidence
 
 **Required Before Merge:**
-- All selftests pass (smoke tests)
-- All acceptance tests pass (VE operations)
-- All kernel harnesses pass (experimental frameworks)
-- All PyTest suites pass (unit + integration)
+- All selftests pass (selftest.py, selftest_runner.py)
+- Acceptance tests pass (acceptance_test.py for VE operations)
+- All PyTest suites pass (unit + integration + API tests)
 - No new linter errors introduced
 
 **Automated Enforcement:**
 - Branch protection: PRs required, status checks mandatory
 - CI workflows: Automated test execution on every push/PR
 - CODEOWNERS: Math-critical files require maintainer approval
+
+**Planned Infrastructure:**
+- Experimental kernel harnesses (tests/kernels/test_k*.py) referenced in documentation but not yet implemented
+- When implemented, will validate K1/K2/K3 kernel imports and execution
 
 ### 4.5 Known Test Limitations
 
@@ -660,10 +668,13 @@ Rollback validates: Current file hash == Metadata hash
 - `experiments/protos/k3_bilateral_v1.py` - Bilateral edge-preserving filter
 
 ### 10.4 Test Suites
-- `tests/selftest.py` - Smoke test harness
-- `tests/acceptance_test.py` - VE operations acceptance
+- `selftest.py` - Smoke test harness (root directory)
+- `selftest_runner.py` - Alternative smoke test harness (root directory)
+- `acceptance_test.py` - VE operations acceptance (root directory)
 - `tests/api/` - REST API endpoint tests
-- `tests/kernels/` - Experimental kernel harnesses
+- `tests/test_*.py` - Unit and integration tests
+
+**Note:** Experimental kernel harness tests referenced in documentation (`tests/kernels/`) are planned but not yet implemented.
 
 ### 10.5 Documentation
 - `docs/DYNOAI_ARCHITECTURE_OVERVIEW.md` - System architecture
