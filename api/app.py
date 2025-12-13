@@ -1046,3 +1046,11 @@ def print_startup_banner():
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")
     app.run(debug=debug_flag, host="0.0.0.0", port=5001, threaded=True)
+
+
+# Register error handlers
+register_error_handlers(app)
+
+
+if __name__ == "__main__":
+    print_startup_banner()

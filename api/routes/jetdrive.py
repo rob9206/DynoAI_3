@@ -950,3 +950,130 @@ def get_monitor_status():
                 "history": _monitor_state["history"][-20:],  # Last 20 entries
             }
         )
+
+
+# =============================================================================
+# Live Data Streaming
+# =============================================================================
+
+# Store for live channel values
+_live_data: dict[str, Any] = {
+    "channels": {},
+    "last_update": None,
+    "capturing": False,
+}
+_live_data_lock = threading.Lock()
+
+
+def _live_capture_loop():
+    """Background thread to capture live channel data."""
+    global _live_data
+
+    from api.services.jetdrive_client import (
+        JetDriveConfig,
+        JetDriveSample,
+        discover_providers,
+    )
+
+    config = JetDriveConfig.from_env()
+
+    while True:
+        with _live_data_lock:
+            if not _live_data["capturing"]:
+                break
+
+        try:
+            # Discover and capture a quick sample
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            providers = loop.run_until_complete(discover_providers(config, timeout=2.0))
+
+            if providers:
+                provider = providers[0]
+
+                # Quick capture for 1 second
+                samples: list[JetDriveSample] = []
+                stop_event = asyncio.Event()
+
+                def on_sample(s: JetDriveSample):
+                    samples.append(s)
+
+                async def capture_brief():
+                    from api.services.jetdrive_client import subscribe
+
+                    # Schedule stop
+                    async def stop_after():
+                        await asyncio.sleep(1.0)
+                        stop_event.set()
+
+                    asyncio.create_task(stop_after())
+                    await subscribe(provider, [], on_sample, config=config, stop_event=stop_event)
+
+                loop.run_until_complete(capture_brief())
+
+                # Update live data with latest values
+                channel_values = {}
+                for s in samples:
+                    channel_values[s.channel_name] = {
+                        "id": s.channel_id,
+                        "name": s.channel_name,
+                        "value": s.value,
+                        "timestamp": s.timestamp_ms,
+                    }
+
+                with _live_data_lock:
+                    _live_data["channels"] = channel_values
+                    _live_data["last_update"] = datetime.now().isoformat()
+
+            loop.close()
+
+        except Exception as e:
+            logger.warning(f"Live capture error: {e}")
+
+        time.sleep(2.0)  # Update every 2 seconds
+
+
+@jetdrive_bp.route("/hardware/live/start", methods=["POST"])
+def start_live_capture():
+    """Start live data capture."""
+    global _live_data
+
+    with _live_data_lock:
+        if _live_data["capturing"]:
+            return jsonify({"status": "already_capturing"})
+
+        _live_data["capturing"] = True
+        _live_data["channels"] = {}
+
+    thread = threading.Thread(target=_live_capture_loop, daemon=True)
+    thread.start()
+
+    return jsonify({"status": "started"})
+
+
+@jetdrive_bp.route("/hardware/live/stop", methods=["POST"])
+def stop_live_capture():
+    """Stop live data capture."""
+    global _live_data
+
+    with _live_data_lock:
+        _live_data["capturing"] = False
+
+    return jsonify({"status": "stopped"})
+
+
+@jetdrive_bp.route("/hardware/live/data", methods=["GET"])
+def get_live_data():
+    """Get current live channel data."""
+    global _live_data
+
+    with _live_data_lock:
+        return jsonify(
+            {
+                "capturing": _live_data["capturing"],
+                "last_update": _live_data["last_update"],
+                "channels": _live_data["channels"],
+                "channel_count": len(_live_data["channels"]),
+            }
+        )
