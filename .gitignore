@@ -21,6 +21,7 @@ uploads/
 runs/
 tmp/
 tmp_test/
+temp_selftest/
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
