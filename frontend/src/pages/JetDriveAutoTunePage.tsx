@@ -657,9 +657,19 @@ export default function JetDriveAutoTunePage() {
 
     // Fetch text export content
     const fetchTextExport = async (rid: string) => {
-        const res = await fetch(`${API_BASE}/run/${rid}/export-text`);
-        const data = await res.json();
-        setTextExportContent(data.content);
+        try {
+            const res = await fetch(`${API_BASE}/run/${rid}/export-text`);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch text export: ${res.status} ${res.statusText}`);
+            }
+            const data = await res.json();
+            if (!data || typeof data.content !== 'string') {
+                throw new Error('Invalid response: missing content');
+            }
+            setTextExportContent(data.content);
+        } catch (err) {
+            toast.error('Failed to fetch text export', { description: String(err) });
+        }
     };
 
     // Download PVV file
