@@ -61,7 +61,20 @@ The JetDrive page provides a complete auto-tuning workflow:
 1. **Navigate to JetDrive** tab in the web UI
 2. **Run Simulation** or upload a CSV from a real dyno run
 3. **View Results** - 2D VE correction grid, AFR analysis, diagnostics
-4. **Export** - Download PVV XML for Power Vision or CSV for manual import
+4. **Export** - Download results in multiple formats:
+   - **PVV XML** for Power Vision/Power Core import
+   - **Text Export** for sharing with AI assistants (ChatGPT, Claude, etc.)
+   - **CSV** for manual analysis
+
+### Text Export for AI Analysis
+
+Export comprehensive analysis reports as human-readable text files perfect for sharing with AI assistants:
+- Complete performance summary (HP, TQ, samples)
+- VE correction grid with all RPM/MAP zones
+- AFR error analysis and zone distribution
+- Hit count data and diagnostics
+
+See [TEXT_EXPORT_GUIDE.md](docs/TEXT_EXPORT_GUIDE.md) for details.
 
 ### Hardware Testing
 
@@ -161,6 +174,8 @@ DynoAI_3/
 | `/api/jetdrive/analyze-unified` | POST | Run unified workflow analysis |
 | `/api/jetdrive/runs/<id>` | GET | Get run details and results |
 | `/api/jetdrive/runs/<id>/pvv` | GET | Download PVV XML export |
+| `/api/jetdrive/runs/<id>/export-text` | GET | Download comprehensive text export for AI analysis |
+| `/api/jetdrive/runs/<id>/report` | GET | Download diagnostics report |
 | `/api/jetdrive/hardware/diagnostics` | GET | Run hardware diagnostics |
 | `/api/jetdrive/hardware/discover` | GET | Discover JetDrive providers |
 
