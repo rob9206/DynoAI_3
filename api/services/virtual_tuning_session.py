@@ -130,6 +130,10 @@ class TuningSession:
     current_iteration: int = 0
     iterations: list[IterationResult] = field(default_factory=list)
 
+    # Sub-iteration progress (0-100)
+    progress_pct: float = 0.0
+    progress_message: str = ""
+
     # Current VE tables
     current_ve_front: np.ndarray | None = None
     current_ve_rear: np.ndarray | None = None
@@ -144,6 +148,19 @@ class TuningSession:
     # Error tracking
     error_message: str | None = None
 
+    # Thread safety for progress updates
+    _progress_lock: Any = field(
+        default_factory=lambda: __import__("threading").Lock(),
+        init=False,
+        repr=False,
+    )
+
+    def update_progress(self, pct: float, message: str = "") -> None:
+        """Thread-safe progress update."""
+        with self._progress_lock:
+            self.progress_pct = pct
+            self.progress_message = message
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
         return {
@@ -152,6 +169,8 @@ class TuningSession:
             "current_iteration": self.current_iteration,
             "max_iterations": self.config.max_iterations,
             "converged": self.status == TuningStatus.CONVERGED,
+            "progress_pct": self.progress_pct,
+            "progress_message": self.progress_message,
             "iterations": [
                 {
                     "iteration": it.iteration,
@@ -393,6 +412,9 @@ class VirtualTuningOrchestrator:
         """
         iteration_start = time.time()
 
+        # Progress: 0% - Iteration started
+        session.update_progress(0.0, f"Starting iteration {iteration}...")
+
         # Create AFR target table
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
 
@@ -410,6 +432,9 @@ class VirtualTuningOrchestrator:
         )
         logger.info("  ✓ Virtual ECU created with VE tables")
 
+        # Progress: 20% - Virtual ECU created
+        session.update_progress(20.0, "Virtual ECU created")
+
         # Create simulator with Virtual ECU
         sim_config = SimulatorConfig(
             profile=session.config.engine_profile,
@@ -426,6 +451,8 @@ class VirtualTuningOrchestrator:
         logger.info(f"  Simulator state after start: {simulator.get_state().value}")
 
         # Trigger pull
+        # Progress: 40% - Dyno pull started
+        session.update_progress(40.0, "Running dyno pull...")
         logger.info("  🚀 Starting dyno pull simulation...")
         simulator.trigger_pull()
 
@@ -451,6 +478,9 @@ class VirtualTuningOrchestrator:
         logger.info(f"  ✓ Dyno pull complete, {len(pull_data)} data points captured")
         simulator.stop()
 
+        # Progress: 70% - Dyno pull completed
+        session.update_progress(70.0, f"Dyno pull complete ({len(pull_data)} points)")
+
         if not pull_data or len(pull_data) == 0:
             raise ValueError("No pull data collected - pull may not have completed")
 
@@ -473,6 +503,9 @@ class VirtualTuningOrchestrator:
             / np.sqrt(2)
         )
         logger.info(f"  ✓ AFR analysis complete, max error: {max_afr_error:.3f}")
+
+        # Progress: 85% - AFR analysis completed
+        session.update_progress(85.0, "AFR analysis complete")
 
         # Calculate VE corrections using AutoTuneWorkflow
         logger.info("  🔧 Calculating VE corrections...")
@@ -502,6 +535,9 @@ class VirtualTuningOrchestrator:
             else 0.0
         )
         cells_corrected = int(significant_mask.sum())
+
+        # Progress: 100% - VE corrections calculated
+        session.update_progress(100.0, "VE corrections calculated")
 
         # Convergence check
         converged_mask = (

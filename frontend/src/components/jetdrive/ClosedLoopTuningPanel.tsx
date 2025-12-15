@@ -38,6 +38,8 @@ interface SessionStatus {
     current_iteration: number;
     max_iterations: number;
     converged: boolean;
+    progress_pct: number;
+    progress_message: string;
     iterations: IterationData[];
     duration_sec: number;
     error_message?: string;
@@ -139,11 +141,11 @@ export function ClosedLoopTuningPanel({
     const isComplete = status?.status === 'converged' || status?.status === 'max_iterations';
     const isFailed = status?.status === 'failed';
 
-    // Calculate progress - show partial progress during first iteration
+    // Calculate progress - use sub-iteration progress when available
     const progressPct = status
         ? status.current_iteration === 0 && status.status === 'running'
-            ? 5  // Show 5% to indicate activity
-            : (status.current_iteration / status.max_iterations) * 100
+            ? status.progress_pct || 5  // Use sub-iteration progress or 5% to indicate activity
+            : ((status.current_iteration + (status.progress_pct || 0) / 100) / status.max_iterations) * 100
         : 0;
 
     // Get latest iteration data
@@ -236,15 +238,17 @@ export function ClosedLoopTuningPanel({
                         </div>
 
                         {/* Current Status */}
-                        {isRunning && status.current_iteration === 0 && (
+                        {isRunning && (
                             <Alert className="bg-cyan-500/10 border-cyan-500/30">
                                 <RefreshCw className="h-4 w-4 text-cyan-500 animate-spin" />
                                 <AlertDescription>
-                                    <strong>Running first iteration...</strong>
+                                    <strong>{status.progress_message || `Running iteration ${status.current_iteration || 1}...`}</strong>
                                     <br />
-                                    This takes 10-15 seconds (running full dyno pull + analysis).
-                                    <br />
-                                    Progress will update when iteration 1 completes.
+                                    {status.current_iteration === 0 ? (
+                                        <>This takes 10-15 seconds (running full dyno pull + analysis).</>
+                                    ) : (
+                                        <>Processing iteration {status.current_iteration} of {status.max_iterations}</>
+                                    )}
                                 </AlertDescription>
                             </Alert>
                         )}
