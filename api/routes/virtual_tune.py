@@ -355,7 +355,7 @@ def get_session_results(session_id: str):
 def health_check():
     """
     Check health of all virtual tuning components.
-    
+
     Response:
     {
         "healthy": true,
@@ -369,13 +369,18 @@ def health_check():
     }
     """
     from datetime import datetime
+
     from api.services.autotune_workflow import AutoTuneWorkflow
-    from api.services.virtual_ecu import VirtualECU, create_baseline_ve_table, create_afr_target_table
     from api.services.dyno_simulator import DynoSimulator, SimulatorConfig
-    
+    from api.services.virtual_ecu import (
+        VirtualECU,
+        create_afr_target_table,
+        create_baseline_ve_table,
+    )
+
     components = {}
     healthy = True
-    
+
     # Check orchestrator
     try:
         orchestrator = get_orchestrator()
@@ -383,17 +388,19 @@ def health_check():
     except Exception as e:
         components["orchestrator"] = f"error: {str(e)}"
         healthy = False
-    
+
     # Check dyno simulator
     try:
         profile = EngineProfile.m8_114()
-        sim_config = SimulatorConfig(profile=profile, enable_thermal_effects=False, auto_pull=False)
+        sim_config = SimulatorConfig(
+            profile=profile, enable_thermal_effects=False, auto_pull=False
+        )
         # Don't actually start it, just verify we can create it
         components["dyno_simulator"] = "ok"
     except Exception as e:
         components["dyno_simulator"] = f"error: {str(e)}"
         healthy = False
-    
+
     # Check virtual ECU
     try:
         ve_table = create_baseline_ve_table(peak_ve=0.85, peak_rpm=4000)
@@ -403,7 +410,7 @@ def health_check():
     except Exception as e:
         components["virtual_ecu"] = f"error: {str(e)}"
         healthy = False
-    
+
     # Check AFR analysis
     try:
         workflow = AutoTuneWorkflow()
@@ -411,10 +418,11 @@ def health_check():
     except Exception as e:
         components["afr_analysis"] = f"error: {str(e)}"
         healthy = False
-    
-    return jsonify({
-        "healthy": healthy,
-        "components": components,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    })
 
+    return jsonify(
+        {
+            "healthy": healthy,
+            "components": components,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    )
