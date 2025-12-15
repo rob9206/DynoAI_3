@@ -118,7 +118,6 @@ class TuningSessionConfig:
     ambient_temp_f: float = 75.0
 
 
-
 @dataclass
 class TuningSession:
     """A complete virtual tuning session."""
@@ -304,23 +303,35 @@ class VirtualTuningOrchestrator:
 
                 # Run one iteration with timeout protection
                 try:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(self._run_iteration, session, iteration)
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=1
+                    ) as executor:
+                        future = executor.submit(
+                            self._run_iteration, session, iteration
+                        )
                         try:
-                            iteration_result = future.result(timeout=session.config.iteration_timeout_sec)
+                            iteration_result = future.result(
+                                timeout=session.config.iteration_timeout_sec
+                            )
                         except concurrent.futures.TimeoutError:
-                            logger.error(f"⚠️ Iteration {iteration} exceeded timeout ({session.config.iteration_timeout_sec}s)")
+                            logger.error(
+                                f"⚠️ Iteration {iteration} exceeded timeout ({session.config.iteration_timeout_sec}s)"
+                            )
                             session.status = TuningStatus.FAILED
                             session.error_message = f"Iteration {iteration} timeout after {session.config.iteration_timeout_sec}s"
                             session.end_time = time.time()
                             break
                 except Exception as iter_error:
-                    logger.error(f"Iteration {iteration} failed: {iter_error}", exc_info=True)
+                    logger.error(
+                        f"Iteration {iteration} failed: {iter_error}", exc_info=True
+                    )
                     session.status = TuningStatus.FAILED
-                    session.error_message = f"Iteration {iteration} failed: {str(iter_error)}"
+                    session.error_message = (
+                        f"Iteration {iteration} failed: {str(iter_error)}"
+                    )
                     session.end_time = time.time()
                     break
-                    
+
                 session.iterations.append(iteration_result)
                 session.current_iteration = iteration
 
@@ -381,7 +392,7 @@ class VirtualTuningOrchestrator:
             IterationResult with metrics
         """
         iteration_start = time.time()
-        
+
         # Create AFR target table
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
 
