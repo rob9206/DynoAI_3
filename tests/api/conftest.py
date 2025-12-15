@@ -29,7 +29,8 @@ import pytest  # noqa: E402
 @pytest.fixture
 def app():
     """Create Flask app instance for testing."""
-    from api.app import app as flask_app, limiter
+    from api.app import app as flask_app
+    from api.app import limiter
 
     flask_app.config["TESTING"] = True
     flask_app.config["WTF_CSRF_ENABLED"] = False
@@ -140,8 +141,8 @@ def mock_output_folder(tmp_path, monkeypatch):
     Mock the output folder configuration to use a temporary directory.
     Creates test run data in the temporary folder.
     """
-    from api.config import get_config
     import api.app
+    from api.config import get_config
 
     config = get_config()
 
