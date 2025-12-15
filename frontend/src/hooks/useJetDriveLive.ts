@@ -147,6 +147,117 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     'chan_29': { label: 'Sensor', units: '', min: 0, max: 1, decimals: 3, color: '#888' },
 };
 
+/**
+ * Get channel configuration with flexible name matching.
+ * Tries exact match, case-insensitive match, and partial match patterns.
+ */
+function getChannelConfig(channelName: string) {
+    // Try exact match first
+    if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
+        return JETDRIVE_CHANNEL_CONFIG[channelName];
+    }
+    
+    // Try case-insensitive match
+    const lowerName = channelName.toLowerCase();
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        if (key.toLowerCase() === lowerName) {
+            return config;
+        }
+    }
+    
+    // Try partial match for common patterns
+    if (lowerName.includes('rpm')) {
+        return JETDRIVE_CHANNEL_CONFIG['RPM'] || {
+            label: channelName,
+            units: 'rpm',
+            min: 0,
+            max: 8000,
+            decimals: 0,
+            color: '#4ade80'
+        };
+    }
+    if (lowerName.includes('afr') || lowerName.includes('air/fuel') || lowerName.includes('air-fuel')) {
+        return JETDRIVE_CHANNEL_CONFIG['AFR'] || {
+            label: channelName,
+            units: ':1',
+            min: 10,
+            max: 18,
+            decimals: 2,
+            color: '#f472b6'
+        };
+    }
+    if (lowerName.includes('lambda')) {
+        return {
+            label: channelName,
+            units: 'λ',
+            min: 0.7,
+            max: 1.3,
+            decimals: 3,
+            color: '#a78bfa'
+        };
+    }
+    if (lowerName.includes('force') || lowerName.includes('load') || lowerName.includes('drum')) {
+        return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'] || {
+            label: channelName,
+            units: 'lbs',
+            min: 0,
+            max: 500,
+            decimals: 1,
+            color: '#4ade80'
+        };
+    }
+    if (lowerName.includes('hp') || lowerName.includes('horsepower') || lowerName.includes('power')) {
+        return {
+            label: channelName,
+            units: 'HP',
+            min: 0,
+            max: 200,
+            decimals: 1,
+            color: '#10b981'
+        };
+    }
+    if (lowerName.includes('tq') || lowerName.includes('torque')) {
+        return {
+            label: channelName,
+            units: 'ft-lb',
+            min: 0,
+            max: 150,
+            decimals: 1,
+            color: '#8b5cf6'
+        };
+    }
+    if (lowerName.includes('map')) {
+        return {
+            label: channelName,
+            units: 'kPa',
+            min: 0,
+            max: 105,
+            decimals: 1,
+            color: '#06b6d4'
+        };
+    }
+    if (lowerName.includes('tps') || lowerName.includes('throttle')) {
+        return {
+            label: channelName,
+            units: '%',
+            min: 0,
+            max: 100,
+            decimals: 1,
+            color: '#14b8a6'
+        };
+    }
+    
+    // Default fallback
+    return {
+        label: channelName,
+        units: '',
+        min: 0,
+        max: 100,
+        decimals: 2,
+        color: '#888888'
+    };
+}
+
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
@@ -225,9 +336,21 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
+                // Debug: Log raw channel names (every 100 polls to avoid spam)
+                if (pollCountRef.current % 100 === 0) {
+                    console.log('[useJetDriveLive] Raw channels:', Object.keys(data.channels));
+                }
+
+                const unmappedChannels: string[] = [];
+
                 for (const [name, ch] of Object.entries(data.channels)) {
                     const channel = ch as { id: number; name: string; value: number; timestamp: number };
-                    const config = JETDRIVE_CHANNEL_CONFIG[name];
+                    const config = getChannelConfig(name);
+
+                    // Track unmapped channels (those using default config)
+                    if (!JETDRIVE_CHANNEL_CONFIG[name] && pollCountRef.current % 100 === 0) {
+                        unmappedChannels.push(name);
+                    }
 
                     newChannels[name] = {
                         name,
@@ -241,11 +364,14 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     newSnapshot.units[name] = config?.units || '';
                 }
 
-                // Debug: Log HP channel specifically
-                if (newChannels['Horsepower']) {
-                    console.log('[useJetDriveLive] HP channel found:', newChannels['Horsepower']);
-                } else {
-                    console.log('[useJetDriveLive] HP channel NOT found. Available:', Object.keys(newChannels));
+                // Debug: Log unmapped channels
+                if (unmappedChannels.length > 0 && pollCountRef.current % 100 === 0) {
+                    console.warn('[useJetDriveLive] Unmapped channels (using fallback config):', unmappedChannels);
+                }
+
+                // Debug: Log mapped channel count
+                if (pollCountRef.current % 100 === 0) {
+                    console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels).length);
                 }
 
                 setChannels(newChannels);
