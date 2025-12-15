@@ -68,15 +68,18 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
     
     const rpm = getRPM();
     
-    // Update history (keep last 20 samples = 1 second at 50ms poll)
-    setRpmHistory(prev => [...prev.slice(-19), rpm]);
+    // Update history using a more efficient approach
+    setRpmHistory(prev => {
+      const newHistory = prev.length >= 20 ? prev.slice(-19) : prev;
+      return [...newHistory, rpm];
+    });
     
     // Need at least 10 samples for detection
     if (rpmHistory.length < 10) {
       return;
     }
     
-    // Calculate average RPM
+    // Calculate average RPM (only if history changed)
     const avgRPM = rpmHistory.reduce((a, b) => a + b, 0) / rpmHistory.length;
     const threshold = autoDetectConfig.rpmThreshold;
     

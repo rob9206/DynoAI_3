@@ -151,23 +151,36 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
  * Get channel configuration with flexible name matching.
  * Tries exact match, case-insensitive match, and partial match patterns.
  */
+const channelConfigCache = new Map<string, any>();
+
 function getChannelConfig(channelName: string) {
+    // Check cache first
+    if (channelConfigCache.has(channelName)) {
+        return channelConfigCache.get(channelName);
+    }
+    
+    let config;
+    
     // Try exact match first
     if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
-        return JETDRIVE_CHANNEL_CONFIG[channelName];
+        config = JETDRIVE_CHANNEL_CONFIG[channelName];
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     
     // Try case-insensitive match
     const lowerName = channelName.toLowerCase();
-    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+    for (const [key, cfg] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
         if (key.toLowerCase() === lowerName) {
+            config = cfg;
+            channelConfigCache.set(channelName, config);
             return config;
         }
     }
     
     // Try partial match for common patterns
     if (lowerName.includes('rpm')) {
-        return JETDRIVE_CHANNEL_CONFIG['RPM'] || {
+        config = JETDRIVE_CHANNEL_CONFIG['RPM'] || {
             label: channelName,
             units: 'rpm',
             min: 0,
@@ -175,9 +188,11 @@ function getChannelConfig(channelName: string) {
             decimals: 0,
             color: '#4ade80'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('afr') || lowerName.includes('air/fuel') || lowerName.includes('air-fuel')) {
-        return JETDRIVE_CHANNEL_CONFIG['AFR'] || {
+        config = JETDRIVE_CHANNEL_CONFIG['AFR'] || {
             label: channelName,
             units: ':1',
             min: 10,
@@ -185,9 +200,11 @@ function getChannelConfig(channelName: string) {
             decimals: 2,
             color: '#f472b6'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('lambda')) {
-        return {
+        config = {
             label: channelName,
             units: 'λ',
             min: 0.7,
@@ -195,9 +212,11 @@ function getChannelConfig(channelName: string) {
             decimals: 3,
             color: '#a78bfa'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('force') || lowerName.includes('load') || lowerName.includes('drum')) {
-        return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'] || {
+        config = JETDRIVE_CHANNEL_CONFIG['Force Drum 1'] || {
             label: channelName,
             units: 'lbs',
             min: 0,
@@ -205,9 +224,11 @@ function getChannelConfig(channelName: string) {
             decimals: 1,
             color: '#4ade80'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('hp') || lowerName.includes('horsepower') || lowerName.includes('power')) {
-        return {
+        config = {
             label: channelName,
             units: 'HP',
             min: 0,
@@ -215,9 +236,11 @@ function getChannelConfig(channelName: string) {
             decimals: 1,
             color: '#10b981'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('tq') || lowerName.includes('torque')) {
-        return {
+        config = {
             label: channelName,
             units: 'ft-lb',
             min: 0,
@@ -225,9 +248,11 @@ function getChannelConfig(channelName: string) {
             decimals: 1,
             color: '#8b5cf6'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('map')) {
-        return {
+        config = {
             label: channelName,
             units: 'kPa',
             min: 0,
@@ -235,9 +260,11 @@ function getChannelConfig(channelName: string) {
             decimals: 1,
             color: '#06b6d4'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     if (lowerName.includes('tps') || lowerName.includes('throttle')) {
-        return {
+        config = {
             label: channelName,
             units: '%',
             min: 0,
@@ -245,10 +272,12 @@ function getChannelConfig(channelName: string) {
             decimals: 1,
             color: '#14b8a6'
         };
+        channelConfigCache.set(channelName, config);
+        return config;
     }
     
     // Default fallback
-    return {
+    config = {
         label: channelName,
         units: '',
         min: 0,
@@ -256,6 +285,8 @@ function getChannelConfig(channelName: string) {
         decimals: 2,
         color: '#888888'
     };
+    channelConfigCache.set(channelName, config);
+    return config;
 }
 
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {

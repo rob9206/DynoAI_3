@@ -72,7 +72,10 @@ export function SessionReplayPanel({ apiUrl, sessionId, onDataUpdate }: SessionR
         setLoading(true);
         try {
             const res = await fetch(`${apiUrl}/sessions/${sessionId}`);
-            if (!res.ok) throw new Error('Failed to load session');
+            if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Unknown error');
+            throw new Error(`Failed to load session (${res.status}): ${errorText}`);
+        }
 
             const data: SessionData = await res.json();
 
@@ -235,7 +238,6 @@ export function SessionReplayPanel({ apiUrl, sessionId, onDataUpdate }: SessionR
                                 step={0.1}
                                 onValueChange={handleSeek}
                                 className="w-full"
-                                disabled={playback.isPlaying}
                             />
                             <div className="flex justify-between text-xs text-muted-foreground">
                                 <span>{formatTime(playback.currentTime)}</span>
