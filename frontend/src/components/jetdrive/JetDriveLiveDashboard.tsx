@@ -10,7 +10,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Activity, Gauge, Flame, Thermometer, Zap, Wind, Battery,
-    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic
+    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic, Search
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
@@ -19,9 +19,10 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
-import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, type JetDriveChannel } from '../../hooks/useJetDriveLive';
+import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDriveChannel } from '../../hooks/useJetDriveLive';
 import { AudioCapturePanel } from './AudioCapturePanel';
 import type { RecordedAudio } from '../../hooks/useAudioCapture';
+import { toast } from 'sonner';
 
 // Infer units from channel name or value
 function inferUnits(name: string, value: number): string {
@@ -127,14 +128,7 @@ export function JetDriveLiveDashboard({
             .map(([name, data]) => ({
                 name,
                 data,
-                config: JETDRIVE_CHANNEL_CONFIG[name] || {
-                    label: name,
-                    units: '',
-                    min: 0,
-                    max: 100,
-                    decimals: 2,
-                    color: '#888',
-                },
+                config: getChannelConfig(name),
             }));
     }, [channels, selectedPreset]);
 
@@ -173,6 +167,33 @@ export function JetDriveLiveDashboard({
         }
     }, [onAudioRecorded]);
 
+    // Handle channel discovery
+    const handleDiscoverChannels = async () => {
+        try {
+            const res = await fetch(`${apiUrl}/hardware/channels/discover`);
+            if (!res.ok) throw new Error('Failed to discover channels');
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                console.log('=== JetDrive Channel Discovery ===');
+                console.table(data.channels);
+                toast.success(`Found ${data.channel_count} channels`, {
+                    description: 'Check browser console for detailed channel information'
+                });
+            } else {
+                toast.error('Channel discovery failed', {
+                    description: data.error || 'Unknown error'
+                });
+            }
+        } catch (err) {
+            console.error('Channel discovery error:', err);
+            toast.error('Failed to discover channels', {
+                description: err instanceof Error ? err.message : 'Unknown error'
+            });
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header with status */}
@@ -209,6 +230,15 @@ export function JetDriveLiveDashboard({
                             <SelectItem value="afr">AFR / Lambda</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleDiscoverChannels}
+                        title="Discover available channels"
+                    >
+                        <Search className="h-4 w-4" />
+                    </Button>
 
                     <Button
                         variant="outline"
@@ -373,7 +403,7 @@ export function JetDriveLiveDashboard({
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {Object.entries(channels).map(([name, ch]) => {
-                                                const config = JETDRIVE_CHANNEL_CONFIG[name];
+                                                const config = getChannelConfig(name);
                                                 const displayLabel = config?.label || name.replace('chan_', 'Channel ').replace(/_/g, ' ');
                                                 const displayUnits = config?.units || inferUnits(name, ch.value);
                                                 const decimals = config?.decimals ?? 2;

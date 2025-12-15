@@ -56,6 +56,55 @@ export interface UseJetDriveLiveReturn {
     clearHistory: () => void;
 }
 
+// Get channel configuration with flexible matching
+export function getChannelConfig(channelName: string) {
+    // Try exact match first
+    if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
+        return JETDRIVE_CHANNEL_CONFIG[channelName];
+    }
+    
+    // Try case-insensitive match
+    const lowerName = channelName.toLowerCase();
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        if (key.toLowerCase() === lowerName) {
+            return config;
+        }
+    }
+    
+    // Try partial match for common patterns
+    if (lowerName.includes('rpm')) {
+        return JETDRIVE_CHANNEL_CONFIG['RPM'];
+    }
+    if (lowerName.includes('afr') || lowerName.includes('air/fuel')) {
+        return JETDRIVE_CHANNEL_CONFIG['AFR'];
+    }
+    if (lowerName.includes('force') || lowerName.includes('load')) {
+        return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'];
+    }
+    if (lowerName.includes('map') || lowerName.includes('manifold')) {
+        return JETDRIVE_CHANNEL_CONFIG['MAP'];
+    }
+    if (lowerName.includes('tps') || lowerName.includes('throttle')) {
+        return JETDRIVE_CHANNEL_CONFIG['TPS'];
+    }
+    if (lowerName.includes('horsepower') || lowerName.includes('hp')) {
+        return JETDRIVE_CHANNEL_CONFIG['HP'];
+    }
+    if (lowerName.includes('torque') || lowerName.includes('tq')) {
+        return JETDRIVE_CHANNEL_CONFIG['TQ'];
+    }
+    
+    // Default fallback
+    return {
+        label: channelName,
+        units: '',
+        min: 0,
+        max: 100,
+        decimals: 2,
+        color: '#888'
+    };
+}
+
 // Channel configuration for display
 // Maps both JetDrive channel names and fallback chan_X names
 export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
@@ -225,9 +274,17 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
+                // Track unmapped channels for debugging
+                const unmappedChannels: string[] = [];
+
                 for (const [name, ch] of Object.entries(data.channels)) {
                     const channel = ch as { id: number; name: string; value: number; timestamp: number };
-                    const config = JETDRIVE_CHANNEL_CONFIG[name];
+                    const config = getChannelConfig(name);
+
+                    // Track if this channel didn't have an exact config match
+                    if (!JETDRIVE_CHANNEL_CONFIG[name]) {
+                        unmappedChannels.push(name);
+                    }
 
                     newChannels[name] = {
                         name,
@@ -241,11 +298,14 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     newSnapshot.units[name] = config?.units || '';
                 }
 
-                // Debug: Log HP channel specifically
-                if (newChannels['Horsepower']) {
-                    console.log('[useJetDriveLive] HP channel found:', newChannels['Horsepower']);
-                } else {
-                    console.log('[useJetDriveLive] HP channel NOT found. Available:', Object.keys(newChannels));
+                // Debug logging
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('[useJetDriveLive] Raw channels:', Object.keys(data.channels));
+                    console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels));
+                    
+                    if (unmappedChannels.length > 0) {
+                        console.warn('[useJetDriveLive] Unmapped channels (using fallback config):', unmappedChannels);
+                    }
                 }
 
                 setChannels(newChannels);
