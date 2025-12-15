@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap } from 'lucide-react';
+import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '../ui/button';
@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 const API_BASE = 'http://127.0.0.1:5001/api/virtual-tune';
 
@@ -60,6 +61,8 @@ export function ClosedLoopTuningPanel({
 }: ClosedLoopTuningPanelProps) {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isStarting, setIsStarting] = useState(false);
+    const [showErrorDetails, setShowErrorDetails] = useState(false);
+    const [lastConfig, setLastConfig] = useState<any>(null);
 
     // Poll session status
     const { data: status, refetch } = useQuery<SessionStatus>({
@@ -81,15 +84,18 @@ export function ClosedLoopTuningPanel({
     // Start tuning mutation
     const startTuning = useMutation({
         mutationFn: async () => {
+            const config = {
+                engine_profile: engineProfile,
+                base_ve_scenario: baseScenario,
+                max_iterations: maxIterations,
+                convergence_threshold_afr: convergenceThreshold,
+            };
+            setLastConfig(config);  // Save config for retry
+            
             const res = await fetch(`${API_BASE}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    engine_profile: engineProfile,
-                    base_ve_scenario: baseScenario,
-                    max_iterations: maxIterations,
-                    convergence_threshold_afr: convergenceThreshold,
-                }),
+                body: JSON.stringify(config),
             });
             if (!res.ok) throw new Error(await res.text());
             return res.json();
@@ -135,6 +141,15 @@ export function ClosedLoopTuningPanel({
     const handleReset = () => {
         setSessionId(null);
         setIsStarting(false);
+        setShowErrorDetails(false);
+    };
+
+    const handleRetry = () => {
+        // Reset and start a new session with the same config
+        setSessionId(null);
+        setIsStarting(true);
+        setShowErrorDetails(false);
+        startTuning.mutate();
     };
 
     const isRunning = status?.status === 'running';
@@ -323,14 +338,47 @@ export function ClosedLoopTuningPanel({
                         )}
 
                         {isFailed && (
-                            <Alert className="bg-red-500/10 border-red-500/30">
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                                <AlertDescription>
-                                    <strong>Tuning failed</strong>
-                                    <br />
-                                    {status.error_message || 'Unknown error'}
-                                </AlertDescription>
-                            </Alert>
+                            <div className="space-y-2">
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertDescription>
+                                        <strong>Tuning Failed</strong>
+                                        <br />
+                                        {status.error_message || 'Unknown error occurred'}
+                                    </AlertDescription>
+                                </Alert>
+                                
+                                <Collapsible open={showErrorDetails} onOpenChange={setShowErrorDetails}>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="w-full justify-between">
+                                            <span>Error Details</span>
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${showErrorDetails ? 'rotate-180' : ''}`} />
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="mt-2">
+                                        <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-sm">
+                                            <div>
+                                                <span className="text-muted-foreground">Session ID:</span>
+                                                <div className="font-mono text-xs break-all">{status.session_id}</div>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Failed at:</span>
+                                                <div>Iteration {status.current_iteration}/{status.max_iterations}</div>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Error Message:</span>
+                                                <div className="text-red-500 font-medium">{status.error_message || 'No details available'}</div>
+                                            </div>
+                                            {status.start_time && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Duration before failure:</span>
+                                                    <div>{status.duration_sec.toFixed(1)}s</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            </div>
                         )}
 
                         {/* Controls */}
@@ -341,7 +389,18 @@ export function ClosedLoopTuningPanel({
                                     Stop
                                 </Button>
                             )}
-                            {(isComplete || isFailed) && (
+                            {isFailed && (
+                                <>
+                                    <Button onClick={handleRetry} variant="outline" size="sm" className="flex-1">
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Retry Tuning
+                                    </Button>
+                                    <Button onClick={handleReset} variant="outline" size="sm" className="flex-1">
+                                        New Session
+                                    </Button>
+                                </>
+                            )}
+                            {isComplete && (
                                 <Button onClick={handleReset} variant="outline" size="sm" className="flex-1">
                                     <RefreshCw className="h-4 w-4 mr-2" />
                                     New Session
