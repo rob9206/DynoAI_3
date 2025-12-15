@@ -9,11 +9,13 @@ Provides REST API for managing virtual tuning sessions:
 """
 
 import logging
+import time
 from flask import Blueprint, jsonify, request
 
 from api.services.dyno_simulator import EngineProfile
 from api.services.virtual_tuning_session import (
     TuningSessionConfig,
+    TuningStatus,
     get_orchestrator,
 )
 
@@ -90,10 +92,22 @@ def start_tuning_session():
         # Start tuning in background (non-blocking for now)
         # In production, this would be a background task (Celery, etc.)
         import threading
+        
+        def run_session_with_error_handling(session):
+            """Wrapper to catch and log exceptions in the background thread."""
+            try:
+                orchestrator.run_session(session)
+            except Exception as e:
+                logger.error(f"Exception in tuning session {session.session_id}: {e}", exc_info=True)
+                session.status = TuningStatus.FAILED
+                session.error_message = str(e)
+                session.end_time = time.time()
+        
         thread = threading.Thread(
-            target=orchestrator.run_session,
+            target=run_session_with_error_handling,
             args=(session,),
-            daemon=True
+            daemon=True,
+            name=f"tuning-{session.session_id}"
         )
         thread.start()
         
