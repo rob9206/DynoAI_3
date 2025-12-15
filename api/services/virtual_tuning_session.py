@@ -358,13 +358,18 @@ class VirtualTuningOrchestrator:
         Returns:
             IterationResult with metrics
         """
+        iteration_start = time.time()
+
         # Create AFR target table
+        logger.info("  📋 Creating AFR target table...")
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
+        logger.info("  ✓ AFR target table created")
 
         # Create Virtual ECU with current VE tables
         if session.current_ve_front is None or session.current_ve_rear is None:
             raise ValueError("VE tables not initialized in session")
 
+        logger.info("  🔧 Creating Virtual ECU with current VE tables...")
         ecu = VirtualECU(
             ve_table_front=session.current_ve_front,
             ve_table_rear=session.current_ve_rear,
@@ -372,8 +377,10 @@ class VirtualTuningOrchestrator:
             barometric_pressure_inhg=session.config.barometric_pressure_inhg,
             ambient_temp_f=session.config.ambient_temp_f,
         )
+        logger.info("  ✓ Virtual ECU created")
 
         # Create simulator with Virtual ECU
+        logger.info("  🏍️ Creating dyno simulator...")
         sim_config = SimulatorConfig(
             profile=session.config.engine_profile,
             enable_thermal_effects=True,
@@ -381,45 +388,63 @@ class VirtualTuningOrchestrator:
         )
 
         simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
+        logger.info("  ✓ Simulator created, starting...")
         simulator.start()
 
         # Wait for idle
         time.sleep(0.5)
 
-        logger.info(f"  Simulator state after start: {simulator.get_state().value}")
+        logger.info(f"  ✓ Simulator started (state: {simulator.get_state().value})")
 
         # Trigger pull
-        logger.info("  Triggering pull...")
+        logger.info("  🚀 Triggering dyno pull (this takes ~10-15 seconds)...")
+        pull_start = time.time()
         simulator.trigger_pull()
 
         # Verify pull started
         time.sleep(0.2)
-        logger.info(f"  Simulator state after trigger: {simulator.get_state().value}")
+        logger.info(f"  ⏳ Pull triggered (state: {simulator.get_state().value})")
 
         # Wait for completion (with timeout)
         max_wait = 30  # 30 second timeout
         wait_count = 0
+        last_log = 0
         while simulator.get_state().value != "idle":
             time.sleep(0.1)
             wait_count += 1
+
+            # Log progress every 2 seconds
+            if wait_count % 20 == 0 and wait_count != last_log:
+                elapsed = wait_count / 10
+                logger.info(
+                    f"  ⏳ Pull in progress... {elapsed:.1f}s elapsed (state: {simulator.get_state().value})"
+                )
+                last_log = wait_count
+
             if wait_count > max_wait * 10:  # 10 checks per second
                 logger.error(
-                    f"Timeout waiting for pull to complete (state: {simulator.get_state().value})"
+                    f"  ❌ Timeout waiting for pull to complete (state: {simulator.get_state().value})"
                 )
                 simulator.stop()
                 raise TimeoutError("Pull did not complete within 30 seconds")
 
+        pull_duration = time.time() - pull_start
+        logger.info(f"  ✓ Pull completed in {pull_duration:.1f}s")
+
         # Get pull data
         pull_data = simulator.get_pull_data()
-        logger.info(f"  Pull data points: {len(pull_data)}")
+        logger.info(f"  📊 Collected {len(pull_data)} data points")
         simulator.stop()
+        logger.info("  ✓ Simulator stopped")
 
         if not pull_data or len(pull_data) == 0:
             raise ValueError("No pull data collected - pull may not have completed")
 
+        logger.info("  📈 Converting pull data to DataFrame...")
         df = pd.DataFrame(pull_data)
 
         # Calculate AFR errors
+        logger.info("  🔍 Analyzing AFR errors...")
         df["AFR Error F"] = df["AFR Meas F"] - df["AFR Target"]
         df["AFR Error R"] = df["AFR Meas R"] - df["AFR Target"]
 
@@ -434,8 +459,12 @@ class VirtualTuningOrchestrator:
             np.sqrt((df["AFR Error F"] ** 2).mean() + (df["AFR Error R"] ** 2).mean())
             / np.sqrt(2)
         )
+        logger.info(
+            f"  ✓ AFR Analysis: max_error={max_afr_error:.3f}, mean_error={mean_afr_error:.3f}"
+        )
 
         # Calculate VE corrections using AutoTuneWorkflow
+        logger.info("  ⚙️ Calculating VE corrections...")
         workflow = AutoTuneWorkflow()
         workflow_session = workflow.create_session()
         workflow.import_dataframe(workflow_session, df)
@@ -480,8 +509,11 @@ class VirtualTuningOrchestrator:
         peak_hp = float(df["Horsepower"].max())
         peak_tq = float(df["Torque"].max())
 
+        iteration_duration = time.time() - iteration_start
+
         logger.info(
-            f"  Max AFR error: {max_afr_error:.3f}, "
+            f"  ✓ Iteration {iteration} complete in {iteration_duration:.1f}s: "
+            f"Max AFR error: {max_afr_error:.3f}, "
             f"Mean: {mean_afr_error:.3f}, "
             f"Max VE correction: {max_ve_correction:.2f}%, "
             f"Converged: {converged}"
