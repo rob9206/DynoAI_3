@@ -78,6 +78,18 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not register health blueprint: {e}")
 
+# Register reliability agent for system monitoring and circuit breakers
+try:
+    from api.reliability_integration import init_reliability
+
+    reliability_agent = init_reliability(app)
+    print("[+] Reliability agent successfully initialized!")
+except Exception as e:  # pragma: no cover
+    import traceback
+
+    print(f"[!] Warning: Could not initialize reliability agent: {e}")
+    traceback.print_exc()
+
 # Lazy import/register of xAI blueprint if available
 try:
     from dynoai.api.xai_blueprint import xai_bp  # type: ignore
@@ -148,6 +160,22 @@ try:
     app.register_blueprint(jetdrive_bp)
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize JetDrive Auto-Tune: {e}")
+
+# Register Transient Fuel Compensation blueprint
+try:
+    from api.routes.transient import transient_bp
+
+    app.register_blueprint(transient_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Transient Fuel Compensation: {e}")
+
+# Virtual Tuning (Closed-Loop Orchestrator)
+try:
+    from api.routes.virtual_tune import virtual_tune_bp
+
+    app.register_blueprint(virtual_tune_bp)
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Virtual Tuning: {e}")
 
 # Store active analysis jobs
 active_jobs = {}
@@ -702,6 +730,83 @@ def get_diagnostics(run_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/confidence/<run_id>", methods=["GET"])
+@rate_limit("120/minute")  # Read-only - permissive
+def get_confidence_report(run_id):
+    """
+    Get tune confidence scoring report
+
+    Args:
+        run_id: Unique run identifier
+
+    Returns:
+        JSON with confidence report data
+    """
+    try:
+        run_id = secure_filename(run_id)
+        output_dir = OUTPUT_FOLDER / run_id
+
+        # Look for confidence report file
+        confidence_file = output_dir / "ConfidenceReport.json"
+
+        if not confidence_file.exists():
+            return jsonify({"error": "Confidence report not found"}), 404
+
+        with open(confidence_file, "r") as f:
+            confidence_data = json.load(f)
+
+        return jsonify(confidence_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
+@rate_limit("120/minute")  # Read-only - permissive
+def get_session_replay(run_id):
+    """
+    Get session replay log with all decisions made during tuning
+
+    Args:
+        run_id: Unique run identifier
+
+    Returns:
+        JSON with session replay data
+    """
+    try:
+        run_id = secure_filename(run_id)
+
+        # Try Jetstream runs folder first
+        session_replay_file = None
+        try:
+            from api.services.run_manager import get_run_manager
+
+            manager = get_run_manager()
+            run_output_dir = manager.get_run_output_dir(run_id)
+            if run_output_dir and run_output_dir.exists():
+                jetstream_file = run_output_dir / "session_replay.json"
+                if jetstream_file.exists():
+                    session_replay_file = jetstream_file
+        except Exception:
+            pass
+
+        # Fall back to outputs folder
+        if not session_replay_file:
+            output_dir = OUTPUT_FOLDER / run_id
+            session_replay_file = output_dir / "session_replay.json"
+
+        if not session_replay_file.exists():
+            return jsonify({"error": "Session replay not found"}), 404
+
+        with open(session_replay_file, "r", encoding="utf-8") as f:
+            replay_data = json.load(f)
+
+        return jsonify(replay_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/coverage/<run_id>", methods=["GET"])
 @rate_limit("120/minute")  # Read-only - permissive
 def get_coverage(run_id):
@@ -801,7 +906,7 @@ def apply_ve_corrections():
         }
     """
     from api.services.session_logger import SessionLogger
-    from ve_operations import VEApply
+    from dynoai.core.ve_operations import VEApply
 
     data = request.get_json()
     if not data or "run_id" not in data:
@@ -914,7 +1019,7 @@ def rollback_ve_corrections():
         }
     """
     from api.services.session_logger import SessionLogger
-    from ve_operations import VERollback
+    from dynoai.core.ve_operations import VERollback
 
     data = request.get_json()
     if not data or "run_id" not in data:

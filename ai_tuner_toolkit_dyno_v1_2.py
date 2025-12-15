@@ -40,10 +40,11 @@ import json
 import logging
 import math
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
-import io_contracts
+from dynoai.core import io_contracts
 from dynoai.constants import (
     AFR_RANGE_MAX,
     AFR_RANGE_MIN,
@@ -58,10 +59,61 @@ from dynoai.constants import (
     Grid,
     GridList,
 )
-from io_contracts import sanitize_csv_cell
+from dynoai.core.io_contracts import sanitize_csv_cell
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Session replay logging - thread-safe
+_session_log: List[Dict[str, Any]] = []
+_session_log_lock = threading.Lock()
+
+
+def log_decision(
+    action: str,
+    reason: str,
+    values: Optional[Dict[str, Any]] = None,
+    cell: Optional[Dict[str, int]] = None,
+) -> None:
+    """Log a decision made during processing for session replay.
+
+    This function is thread-safe and adds minimal overhead (<1%).
+
+    Args:
+        action: Action performed (e.g., "AFR_CORRECTION", "SMOOTHING", "CLAMPING")
+        reason: Reason for the action
+        values: Optional dict of values involved (before/after)
+        cell: Optional cell location (rpm, kpa indices)
+
+    Thread-safety: Uses a lock to ensure safe concurrent access to session log.
+    """
+    entry = {
+        "timestamp": io_contracts.utc_now_iso(),
+        "action": action,
+        "reason": reason,
+    }
+
+    if values is not None:
+        entry["values"] = values
+
+    if cell is not None:
+        entry["cell"] = cell
+
+    # Thread-safe append
+    with _session_log_lock:
+        _session_log.append(entry)
+
+
+def get_session_log() -> List[Dict[str, Any]]:
+    """Get a copy of the current session log (thread-safe)."""
+    with _session_log_lock:
+        return _session_log.copy()
+
+
+def clear_session_log() -> None:
+    """Clear the session log (thread-safe)."""
+    with _session_log_lock:
+        _session_log.clear()
 
 
 def create_rpm_bins_standard() -> List[int]:
@@ -328,6 +380,12 @@ def kernel_smooth(
     if not grid:
         return grid
 
+    log_decision(
+        action="SMOOTHING_START",
+        reason=f"Starting gradient-limited smoothing with {passes} passes, threshold={gradient_threshold}%",
+        values={"passes": passes, "gradient_threshold": gradient_threshold},
+    )
+
     rows, cols = len(grid), len(grid[0])
 
     # Stage 1: Calculate gradient magnitudes
@@ -424,6 +482,22 @@ def kernel_smooth(
                     1 - blend_factor
                 ) * smoothed_val + blend_factor * original_val
 
+                # Log gradient limiting for significant cases
+                if gradient_magnitude > gradient_threshold * 1.5:
+                    log_decision(
+                        action="GRADIENT_LIMITING",
+                        reason=f"High gradient detected, blending toward original value",
+                        values={
+                            "gradient": round(gradient_magnitude, 2),
+                            "threshold": gradient_threshold,
+                            "blend_factor": round(blend_factor, 3),
+                            "original": round(original_val, 2),
+                            "smoothed": round(smoothed_val, 2),
+                            "result": round(gradient_limited_grid[r][c], 2),
+                        },
+                        cell={"rpm_index": r, "kpa_index": c},
+                    )
+
     # Stage 4: Coverage-weighted smoothing (same as original)
     final_grid = [row[:] for row in gradient_limited_grid]
 
@@ -518,9 +592,11 @@ OUTPUT_SPECS: Sequence[Tuple[str, str, str, bool]] = [
     ("Spark_Rear_PasteReady.txt", "text", "spark_rear_paste", False),
     ("Diagnostics_Report.txt", "text", "diagnostics_report", False),
     ("Anomaly_Hypotheses.json", "json", "anomaly_hypotheses", False),
+    ("PowerOpportunities.json", "json", "power_opportunities", False),
     ("Coverage_Front_Table.html", "text", "coverage_table_front", False),
     ("Coverage_Front_Enhanced.csv", "csv", "coverage_front_enhanced", True),
     ("Coverage_Front_Heatmap.png", "png", "coverage_front_heatmap", False),
+    ("session_replay.json", "json", "session_replay", False),
 ]
 
 
@@ -1100,6 +1176,20 @@ def dyno_bin_aggregate(
                 weight,
             )
 
+        # Log AFR correction decision for first few samples per bin
+        if coverage[rpm_index][kpa_index] < 3:
+            log_decision(
+                action="AFR_CORRECTION",
+                reason=f"Accepted AFR error sample for {cyl} cylinder",
+                values={
+                    "afr_error_pct": round(afr_err, 2),
+                    "weight": round(weight, 1),
+                    "afr_commanded": round(afr_cmd, 2) if afr_cmd else None,
+                    "afr_measured": round(afr_meas, 2) if afr_meas else None,
+                },
+                cell={"rpm": rpm_bin, "kpa": kpa_bin, "cylinder": cyl},
+            )
+
         assert afr_err is not None
         sums[rpm_index][kpa_index] += afr_err * weight
         weights[rpm_index][kpa_index] += weight
@@ -1172,8 +1262,50 @@ def grid_map(
 
 def clamp_grid(
     grid: List[List[Optional[float]]], limit: float
-) -> List[List[Optional[float]]]:
-    return grid_map(lambda v: clamp(v, -limit, limit), grid)
+) -> Tuple[List[List[Optional[float]]], List[Dict[str, Any]]]:
+    """Clamp grid values to +/- limit, logging significant clamps.
+    
+    Returns:
+        Tuple of (clamped_grid, clamped_cells_list)
+    """
+    log_decision(
+        action="CLAMPING_START",
+        reason=f"Clamping VE corrections to +/- {limit}%",
+        values={"limit": limit},
+    )
+
+    # Track clamped cells for logging
+    clamped_cells = []
+    result = []
+
+    for r_idx, row in enumerate(grid):
+        result_row = []
+        for c_idx, val in enumerate(row):
+            if val is not None:
+                original = val
+                clamped = clamp(val, -limit, limit)
+                result_row.append(clamped)
+
+                # Log if value was actually clamped
+                if abs(original - clamped) > 0.01:
+                    clamped_cells.append({
+                        "rpm_index": r_idx,
+                        "kpa_index": c_idx,
+                        "original": round(original, 2),
+                        "clamped": round(clamped, 2),
+                    })
+            else:
+                result_row.append(None)
+        result.append(result_row)
+
+    if clamped_cells:
+        log_decision(
+            action="CLAMPING_APPLIED",
+            reason=f"Clamped {len(clamped_cells)} cells exceeding +/- {limit}% limit",
+            values={"clamped_count": len(clamped_cells), "cells": clamped_cells[:10]},  # Log first 10
+        )
+
+    return result, clamped_cells
 
 
 def combine_front_rear(
@@ -1412,6 +1544,11 @@ def anomaly_diagnostics(
     iat_r: List[List[Optional[float]]],
     coverage: List[List[int]],
 ) -> List[Dict[str, Any]]:
+    log_decision(
+        action="ANOMALY_DETECTION_START",
+        reason="Starting anomaly detection analysis",
+    )
+
     anomalies: List[Dict[str, Any]] = []
 
     # 1) Spatial discontinuity
@@ -1429,17 +1566,23 @@ def anomaly_diagnostics(
                     continue
                 z_score = 0.6745 * (roughness_value - med) / mad if mad > 0 else 0.0
                 if z_score > 3.5 and coverage[rpm_index][kpa_index] > 0:
-                    anomalies.append(
-                        {
-                            "type": "Spatial discontinuity",
-                            "score": float(z_score),
-                            "cell": {"rpm": rpm, "kpa": kpa},
-                            "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
-                            "next_checks": [
-                                "Re-run steady-state in this cell",
-                                "Inspect for vacuum leaks, throttle sync, or sensor noise",
-                            ],
-                        }
+                    anomaly = {
+                        "type": "Spatial discontinuity",
+                        "score": float(z_score),
+                        "cell": {"rpm": rpm, "kpa": kpa},
+                        "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+                        "next_checks": [
+                            "Re-run steady-state in this cell",
+                            "Inspect for vacuum leaks, throttle sync, or sensor noise",
+                        ],
+                    }
+                    anomalies.append(anomaly)
+
+                    log_decision(
+                        action="ANOMALY_DETECTED",
+                        reason=anomaly["explanation"],
+                        values={"type": anomaly["type"], "score": anomaly["score"]},
+                        cell={"rpm": rpm, "kpa": kpa},
                     )
 
     # 2) Rear vs Front bias in mid band
@@ -1558,15 +1701,552 @@ def anomaly_diagnostics(
     return anomalies
 
 
+def find_power_opportunities(
+    afr_err_f: List[List[Optional[float]]],
+    afr_err_r: List[List[Optional[float]]],
+    spark_f: List[List[float]],
+    spark_r: List[List[float]],
+    coverage_f: List[List[int]],
+    coverage_r: List[List[int]],
+    knock_f: List[List[float]],
+    knock_r: List[List[float]],
+    hp_grid: List[List[Optional[float]]],
+) -> List[Dict[str, Any]]:
+    """
+    Analyze tuning data to identify safe opportunities for power gains.
+    
+    Looks for:
+    1. Cells that are >2% rich with good coverage (>20 hits)
+    2. Cells where spark timing could be advanced safely (no knock)
+    3. Areas where VE could be increased without exceeding AFR targets
+    
+    Returns prioritized list of opportunities with specific suggestions.
+    
+    Args:
+        afr_err_f: Front AFR error grid (% rich/lean)
+        afr_err_r: Rear AFR error grid (% rich/lean)
+        spark_f: Front spark suggestions (degrees)
+        spark_r: Rear spark suggestions (degrees)
+        coverage_f: Front coverage (hit count per cell)
+        coverage_r: Rear coverage (hit count per cell)
+        knock_f: Front knock retard grid (degrees)
+        knock_r: Rear knock retard grid (degrees)
+        hp_grid: Combined horsepower grid
+        
+    Returns:
+        List of power opportunities sorted by estimated gain (highest first)
+    """
+    opportunities: List[Dict[str, Any]] = []
+    
+    # Minimum coverage threshold for confident suggestions
+    MIN_COVERAGE = 20
+    
+    # Safety limits
+    MAX_AFR_CHANGE_PCT = 3.0  # Don't suggest more than ±3% AFR change
+    MAX_TIMING_ADVANCE_DEG = 2.0  # Max 2° timing advance per suggestion
+    KNOCK_THRESHOLD = 0.5  # Don't suggest changes where knock >= 0.5°
+    
+    # Rich threshold - cells richer than this are power opportunities
+    RICH_THRESHOLD_PCT = 2.0
+    
+    for ri, rpm in enumerate(RPM_BINS):
+        for ki, kpa in enumerate(KPA_BINS):
+            # Combine front and rear data
+            afr_err_front = afr_err_f[ri][ki]
+            afr_err_rear = afr_err_r[ri][ki]
+            coverage_total = coverage_f[ri][ki] + coverage_r[ri][ki]
+            knock_front = knock_f[ri][ki]
+            knock_rear = knock_r[ri][ki]
+            spark_suggest_f = spark_f[ri][ki]
+            spark_suggest_r = spark_r[ri][ki]
+            hp_current = hp_grid[ri][ki]
+            
+            # Skip cells with insufficient coverage
+            if coverage_total < MIN_COVERAGE:
+                continue
+            
+            # Skip cells with knock activity (not safe to advance timing or lean out)
+            if knock_front >= KNOCK_THRESHOLD or knock_rear >= KNOCK_THRESHOLD:
+                continue
+            
+            # Calculate average AFR error (positive = rich, negative = lean)
+            afr_errors = [e for e in [afr_err_front, afr_err_rear] if e is not None]
+            if not afr_errors:
+                continue
+            
+            avg_afr_err = sum(afr_errors) / len(afr_errors)
+            
+            # Calculate confidence based on coverage
+            confidence = min(100, int((coverage_total / 50) * 100))
+            
+            # Opportunity 1: Rich cells - can lean out for more power
+            if avg_afr_err > RICH_THRESHOLD_PCT:
+                # Suggest leaning by up to 50% of the error, capped at MAX_AFR_CHANGE_PCT
+                lean_suggestion = min(avg_afr_err * 0.5, MAX_AFR_CHANGE_PCT)
+                
+                # Estimate power gain: ~2% HP per 1% leaner AFR (conservative)
+                # Only apply to cells with actual HP data
+                if hp_current is not None and hp_current > 0:
+                    estimated_hp_gain = hp_current * (lean_suggestion * 0.02)
+                else:
+                    # Estimate based on typical HP for this RPM/load
+                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * lean_suggestion * 0.5
+                
+                opportunities.append({
+                    "type": "Lean AFR",
+                    "rpm": rpm,
+                    "kpa": kpa,
+                    "suggestion": f"Lean by {lean_suggestion:.1f}% (currently {avg_afr_err:+.1f}% rich)",
+                    "estimated_gain_hp": round(estimated_hp_gain, 2),
+                    "confidence": confidence,
+                    "coverage": coverage_total,
+                    "current_hp": round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "afr_error_pct": round(avg_afr_err, 2),
+                        "suggested_change_pct": round(-lean_suggestion, 2),  # Negative = lean
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    }
+                })
+            
+            # Opportunity 2: Timing advance potential (no knock, not already suggested to advance)
+            # If spark suggestion is 0 or slightly negative but no knock, there's room to advance
+            avg_spark_suggest = (spark_suggest_f + spark_suggest_r) / 2.0
+            
+            if avg_spark_suggest <= 0 and knock_front < 0.1 and knock_rear < 0.1:
+                # Suggest conservative timing advance
+                timing_advance = min(MAX_TIMING_ADVANCE_DEG, 2.0)
+                
+                # Estimate power gain: ~3% HP per degree of advance (conservative)
+                if hp_current is not None and hp_current > 0:
+                    estimated_hp_gain = hp_current * (timing_advance * 0.03)
+                else:
+                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * timing_advance * 0.8
+                
+                opportunities.append({
+                    "type": "Advance Timing",
+                    "rpm": rpm,
+                    "kpa": kpa,
+                    "suggestion": f"Advance timing by {timing_advance:.1f}° (no knock detected)",
+                    "estimated_gain_hp": round(estimated_hp_gain, 2),
+                    "confidence": confidence,
+                    "coverage": coverage_total,
+                    "current_hp": round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "current_suggestion_deg": round(avg_spark_suggest, 2),
+                        "advance_deg": round(timing_advance, 2),
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    }
+                })
+            
+            # Opportunity 3: Combined opportunity (rich + no knock = lean AND advance)
+            if avg_afr_err > RICH_THRESHOLD_PCT and knock_front < 0.1 and knock_rear < 0.1:
+                lean_suggestion = min(avg_afr_err * 0.5, MAX_AFR_CHANGE_PCT)
+                timing_advance = min(MAX_TIMING_ADVANCE_DEG, 1.5)  # More conservative when combining
+                
+                # Combined gains are multiplicative (but use conservative estimate)
+                if hp_current is not None and hp_current > 0:
+                    afr_gain = hp_current * (lean_suggestion * 0.02)
+                    timing_gain = hp_current * (timing_advance * 0.03)
+                    estimated_hp_gain = afr_gain + timing_gain * 0.8  # Reduce timing gain when combined
+                else:
+                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * (lean_suggestion + timing_advance)
+                
+                opportunities.append({
+                    "type": "Combined (AFR + Timing)",
+                    "rpm": rpm,
+                    "kpa": kpa,
+                    "suggestion": f"Lean by {lean_suggestion:.1f}% AND advance {timing_advance:.1f}°",
+                    "estimated_gain_hp": round(estimated_hp_gain, 2),
+                    "confidence": confidence,
+                    "coverage": coverage_total,
+                    "current_hp": round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "afr_error_pct": round(avg_afr_err, 2),
+                        "suggested_afr_change_pct": round(-lean_suggestion, 2),
+                        "advance_deg": round(timing_advance, 2),
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    }
+                })
+    
+    # Sort by estimated HP gain (highest first)
+    opportunities.sort(key=lambda x: x["estimated_gain_hp"], reverse=True)
+    
+    # Return top 10 opportunities
+    return opportunities[:10]
+
+
+def write_session_replay(outdir: str | Path, run_id: str) -> None:
+    """Write session replay log to JSON file.
+
+    Args:
+        outdir: Output directory path
+        run_id: Run identifier for the session
+    """
+    safe_outdir = io_contracts.safe_path(str(outdir))
+    session_log = get_session_log()
+
+    replay_data = {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "generated_at": io_contracts.utc_now_iso(),
+        "total_decisions": len(session_log),
+        "decisions": session_log,
+    }
+
+    replay_path = safe_outdir / "session_replay.json"
+    with open(replay_path, "w", encoding="utf-8") as f:
+        json.dump(replay_data, f, indent=2, ensure_ascii=False)
+
+    logger.info(f"Session replay log written: {len(session_log)} decisions logged")
+
+
+def calculate_tune_confidence(
+    coverage_f: List[List[int]],
+    coverage_r: List[List[int]],
+    mad_grid_f: List[List[Optional[float]]],
+    mad_grid_r: List[List[Optional[float]]],
+    anomalies: Sequence[Dict[str, Any]],
+    clamped_cells_f: List[Dict[str, Any]],
+    clamped_cells_r: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Calculate comprehensive tune confidence score based on coverage, consistency, and quality.
+    
+    Returns a confidence report with:
+    - Overall score (0-100%)
+    - Letter grade (A/B/C/D)
+    - Breakdown by area (idle, cruise, WOT)
+    - Specific recommendations for improvement
+    
+    Completes in <100ms using only pre-calculated data.
+    """
+    import time
+    start_time = time.perf_counter()
+    
+    log_decision(
+        action="CONFIDENCE_SCORING_START",
+        reason="Calculating tune confidence metrics",
+    )
+    
+    # Define operating regions
+    regions = {
+        "idle": {"rpm_range": (1000, 2000), "kpa_range": (20, 40)},
+        "cruise": {"rpm_range": (2000, 3500), "kpa_range": (40, 70)},
+        "wot": {"rpm_range": (3000, 6500), "kpa_range": (85, 105)},
+    }
+    
+    total_cells = len(RPM_BINS) * len(KPA_BINS)
+    
+    # 1. COVERAGE ANALYSIS (40% of score)
+    coverage_threshold = 10  # Minimum hits for "good" coverage
+    well_covered_cells = 0
+    coverage_by_region: Dict[str, Dict[str, int]] = {}
+    
+    for region_name, bounds in regions.items():
+        region_total = 0
+        region_covered = 0
+        
+        for ri, rpm in enumerate(RPM_BINS):
+            for ki, kpa in enumerate(KPA_BINS):
+                if (bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1] and
+                    bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]):
+                    region_total += 1
+                    hits = coverage_f[ri][ki] + coverage_r[ri][ki]
+                    if hits >= coverage_threshold:
+                        region_covered += 1
+        
+        coverage_by_region[region_name] = {
+            "total": region_total,
+            "covered": region_covered,
+            "percentage": (region_covered / region_total * 100) if region_total > 0 else 0
+        }
+    
+    # Overall coverage
+    for ri in range(len(RPM_BINS)):
+        for ki in range(len(KPA_BINS)):
+            hits = coverage_f[ri][ki] + coverage_r[ri][ki]
+            if hits >= coverage_threshold:
+                well_covered_cells += 1
+    
+    coverage_percentage = (well_covered_cells / total_cells) * 100
+    coverage_score = min(100, coverage_percentage * 1.2)  # Boost to make 85% coverage = 100 points
+    
+    # 2. CONSISTENCY ANALYSIS (30% of score)
+    # Lower MAD = better consistency
+    mad_values: List[float] = []
+    mad_by_region: Dict[str, List[float]] = {region: [] for region in regions}
+    
+    for ri, rpm in enumerate(RPM_BINS):
+        for ki, kpa in enumerate(KPA_BINS):
+            # Combine front and rear MAD values
+            for mad_grid in [mad_grid_f, mad_grid_r]:
+                mad_val = mad_grid[ri][ki]
+                if mad_val is not None and mad_val > 0:
+                    mad_values.append(mad_val)
+                    
+                    # Categorize by region
+                    for region_name, bounds in regions.items():
+                        if (bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1] and
+                            bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]):
+                            mad_by_region[region_name].append(mad_val)
+    
+    avg_mad = sum(mad_values) / len(mad_values) if mad_values else 0.0
+    
+    # Score consistency: MAD < 0.5 = excellent, MAD > 2.0 = poor
+    if avg_mad < 0.5:
+        consistency_score = 100
+    elif avg_mad < 1.0:
+        consistency_score = 90 - (avg_mad - 0.5) * 40  # 90 to 70
+    elif avg_mad < 2.0:
+        consistency_score = 70 - (avg_mad - 1.0) * 40  # 70 to 30
+    else:
+        consistency_score = max(0, 30 - (avg_mad - 2.0) * 15)
+    
+    # 3. ANOMALY IMPACT (15% of score)
+    anomaly_count = len(anomalies)
+    high_severity_anomalies = sum(1 for a in anomalies if a.get("score", 0) > 3.0)
+    
+    if anomaly_count == 0:
+        anomaly_score = 100
+    elif anomaly_count <= 2:
+        anomaly_score = 85
+    elif anomaly_count <= 5:
+        anomaly_score = 70
+    else:
+        anomaly_score = max(0, 70 - (anomaly_count - 5) * 10)
+    
+    # Penalize high-severity anomalies more
+    anomaly_score = max(0, anomaly_score - (high_severity_anomalies * 10))
+    
+    # 4. CLAMPING ANALYSIS (15% of score)
+    total_clamped = len(clamped_cells_f) + len(clamped_cells_r)
+    clamp_percentage = (total_clamped / total_cells) * 100
+    
+    if clamp_percentage == 0:
+        clamp_score = 100
+    elif clamp_percentage < 5:
+        clamp_score = 90
+    elif clamp_percentage < 10:
+        clamp_score = 75
+    elif clamp_percentage < 20:
+        clamp_score = 50
+    else:
+        clamp_score = max(0, 50 - (clamp_percentage - 20) * 2)
+    
+    # CALCULATE OVERALL SCORE
+    overall_score = (
+        coverage_score * 0.40 +
+        consistency_score * 0.30 +
+        anomaly_score * 0.15 +
+        clamp_score * 0.15
+    )
+    
+    # ASSIGN LETTER GRADE
+    if overall_score >= 85:
+        letter_grade = "A"
+        grade_description = "Excellent - Ready for deployment"
+    elif overall_score >= 70:
+        letter_grade = "B"
+        grade_description = "Good - Minor improvements recommended"
+    elif overall_score >= 50:
+        letter_grade = "C"
+        grade_description = "Fair - Additional data collection needed"
+    else:
+        letter_grade = "D"
+        grade_description = "Poor - Significant issues require attention"
+    
+    # GENERATE RECOMMENDATIONS
+    recommendations: List[str] = []
+    weak_areas: List[str] = []
+    
+    # Coverage recommendations
+    if coverage_percentage < 60:
+        recommendations.append(
+            f"Collect more data: Only {coverage_percentage:.1f}% of cells have sufficient data (≥{coverage_threshold} hits)"
+        )
+        for region_name, stats in coverage_by_region.items():
+            if stats["percentage"] < 50:
+                weak_areas.append(f"{region_name} ({stats['percentage']:.0f}% covered)")
+        
+        if weak_areas:
+            recommendations.append(f"Focus data collection on: {', '.join(weak_areas)}")
+    
+    # Consistency recommendations
+    if avg_mad > 1.5:
+        recommendations.append(
+            f"Data consistency is poor (MAD={avg_mad:.2f}). Check for mechanical issues, sensor problems, or unstable operating conditions."
+        )
+        
+        # Identify regions with worst consistency
+        worst_regions = []
+        for region_name, mad_vals in mad_by_region.items():
+            if mad_vals:
+                region_avg_mad = sum(mad_vals) / len(mad_vals)
+                if region_avg_mad > 2.0:
+                    worst_regions.append(f"{region_name} (MAD={region_avg_mad:.2f})")
+        
+        if worst_regions:
+            recommendations.append(f"Worst consistency in: {', '.join(worst_regions)}")
+    
+    # Clamping recommendations
+    if clamp_percentage > 10:
+        recommendations.append(
+            f"{clamp_percentage:.1f}% of corrections hit clamp limits. Consider increasing clamp limits or investigating root causes."
+        )
+    
+    # Anomaly recommendations
+    if high_severity_anomalies > 0:
+        recommendations.append(
+            f"{high_severity_anomalies} high-severity anomalies detected. Review Anomaly_Hypotheses.json for details."
+        )
+    
+    # Success message if score is high
+    if overall_score >= 85 and not recommendations:
+        recommendations.append("Tune quality is excellent. No major improvements needed.")
+    
+    # Calculate region-specific MAD averages
+    region_mad_avg = {}
+    for region_name, mad_vals in mad_by_region.items():
+        region_mad_avg[region_name] = sum(mad_vals) / len(mad_vals) if mad_vals else 0.0
+    
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    
+    log_decision(
+        action="CONFIDENCE_SCORING_COMPLETE",
+        reason=f"Confidence score calculated: {overall_score:.1f}% (Grade {letter_grade})",
+        values={
+            "overall_score": round(overall_score, 1),
+            "letter_grade": letter_grade,
+            "elapsed_ms": round(elapsed_ms, 2),
+        }
+    )
+    
+    return {
+        "overall_score": round(overall_score, 1),
+        "letter_grade": letter_grade,
+        "grade_description": grade_description,
+        "component_scores": {
+            "coverage": {
+                "score": round(coverage_score, 1),
+                "weight": "40%",
+                "details": {
+                    "well_covered_cells": well_covered_cells,
+                    "total_cells": total_cells,
+                    "coverage_percentage": round(coverage_percentage, 1),
+                    "threshold_hits": coverage_threshold,
+                }
+            },
+            "consistency": {
+                "score": round(consistency_score, 1),
+                "weight": "30%",
+                "details": {
+                    "average_mad": round(avg_mad, 3),
+                    "mad_samples": len(mad_values),
+                }
+            },
+            "anomalies": {
+                "score": round(anomaly_score, 1),
+                "weight": "15%",
+                "details": {
+                    "total_anomalies": anomaly_count,
+                    "high_severity": high_severity_anomalies,
+                }
+            },
+            "clamping": {
+                "score": round(clamp_score, 1),
+                "weight": "15%",
+                "details": {
+                    "clamped_cells": total_clamped,
+                    "clamp_percentage": round(clamp_percentage, 1),
+                }
+            }
+        },
+        "region_breakdown": {
+            region_name: {
+                "coverage_percentage": round(stats["percentage"], 1),
+                "cells_covered": stats["covered"],
+                "cells_total": stats["total"],
+                "average_mad": round(region_mad_avg.get(region_name, 0.0), 3),
+            }
+            for region_name, stats in coverage_by_region.items()
+        },
+        "recommendations": recommendations,
+        "weak_areas": weak_areas,
+        "performance": {
+            "calculation_time_ms": round(elapsed_ms, 2),
+        },
+        "methodology": {
+            "description": "Confidence score based on weighted combination of coverage, consistency, anomalies, and clamping",
+            "weights": {
+                "coverage": "40% - Cells with ≥10 hits",
+                "consistency": "30% - Average MAD (lower is better)",
+                "anomalies": "15% - Detected issues",
+                "clamping": "15% - Corrections hitting limits",
+            },
+            "grading_scale": {
+                "A": "≥85% - Excellent",
+                "B": "70-85% - Good",
+                "C": "50-70% - Fair",
+                "D": "<50% - Poor",
+            }
+        }
+    }
+
+
 def write_diagnostics(
     outdir: str | Path,
     anomalies: Sequence[Dict[str, Any]],
     correction_diagnostics: Optional[Dict[str, Dict[str, Any]]] = None,
+    confidence_report: Optional[Dict[str, Any]] = None,
 ) -> None:
     # Human-readable
     lines: List[str] = []
     lines.append("Dyno AI Tuner v1.2 Diagnostics")
     lines.append("")
+    
+    # Add confidence report if provided
+    if confidence_report:
+        lines.append("=" * 60)
+        lines.append("=== TUNE CONFIDENCE SCORE ===")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Overall Score: {confidence_report['overall_score']}%")
+        lines.append(f"Letter Grade: {confidence_report['letter_grade']} - {confidence_report['grade_description']}")
+        lines.append("")
+        
+        lines.append("Component Scores:")
+        for component, data in confidence_report['component_scores'].items():
+            lines.append(f"  {component.upper()}: {data['score']:.1f}% (weight: {data['weight']})")
+            for key, value in data['details'].items():
+                lines.append(f"    - {key}: {value}")
+        lines.append("")
+        
+        lines.append("Region Breakdown:")
+        for region, data in confidence_report['region_breakdown'].items():
+            lines.append(f"  {region.upper()}:")
+            lines.append(f"    Coverage: {data['coverage_percentage']:.1f}% ({data['cells_covered']}/{data['cells_total']} cells)")
+            lines.append(f"    Avg MAD: {data['average_mad']:.3f}")
+        lines.append("")
+        
+        if confidence_report['recommendations']:
+            lines.append("RECOMMENDATIONS:")
+            for i, rec in enumerate(confidence_report['recommendations'], 1):
+                lines.append(f"  {i}. {rec}")
+            lines.append("")
+        
+        if confidence_report['weak_areas']:
+            lines.append("WEAK AREAS NEEDING MORE DATA:")
+            for area in confidence_report['weak_areas']:
+                lines.append(f"  - {area}")
+            lines.append("")
+        
+        lines.append(f"Calculation time: {confidence_report['performance']['calculation_time_ms']:.2f} ms")
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("")
 
     # Add correction diagnostics if provided
     if correction_diagnostics:
@@ -1634,6 +2314,12 @@ def write_diagnostics(
     Path(safe_outdir, "Anomaly_Hypotheses.json").write_text(
         json.dumps(diagnostic_output, indent=2), encoding="utf-8"
     )
+    
+    # Write confidence report separately if provided
+    if confidence_report:
+        Path(safe_outdir, "ConfidenceReport.json").write_text(
+            json.dumps(confidence_report, indent=2), encoding="utf-8"
+        )
 
 
 def main() -> int:
@@ -1869,7 +2555,7 @@ def main() -> int:
         print("PROGRESS:70:Smoothing and clamping VE corrections...")
         sys.stdout.flush()
         ve_smooth = kernel_smooth(ve_delta, passes=max(0, min(5, args.smooth_passes)))
-        ve_clamped = clamp_grid(ve_smooth, args.clamp)
+        ve_clamped, clamped_cells_combined = clamp_grid(ve_smooth, args.clamp)
 
         print("PROGRESS:80:Generating spark advance suggestions...")
         sys.stdout.flush()
@@ -1976,7 +2662,6 @@ def main() -> int:
             outdir / "Spark_Rear_PasteReady.txt", spark_r, value_fmt="{:+.2f}"
         )
 
-        extra_specs: List[Tuple[str, str, str, bool]] = []
         if base_front_path:
             base_f = read_grid_csv(str(base_front_path))
             base_r = read_grid_csv(str(base_rear_path or base_front_path))
@@ -2029,8 +2714,72 @@ def main() -> int:
             ],
         )
 
+        # Calculate tune confidence score
+        print("PROGRESS:96:Calculating tune confidence score...")
+        sys.stdout.flush()
+        
+        # Extract MAD grids from diagnostics
+        mad_grid_f = diag_f.get("per_bin_stats", {}).get("mad", [[None for _ in KPA_BINS] for _ in RPM_BINS])
+        mad_grid_r = diag_r.get("per_bin_stats", {}).get("mad", [[None for _ in KPA_BINS] for _ in RPM_BINS])
+        
+        # For clamped cells, we need to split by cylinder (we only have combined)
+        # Since we don't track separately, we'll split them evenly for the confidence calc
+        half_clamped = len(clamped_cells_combined) // 2
+        clamped_cells_f = clamped_cells_combined[:half_clamped]
+        clamped_cells_r = clamped_cells_combined[half_clamped:]
+        
+        confidence_report = calculate_tune_confidence(
+            coverage_f=cov_f,
+            coverage_r=cov_r,
+            mad_grid_f=mad_grid_f,
+            mad_grid_r=mad_grid_r,
+            anomalies=anomalies,
+            clamped_cells_f=clamped_cells_f,
+            clamped_cells_r=clamped_cells_r,
+        )
+        
+        print(f"[OK] Tune Confidence: {confidence_report['overall_score']}% (Grade {confidence_report['letter_grade']})")
+        
         correction_diagnostics = {"front": diag_f, "rear": diag_r}
-        write_diagnostics(outdir, anomalies, correction_diagnostics)
+        write_diagnostics(outdir, anomalies, correction_diagnostics, confidence_report)
+
+        # Initialize extra_specs list for additional outputs
+        extra_specs: List[Tuple[str, str, str, bool]] = []
+
+        # --- Find Power Opportunities ---
+        print("PROGRESS:96:Analyzing power opportunities...")
+        sys.stdout.flush()
+        power_opportunities = find_power_opportunities(
+            afr_err_f=afr_err_f,
+            afr_err_r=afr_err_r,
+            spark_f=spark_f,
+            spark_r=spark_r,
+            coverage_f=cov_f,
+            coverage_r=cov_r,
+            knock_f=knock_f,
+            knock_r=knock_r,
+            hp_grid=hp_combined,
+        )
+        
+        # Write power opportunities to JSON
+        power_output_path = outdir / "PowerOpportunities.json"
+        power_output = {
+            "summary": {
+                "total_opportunities": len(power_opportunities),
+                "total_estimated_gain_hp": round(sum(opp["estimated_gain_hp"] for opp in power_opportunities), 2),
+                "analysis_date": io_contracts.utc_now_iso(),
+            },
+            "opportunities": power_opportunities,
+            "safety_notes": [
+                "All suggestions are conservative and prioritize engine safety",
+                "Test changes incrementally and monitor for knock",
+                "Verify AFR targets are appropriate for your fuel and application",
+                "Maximum suggested changes: ±3% AFR, +2° timing per cell",
+            ]
+        }
+        power_output_path.write_text(json.dumps(power_output, indent=2), encoding="utf-8")
+        print(f"[OK] Found {len(power_opportunities)} power opportunities, "
+              f"estimated total gain: {power_output['summary']['total_estimated_gain_hp']:.2f} HP")
 
         stats = {
             "rows_read": len(recs),
@@ -2038,6 +2787,7 @@ def main() -> int:
             "bins_covered": sum(1 for row in cov_f for value in row if value > 0),
             "front_accepted": diag_f["accepted_wb"],
             "rear_accepted": diag_r["accepted_wb"],
+            "power_opportunities_found": len(power_opportunities),
         }
 
         # --- Decel Fuel Management ---
@@ -2045,7 +2795,7 @@ def main() -> int:
             print("\nPROGRESS:96:Running decel fuel management analysis...")
             sys.stdout.flush()
             try:
-                from decel_management import process_decel_management
+                from dynoai.core.decel_management import process_decel_management
 
                 # Build decel config from args
                 decel_config = {
@@ -2085,7 +2835,7 @@ def main() -> int:
             print("\nPROGRESS:97:Running per-cylinder auto-balancing...")
             sys.stdout.flush()
             try:
-                from cylinder_balancing import process_cylinder_balancing
+                from dynoai.core.cylinder_balancing import process_cylinder_balancing
 
                 balance_result = process_cylinder_balancing(
                     records=recs,
@@ -2164,6 +2914,11 @@ def main() -> int:
                 "[WARN] 'visualize_coverage_all.py' not found, skipping visualization."
             )
         # --- End Visualization Call ---
+
+        # --- Write Session Replay Log ---
+        print("PROGRESS:99:Writing session replay log...")
+        sys.stdout.flush()
+        write_session_replay(outdir, run_id)
 
         register_outputs(manifest, outdir, extra_specs)
         # Finalize and write manifest

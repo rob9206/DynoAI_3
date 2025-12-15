@@ -121,7 +121,7 @@ export const uploadAndAnalyze = async (
 ): Promise<AnalysisResponse> => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   if (params) {
     if (params.smoothPasses !== undefined) formData.append('smoothPasses', params.smoothPasses.toString());
     if (params.clamp !== undefined) formData.append('clamp', params.clamp.toString());
@@ -203,6 +203,18 @@ export const pollJobStatus = async (
 
     poll();
   });
+};
+
+// Session Replay API
+export const getSessionReplay = async (runId: string) => {
+  const response = await api.get(`/api/session-replay/${runId}`);
+  return response.data;
+};
+
+// Confidence Report API
+export const getConfidenceReport = async (runId: string) => {
+  const response = await api.get(`/api/confidence-report/${runId}`);
+  return response.data;
 };
 
 // Error handler

@@ -2,6 +2,8 @@
 
 **A deterministic, automation-first, post-processing calibration engine for dyno data.**
 
+> Current release: **v1.2.1** — defined once in `dynoai/version.py` and used across code, builds, and docs.
+
 DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles with provable math, explicit boundaries, and OEM-inspired discipline. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision and Power Core systems—all with deterministic, reproducible results.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -18,6 +20,15 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 ✅ **Production Safety** - Conservative defaults, dry-run mode, rollback protection
 
 ## Features
+
+### 🔊 Audio Engine (NEW!)
+- **Real-time engine sound synthesis** synchronized with dyno pulls
+- **Realistic audio generation** based on RPM, load, and cylinder count
+- **Exhaust effects** including deceleration crackle and harmonics
+- **Auto-start** during dyno captures for immersive experience
+- See [Audio Engine Documentation](docs/AUDIO_ENGINE.md) for details
+
+### Core Features
 
 ### 🎯 Deterministic Core Engine
 - **VE Correction Analysis** - Deterministic AFR-to-VE conversion with provable math
@@ -44,6 +55,18 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 - **SHA-256 Verification** - Hash-verified corrections with audit trail
 - **Dry-Run Mode** - Preview changes before committing
 - **Formal Contracts** - Explicit CSV schemas with validation
+
+## Versioning
+
+- Single source of truth: `dynoai/version.py`
+- The Python package, API responses, metrics, Docker images, and docs consume that version at runtime/build time.
+- Validate that the importable version matches package metadata:
+
+```powershell
+pip install -e .
+python -c "import dynoai; print(dynoai.__version__)"
+python -c "import importlib.metadata as m; print(m.version('dynoai'))"
+```
 
 ## Quick Start
 

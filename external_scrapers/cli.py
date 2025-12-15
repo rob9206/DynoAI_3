@@ -20,7 +20,7 @@ from external_scrapers.winpep_synthesizer import (
     generate_synthetic_pull,
     save_winpep_csv,
 )
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 

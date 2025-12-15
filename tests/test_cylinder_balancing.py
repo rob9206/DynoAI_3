@@ -16,7 +16,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-from cylinder_balancing import (
+from dynoai.core.cylinder_balancing import (
     BalanceMode,
     CylinderData,
     ImbalanceCell,

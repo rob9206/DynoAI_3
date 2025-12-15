@@ -16,7 +16,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from ve_operations import (
+from dynoai.core.ve_operations import (
     VEApply,
     VERollback,
     compute_sha256,

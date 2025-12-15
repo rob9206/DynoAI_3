@@ -1,7 +1,8 @@
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import { Anomaly } from '../lib/api';
+import { Anomaly, ConfidenceReport } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
+import ConfidenceScoreCard from './ConfidenceScoreCard';
 
 interface DiagnosticsPanelProps {
   anomalies: Anomaly[];
@@ -9,9 +10,10 @@ interface DiagnosticsPanelProps {
     front?: Record<string, any>;
     rear?: Record<string, any>;
   };
+  confidenceReport?: ConfidenceReport;
 }
 
-export default function DiagnosticsPanel({ anomalies, correctionDiagnostics }: DiagnosticsPanelProps) {
+export default function DiagnosticsPanel({ anomalies, correctionDiagnostics, confidenceReport }: DiagnosticsPanelProps) {
   const getSeverityColor = (score: number) => {
     if (score >= 5) return 'text-destructive';
     if (score >= 3) return 'text-accent';
@@ -26,6 +28,10 @@ export default function DiagnosticsPanel({ anomalies, correctionDiagnostics }: D
 
   return (
     <div className="space-y-6">
+      {/* Confidence Score Card */}
+      {confidenceReport && (
+        <ConfidenceScoreCard confidence={confidenceReport} />
+      )}
       {/* Data Quality Summary */}
       {correctionDiagnostics && (
         <Card>

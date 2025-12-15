@@ -1,0 +1,1904 @@
+{
+  "schema_version": "1.0",
+  "run_id": "2025-12-15T17-28-01Z-e46826",
+  "generated_at": "2025-12-15T17:28:01.830Z",
+  "total_decisions": 119,
+  "decisions": [
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 0.73,
+        "weight": 73.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.41
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 4.43,
+        "weight": 71.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.97
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -4.94,
+        "weight": 77.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.15
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -5.66,
+        "weight": 75.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.25
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 4.08,
+        "weight": 72.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.01
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -5.8,
+        "weight": 72.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.27
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 9.17,
+        "weight": 78.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.45
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 10.42,
+        "weight": 74.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.32
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -0.24,
+        "weight": 77.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.53
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -5.66,
+        "weight": 71.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.25
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 3.39,
+        "weight": 69.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.09
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 7.67,
+        "weight": 70.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.61
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -4.65,
+        "weight": 53.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.11
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 3.65,
+        "weight": 54.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.06
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 14.47,
+        "weight": 54.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 10.92
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -2.42,
+        "weight": 51.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.81
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -4.07,
+        "weight": 54.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.03
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.803Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -3.92,
+        "weight": 62.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.01
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.804Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -4.21,
+        "weight": 92.6,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.78
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.804Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -0.6,
+        "weight": 76.8,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.28
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.805Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -2.15,
+        "weight": 92.6,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.49
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.805Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 12.11,
+        "weight": 88.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.15
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.806Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 2.04,
+        "weight": 79.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.25
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.806Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -1.79,
+        "weight": 73.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.44
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 7.11,
+        "weight": 103.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.67
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -2.87,
+        "weight": 105.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.87
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 1.3,
+        "weight": 104.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.34
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 7.02,
+        "weight": 125.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.68
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -4.14,
+        "weight": 128.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.04
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 0.56,
+        "weight": 131.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.43
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -3.62,
+        "weight": 111.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.97
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -12.53,
+        "weight": 107.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 14.29
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -1.5,
+        "weight": 104.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.69
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -1.19,
+        "weight": 70.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.65
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -9.68,
+        "weight": 71.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.84
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 10.82,
+        "weight": 68.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.28
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -7.82,
+        "weight": 108.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.56
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -6.37,
+        "weight": 110.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.35
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -5.09,
+        "weight": 104.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.17
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 7.57,
+        "weight": 110.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.62
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 4.69,
+        "weight": 104.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.94
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 6.75,
+        "weight": 107.5,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.71
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 5.57,
+        "weight": 107.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.84
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 8.7,
+        "weight": 100.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.5
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.807Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": 4.95,
+        "weight": 102.5,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.91
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.808Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -8.08,
+        "weight": 81.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 14.36
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 95,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.809Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -3.08,
+        "weight": 124.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.62
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 95,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.809Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -8.97,
+        "weight": 139.4,
+        "afr_commanded": 13.2,
+        "afr_measured": 14.5
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 95,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.809Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for f cylinder",
+      "values": {
+        "afr_error_pct": -6.25,
+        "weight": 94.2,
+        "afr_commanded": 13.2,
+        "afr_measured": 14.08
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 95,
+        "cylinder": "f"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.8,
+        "weight": 73.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.13
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 1.3,
+        "weight": 71.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.34
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 8.41,
+        "weight": 77.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.53
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -1.88,
+        "weight": 75.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.74
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 1.38,
+        "weight": 72.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.33
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -5.59,
+        "weight": 72.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.24
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 10.62,
+        "weight": 78.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.3
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.43,
+        "weight": 74.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.08
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -6.44,
+        "weight": 77.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.36
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 2.12,
+        "weight": 71.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.24
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -8.29,
+        "weight": 69.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.63
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.36,
+        "weight": 70.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.07
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 4.43,
+        "weight": 53.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.97
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 0.56,
+        "weight": 54.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.43
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 5.04,
+        "weight": 54.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.9
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 1.96,
+        "weight": 51.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.26
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 6.47,
+        "weight": 54.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.74
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.810Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.29,
+        "weight": 62.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.06
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.811Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.21,
+        "weight": 92.6,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.78
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.811Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -13.56,
+        "weight": 76.8,
+        "afr_commanded": 13.2,
+        "afr_measured": 15.27
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.812Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -5.51,
+        "weight": 92.6,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.97
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.812Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -9.75,
+        "weight": 88.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.85
+      },
+      "cell": {
+        "rpm": 2500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.813Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -9.02,
+        "weight": 79.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.74
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.813Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 0.3,
+        "weight": 73.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.16
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -3.92,
+        "weight": 103.9,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.01
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -6.99,
+        "weight": 105.1,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.44
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 14.36,
+        "weight": 104.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 10.93
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 13.12,
+        "weight": 125.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.05
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -12.34,
+        "weight": 128.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 14.26
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 0.89,
+        "weight": 131.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.39
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -8.49,
+        "weight": 111.7,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.66
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -6.65,
+        "weight": 107.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.39
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.814Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -4.94,
+        "weight": 104.4,
+        "afr_commanded": 12.5,
+        "afr_measured": 13.15
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 2.12,
+        "weight": 70.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.24
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 3.91,
+        "weight": 71.2,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.03
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -15.37,
+        "weight": 68.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 14.77
+      },
+      "cell": {
+        "rpm": 1500,
+        "kpa": 80,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 3.05,
+        "weight": 108.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.13
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 4.87,
+        "weight": 110.8,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.92
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 19.5,
+        "weight": 104.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 10.46
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 3.39,
+        "weight": 110.6,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.09
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 11.31,
+        "weight": 104.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.23
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 14.78,
+        "weight": 107.5,
+        "afr_commanded": 12.5,
+        "afr_measured": 10.89
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 7.76,
+        "weight": 107.0,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.6
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 7.2,
+        "weight": 100.3,
+        "afr_commanded": 12.5,
+        "afr_measured": 11.66
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.815Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -0.95,
+        "weight": 102.5,
+        "afr_commanded": 12.5,
+        "afr_measured": 12.62
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 50,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.816Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 3.61,
+        "weight": 81.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 12.74
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 95,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.816Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": 3.29,
+        "weight": 124.0,
+        "afr_commanded": 13.2,
+        "afr_measured": 12.78
+      },
+      "cell": {
+        "rpm": 3000,
+        "kpa": 95,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.816Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -3.23,
+        "weight": 139.4,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.64
+      },
+      "cell": {
+        "rpm": 3500,
+        "kpa": 95,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.816Z",
+      "action": "AFR_CORRECTION",
+      "reason": "Accepted AFR error sample for r cylinder",
+      "values": {
+        "afr_error_pct": -3.37,
+        "weight": 94.2,
+        "afr_commanded": 13.2,
+        "afr_measured": 13.66
+      },
+      "cell": {
+        "rpm": 2000,
+        "kpa": 95,
+        "cylinder": "r"
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "SMOOTHING_START",
+      "reason": "Starting gradient-limited smoothing with 2 passes, threshold=1.0%",
+      "values": {
+        "passes": 2,
+        "gradient_threshold": 1.0
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 1.78,
+        "threshold": 1.0,
+        "blend_factor": 0.89,
+        "original": 1.55,
+        "smoothed": 1.05,
+        "result": 1.49
+      },
+      "cell": {
+        "rpm_index": 0,
+        "kpa_index": 1
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 1.78,
+        "threshold": 1.0,
+        "blend_factor": 0.89,
+        "original": -0.23,
+        "smoothed": -0.45,
+        "result": -0.26
+      },
+      "cell": {
+        "rpm_index": 0,
+        "kpa_index": 2
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 3.03,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -1.97,
+        "smoothed": -0.45,
+        "result": -1.97
+      },
+      "cell": {
+        "rpm_index": 0,
+        "kpa_index": 3
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 2.28,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 1.82,
+        "smoothed": 0.99,
+        "result": 1.82
+      },
+      "cell": {
+        "rpm_index": 1,
+        "kpa_index": 1
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 2.28,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -0.46,
+        "smoothed": 0.21,
+        "result": -0.46
+      },
+      "cell": {
+        "rpm_index": 1,
+        "kpa_index": 2
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.67,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 1.06,
+        "smoothed": -0.29,
+        "result": 1.06
+      },
+      "cell": {
+        "rpm_index": 1,
+        "kpa_index": 3
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.67,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -3.62,
+        "smoothed": -3.62,
+        "result": -3.62
+      },
+      "cell": {
+        "rpm_index": 1,
+        "kpa_index": 4
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 2.19,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 1.53,
+        "smoothed": 0.34,
+        "result": 1.53
+      },
+      "cell": {
+        "rpm_index": 2,
+        "kpa_index": 1
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 3.16,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -0.66,
+        "smoothed": 0.98,
+        "result": -0.66
+      },
+      "cell": {
+        "rpm_index": 2,
+        "kpa_index": 2
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 3.16,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 2.5,
+        "smoothed": 0.94,
+        "result": 2.5
+      },
+      "cell": {
+        "rpm_index": 2,
+        "kpa_index": 3
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.41,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -0.5,
+        "smoothed": 1.66,
+        "result": -0.5
+      },
+      "cell": {
+        "rpm_index": 3,
+        "kpa_index": 1
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 1.82,
+        "threshold": 1.0,
+        "blend_factor": 0.908,
+        "original": 1.15,
+        "smoothed": 1.38,
+        "result": 1.17
+      },
+      "cell": {
+        "rpm_index": 3,
+        "kpa_index": 2
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 2.38,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 0.55,
+        "smoothed": 0.16,
+        "result": 0.55
+      },
+      "cell": {
+        "rpm_index": 3,
+        "kpa_index": 3
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 6.2,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 0.1,
+        "smoothed": -2.63,
+        "result": 0.1
+      },
+      "cell": {
+        "rpm_index": 3,
+        "kpa_index": 4
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.41,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 3.91,
+        "smoothed": 3.91,
+        "result": 3.91
+      },
+      "cell": {
+        "rpm_index": 4,
+        "kpa_index": 1
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.18,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": 2.35,
+        "smoothed": 1.45,
+        "result": 2.35
+      },
+      "cell": {
+        "rpm_index": 4,
+        "kpa_index": 2
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 4.27,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -1.83,
+        "smoothed": -1.58,
+        "result": -1.83
+      },
+      "cell": {
+        "rpm_index": 4,
+        "kpa_index": 3
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.817Z",
+      "action": "GRADIENT_LIMITING",
+      "reason": "High gradient detected, blending toward original value",
+      "values": {
+        "gradient": 6.2,
+        "threshold": 1.0,
+        "blend_factor": 1.0,
+        "original": -6.1,
+        "smoothed": -6.1,
+        "result": -6.1
+      },
+      "cell": {
+        "rpm_index": 4,
+        "kpa_index": 4
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.818Z",
+      "action": "CLAMPING_START",
+      "reason": "Clamping VE corrections to +/- 10.0%",
+      "values": {
+        "limit": 10.0
+      }
+    },
+    {
+      "timestamp": "2025-12-15T17:28:01.825Z",
+      "action": "ANOMALY_DETECTION_START",
+      "reason": "Starting anomaly detection analysis"
+    }
+  ]
+}

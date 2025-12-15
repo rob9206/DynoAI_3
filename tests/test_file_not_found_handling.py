@@ -10,15 +10,10 @@ Related Issue: FileNotFoundError during CSV analysis process
 """
 
 import os
-import sys
 import tempfile
 import unittest
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import io_contracts
+from dynoai.core import io_contracts
 
 
 class TestFileNotFoundHandling(unittest.TestCase):

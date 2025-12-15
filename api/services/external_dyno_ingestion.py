@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from api.models.external_dyno import ExternalDynoChart, SyntheticWinpepRun, utc_now
 from api.services.database import get_db
 from external_scrapers.dyno_models import DynoChartMeta, meta_from_row
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 from synthetic.winpep8_synthesizer import (
     EngineFamily,
     PeakInfo as SynthPeakInfo,

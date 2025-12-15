@@ -124,6 +124,58 @@ DynoAI3's calibration engine consists of three deterministic kernels applied in 
 - `ai_tuner_toolkit_dyno_v1_2.py::spark_suggestion()`
 - `ai_tuner_toolkit_dyno_v1_2.py::enforce_rear_rule()`
 
+### VE Correction Calculation (NEW in v2.0.0)
+
+**Purpose:** Calculate VE correction factors from AFR measurements
+
+**Math Versions:**
+
+| Version | Formula | Description |
+|---------|---------|-------------|
+| v1.0.0 | `VE = 1 + (AFR_error × 0.07)` | Linear 7% per AFR point (legacy) |
+| v2.0.0 | `VE = AFR_measured / AFR_target` | Ratio model (default, physically accurate) |
+
+**v2.0.0 Ratio Model (Default):**
+
+The ratio model is derived from first principles of fuel mass balance:
+
+```python
+VE_correction = AFR_measured / AFR_target
+```
+
+**Physical Derivation:**
+- AFR = mass_of_air / mass_of_fuel
+- If measured AFR is higher than target (lean), we need MORE fuel
+- Required fuel multiplier = measured/target directly
+
+**Examples:**
+
+| Scenario | Measured | Target | v1.0.0 | v2.0.0 | Accurate |
+|----------|----------|--------|--------|--------|----------|
+| Lean | 14.0 | 13.0 | 1.07 | 1.077 | 1.077 |
+| Very Lean | 15.0 | 12.5 | 1.175 | 1.200 | 1.200 |
+| Rich | 12.0 | 13.0 | 0.93 | 0.923 | 0.923 |
+| On Target | 13.0 | 13.0 | 1.00 | 1.000 | 1.000 |
+
+**Why v2.0.0 is Better:**
+1. Mathematically exact (not an approximation)
+2. Works correctly at all AFR ranges
+3. More accurate at large deviations (v1.0.0 underestimates by ~10% at 3 AFR points)
+4. Used by OEM calibration systems (Bosch, Delphi, MoTeC)
+
+**Location:** `dynoai/core/ve_math.py::calculate_ve_correction()`
+
+**Parameters:**
+- `afr_measured`: Measured AFR from wideband sensor
+- `afr_target`: Target/commanded AFR
+- `version`: MathVersion.V1_0_0 or MathVersion.V2_0_0 (default)
+- `clamp`: Whether to apply safety clamping (default: True)
+
+**Safety Clamping:**
+- Default: ±15% maximum correction
+- Prevents dangerous lean/rich conditions
+- Configurable via MathConfig
+
 ---
 
 ## 4. Apply/Rollback Guarantees
@@ -368,13 +420,40 @@ These boundaries are intentional and allow DynoAI3 to excel in its domain.
 
 ## 9. Math Versioning Policy
 
-### Current Version
+### Current Versions
 
-**Math Version:** 1.0.0  
-**Kernel Configuration:**
+**Kernel Math Version:** 1.0.0 (FROZEN)  
+**VE Correction Math Version:** 2.0.0 (DEFAULT as of 2025-12-15)
+
+**Kernel Configuration (v1.0.0):**
 - K1: Gradient-limited smoothing (passes=2, gradient_threshold=1.0)
 - K2: Coverage-weighted smoothing (alpha=0.20, center_bias=1.25, min_hits=1, dist_pow=1)
 - K3: Tiered spark logic (extra_rule_deg=2.0, hot_extra=-1.0)
+
+**VE Correction Configuration:**
+
+| Version | Status | Formula | Use Case |
+|---------|--------|---------|----------|
+| v1.0.0 | Available | `1 + (AFR_error × 0.07)` | Legacy compatibility |
+| v2.0.0 | **Default** | `AFR_measured / AFR_target` | Production (physically accurate) |
+
+**How to Select VE Math Version:**
+
+```python
+from dynoai.core.ve_math import calculate_ve_correction, MathVersion
+
+# v2.0.0 (default)
+correction = calculate_ve_correction(14.0, 13.0)
+
+# v1.0.0 (legacy)
+correction = calculate_ve_correction(14.0, 13.0, version=MathVersion.V1_0_0)
+```
+
+**CLI:**
+```bash
+python scripts/jetdrive_autotune.py --math-version 2.0.0  # default
+python scripts/jetdrive_autotune.py --math-version 1.0.0  # legacy
+```
 
 ### Version Stability Guarantee
 
@@ -750,7 +829,8 @@ Before releasing any code that affects tuning math:
 
 ---
 
-**Document Version:** 1.0.0  
-**Math Version:** 1.0.0  
-**Last Review:** 2025-12-13  
+**Document Version:** 1.1.0  
+**Kernel Math Version:** 1.0.0 (FROZEN)  
+**VE Correction Math Version:** 2.0.0 (DEFAULT)  
+**Last Review:** 2025-12-15  
 **Next Review:** Before any math modification

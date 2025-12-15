@@ -1,6 +1,7 @@
 """DynoAI Core Package - Motorcycle dyno tuning analysis system."""
 
-__version__ = "1.2.1"
+from dynoai.version import __version__
+
 __author__ = "DynoAI Team"
 
 from dynoai.constants import (
@@ -13,6 +14,7 @@ from dynoai.constants import (
 )
 
 __all__ = [
+    "__version__",
     "RPM_BINS",
     "KPA_BINS",
     "GRID_ROWS",

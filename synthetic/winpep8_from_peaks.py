@@ -15,7 +15,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 
 @dataclass

@@ -2,19 +2,14 @@
 
 import json
 import os
-import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 from .models import JetstreamRun, JetstreamRunMetadata
-
-# Add parent directory to path for io_contracts import
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 class JetstreamClient:

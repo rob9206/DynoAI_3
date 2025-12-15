@@ -18,7 +18,7 @@ from external_scrapers import get_stdout_logger
 from external_scrapers.dyno_models import DynoChartMeta, meta_from_row
 from external_scrapers.dynojet_site_scraper import run_dynojet_scrape
 from external_scrapers.fuelmoto_university_scraper import run_fuelmoto_scrape
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 from synthetic.winpep8_from_peaks import PeakInfo, generate_and_write_run
 
 logger = get_stdout_logger(__name__)

@@ -1,6 +1,6 @@
 [project]
 name = "dynoai"
-version = "1.2.0"
+dynamic = ["version"]
 description = "AI-powered dyno tuning toolkit for Harley-Davidson ECM optimization"
 readme = "README.md"
 license = { text = "MIT" }
@@ -30,6 +30,7 @@ dependencies = [
     "matplotlib>=3.9.0",
     "beautifulsoup4>=4.12.0",
     "requests>=2.32.0",
+    "defusedxml>=0.7.1",
     "pillow>=10.0.0",
     "pytesseract>=0.3.10",
     "pyyaml>=6.0.0",
@@ -73,6 +74,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["dynoai", "api", "external_scrapers"]
 
+[tool.hatch.version]
+path = "dynoai/version.py"
+
 # =============================================================================
 # Tool Configuration
 # =============================================================================
@@ -105,7 +109,7 @@ profile = "black"
 line_length = 88
 skip_gitignore = true
 skip = [".venv", "node_modules", "__pycache__", "experiments"]
-known_first_party = ["dynoai", "api", "io_contracts"]
+known_first_party = ["dynoai", "api", "external_scrapers"]
 
 [tool.ruff]
 line-length = 88
@@ -193,7 +197,7 @@ pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-norecursedirs = ["DynoAI_3", "DynoAI_3-main", "node_modules", ".venv", "experiments", "temp_selftest"]
+norecursedirs = ["DynoAI_*", "node_modules", ".venv", "experiments", "temp_selftest"]
 addopts = [
     "-ra",
     "-q",

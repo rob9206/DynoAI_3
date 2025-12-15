@@ -58,8 +58,6 @@ def get_git_branch(repo_root: Path) -> Optional[str]:
 ALLOWED_FILES = [
     # Core engine files
     "ai_tuner_toolkit_dyno_v1_2.py",
-    "ve_operations.py",
-    "io_contracts.py",
     # Test harnesses
     "selftest.py",
     "selftest_runner.py",
