@@ -2417,6 +2417,30 @@ def main() -> int:
         default=3.0,
         help="Maximum VE correction percentage for balancing (default: 3.0%%).",
     )
+    # PDF report generation options
+    ap.add_argument(
+        "--generate-report",
+        action="store_true",
+        help="Generate a professional PDF report suitable for customer delivery and insurance.",
+    )
+    ap.add_argument(
+        "--report-shop-name",
+        type=str,
+        default="",
+        help="Shop/business name to include in report header.",
+    )
+    ap.add_argument(
+        "--report-operator",
+        type=str,
+        default="",
+        help="Operator name for the tuning session.",
+    )
+    ap.add_argument(
+        "--report-vehicle",
+        type=str,
+        default="",
+        help="Vehicle description (year, make, model).",
+    )
     args = ap.parse_args()
 
     # Configure logging level based on --verbose flag
@@ -2919,6 +2943,63 @@ def main() -> int:
         print("PROGRESS:99:Writing session replay log...")
         sys.stdout.flush()
         write_session_replay(outdir, run_id)
+
+        # --- Generate PDF Report (if requested) ---
+        if args.generate_report:
+            print("\nPROGRESS:99.5:Generating PDF report...")
+            sys.stdout.flush()
+            try:
+                from report_generator import generate_pdf_report
+                
+                # Prepare run data
+                run_data = {
+                    'run_id': run_id,
+                    'date': io_contracts.utc_now_iso(),
+                    'operator': args.report_operator or 'N/A',
+                    'vehicle': args.report_vehicle or 'N/A',
+                }
+                
+                # Prepare shop info
+                shop_info = None
+                if args.report_shop_name:
+                    shop_info = {
+                        'name': args.report_shop_name,
+                        'address': '',
+                        'phone': '',
+                        'email': '',
+                        'website': '',
+                        'logo_path': None,
+                    }
+                
+                # Generate PDF
+                pdf_path = outdir / "DynoAI_Report.pdf"
+                generate_pdf_report(
+                    output_path=pdf_path,
+                    run_data=run_data,
+                    manifest=manifest,
+                    anomalies=anomalies,
+                    confidence_report=confidence_report,
+                    ve_delta=ve_clamped,
+                    torque_map=tq_combined,
+                    hp_map=hp_combined,
+                    rpm_bins=RPM_BINS,
+                    kpa_bins=KPA_BINS,
+                    shop_info=shop_info,
+                    disclaimer=None,  # Use default
+                )
+                
+                print(f"[OK] PDF report generated: {pdf_path}")
+                
+                # Add PDF to outputs manifest
+                extra_specs.append(("DynoAI_Report.pdf", "pdf", "tuning_report", False))
+                
+            except ImportError as e:
+                print(f"[WARN] PDF report generation not available: {e}")
+                print("[WARN] Install required packages: pip install reportlab qrcode")
+            except Exception as e:
+                print(f"[WARN] PDF report generation failed: {e}")
+                logger.exception("PDF generation error")
+        # --- End PDF Report Generation ---
 
         register_outputs(manifest, outdir, extra_specs)
         # Finalize and write manifest
