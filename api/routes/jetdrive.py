@@ -999,13 +999,15 @@ def _live_capture_loop():
 
                 # Quick capture for 1 second
                 samples: list[JetDriveSample] = []
-                stop_event = asyncio.Event()
 
                 def on_sample(s: JetDriveSample):
                     samples.append(s)
 
                 async def capture_brief():
                     from api.services.jetdrive_client import subscribe
+
+                    # Create after loop is running to avoid RuntimeError: no running event loop
+                    stop_event = asyncio.Event()
 
                     # Schedule stop
                     async def stop_after():

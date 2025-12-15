@@ -1049,7 +1049,19 @@ def print_startup_banner():
 
 
 # Register error handlers
-register_error_handlers(app)
+def _ensure_error_handlers_registered():
+    """Register error handlers once per process."""
+    if getattr(app, "_error_handlers_registered", False):
+        return
+    register_error_handlers(app)
+    app._error_handlers_registered = True
+
+
+@app.before_first_request
+def _register_error_handlers_before_first_request():
+    _ensure_error_handlers_registered()
+
 
 if __name__ == "__main__":
+    _ensure_error_handlers_registered()
     print_startup_banner()
