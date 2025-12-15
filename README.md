@@ -1,18 +1,31 @@
-# DynoAI
+# DynoAI3
 
-AI-powered dyno tuning toolkit for Harley-Davidson motorcycles. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision and Power Core systems.
+**A deterministic, automation-first, post-processing calibration engine for dyno data.**
+
+DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles with provable math, explicit boundaries, and OEM-inspired discipline. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision and Power Core systems—all with deterministic, reproducible results.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![React](https://img.shields.io/badge/react-18-blue.svg)
 
+## What Makes DynoAI3 World-Class
+
+✅ **Deterministic Math** - Same inputs always produce same outputs, bit-for-bit  
+✅ **Provable Apply/Rollback** - Exact mathematical inverses with SHA-256 verification  
+✅ **Automation-First** - Headless CLI, batch processing, CI-ready workflows  
+✅ **Formal Contracts** - Explicit schemas, units, and invariants  
+✅ **Math Versioning** - Stable algorithms with version freeze guarantees  
+✅ **Production Safety** - Conservative defaults, dry-run mode, rollback protection
+
 ## Features
 
-### 🎯 Core Analysis
-- **VE Correction Analysis** - Analyze AFR data to generate volumetric efficiency corrections
+### 🎯 Deterministic Core Engine
+- **VE Correction Analysis** - Deterministic AFR-to-VE conversion with provable math
+- **Three-Kernel System** - K1 (gradient-limited smoothing), K2 (coverage-weighted), K3 (spark logic)
+- **Apply/Rollback Symmetry** - Exact mathematical inverses verified by acceptance tests
+- **Math Versioning** - Algorithm stability with version freeze guarantees (currently v1.0.0)
 - **2D Grid Analysis** - RPM × MAP zone-based analysis (11×9 grid = 99 cells)
-- **Adaptive Kernel Smoothing** - Two-stage system preserving large corrections while smoothing noise
-- **Spark Timing Suggestions** - Generate spark advance/retard based on knock detection
+- **Conservative Clamping** - Default ±7% limit for production safety
 
 ### 🔌 JetDrive Integration
 - **Live Data Capture** - Real-time dyno data via KLHDV multicast protocol
@@ -28,7 +41,9 @@ AI-powered dyno tuning toolkit for Harley-Davidson motorcycles. Analyze dyno log
 ### 🛠️ Advanced Features
 - **Decel Fuel Management** - Automated deceleration popping elimination
 - **Cylinder Balancing** - Per-cylinder AFR equalization for V-twins
-- **Safe Apply/Rollback** - Hash-verified corrections with full undo capability
+- **SHA-256 Verification** - Hash-verified corrections with audit trail
+- **Dry-Run Mode** - Preview changes before committing
+- **Formal Contracts** - Explicit CSV schemas with validation
 
 ## Quick Start
 
@@ -214,10 +229,53 @@ pytest --cov=api --cov=scripts tests/
 
 ## Documentation
 
-- [JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md) - Hardware setup guide
-- [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) - Web app setup
-- [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - VE apply/rollback system
-- [TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md) - Adaptive kernel details
+### Core Specifications
+- **[DETERMINISTIC_MATH_SPECIFICATION.md](docs/DETERMINISTIC_MATH_SPECIFICATION.md)** - Complete mathematical specification and world-class positioning
+- **[KERNEL_SPECIFICATION.md](docs/KERNEL_SPECIFICATION.md)** - Detailed kernel algorithms (K1, K2, K3) with frozen parameters
+- **[DYNOAI_ARCHITECTURE_OVERVIEW.md](docs/DYNOAI_ARCHITECTURE_OVERVIEW.md)** - System architecture and design
+- **[README_VE_OPERATIONS.md](README_VE_OPERATIONS.md)** - VE apply/rollback system documentation
+
+### Integration Guides
+- **[JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md)** - Hardware setup and testing
+- **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** - Web application setup
+- **[TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md)** - Adaptive kernel implementation details
+
+### Testing
+- **[TESTING.md](docs/TESTING.md)** - Test suite documentation
+- **acceptance_test.py** - Formal acceptance tests validating all requirements
+- **selftest.py** - Kernel and system validation tests
+
+## Explicit Boundaries
+
+### What DynoAI3 IS
+✅ Deterministic post-processing VE calibration engine  
+✅ Dyno data analyzer (CSV input)  
+✅ VE correction factor generator  
+✅ Spark timing suggestion system  
+✅ Apply/rollback with hash verification  
+✅ Automation-first with headless CLI  
+✅ Batch processing and CI-ready  
+
+### What DynoAI3 is NOT
+❌ **NOT a dyno controller** - Does not control dynamometers  
+❌ **NOT an ECU communication tool** - Does not flash or read ECUs directly  
+❌ **NOT real-time** - Post-processing only, not closed-loop  
+❌ **NOT adaptive** - No learning across runs, deterministic only  
+❌ **NOT ML-based** - Core math is deterministic despite the "AI" name  
+
+These boundaries are intentional and allow DynoAI3 to excel in its specific domain with world-class reliability.
+
+## Comparison with OEM Systems
+
+| System | Deterministic Math | Automation | Formal Contracts | Domain |
+|--------|-------------------|------------|------------------|---------|
+| ETAS INCA | High | High (COM + MATLAB) | ASAM A2L/MDF | ECU calibration |
+| Vector CANape | High | High (API/COM/MATLAB) | ASAM A2L/MDF | ECU calibration |
+| MoTeC M1 | High (strategy-dependent) | In-ECU scripting | Package-defined | Motorsport ECU |
+| HP Tuners | Medium–High | Low–Medium | Tool-specific | Aftermarket tuning |
+| **DynoAI3** | **High (test-proven)** | **High (headless, batch)** | **High (dyno-domain)** | **Dyno post-processing** |
+
+**DynoAI3 achieves world-class status through discipline, not novelty.**
 
 ## Requirements
 

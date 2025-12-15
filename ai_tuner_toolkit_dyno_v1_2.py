@@ -1,3 +1,39 @@
+"""
+DynoAI3 - Deterministic Dyno Tuning Toolkit
+
+A deterministic, automation-first, post-processing calibration engine for dyno data.
+
+MATH VERSION: 1.0.0 (FROZEN)
+============================
+
+This module implements the core VE correction analysis engine with three deterministic
+kernels applied in a fixed, documented order:
+
+1. K1: Gradient-Limited Adaptive Smoothing
+   - Preserves large corrections (≥3.0%) while smoothing noise
+   - Parameters: passes=2, gradient_threshold=1.0
+
+2. K2: Coverage-Weighted Smoothing
+   - Neighbor-weighted averaging with center bias
+   - Parameters: alpha=0.20, center_bias=1.25, min_hits=1, dist_pow=1
+
+3. K3: Tiered Spark Logic
+   - Knock-based spark retard with hot IAT compensation
+   - Parameters: extra_rule_deg=2.0, hot_extra=-1.0
+
+FROZEN PARAMETERS:
+All kernel parameters listed above are FROZEN and will not change without a major
+version increment. See docs/KERNEL_SPECIFICATION.md for complete mathematical details.
+
+DETERMINISTIC GUARANTEES:
+- Same inputs always produce same outputs (bit-for-bit)
+- No randomness, no adaptive learning, no cross-run state
+- Apply/rollback operations are exact mathematical inverses
+- SHA-256 verification on all apply operations
+
+See docs/DETERMINISTIC_MATH_SPECIFICATION.md for the complete specification.
+"""
+
 import argparse
 import csv
 import json

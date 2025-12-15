@@ -1,8 +1,21 @@
 # DynoAI Architecture Overview
 
-_Last updated: 2025-11-13_
+_Last updated: 2025-12-13_
 
-DynoAI is an intelligent dyno tuning system that transforms WinPEP logs into production-ready VE correction tables for Harley-Davidson ECM calibration. The architecture prioritizes safety, reproducibility, and extensibility.
+DynoAI3 is a deterministic, automation-first, post-processing calibration engine that transforms dyno logs into production-ready VE correction tables for Harley-Davidson ECM calibration. The architecture prioritizes **trust, repeatability, and auditability** over algorithmic novelty—aligning with world-class OEM and motorsport calibration systems.
+
+## Core Philosophy
+
+DynoAI3 achieves world-class status through:
+
+1. **Deterministic Math** - Same inputs → same outputs, provably
+2. **Math Versioning** - Algorithm stability as a contractual obligation (frozen at v1.0.0)
+3. **Formal Contracts** - Explicit schemas, units, and validation
+4. **Apply/Rollback Symmetry** - Exact mathematical inverses with SHA-256 verification
+5. **Automation-First** - Headless CLI, batch processing, CI-ready workflows
+6. **Explicit Boundaries** - Clear statement of capabilities and non-goals
+
+Despite the "AI" in its name, DynoAI3's core VE calibration pipeline contains **no machine learning**. All tuning operations are deterministic, reproducible, and auditable.
 
 ---
 

@@ -15,7 +15,8 @@ import {
     Gauge, Play, FileDown, Upload, RefreshCw,
     CheckCircle2, XCircle, AlertCircle, Grid3X3,
     FileText, Download, Zap, Radio, Wifi, WifiOff,
-    Activity, Server, MonitorCheck, Settings, Search
+    Activity, Server, MonitorCheck, Settings, Search,
+    Thermometer, Droplets, Wind
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,9 +28,10 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
+import { JetDriveLiveDashboard, QuickTunePanel } from '../components/jetdrive';
 
 // API base URL
-const API_BASE = 'http://127.0.0.1:5000/api/jetdrive';
+const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
 
 interface AnalysisResult {
     success: boolean;
@@ -95,6 +97,39 @@ interface MonitorStatus {
     history: { timestamp: string; connected: boolean; provider_count: number }[];
 }
 
+interface LiveChannel {
+    id: number;
+    name: string;
+    value: number;
+    timestamp: number;
+}
+
+interface LiveData {
+    capturing: boolean;
+    last_update: string | null;
+    channels: Record<string, LiveChannel>;
+    channel_count: number;
+}
+
+// Channel name mappings for display
+const CHANNEL_LABELS: Record<string, { label: string; unit: string; icon: string }> = {
+    // Atmospheric
+    'Humidity': { label: '💧 Humidity', unit: '%', icon: '💧' },
+    'Pressure': { label: '🌬️ Pressure', unit: 'kPa', icon: '🌬️' },
+    'Temperature 1': { label: '🌡️ Temp 1', unit: '°C', icon: '🌡️' },
+    'Temperature 2': { label: '🌡️ Temp 2', unit: '°C', icon: '🌡️' },
+    // Dyno
+    'Force Drum 1': { label: '⚡ Force', unit: 'lbs', icon: '⚡' },
+    'Acceleration': { label: '📈 Accel', unit: 'g', icon: '📈' },
+    'Digital RPM 1': { label: '🔄 RPM 1', unit: 'rpm', icon: '🔄' },
+    'Digital RPM 2': { label: '🔄 RPM 2', unit: 'rpm', icon: '🔄' },
+    // AFR
+    'Air/Fuel Ratio 1': { label: '⛽ AFR 1', unit: ':1', icon: '⛽' },
+    'Air/Fuel Ratio 2': { label: '⛽ AFR 2', unit: ':1', icon: '⛽' },
+    'Lambda 1': { label: 'λ Lambda 1', unit: '', icon: 'λ' },
+    'Lambda 2': { label: 'λ Lambda 2', unit: '', icon: 'λ' },
+};
+
 // VE Heatmap cell color based on correction value
 function getCellColor(value: number): string {
     const delta = (value - 1) * 100;
@@ -154,6 +189,34 @@ function HardwareTab() {
         refetchInterval: (query) => query.state.data?.running ? 2000 : 5000,
         retry: 1,
     });
+
+    // Fetch live data
+    const { data: liveData } = useQuery<LiveData>({
+        queryKey: ['jetdrive-live'],
+        queryFn: async () => {
+            const res = await fetch(`${API_BASE}/hardware/live/data`);
+            if (!res.ok) {
+                throw new Error('Live data endpoint not available');
+            }
+            return res.json();
+        },
+        refetchInterval: (query) => query.state.data?.capturing ? 1000 : false,
+        retry: 1,
+    });
+
+    // Toggle live capture
+    const toggleLiveCapture = async () => {
+        const action = liveData?.capturing ? 'stop' : 'start';
+        try {
+            const res = await fetch(`${API_BASE}/hardware/live/${action}`, { method: 'POST' });
+            if (!res.ok) {
+                throw new Error(`Failed to ${action} live capture`);
+            }
+            toast.success(`Live capture ${action}ed`);
+        } catch (err) {
+            toast.error(`Failed to ${action} live capture`);
+        }
+    };
 
     // Discover providers
     const handleDiscover = async () => {
@@ -273,6 +336,69 @@ function HardwareTab() {
                     </div>
                 )}
             </div>
+
+            {/* Live Data Display */}
+            {monitorStatus?.connected && (
+                <Card className="border-primary/30">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                <Activity className="h-5 w-5 text-primary" />
+                                Live Data
+                            </CardTitle>
+                            <Button
+                                variant={liveData?.capturing ? "destructive" : "default"}
+                                size="sm"
+                                onClick={() => void toggleLiveCapture()}
+                            >
+                                <Radio className={`h-4 w-4 mr-2 ${liveData?.capturing ? 'animate-pulse' : ''}`} />
+                                {liveData?.capturing ? 'Stop Capture' : 'Start Capture'}
+                            </Button>
+                        </div>
+                        {liveData?.last_update && (
+                            <CardDescription>
+                                Last update: {new Date(liveData.last_update).toLocaleTimeString()} • {liveData.channel_count} channels
+                            </CardDescription>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {liveData?.capturing && liveData.channel_count > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {Object.values(liveData.channels).map((channel) => {
+                                    const config = CHANNEL_LABELS[channel.name] || { label: channel.name, unit: '', icon: '📊' };
+                                    return (
+                                        <div
+                                            key={channel.id}
+                                            className="p-3 rounded-lg bg-muted/40 border border-border hover:border-primary/30 transition-colors"
+                                        >
+                                            <div className="text-xs text-muted-foreground mb-1 truncate">
+                                                {config.icon} {config.label}
+                                            </div>
+                                            <div className="text-xl font-mono font-bold">
+                                                {channel.value.toFixed(2)}
+                                                <span className="text-xs font-normal text-muted-foreground ml-1">
+                                                    {config.unit}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : liveData?.capturing ? (
+                            <div className="text-center py-6 text-muted-foreground">
+                                <Radio className="h-8 w-8 mx-auto mb-2 animate-pulse text-primary" />
+                                <p>Waiting for data...</p>
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 text-muted-foreground">
+                                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p>Click "Start Capture" to view live channel data</p>
+                                <p className="text-xs mt-1">Including humidity, temperature, pressure, AFR, and more</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Diagnostics Card */}
@@ -577,12 +703,21 @@ export default function JetDriveAutoTunePage() {
                 </div>
             </div>
 
+            {/* Quick Tune Panel - Maximum Automation */}
+            <div className="mb-6">
+                <QuickTunePanel apiUrl={API_BASE} />
+            </div>
+
             {/* Main Tabs */}
             <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg">
                     <TabsTrigger value="hardware" className="flex items-center gap-2">
                         <Radio className="h-4 w-4" />
                         Hardware
+                    </TabsTrigger>
+                    <TabsTrigger value="live" className="flex items-center gap-2">
+                        <Activity className="h-4 w-4" />
+                        Live
                     </TabsTrigger>
                     <TabsTrigger value="autotune" className="flex items-center gap-2">
                         <Zap className="h-4 w-4" />
@@ -593,6 +728,11 @@ export default function JetDriveAutoTunePage() {
                 {/* Hardware Tab */}
                 <TabsContent value="hardware" className="mt-6">
                     <HardwareTab />
+                </TabsContent>
+
+                {/* Live Dashboard Tab */}
+                <TabsContent value="live" className="mt-6">
+                    <JetDriveLiveDashboard apiUrl={API_BASE} />
                 </TabsContent>
 
                 {/* Auto-Tune Tab */}
