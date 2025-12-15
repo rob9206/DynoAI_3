@@ -26,3 +26,6 @@ tmp_test/
 .cursor/rules/snyk_rules.mdc
 .github/instructions/snyk_rules.instructions.md
 temp_selftest/
+
+# Workspace-local generated artifacts (common variants)
+agent_outputs/
