@@ -6,7 +6,7 @@ The template is designed to create professional, branded reports suitable for
 customer delivery and insurance documentation.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Page layout constants (in points, 1 inch = 72 points)
 PAGE_WIDTH = 612  # 8.5 inches
@@ -70,10 +70,10 @@ DEFAULT_SHOP_INFO: Dict[str, Any] = {
 def get_confidence_color(score: float) -> tuple:
     """
     Get color based on confidence score.
-    
+
     Args:
         score: Confidence score (0-100)
-        
+
     Returns:
         RGB color tuple
     """
@@ -90,18 +90,18 @@ def get_confidence_color(score: float) -> tuple:
 def get_grade_color(grade: str) -> tuple:
     """
     Get color based on letter grade.
-    
+
     Args:
         grade: Letter grade (A+, A, B+, B, C+, C, D, F)
-        
+
     Returns:
         RGB color tuple
     """
-    if grade.startswith('A'):
+    if grade.startswith("A"):
         return COLOR_SUCCESS
-    elif grade.startswith('B'):
+    elif grade.startswith("B"):
         return (0.5, 0.7, 0.3)
-    elif grade.startswith('C'):
+    elif grade.startswith("C"):
         return COLOR_WARNING
     else:
         return COLOR_ACCENT

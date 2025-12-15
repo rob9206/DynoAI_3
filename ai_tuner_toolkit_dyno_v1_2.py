@@ -44,7 +44,6 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
-from dynoai.core import io_contracts
 from dynoai.constants import (
     AFR_RANGE_MAX,
     AFR_RANGE_MIN,
@@ -59,6 +58,7 @@ from dynoai.constants import (
     Grid,
     GridList,
 )
+from dynoai.core import io_contracts
 from dynoai.core.io_contracts import sanitize_csv_cell
 
 # Configure logging
@@ -1264,7 +1264,7 @@ def clamp_grid(
     grid: List[List[Optional[float]]], limit: float
 ) -> Tuple[List[List[Optional[float]]], List[Dict[str, Any]]]:
     """Clamp grid values to +/- limit, logging significant clamps.
-    
+
     Returns:
         Tuple of (clamped_grid, clamped_cells_list)
     """
@@ -1288,12 +1288,14 @@ def clamp_grid(
 
                 # Log if value was actually clamped
                 if abs(original - clamped) > 0.01:
-                    clamped_cells.append({
-                        "rpm_index": r_idx,
-                        "kpa_index": c_idx,
-                        "original": round(original, 2),
-                        "clamped": round(clamped, 2),
-                    })
+                    clamped_cells.append(
+                        {
+                            "rpm_index": r_idx,
+                            "kpa_index": c_idx,
+                            "original": round(original, 2),
+                            "clamped": round(clamped, 2),
+                        }
+                    )
             else:
                 result_row.append(None)
         result.append(result_row)
@@ -1302,7 +1304,10 @@ def clamp_grid(
         log_decision(
             action="CLAMPING_APPLIED",
             reason=f"Clamped {len(clamped_cells)} cells exceeding +/- {limit}% limit",
-            values={"clamped_count": len(clamped_cells), "cells": clamped_cells[:10]},  # Log first 10
+            values={
+                "clamped_count": len(clamped_cells),
+                "cells": clamped_cells[:10],
+            },  # Log first 10
         )
 
     return result, clamped_cells
@@ -1714,14 +1719,14 @@ def find_power_opportunities(
 ) -> List[Dict[str, Any]]:
     """
     Analyze tuning data to identify safe opportunities for power gains.
-    
+
     Looks for:
     1. Cells that are >2% rich with good coverage (>20 hits)
     2. Cells where spark timing could be advanced safely (no knock)
     3. Areas where VE could be increased without exceeding AFR targets
-    
+
     Returns prioritized list of opportunities with specific suggestions.
-    
+
     Args:
         afr_err_f: Front AFR error grid (% rich/lean)
         afr_err_r: Rear AFR error grid (% rich/lean)
@@ -1732,23 +1737,23 @@ def find_power_opportunities(
         knock_f: Front knock retard grid (degrees)
         knock_r: Rear knock retard grid (degrees)
         hp_grid: Combined horsepower grid
-        
+
     Returns:
         List of power opportunities sorted by estimated gain (highest first)
     """
     opportunities: List[Dict[str, Any]] = []
-    
+
     # Minimum coverage threshold for confident suggestions
     MIN_COVERAGE = 20
-    
+
     # Safety limits
     MAX_AFR_CHANGE_PCT = 3.0  # Don't suggest more than ±3% AFR change
     MAX_TIMING_ADVANCE_DEG = 2.0  # Max 2° timing advance per suggestion
     KNOCK_THRESHOLD = 0.5  # Don't suggest changes where knock >= 0.5°
-    
+
     # Rich threshold - cells richer than this are power opportunities
     RICH_THRESHOLD_PCT = 2.0
-    
+
     for ri, rpm in enumerate(RPM_BINS):
         for ki, kpa in enumerate(KPA_BINS):
             # Combine front and rear data
@@ -1760,120 +1765,142 @@ def find_power_opportunities(
             spark_suggest_f = spark_f[ri][ki]
             spark_suggest_r = spark_r[ri][ki]
             hp_current = hp_grid[ri][ki]
-            
+
             # Skip cells with insufficient coverage
             if coverage_total < MIN_COVERAGE:
                 continue
-            
+
             # Skip cells with knock activity (not safe to advance timing or lean out)
             if knock_front >= KNOCK_THRESHOLD or knock_rear >= KNOCK_THRESHOLD:
                 continue
-            
+
             # Calculate average AFR error (positive = rich, negative = lean)
             afr_errors = [e for e in [afr_err_front, afr_err_rear] if e is not None]
             if not afr_errors:
                 continue
-            
+
             avg_afr_err = sum(afr_errors) / len(afr_errors)
-            
+
             # Calculate confidence based on coverage
             confidence = min(100, int((coverage_total / 50) * 100))
-            
+
             # Opportunity 1: Rich cells - can lean out for more power
             if avg_afr_err > RICH_THRESHOLD_PCT:
                 # Suggest leaning by up to 50% of the error, capped at MAX_AFR_CHANGE_PCT
                 lean_suggestion = min(avg_afr_err * 0.5, MAX_AFR_CHANGE_PCT)
-                
+
                 # Estimate power gain: ~2% HP per 1% leaner AFR (conservative)
                 # Only apply to cells with actual HP data
                 if hp_current is not None and hp_current > 0:
                     estimated_hp_gain = hp_current * (lean_suggestion * 0.02)
                 else:
                     # Estimate based on typical HP for this RPM/load
-                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * lean_suggestion * 0.5
-                
-                opportunities.append({
-                    "type": "Lean AFR",
-                    "rpm": rpm,
-                    "kpa": kpa,
-                    "suggestion": f"Lean by {lean_suggestion:.1f}% (currently {avg_afr_err:+.1f}% rich)",
-                    "estimated_gain_hp": round(estimated_hp_gain, 2),
-                    "confidence": confidence,
-                    "coverage": coverage_total,
-                    "current_hp": round(hp_current, 1) if hp_current else None,
-                    "details": {
-                        "afr_error_pct": round(avg_afr_err, 2),
-                        "suggested_change_pct": round(-lean_suggestion, 2),  # Negative = lean
-                        "knock_front": round(knock_front, 2),
-                        "knock_rear": round(knock_rear, 2),
+                    estimated_hp_gain = (
+                        (rpm / 1000) * (kpa / 100) * lean_suggestion * 0.5
+                    )
+
+                opportunities.append(
+                    {
+                        "type": "Lean AFR",
+                        "rpm": rpm,
+                        "kpa": kpa,
+                        "suggestion": f"Lean by {lean_suggestion:.1f}% (currently {avg_afr_err:+.1f}% rich)",
+                        "estimated_gain_hp": round(estimated_hp_gain, 2),
+                        "confidence": confidence,
+                        "coverage": coverage_total,
+                        "current_hp": round(hp_current, 1) if hp_current else None,
+                        "details": {
+                            "afr_error_pct": round(avg_afr_err, 2),
+                            "suggested_change_pct": round(
+                                -lean_suggestion, 2
+                            ),  # Negative = lean
+                            "knock_front": round(knock_front, 2),
+                            "knock_rear": round(knock_rear, 2),
+                        },
                     }
-                })
-            
+                )
+
             # Opportunity 2: Timing advance potential (no knock, not already suggested to advance)
             # If spark suggestion is 0 or slightly negative but no knock, there's room to advance
             avg_spark_suggest = (spark_suggest_f + spark_suggest_r) / 2.0
-            
+
             if avg_spark_suggest <= 0 and knock_front < 0.1 and knock_rear < 0.1:
                 # Suggest conservative timing advance
                 timing_advance = min(MAX_TIMING_ADVANCE_DEG, 2.0)
-                
+
                 # Estimate power gain: ~3% HP per degree of advance (conservative)
                 if hp_current is not None and hp_current > 0:
                     estimated_hp_gain = hp_current * (timing_advance * 0.03)
                 else:
-                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * timing_advance * 0.8
-                
-                opportunities.append({
-                    "type": "Advance Timing",
-                    "rpm": rpm,
-                    "kpa": kpa,
-                    "suggestion": f"Advance timing by {timing_advance:.1f}° (no knock detected)",
-                    "estimated_gain_hp": round(estimated_hp_gain, 2),
-                    "confidence": confidence,
-                    "coverage": coverage_total,
-                    "current_hp": round(hp_current, 1) if hp_current else None,
-                    "details": {
-                        "current_suggestion_deg": round(avg_spark_suggest, 2),
-                        "advance_deg": round(timing_advance, 2),
-                        "knock_front": round(knock_front, 2),
-                        "knock_rear": round(knock_rear, 2),
+                    estimated_hp_gain = (
+                        (rpm / 1000) * (kpa / 100) * timing_advance * 0.8
+                    )
+
+                opportunities.append(
+                    {
+                        "type": "Advance Timing",
+                        "rpm": rpm,
+                        "kpa": kpa,
+                        "suggestion": f"Advance timing by {timing_advance:.1f}° (no knock detected)",
+                        "estimated_gain_hp": round(estimated_hp_gain, 2),
+                        "confidence": confidence,
+                        "coverage": coverage_total,
+                        "current_hp": round(hp_current, 1) if hp_current else None,
+                        "details": {
+                            "current_suggestion_deg": round(avg_spark_suggest, 2),
+                            "advance_deg": round(timing_advance, 2),
+                            "knock_front": round(knock_front, 2),
+                            "knock_rear": round(knock_rear, 2),
+                        },
                     }
-                })
-            
+                )
+
             # Opportunity 3: Combined opportunity (rich + no knock = lean AND advance)
-            if avg_afr_err > RICH_THRESHOLD_PCT and knock_front < 0.1 and knock_rear < 0.1:
+            if (
+                avg_afr_err > RICH_THRESHOLD_PCT
+                and knock_front < 0.1
+                and knock_rear < 0.1
+            ):
                 lean_suggestion = min(avg_afr_err * 0.5, MAX_AFR_CHANGE_PCT)
-                timing_advance = min(MAX_TIMING_ADVANCE_DEG, 1.5)  # More conservative when combining
-                
+                timing_advance = min(
+                    MAX_TIMING_ADVANCE_DEG, 1.5
+                )  # More conservative when combining
+
                 # Combined gains are multiplicative (but use conservative estimate)
                 if hp_current is not None and hp_current > 0:
                     afr_gain = hp_current * (lean_suggestion * 0.02)
                     timing_gain = hp_current * (timing_advance * 0.03)
-                    estimated_hp_gain = afr_gain + timing_gain * 0.8  # Reduce timing gain when combined
+                    estimated_hp_gain = (
+                        afr_gain + timing_gain * 0.8
+                    )  # Reduce timing gain when combined
                 else:
-                    estimated_hp_gain = (rpm / 1000) * (kpa / 100) * (lean_suggestion + timing_advance)
-                
-                opportunities.append({
-                    "type": "Combined (AFR + Timing)",
-                    "rpm": rpm,
-                    "kpa": kpa,
-                    "suggestion": f"Lean by {lean_suggestion:.1f}% AND advance {timing_advance:.1f}°",
-                    "estimated_gain_hp": round(estimated_hp_gain, 2),
-                    "confidence": confidence,
-                    "coverage": coverage_total,
-                    "current_hp": round(hp_current, 1) if hp_current else None,
-                    "details": {
-                        "afr_error_pct": round(avg_afr_err, 2),
-                        "suggested_afr_change_pct": round(-lean_suggestion, 2),
-                        "advance_deg": round(timing_advance, 2),
-                        "knock_front": round(knock_front, 2),
-                        "knock_rear": round(knock_rear, 2),
+                    estimated_hp_gain = (
+                        (rpm / 1000) * (kpa / 100) * (lean_suggestion + timing_advance)
+                    )
+
+                opportunities.append(
+                    {
+                        "type": "Combined (AFR + Timing)",
+                        "rpm": rpm,
+                        "kpa": kpa,
+                        "suggestion": f"Lean by {lean_suggestion:.1f}% AND advance {timing_advance:.1f}°",
+                        "estimated_gain_hp": round(estimated_hp_gain, 2),
+                        "confidence": confidence,
+                        "coverage": coverage_total,
+                        "current_hp": round(hp_current, 1) if hp_current else None,
+                        "details": {
+                            "afr_error_pct": round(avg_afr_err, 2),
+                            "suggested_afr_change_pct": round(-lean_suggestion, 2),
+                            "advance_deg": round(timing_advance, 2),
+                            "knock_front": round(knock_front, 2),
+                            "knock_rear": round(knock_rear, 2),
+                        },
                     }
-                })
-    
+                )
+
     # Sort by estimated HP gain (highest first)
     opportunities.sort(key=lambda x: x["estimated_gain_hp"], reverse=True)
-    
+
     # Return top 10 opportunities
     return opportunities[:10]
 
@@ -1914,71 +1941,78 @@ def calculate_tune_confidence(
 ) -> Dict[str, Any]:
     """
     Calculate comprehensive tune confidence score based on coverage, consistency, and quality.
-    
+
     Returns a confidence report with:
     - Overall score (0-100%)
     - Letter grade (A/B/C/D)
     - Breakdown by area (idle, cruise, WOT)
     - Specific recommendations for improvement
-    
+
     Completes in <100ms using only pre-calculated data.
     """
     import time
+
     start_time = time.perf_counter()
-    
+
     log_decision(
         action="CONFIDENCE_SCORING_START",
         reason="Calculating tune confidence metrics",
     )
-    
+
     # Define operating regions
     regions = {
         "idle": {"rpm_range": (1000, 2000), "kpa_range": (20, 40)},
         "cruise": {"rpm_range": (2000, 3500), "kpa_range": (40, 70)},
         "wot": {"rpm_range": (3000, 6500), "kpa_range": (85, 105)},
     }
-    
+
     total_cells = len(RPM_BINS) * len(KPA_BINS)
-    
+
     # 1. COVERAGE ANALYSIS (40% of score)
     coverage_threshold = 10  # Minimum hits for "good" coverage
     well_covered_cells = 0
     coverage_by_region: Dict[str, Dict[str, int]] = {}
-    
+
     for region_name, bounds in regions.items():
         region_total = 0
         region_covered = 0
-        
+
         for ri, rpm in enumerate(RPM_BINS):
             for ki, kpa in enumerate(KPA_BINS):
-                if (bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1] and
-                    bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]):
+                if (
+                    bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1]
+                    and bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]
+                ):
                     region_total += 1
                     hits = coverage_f[ri][ki] + coverage_r[ri][ki]
                     if hits >= coverage_threshold:
                         region_covered += 1
-        
+
         coverage_by_region[region_name] = {
             "total": region_total,
             "covered": region_covered,
-            "percentage": (region_covered / region_total * 100) if region_total > 0 else 0
+            "percentage": (
+                (region_covered / region_total * 100) if region_total > 0 else 0
+            ),
         }
-    
+
     # Overall coverage
     for ri in range(len(RPM_BINS)):
         for ki in range(len(KPA_BINS)):
             hits = coverage_f[ri][ki] + coverage_r[ri][ki]
             if hits >= coverage_threshold:
                 well_covered_cells += 1
-    
+
     coverage_percentage = (well_covered_cells / total_cells) * 100
-    coverage_score = min(100, coverage_percentage * 1.2)  # Boost to make 85% coverage = 100 points
-    
+    coverage_score = min(
+        100, coverage_percentage * 1.2
+    )  # Boost to make 85% coverage = 100 points
+
     # 2. CONSISTENCY ANALYSIS (30% of score)
     # Lower MAD = better consistency
     mad_values: List[float] = []
     mad_by_region: Dict[str, List[float]] = {region: [] for region in regions}
-    
+
     for ri, rpm in enumerate(RPM_BINS):
         for ki, kpa in enumerate(KPA_BINS):
             # Combine front and rear MAD values
@@ -1986,15 +2020,17 @@ def calculate_tune_confidence(
                 mad_val = mad_grid[ri][ki]
                 if mad_val is not None and mad_val > 0:
                     mad_values.append(mad_val)
-                    
+
                     # Categorize by region
                     for region_name, bounds in regions.items():
-                        if (bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1] and
-                            bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]):
+                        if (
+                            bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1]
+                            and bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]
+                        ):
                             mad_by_region[region_name].append(mad_val)
-    
+
     avg_mad = sum(mad_values) / len(mad_values) if mad_values else 0.0
-    
+
     # Score consistency: MAD < 0.5 = excellent, MAD > 2.0 = poor
     if avg_mad < 0.5:
         consistency_score = 100
@@ -2004,11 +2040,11 @@ def calculate_tune_confidence(
         consistency_score = 70 - (avg_mad - 1.0) * 40  # 70 to 30
     else:
         consistency_score = max(0, 30 - (avg_mad - 2.0) * 15)
-    
+
     # 3. ANOMALY IMPACT (15% of score)
     anomaly_count = len(anomalies)
     high_severity_anomalies = sum(1 for a in anomalies if a.get("score", 0) > 3.0)
-    
+
     if anomaly_count == 0:
         anomaly_score = 100
     elif anomaly_count <= 2:
@@ -2017,14 +2053,14 @@ def calculate_tune_confidence(
         anomaly_score = 70
     else:
         anomaly_score = max(0, 70 - (anomaly_count - 5) * 10)
-    
+
     # Penalize high-severity anomalies more
     anomaly_score = max(0, anomaly_score - (high_severity_anomalies * 10))
-    
+
     # 4. CLAMPING ANALYSIS (15% of score)
     total_clamped = len(clamped_cells_f) + len(clamped_cells_r)
     clamp_percentage = (total_clamped / total_cells) * 100
-    
+
     if clamp_percentage == 0:
         clamp_score = 100
     elif clamp_percentage < 5:
@@ -2035,15 +2071,15 @@ def calculate_tune_confidence(
         clamp_score = 50
     else:
         clamp_score = max(0, 50 - (clamp_percentage - 20) * 2)
-    
+
     # CALCULATE OVERALL SCORE
     overall_score = (
-        coverage_score * 0.40 +
-        consistency_score * 0.30 +
-        anomaly_score * 0.15 +
-        clamp_score * 0.15
+        coverage_score * 0.40
+        + consistency_score * 0.30
+        + anomaly_score * 0.15
+        + clamp_score * 0.15
     )
-    
+
     # ASSIGN LETTER GRADE
     if overall_score >= 85:
         letter_grade = "A"
@@ -2057,11 +2093,11 @@ def calculate_tune_confidence(
     else:
         letter_grade = "D"
         grade_description = "Poor - Significant issues require attention"
-    
+
     # GENERATE RECOMMENDATIONS
     recommendations: List[str] = []
     weak_areas: List[str] = []
-    
+
     # Coverage recommendations
     if coverage_percentage < 60:
         recommendations.append(
@@ -2070,16 +2106,16 @@ def calculate_tune_confidence(
         for region_name, stats in coverage_by_region.items():
             if stats["percentage"] < 50:
                 weak_areas.append(f"{region_name} ({stats['percentage']:.0f}% covered)")
-        
+
         if weak_areas:
             recommendations.append(f"Focus data collection on: {', '.join(weak_areas)}")
-    
+
     # Consistency recommendations
     if avg_mad > 1.5:
         recommendations.append(
             f"Data consistency is poor (MAD={avg_mad:.2f}). Check for mechanical issues, sensor problems, or unstable operating conditions."
         )
-        
+
         # Identify regions with worst consistency
         worst_regions = []
         for region_name, mad_vals in mad_by_region.items():
@@ -2087,33 +2123,35 @@ def calculate_tune_confidence(
                 region_avg_mad = sum(mad_vals) / len(mad_vals)
                 if region_avg_mad > 2.0:
                     worst_regions.append(f"{region_name} (MAD={region_avg_mad:.2f})")
-        
+
         if worst_regions:
             recommendations.append(f"Worst consistency in: {', '.join(worst_regions)}")
-    
+
     # Clamping recommendations
     if clamp_percentage > 10:
         recommendations.append(
             f"{clamp_percentage:.1f}% of corrections hit clamp limits. Consider increasing clamp limits or investigating root causes."
         )
-    
+
     # Anomaly recommendations
     if high_severity_anomalies > 0:
         recommendations.append(
             f"{high_severity_anomalies} high-severity anomalies detected. Review Anomaly_Hypotheses.json for details."
         )
-    
+
     # Success message if score is high
     if overall_score >= 85 and not recommendations:
-        recommendations.append("Tune quality is excellent. No major improvements needed.")
-    
+        recommendations.append(
+            "Tune quality is excellent. No major improvements needed."
+        )
+
     # Calculate region-specific MAD averages
     region_mad_avg = {}
     for region_name, mad_vals in mad_by_region.items():
         region_mad_avg[region_name] = sum(mad_vals) / len(mad_vals) if mad_vals else 0.0
-    
+
     elapsed_ms = (time.perf_counter() - start_time) * 1000
-    
+
     log_decision(
         action="CONFIDENCE_SCORING_COMPLETE",
         reason=f"Confidence score calculated: {overall_score:.1f}% (Grade {letter_grade})",
@@ -2121,9 +2159,9 @@ def calculate_tune_confidence(
             "overall_score": round(overall_score, 1),
             "letter_grade": letter_grade,
             "elapsed_ms": round(elapsed_ms, 2),
-        }
+        },
     )
-    
+
     return {
         "overall_score": round(overall_score, 1),
         "letter_grade": letter_grade,
@@ -2137,7 +2175,7 @@ def calculate_tune_confidence(
                     "total_cells": total_cells,
                     "coverage_percentage": round(coverage_percentage, 1),
                     "threshold_hits": coverage_threshold,
-                }
+                },
             },
             "consistency": {
                 "score": round(consistency_score, 1),
@@ -2145,7 +2183,7 @@ def calculate_tune_confidence(
                 "details": {
                     "average_mad": round(avg_mad, 3),
                     "mad_samples": len(mad_values),
-                }
+                },
             },
             "anomalies": {
                 "score": round(anomaly_score, 1),
@@ -2153,7 +2191,7 @@ def calculate_tune_confidence(
                 "details": {
                     "total_anomalies": anomaly_count,
                     "high_severity": high_severity_anomalies,
-                }
+                },
             },
             "clamping": {
                 "score": round(clamp_score, 1),
@@ -2161,8 +2199,8 @@ def calculate_tune_confidence(
                 "details": {
                     "clamped_cells": total_clamped,
                     "clamp_percentage": round(clamp_percentage, 1),
-                }
-            }
+                },
+            },
         },
         "region_breakdown": {
             region_name: {
@@ -2191,8 +2229,8 @@ def calculate_tune_confidence(
                 "B": "70-85% - Good",
                 "C": "50-70% - Fair",
                 "D": "<50% - Poor",
-            }
-        }
+            },
+        },
     }
 
 
@@ -2206,7 +2244,7 @@ def write_diagnostics(
     lines: List[str] = []
     lines.append("Dyno AI Tuner v1.2 Diagnostics")
     lines.append("")
-    
+
     # Add confidence report if provided
     if confidence_report:
         lines.append("=" * 60)
@@ -2214,36 +2252,44 @@ def write_diagnostics(
         lines.append("=" * 60)
         lines.append("")
         lines.append(f"Overall Score: {confidence_report['overall_score']}%")
-        lines.append(f"Letter Grade: {confidence_report['letter_grade']} - {confidence_report['grade_description']}")
+        lines.append(
+            f"Letter Grade: {confidence_report['letter_grade']} - {confidence_report['grade_description']}"
+        )
         lines.append("")
-        
+
         lines.append("Component Scores:")
-        for component, data in confidence_report['component_scores'].items():
-            lines.append(f"  {component.upper()}: {data['score']:.1f}% (weight: {data['weight']})")
-            for key, value in data['details'].items():
+        for component, data in confidence_report["component_scores"].items():
+            lines.append(
+                f"  {component.upper()}: {data['score']:.1f}% (weight: {data['weight']})"
+            )
+            for key, value in data["details"].items():
                 lines.append(f"    - {key}: {value}")
         lines.append("")
-        
+
         lines.append("Region Breakdown:")
-        for region, data in confidence_report['region_breakdown'].items():
+        for region, data in confidence_report["region_breakdown"].items():
             lines.append(f"  {region.upper()}:")
-            lines.append(f"    Coverage: {data['coverage_percentage']:.1f}% ({data['cells_covered']}/{data['cells_total']} cells)")
+            lines.append(
+                f"    Coverage: {data['coverage_percentage']:.1f}% ({data['cells_covered']}/{data['cells_total']} cells)"
+            )
             lines.append(f"    Avg MAD: {data['average_mad']:.3f}")
         lines.append("")
-        
-        if confidence_report['recommendations']:
+
+        if confidence_report["recommendations"]:
             lines.append("RECOMMENDATIONS:")
-            for i, rec in enumerate(confidence_report['recommendations'], 1):
+            for i, rec in enumerate(confidence_report["recommendations"], 1):
                 lines.append(f"  {i}. {rec}")
             lines.append("")
-        
-        if confidence_report['weak_areas']:
+
+        if confidence_report["weak_areas"]:
             lines.append("WEAK AREAS NEEDING MORE DATA:")
-            for area in confidence_report['weak_areas']:
+            for area in confidence_report["weak_areas"]:
                 lines.append(f"  - {area}")
             lines.append("")
-        
-        lines.append(f"Calculation time: {confidence_report['performance']['calculation_time_ms']:.2f} ms")
+
+        lines.append(
+            f"Calculation time: {confidence_report['performance']['calculation_time_ms']:.2f} ms"
+        )
         lines.append("")
         lines.append("=" * 60)
         lines.append("")
@@ -2314,7 +2360,7 @@ def write_diagnostics(
     Path(safe_outdir, "Anomaly_Hypotheses.json").write_text(
         json.dumps(diagnostic_output, indent=2), encoding="utf-8"
     )
-    
+
     # Write confidence report separately if provided
     if confidence_report:
         Path(safe_outdir, "ConfidenceReport.json").write_text(
@@ -2741,17 +2787,21 @@ def main() -> int:
         # Calculate tune confidence score
         print("PROGRESS:96:Calculating tune confidence score...")
         sys.stdout.flush()
-        
+
         # Extract MAD grids from diagnostics
-        mad_grid_f = diag_f.get("per_bin_stats", {}).get("mad", [[None for _ in KPA_BINS] for _ in RPM_BINS])
-        mad_grid_r = diag_r.get("per_bin_stats", {}).get("mad", [[None for _ in KPA_BINS] for _ in RPM_BINS])
-        
+        mad_grid_f = diag_f.get("per_bin_stats", {}).get(
+            "mad", [[None for _ in KPA_BINS] for _ in RPM_BINS]
+        )
+        mad_grid_r = diag_r.get("per_bin_stats", {}).get(
+            "mad", [[None for _ in KPA_BINS] for _ in RPM_BINS]
+        )
+
         # For clamped cells, we need to split by cylinder (we only have combined)
         # Since we don't track separately, we'll split them evenly for the confidence calc
         half_clamped = len(clamped_cells_combined) // 2
         clamped_cells_f = clamped_cells_combined[:half_clamped]
         clamped_cells_r = clamped_cells_combined[half_clamped:]
-        
+
         confidence_report = calculate_tune_confidence(
             coverage_f=cov_f,
             coverage_r=cov_r,
@@ -2761,9 +2811,11 @@ def main() -> int:
             clamped_cells_f=clamped_cells_f,
             clamped_cells_r=clamped_cells_r,
         )
-        
-        print(f"[OK] Tune Confidence: {confidence_report['overall_score']}% (Grade {confidence_report['letter_grade']})")
-        
+
+        print(
+            f"[OK] Tune Confidence: {confidence_report['overall_score']}% (Grade {confidence_report['letter_grade']})"
+        )
+
         correction_diagnostics = {"front": diag_f, "rear": diag_r}
         write_diagnostics(outdir, anomalies, correction_diagnostics, confidence_report)
 
@@ -2784,13 +2836,15 @@ def main() -> int:
             knock_r=knock_r,
             hp_grid=hp_combined,
         )
-        
+
         # Write power opportunities to JSON
         power_output_path = outdir / "PowerOpportunities.json"
         power_output = {
             "summary": {
                 "total_opportunities": len(power_opportunities),
-                "total_estimated_gain_hp": round(sum(opp["estimated_gain_hp"] for opp in power_opportunities), 2),
+                "total_estimated_gain_hp": round(
+                    sum(opp["estimated_gain_hp"] for opp in power_opportunities), 2
+                ),
                 "analysis_date": io_contracts.utc_now_iso(),
             },
             "opportunities": power_opportunities,
@@ -2799,11 +2853,15 @@ def main() -> int:
                 "Test changes incrementally and monitor for knock",
                 "Verify AFR targets are appropriate for your fuel and application",
                 "Maximum suggested changes: ±3% AFR, +2° timing per cell",
-            ]
+            ],
         }
-        power_output_path.write_text(json.dumps(power_output, indent=2), encoding="utf-8")
-        print(f"[OK] Found {len(power_opportunities)} power opportunities, "
-              f"estimated total gain: {power_output['summary']['total_estimated_gain_hp']:.2f} HP")
+        power_output_path.write_text(
+            json.dumps(power_output, indent=2), encoding="utf-8"
+        )
+        print(
+            f"[OK] Found {len(power_opportunities)} power opportunities, "
+            f"estimated total gain: {power_output['summary']['total_estimated_gain_hp']:.2f} HP"
+        )
 
         stats = {
             "rows_read": len(recs),
@@ -2950,27 +3008,27 @@ def main() -> int:
             sys.stdout.flush()
             try:
                 from report_generator import generate_pdf_report
-                
+
                 # Prepare run data
                 run_data = {
-                    'run_id': run_id,
-                    'date': io_contracts.utc_now_iso(),
-                    'operator': args.report_operator or 'N/A',
-                    'vehicle': args.report_vehicle or 'N/A',
+                    "run_id": run_id,
+                    "date": io_contracts.utc_now_iso(),
+                    "operator": args.report_operator or "N/A",
+                    "vehicle": args.report_vehicle or "N/A",
                 }
-                
+
                 # Prepare shop info
                 shop_info = None
                 if args.report_shop_name:
                     shop_info = {
-                        'name': args.report_shop_name,
-                        'address': '',
-                        'phone': '',
-                        'email': '',
-                        'website': '',
-                        'logo_path': None,
+                        "name": args.report_shop_name,
+                        "address": "",
+                        "phone": "",
+                        "email": "",
+                        "website": "",
+                        "logo_path": None,
                     }
-                
+
                 # Generate PDF
                 pdf_path = outdir / "DynoAI_Report.pdf"
                 generate_pdf_report(
@@ -2987,12 +3045,12 @@ def main() -> int:
                     shop_info=shop_info,
                     disclaimer=None,  # Use default
                 )
-                
+
                 print(f"[OK] PDF report generated: {pdf_path}")
-                
+
                 # Add PDF to outputs manifest
                 extra_specs.append(("DynoAI_Report.pdf", "pdf", "tuning_report", False))
-                
+
             except ImportError as e:
                 print(f"[WARN] PDF report generation not available: {e}")
                 print("[WARN] Install required packages: pip install reportlab qrcode")
