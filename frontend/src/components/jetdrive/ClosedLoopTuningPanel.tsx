@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap, ChevronDown } from 'lucide-react';
+import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap, ChevronDown, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '../ui/button';
@@ -63,6 +63,43 @@ export function ClosedLoopTuningPanel({
     const [isStarting, setIsStarting] = useState(false);
     const [showErrorDetails, setShowErrorDetails] = useState(false);
     const [lastConfig, setLastConfig] = useState<any>(null);
+    const [isResumed, setIsResumed] = useState(false);
+
+    // Session recovery from localStorage
+    useEffect(() => {
+        const savedSession = localStorage.getItem('dynoai_active_tuning_session');
+        if (savedSession) {
+            try {
+                const { sessionId: savedId, startTime } = JSON.parse(savedSession);
+                // Only resume if session was started less than 1 hour ago
+                const hourAgo = Date.now() - 3600000;
+                if (startTime > hourAgo) {
+                    setSessionId(savedId);
+                    setIsResumed(true);
+                    toast.info('Resumed monitoring session', {
+                        description: `Session from ${new Date(startTime).toLocaleTimeString()}`,
+                    });
+                } else {
+                    localStorage.removeItem('dynoai_active_tuning_session');
+                }
+            } catch (e) {
+                localStorage.removeItem('dynoai_active_tuning_session');
+            }
+        }
+    }, []);
+
+    // Save active session to localStorage
+    useEffect(() => {
+        if (sessionId && status?.status === 'running') {
+            localStorage.setItem('dynoai_active_tuning_session', JSON.stringify({
+                sessionId,
+                startTime: Date.now()
+            }));
+        } else if (sessionId && (status?.status === 'converged' || status?.status === 'failed' || status?.status === 'stopped' || status?.status === 'max_iterations')) {
+            // Clear localStorage when session completes
+            localStorage.removeItem('dynoai_active_tuning_session');
+        }
+    }, [sessionId, status?.status]);
 
     // Poll session status
     const { data: status, refetch } = useQuery<SessionStatus>({
@@ -126,6 +163,35 @@ export function ClosedLoopTuningPanel({
         onSuccess: () => {
             toast.info('Tuning session stopped');
             refetch();
+        },
+    });
+
+    // Health check mutation
+    const healthCheck = useMutation({
+        mutationFn: async () => {
+            const res = await fetch(`${API_BASE}/health`);
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+        onSuccess: (data) => {
+            if (data.healthy) {
+                toast.success('All systems operational', {
+                    description: 'Virtual tuning system is healthy',
+                });
+            } else {
+                const failedComponents = Object.entries(data.components)
+                    .filter(([_, status]) => status !== 'ok')
+                    .map(([name, _]) => name)
+                    .join(', ');
+                toast.warning('Some components have issues', {
+                    description: `Failed: ${failedComponents}`,
+                });
+            }
+        },
+        onError: (error) => {
+            toast.error('Health check failed', {
+                description: error instanceof Error ? error.message : String(error),
+            });
         },
     });
 
@@ -226,15 +292,49 @@ export function ClosedLoopTuningPanel({
                             </div>
                         </div>
 
-                        <Button onClick={handleStart} disabled={isStarting} className="w-full bg-cyan-600 hover:bg-cyan-700">
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Closed-Loop Tuning
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={handleStart} disabled={isStarting} className="flex-1 bg-cyan-600 hover:bg-cyan-700">
+                                <Play className="h-4 w-4 mr-2" />
+                                Start Closed-Loop Tuning
+                            </Button>
+                            <Button 
+                                onClick={() => healthCheck.mutate()} 
+                                variant="outline" 
+                                size="default"
+                                disabled={healthCheck.isPending}
+                            >
+                                <Activity className="h-4 w-4 mr-2" />
+                                Test Health
+                            </Button>
+                        </div>
                     </>
                 )}
 
                 {sessionId && status && (
                     <>
+                        {/* Resumed Session Banner */}
+                        {isResumed && (
+                            <Alert className="bg-blue-500/10 border-blue-500/30">
+                                <AlertDescription className="flex items-center justify-between">
+                                    <span>
+                                        <strong>Session Resumed</strong>
+                                        <br />
+                                        Monitoring session from previous page visit
+                                    </span>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => {
+                                            setIsResumed(false);
+                                            localStorage.removeItem('dynoai_active_tuning_session');
+                                        }}
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                        
                         {/* Progress Bar */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
