@@ -23,6 +23,8 @@ import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDri
 import { AudioCapturePanel } from './AudioCapturePanel';
 import type { RecordedAudio } from '../../hooks/useAudioCapture';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { cn } from '../../lib/utils';
 
 // Infer units from channel name or value
 function inferUnits(name: string, value: number): string {
@@ -102,6 +104,18 @@ export function JetDriveLiveDashboard({
     const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('all');
     const [chartChannel, setChartChannel] = useState<string>('');
     const [audioEnabled, setAudioEnabled] = useState(true);
+
+    // Health monitoring
+    const { data: health } = useQuery({
+        queryKey: ['jetdrive-health', apiUrl],
+        queryFn: async () => {
+            const res = await fetch(`${apiUrl}/hardware/health`);
+            if (!res.ok) throw new Error('Health check failed');
+            return res.json();
+        },
+        refetchInterval: 5000, // Check every 5 seconds
+        retry: false,
+    });
 
     const {
         isConnected,
@@ -200,10 +214,18 @@ export function JetDriveLiveDashboard({
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <div className={cn(
+                            "w-3 h-3 rounded-full",
+                            isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                        )} />
                         <span className="font-medium">
                             {isConnected ? providerName || 'Connected' : 'Disconnected'}
                         </span>
+                        {health && health.healthy && (
+                            <span className="text-xs text-muted-foreground">
+                                ({health.latency_ms?.toFixed(0)}ms)
+                            </span>
+                        )}
                     </div>
                     {isConnected && (
                         <Badge variant="secondary">
@@ -214,6 +236,11 @@ export function JetDriveLiveDashboard({
                         <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                             <Radio className="w-3 h-3 mr-1 animate-pulse" />
                             LIVE
+                        </Badge>
+                    )}
+                    {health?.simulated && (
+                        <Badge variant="outline" className="text-yellow-500 border-yellow-500/30">
+                            SIMULATED
                         </Badge>
                     )}
                 </div>
