@@ -73,25 +73,25 @@ export function getChannelConfig(channelName: string) {
     
     // Try partial match for common patterns
     if (lowerName.includes('rpm')) {
-        return JETDRIVE_CHANNEL_CONFIG['RPM'];
+        return JETDRIVE_CHANNEL_CONFIG['RPM'] || JETDRIVE_CHANNEL_CONFIG['Digital RPM 1'];
     }
     if (lowerName.includes('afr') || lowerName.includes('air/fuel')) {
-        return JETDRIVE_CHANNEL_CONFIG['AFR'];
+        return JETDRIVE_CHANNEL_CONFIG['AFR'] || JETDRIVE_CHANNEL_CONFIG['Air/Fuel Ratio 1'];
     }
     if (lowerName.includes('force') || lowerName.includes('load')) {
         return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'];
     }
     if (lowerName.includes('map') || lowerName.includes('manifold')) {
-        return JETDRIVE_CHANNEL_CONFIG['MAP'];
+        return JETDRIVE_CHANNEL_CONFIG['MAP'] || JETDRIVE_CHANNEL_CONFIG['MAP kPa'];
     }
     if (lowerName.includes('tps') || lowerName.includes('throttle')) {
         return JETDRIVE_CHANNEL_CONFIG['TPS'];
     }
     if (lowerName.includes('horsepower') || lowerName.includes('hp')) {
-        return JETDRIVE_CHANNEL_CONFIG['HP'];
+        return JETDRIVE_CHANNEL_CONFIG['HP'] || JETDRIVE_CHANNEL_CONFIG['Horsepower'];
     }
     if (lowerName.includes('torque') || lowerName.includes('tq')) {
-        return JETDRIVE_CHANNEL_CONFIG['TQ'];
+        return JETDRIVE_CHANNEL_CONFIG['TQ'] || JETDRIVE_CHANNEL_CONFIG['Torque'];
     }
     
     // Default fallback

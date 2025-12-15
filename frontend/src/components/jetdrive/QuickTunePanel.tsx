@@ -215,7 +215,7 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
                     onChange={(e) => 
                       setAutoDetectConfig(prev => ({ 
                         ...prev, 
-                        rpmThreshold: parseInt(e.target.value) || 2000
+                        rpmThreshold: parseInt(e.target.value, 10) || 2000
                       }))
                     }
                     className="h-8 text-sm"
@@ -229,7 +229,7 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
                     onChange={(e) => 
                       setAutoDetectConfig(prev => ({ 
                         ...prev, 
-                        cooldownPeriod: parseInt(e.target.value) || 5
+                        cooldownPeriod: parseInt(e.target.value, 10) || 5
                       }))
                     }
                     className="h-8 text-sm"
