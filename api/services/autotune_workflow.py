@@ -362,7 +362,7 @@ class AutoTuneWorkflow:
 
         Uses the DynoAI standard formula:
         - AFR error (points) = measured AFR - target AFR
-        - VE correction (%) = -AFR_error * 7%  (7% per AFR point)
+        - VE correction (%) = +AFR_error * 7%  (7% per AFR point)
 
         Requires log to be imported first.
         """
@@ -438,9 +438,10 @@ class AutoTuneWorkflow:
                     afr_error_matrix[i, j] = afr_error
 
                     # VE correction using 7% per AFR point formula
-                    # Lean (+ error) -> need more fuel -> increase VE (- correction inverted)
-                    # Rich (- error) -> need less fuel -> decrease VE (+ correction inverted)
-                    ve_delta_pct = -afr_error * self.VE_PCT_PER_AFR_POINT
+                    # afr_error = measured - target (positive = lean, negative = rich)
+                    # Lean (+error) -> need more fuel -> INCREASE VE -> positive VE delta %
+                    # Rich (-error) -> need less fuel -> DECREASE VE -> negative VE delta %
+                    ve_delta_pct = afr_error * self.VE_PCT_PER_AFR_POINT
                     ve_delta_matrix[i, j] = ve_delta_pct
 
         # Create DataFrames with labeled axes

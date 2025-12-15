@@ -351,8 +351,10 @@ def analyze_dyno_data(df: pd.DataFrame, config: TuneConfig = None) -> AnalysisRe
     afr_error = mean_afr - target_afr  # positive = lean, negative = rich
 
     # VE correction: 7% per AFR point (DynoAI standard)
-    # Lean (+error) → need more fuel → increase VE → negative correction applied inverted
-    ve_delta_pct = -afr_error * config.ve_per_afr_point
+    # afr_error = measured - target (positive = lean, negative = rich)
+    # Lean (+error) → need more fuel → INCREASE VE → positive VE delta %
+    # Rich (-error) → need less fuel → DECREASE VE → negative VE delta %
+    ve_delta_pct = afr_error * config.ve_per_afr_point
     ve_correction = 1 + (ve_delta_pct / 100)
 
     # Clamp corrections

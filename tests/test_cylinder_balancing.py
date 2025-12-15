@@ -11,15 +11,12 @@ Tests cover:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from unittest.mock import mock_open, patch
 
 import pytest
 
 from cylinder_balancing import (
-    DEFAULT_AFR_THRESHOLD,
-    DEFAULT_MAX_CORRECTION_PCT,
-    MAX_ABSOLUTE_CORRECTION,
     BalanceMode,
     CylinderData,
     ImbalanceCell,
@@ -44,7 +41,7 @@ def create_mock_records(
     front_afr_bias: float = 0.0,  # Positive = front leaner than rear
     rear_afr_bias: float = 0.0,  # Positive = rear leaner than front
     base_afr: float = 13.8,
-) -> List[Dict[str, Optional[float]]]:
+) -> List[Dict[str, float]]:
     """Create mock dyno records with controllable AFR bias."""
     records = []
 
@@ -272,11 +269,11 @@ class TestCorrectionCalculation:
         """Test AFR error to VE correction conversion."""
         # Lean (+1.0 AFR) needs more fuel = +VE
         correction = _afr_error_to_ve_correction(1.0)
-        assert correction == pytest.approx(-0.07, abs=0.01)  # Inverted sign
+        assert correction == pytest.approx(0.07, abs=0.01)
 
         # Rich (-1.0 AFR) needs less fuel = -VE
         correction = _afr_error_to_ve_correction(-1.0)
-        assert correction == pytest.approx(0.07, abs=0.01)
+        assert correction == pytest.approx(-0.07, abs=0.01)
 
         # No error = no correction
         correction = _afr_error_to_ve_correction(0.0)
@@ -537,7 +534,7 @@ class TestProcessCylinderBalancing:
         # Create severe imbalance
         records = create_mock_records(100, front_afr_bias=0.0, rear_afr_bias=3.0)
 
-        result = process_cylinder_balancing(
+        _ = process_cylinder_balancing(
             records=records,
             output_dir="test_output",
             mode="equalize",
