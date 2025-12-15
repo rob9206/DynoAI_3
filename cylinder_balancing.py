@@ -332,10 +332,6 @@ def calculate_correction_factors(
         if afr_target == 0.0:
             afr_target = 14.0  # Fallback to stoichiometric for gasoline
 
-        # Calculate error from target for each cylinder
-        front_error = cell.front_afr - afr_target  # Positive = too lean
-        rear_error = cell.rear_afr - afr_target  # Positive = too lean
-
         if mode == BalanceMode.EQUALIZE:
             # Balance both toward the average
             avg_afr = (cell.front_afr + cell.rear_afr) / 2.0
@@ -377,8 +373,10 @@ def _afr_error_to_ve_correction(afr_error: float) -> float:
     Returns:
         VE correction as percentage (0.07 = +7%)
     """
-    # Invert sign: lean needs more VE, rich needs less VE
-    ve_correction = -afr_error * 0.07
+    # afr_error = measured - target (positive = lean, negative = rich)
+    # Lean (+error) -> need more fuel -> increase VE (+)
+    # Rich (-error) -> need less fuel -> decrease VE (-)
+    ve_correction = afr_error * 0.07
     return ve_correction
 
 
