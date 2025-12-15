@@ -1048,20 +1048,10 @@ def print_startup_banner():
     app.run(debug=debug_flag, host="0.0.0.0", port=5001, threaded=True)
 
 
-# Register error handlers
-def _ensure_error_handlers_registered():
-    """Register error handlers once per process."""
-    if getattr(app, "_error_handlers_registered", False):
-        return
-    register_error_handlers(app)
-    app._error_handlers_registered = True
-
-
-@app.before_first_request
-def _register_error_handlers_before_first_request():
-    _ensure_error_handlers_registered()
+# Register error handlers at app initialization
+# (done once here rather than in deprecated @before_first_request)
+register_error_handlers(app)
 
 
 if __name__ == "__main__":
-    _ensure_error_handlers_registered()
     print_startup_banner()
