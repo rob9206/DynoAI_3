@@ -31,8 +31,8 @@ from typing import Any
 from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
-from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 from api.rate_limit import get_limiter
+from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
 
@@ -314,9 +314,10 @@ def analyze_run():
                 400,
             )
 
-        from api.services.dyno_simulator import get_simulator, SimState
         import csv as csv_module
         from datetime import datetime
+
+        from api.services.dyno_simulator import SimState, get_simulator
 
         sim = get_simulator()
         sim_state = sim.get_state()
@@ -1410,7 +1411,11 @@ def discover_channels():
             if "rpm" in name_lower or (value > 500 and value < 15000):
                 channel_info["suggested_units"] = "rpm"
                 channel_info["suggested_type"] = "Engine Speed"
-            elif "afr" in name_lower or "air/fuel" in name_lower or (value > 9 and value < 20):
+            elif (
+                "afr" in name_lower
+                or "air/fuel" in name_lower
+                or (value > 9 and value < 20)
+            ):
                 channel_info["suggested_units"] = ":1"
                 channel_info["suggested_type"] = "Air/Fuel Ratio"
             elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
@@ -1419,10 +1424,16 @@ def discover_channels():
             elif "temp" in name_lower or (value > 10 and value < 150):
                 channel_info["suggested_units"] = "°C or °F"
                 channel_info["suggested_type"] = "Temperature"
-            elif "press" in name_lower or "kpa" in name_lower or (value > 85 and value < 115):
+            elif (
+                "press" in name_lower
+                or "kpa" in name_lower
+                or (value > 85 and value < 115)
+            ):
                 channel_info["suggested_units"] = "kPa"
                 channel_info["suggested_type"] = "Pressure"
-            elif "humid" in name_lower or (value >= 0 and value <= 100 and value != int(value)):
+            elif "humid" in name_lower or (
+                value >= 0 and value <= 100 and value != int(value)
+            ):
                 channel_info["suggested_units"] = "%"
                 channel_info["suggested_type"] = "Humidity"
             elif "force" in name_lower or "load" in name_lower:
@@ -1502,9 +1513,7 @@ def check_hardware_health():
     except Exception as e:
         logger.exception("Health check failed")
         return (
-            jsonify(
-                {"healthy": False, "connected": False, "error": str(e)}
-            ),
+            jsonify({"healthy": False, "connected": False, "error": str(e)}),
             503,
         )
 
@@ -1589,8 +1598,8 @@ def start_simulator():
         if ecu_config and ecu_config.get("enabled", False):
             from api.services.virtual_ecu import (
                 VirtualECU,
-                create_baseline_ve_table,
                 create_afr_target_table,
+                create_baseline_ve_table,
                 create_intentionally_wrong_ve_table,
             )
 
@@ -1763,7 +1772,7 @@ def trigger_pull():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator, SimState
+    from api.services.dyno_simulator import SimState, get_simulator
 
     sim = get_simulator()
     current_state = sim.get_state()
@@ -1796,7 +1805,7 @@ def get_pull_data():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator, SimState
+    from api.services.dyno_simulator import SimState, get_simulator
 
     sim = get_simulator()
     sim_state = sim.get_state()
@@ -1864,9 +1873,10 @@ def save_simulator_pull():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator
     import csv
     from datetime import datetime
+
+    from api.services.dyno_simulator import get_simulator
 
     sim = get_simulator()
     data = sim.get_pull_data()
