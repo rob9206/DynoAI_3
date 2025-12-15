@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -150,7 +151,7 @@ class TuningSession:
 
     # Thread safety for progress updates
     _progress_lock: Any = field(
-        default_factory=lambda: __import__("threading").Lock(),
+        default_factory=threading.Lock,
         init=False,
         repr=False,
     )

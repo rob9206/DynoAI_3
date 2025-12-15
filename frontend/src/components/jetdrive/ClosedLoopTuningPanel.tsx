@@ -23,6 +23,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 
 const API_BASE = 'http://127.0.0.1:5001/api/virtual-tune';
 
+// Session recovery constants
+const HOUR_IN_MS = 60 * 60 * 1000;
+const SESSION_STORAGE_KEY = 'dynoai_active_tuning_session';
+
 interface IterationData {
     iteration: number;
     max_afr_error: number;
@@ -67,12 +71,12 @@ export function ClosedLoopTuningPanel({
 
     // Session recovery from localStorage
     useEffect(() => {
-        const savedSession = localStorage.getItem('dynoai_active_tuning_session');
+        const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
         if (savedSession) {
             try {
                 const { sessionId: savedId, startTime } = JSON.parse(savedSession);
                 // Only resume if session was started less than 1 hour ago
-                const hourAgo = Date.now() - 3600000;
+                const hourAgo = Date.now() - HOUR_IN_MS;
                 if (startTime > hourAgo) {
                     setSessionId(savedId);
                     setIsResumed(true);
@@ -80,10 +84,10 @@ export function ClosedLoopTuningPanel({
                         description: `Session from ${new Date(startTime).toLocaleTimeString()}`,
                     });
                 } else {
-                    localStorage.removeItem('dynoai_active_tuning_session');
+                    localStorage.removeItem(SESSION_STORAGE_KEY);
                 }
             } catch (e) {
-                localStorage.removeItem('dynoai_active_tuning_session');
+                localStorage.removeItem(SESSION_STORAGE_KEY);
             }
         }
     }, []);
@@ -91,13 +95,13 @@ export function ClosedLoopTuningPanel({
     // Save active session to localStorage
     useEffect(() => {
         if (sessionId && status?.status === 'running') {
-            localStorage.setItem('dynoai_active_tuning_session', JSON.stringify({
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
                 sessionId,
                 startTime: Date.now()
             }));
         } else if (sessionId && (status?.status === 'converged' || status?.status === 'failed' || status?.status === 'stopped' || status?.status === 'max_iterations')) {
             // Clear localStorage when session completes
-            localStorage.removeItem('dynoai_active_tuning_session');
+            localStorage.removeItem(SESSION_STORAGE_KEY);
         }
     }, [sessionId, status?.status]);
 
@@ -222,11 +226,22 @@ export function ClosedLoopTuningPanel({
     const isComplete = status?.status === 'converged' || status?.status === 'max_iterations';
     const isFailed = status?.status === 'failed';
 
-    // Calculate progress - use sub-iteration progress when available
-    const progressPct = status
-        ? status.current_iteration === 0 && status.status === 'running'
-            ? status.progress_pct || 5  // Use sub-iteration progress or 5% to indicate activity
-            : ((status.current_iteration + (status.progress_pct || 0) / 100) / status.max_iterations) * 100
+    // Helper function to calculate overall progress percentage
+    const calculateProgressPercentage = (status: SessionStatus | null | undefined): number => {
+        if (!status) return 0;
+        
+        // First iteration: use sub-iteration progress
+        if (status.current_iteration === 0 && status.status === 'running') {
+            return status.progress_pct || 5;  // Show 5% minimum to indicate activity
+        }
+        
+        // Subsequent iterations: combine iteration count with sub-progress
+        const completedProgress = status.current_iteration / status.max_iterations;
+        const currentProgress = (status.progress_pct || 0) / 100 / status.max_iterations;
+        return (completedProgress + currentProgress) * 100;
+    };
+
+    const progressPct = calculateProgressPercentage(status);
         : 0;
 
     // Get latest iteration data
@@ -326,7 +341,7 @@ export function ClosedLoopTuningPanel({
                                         size="sm" 
                                         onClick={() => {
                                             setIsResumed(false);
-                                            localStorage.removeItem('dynoai_active_tuning_session');
+                                            localStorage.removeItem(SESSION_STORAGE_KEY);
                                         }}
                                     >
                                         Dismiss
