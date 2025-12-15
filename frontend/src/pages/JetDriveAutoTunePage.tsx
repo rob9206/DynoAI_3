@@ -9,7 +9,7 @@
  * - Hardware diagnostics and connection monitoring
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     Gauge, Play, FileDown, Upload, RefreshCw,
@@ -596,7 +596,7 @@ export default function JetDriveAutoTunePage() {
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
 
-    // Fetch available runs
+    // Fetch available runs - optimized with staleTime to reduce unnecessary refetches
     const { data: statusData, refetch: refetchStatus } = useQuery({
         queryKey: ['jetdrive-status'],
         queryFn: async () => {
@@ -604,9 +604,10 @@ export default function JetDriveAutoTunePage() {
             return res.json();
         },
         refetchInterval: 10000,
+        staleTime: 5000, // Consider data fresh for 5 seconds
     });
 
-    // Fetch selected run details
+    // Fetch selected run details - cached for performance
     const { data: runData, isLoading: runLoading } = useQuery({
         queryKey: ['jetdrive-run', selectedRun],
         queryFn: async () => {
@@ -615,6 +616,8 @@ export default function JetDriveAutoTunePage() {
             return res.json();
         },
         enabled: !!selectedRun,
+        staleTime: 30000, // Cache run data for 30 seconds
+        gcTime: 300000, // Keep in cache for 5 minutes
     });
 
     // Run analysis mutation
@@ -647,15 +650,20 @@ export default function JetDriveAutoTunePage() {
         },
     });
 
-    // Fetch PVV content
-    const fetchPvv = async (rid: string) => {
-        const res = await fetch(`${API_BASE}/run/${rid}/pvv`);
-        const data = await res.json();
-        setPvvContent(data.content);
-    };
+    // Fetch PVV content - memoized to prevent recreation on every render
+    const fetchPvv = useCallback(async (rid: string) => {
+        try {
+            const res = await fetch(`${API_BASE}/run/${rid}/pvv`);
+            const data = await res.json();
+            setPvvContent(data.content);
+        } catch (error) {
+            console.error('Failed to fetch PVV:', error);
+            toast.error('Failed to fetch PVV content');
+        }
+    }, []);
 
-    // Download PVV file
-    const downloadPvv = () => {
+    // Download PVV file - memoized
+    const downloadPvv = useCallback(() => {
         if (!pvvContent || !selectedRun) return;
         const blob = new Blob([pvvContent], { type: 'application/xml' });
         const url = URL.createObjectURL(blob);
@@ -664,18 +672,22 @@ export default function JetDriveAutoTunePage() {
         a.download = `VE_Correction_${selectedRun}.pvv`;
         a.click();
         URL.revokeObjectURL(url);
-    };
+    }, [pvvContent, selectedRun]);
 
+    // Fetch PVV when selectedRun changes
     useEffect(() => {
         if (selectedRun) {
             fetchPvv(selectedRun);
+        } else {
+            setPvvContent(''); // Clear PVV content when no run selected
         }
-    }, [selectedRun]);
+    }, [selectedRun, fetchPvv]);
 
-    const runs: RunInfo[] = statusData?.runs || [];
-    const analysis = runData?.manifest?.analysis;
-    const grid = runData?.manifest?.grid;
-    const veGrid = runData?.ve_grid || [];
+    // Memoize derived data to prevent unnecessary recalculations
+    const runs = useMemo(() => statusData?.runs || [], [statusData?.runs]);
+    const analysis = useMemo(() => runData?.manifest?.analysis, [runData?.manifest?.analysis]);
+    const grid = useMemo(() => runData?.manifest?.grid, [runData?.manifest?.grid]);
+    const veGrid = useMemo(() => runData?.ve_grid || [], [runData?.ve_grid]);
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 md:p-6">

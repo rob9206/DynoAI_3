@@ -555,7 +555,7 @@ def download_file(run_id, filename):
 @rate_limit("120/minute")  # Read-only - permissive
 def get_ve_data(run_id):
     """
-    Get VE table data for 3D visualization
+    Get VE table data for 3D visualization - WITH CACHING
 
     Args:
         run_id: Unique run identifier
@@ -563,8 +563,19 @@ def get_ve_data(run_id):
     Returns:
         JSON with VE data in format expected by frontend
     """
+    from api.services.cache import get_ve_data_cache
+
     try:
         run_id = secure_filename(run_id)
+        cache = get_ve_data_cache()
+        cache_key = f"ve_data:{run_id}"
+
+        # Try to get from cache
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            cached_data["cached"] = True
+            return jsonify(cached_data), 200
+
         ve_delta_file = None
 
         # Try Jetstream run manager first
@@ -573,14 +584,9 @@ def get_ve_data(run_id):
 
             manager = get_run_manager()
             run_output_dir = manager.get_run_output_dir(run_id)
-            print(f"[DEBUG] Jetstream run output dir: {run_output_dir}")
             if run_output_dir and run_output_dir.exists():
                 ve_delta_file = run_output_dir / "VE_Correction_Delta_DYNO.csv"
-                print(
-                    f"[DEBUG] VE file path: {ve_delta_file}, exists: {ve_delta_file.exists()}"
-                )
-        except Exception as e:
-            print(f"[DEBUG] Exception in Jetstream path: {e}")
+        except Exception:
             pass
 
         # Fall back to old outputs folder if not found
@@ -620,18 +626,19 @@ def get_ve_data(run_id):
             for i in range(len(rpm_points))
         ]
 
-        return (
-            jsonify(
-                {
-                    "rpm": rpm_points,
-                    "load": load_points,
-                    "corrections": corrections,
-                    "before": before_data,
-                    "after": after_data,
-                }
-            ),
-            200,
-        )
+        result = {
+            "rpm": rpm_points,
+            "load": load_points,
+            "corrections": corrections,
+            "before": before_data,
+            "after": after_data,
+            "cached": False,
+        }
+
+        # Cache for 10 minutes
+        cache.set(cache_key, result, ttl=600)
+
+        return jsonify(result), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -640,8 +647,19 @@ def get_ve_data(run_id):
 @app.route("/api/runs", methods=["GET"])
 @rate_limit("120/minute")  # Read-only - permissive
 def list_runs():
-    """List all available analysis runs"""
+    """List all available analysis runs - WITH CACHING"""
+    from api.services.cache import get_runs_list_cache
+
     try:
+        cache = get_runs_list_cache()
+        cache_key = "runs_list"
+
+        # Try to get from cache
+        cached_runs = cache.get(cache_key)
+        if cached_runs is not None:
+            return jsonify({"runs": cached_runs, "cached": True}), 200
+
+        # Cache miss - load from filesystem
         runs = []
         for run_dir in OUTPUT_FOLDER.iterdir():
             if run_dir.is_dir():
@@ -657,7 +675,10 @@ def list_runs():
                         }
                     )
 
-        return jsonify({"runs": runs}), 200
+        # Cache for 10 seconds
+        cache.set(cache_key, runs, ttl=10)
+
+        return jsonify({"runs": runs, "cached": False}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -892,6 +913,45 @@ def apply_ve_corrections():
         ),
         200,
     )
+
+
+@app.route("/api/cache/stats", methods=["GET"])
+@rate_limit("60/minute")
+def get_cache_stats():
+    """Get cache statistics for monitoring and debugging"""
+    from api.services.cache import (
+        get_manifest_cache,
+        get_runs_list_cache,
+        get_ve_data_cache,
+    )
+
+    return (
+        jsonify(
+            {
+                "manifest_cache": get_manifest_cache().stats(),
+                "ve_data_cache": get_ve_data_cache().stats(),
+                "runs_list_cache": get_runs_list_cache().stats(),
+            }
+        ),
+        200,
+    )
+
+
+@app.route("/api/cache/clear", methods=["POST"])
+@rate_limit("10/minute")
+def clear_cache():
+    """Clear all caches - useful for debugging or forcing fresh data"""
+    from api.services.cache import (
+        get_manifest_cache,
+        get_runs_list_cache,
+        get_ve_data_cache,
+    )
+
+    get_manifest_cache().clear()
+    get_ve_data_cache().clear()
+    get_runs_list_cache().clear()
+
+    return jsonify({"success": True, "message": "All caches cleared"}), 200
 
 
 @app.route("/api/rollback", methods=["POST"])

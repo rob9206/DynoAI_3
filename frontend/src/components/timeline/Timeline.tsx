@@ -4,7 +4,7 @@
  * Visual timeline showing session history with step-by-step navigation.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Clock, FileText, Search as SearchIcon, Check, Undo2, ChevronLeft, ChevronRight, Play, Pause, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -228,16 +228,27 @@ export function Timeline({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<TimelineEvent['type'] | 'all'>('all');
 
-  // Filter events based on search and type
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = searchTerm === '' || 
-      event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.type.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = filterType === 'all' || event.type === filterType;
-    
-    return matchesSearch && matchesType;
-  });
+  // Create event index map for O(1) lookups - PERFORMANCE FIX
+  const eventIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    events.forEach((event, index) => {
+      map.set(event.id, index);
+    });
+    return map;
+  }, [events]);
+
+  // Filter events based on search and type - memoized for performance
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+      const matchesSearch = searchTerm === '' ||
+        event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.type.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesType = filterType === 'all' || event.type === filterType;
+
+      return matchesSearch && matchesType;
+    });
+  }, [events, searchTerm, filterType]);
 
   if (events.length === 0) {
     return (
@@ -383,9 +394,9 @@ export function Timeline({
         <CardContent className="max-h-[400px] overflow-y-auto">
           {filteredEvents.length > 0 ? (
             <div className="space-y-2">
-              {filteredEvents.map((event, index) => {
-                // Find actual sequence number for this event
-                const actualIndex = events.findIndex(e => e.id === event.id);
+              {filteredEvents.map((event) => {
+                // Use O(1) map lookup instead of O(n) findIndex - PERFORMANCE FIX
+                const actualIndex = eventIndexMap.get(event.id) ?? -1;
                 return (
                   <TimelineEventCard
                     key={event.id}

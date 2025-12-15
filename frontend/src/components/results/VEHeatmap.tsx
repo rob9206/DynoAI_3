@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { getColorForValue, getTextColorForBackground, isValueClamped } from '@/lib/colorScale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +25,14 @@ interface TooltipState {
   y: number;
 }
 
-export function VEHeatmap({
+interface CellStyle {
+  bgColor: string;
+  textColor: string;
+  isClamped: boolean;
+}
+
+// Memoized component to prevent unnecessary re-renders
+export const VEHeatmap = React.memo(function VEHeatmap({
   data,
   rowLabels,
   colLabels,
@@ -85,6 +92,18 @@ export function VEHeatmap({
     return hoveredCell?.row === row && hoveredCell?.col === col;
   }, [hoveredCell]);
 
+  // Memoize cell styles to avoid recalculating on every render
+  const cellStyles = useMemo(() => {
+    return data.map((row) =>
+      row.map((value) => {
+        const bgColor = getColorForValue(value, { clampLimit });
+        const textColor = getTextColorForBackground(bgColor);
+        const isClamped = showClampIndicators && isValueClamped(value, clampLimit);
+        return { bgColor, textColor, isClamped };
+      })
+    );
+  }, [data, clampLimit, showClampIndicators]);
+
   const content = (
     <div className="overflow-x-auto relative" ref={containerRef}>
       <div className="inline-block min-w-max">
@@ -113,9 +132,7 @@ export function VEHeatmap({
 
             {/* Cells */}
             {row.map((value, colIndex) => {
-              const bgColor = getColorForValue(value, { clampLimit });
-              const textColor = getTextColorForBackground(bgColor);
-              const isClamped = showClampIndicators && isValueClamped(value, clampLimit);
+              const { bgColor, textColor, isClamped } = cellStyles[rowIndex][colIndex];
               const highlighted = isHighlighted(rowIndex, colIndex);
               const hovered = isHovered(rowIndex, colIndex);
 
@@ -226,4 +243,20 @@ export function VEHeatmap({
       {content}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  return (
+    prevProps.data === nextProps.data &&
+    prevProps.rowLabels === nextProps.rowLabels &&
+    prevProps.colLabels === nextProps.colLabels &&
+    prevProps.clampLimit === nextProps.clampLimit &&
+    prevProps.showClampIndicators === nextProps.showClampIndicators &&
+    prevProps.showValues === nextProps.showValues &&
+    prevProps.onCellClick === nextProps.onCellClick &&
+    prevProps.onCellHover === nextProps.onCellHover &&
+    prevProps.highlightCell?.row === nextProps.highlightCell?.row &&
+    prevProps.highlightCell?.col === nextProps.highlightCell?.col &&
+    prevProps.title === nextProps.title &&
+    prevProps.className === nextProps.className
+  );
+});

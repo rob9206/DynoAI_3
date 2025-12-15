@@ -115,12 +115,18 @@ export function useLiveLink(options: UseLiveLinkOptions = {}): UseLiveLinkReturn
       },
     }));
 
-    // Update history for charts
+    // Update history for charts with circular buffer for better memory management
     setHistory(prev => {
       const channelHistory = prev[data.channel] || [];
       const newPoint = { time: timestamp, value: data.value };
-      const updated = [...channelHistory, newPoint].slice(-MAX_HISTORY_POINTS);
-      return { ...prev, [data.channel]: updated };
+
+      // Only keep MAX_HISTORY_POINTS, drop oldest
+      if (channelHistory.length >= MAX_HISTORY_POINTS) {
+        const updated = [...channelHistory.slice(1), newPoint];
+        return { ...prev, [data.channel]: updated };
+      }
+
+      return { ...prev, [data.channel]: [...channelHistory, newPoint] };
     });
   }, []);
 
@@ -266,16 +272,58 @@ export function useLiveLink(options: UseLiveLinkOptions = {}): UseLiveLinkReturn
     setHistory({});
   }, []);
 
-  // Auto-connect on mount if enabled
+  // Periodic cleanup of old history data for memory efficiency
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const maxAge = 60000; // 60 seconds
+
+      setHistory(prev => {
+        const cleaned: Record<string, { time: number; value: number }[]> = {};
+        let hasChanges = false;
+
+        Object.entries(prev).forEach(([channel, points]) => {
+          const filtered = points.filter(p => now - p.time < maxAge);
+          if (filtered.length !== points.length) {
+            hasChanges = true;
+          }
+          if (filtered.length > 0) {
+            cleaned[channel] = filtered;
+          }
+        });
+
+        return hasChanges ? cleaned : prev;
+      });
+    }, 10000); // Clean up every 10 seconds
+
+    return () => clearInterval(cleanupInterval);
+  }, [isConnected]);
+
+  // Auto-connect on mount if enabled - FIXED: removed connect/disconnect from deps to prevent infinite loop
   useEffect(() => {
     if (opts.autoConnect) {
       connect();
     }
 
+    // Cleanup function with direct socket reference to avoid stale closure
     return () => {
-      disconnect();
+      if (socketRef.current) {
+        try {
+          socketRef.current.emit('stop');
+          socketRef.current.disconnect();
+        } catch (error) {
+          console.error('[LiveLink] Error during cleanup:', error);
+        }
+        socketRef.current = null;
+      }
+      setIsConnected(false);
+      setIsConnecting(false);
+      setMode(null);
     };
-  }, [opts.autoConnect, connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opts.autoConnect]); // Only depend on autoConnect, not connect/disconnect
 
   return {
     isConnected,
