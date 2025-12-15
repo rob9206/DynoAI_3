@@ -352,6 +352,39 @@ export function LiveVETable({
         [displayHitCounts]
     );
 
+    // Performance monitoring
+    const [updateStats, setUpdateStats] = useState({
+        updatesPerSec: 0,
+        lastUpdate: Date.now(),
+        updateCount: 0
+    });
+
+    useEffect(() => {
+        if (!isLive) return;
+        
+        // Track update count
+        setUpdateStats(prev => ({
+            ...prev,
+            updateCount: prev.updateCount + 1
+        }));
+
+        // Calculate updates per second every second
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = (now - updateStats.lastUpdate) / 1000;
+            
+            if (elapsed >= 1) {
+                setUpdateStats(prev => ({
+                    updatesPerSec: prev.updateCount / elapsed,
+                    lastUpdate: now,
+                    updateCount: 0
+                }));
+            }
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, [isLive, updateStats.lastUpdate, updateStats.updateCount]);
+
     return (
         <div className="space-y-3">
             {/* Header */}
@@ -376,14 +409,20 @@ export function LiveVETable({
                     <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
                         {totalHits} hits
                     </Badge>
+                    {process.env.NODE_ENV === 'development' && isLive && (
+                        <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                            {updateStats.updatesPerSec.toFixed(1)} ups
+                        </Badge>
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleReset}
                         className="h-7 px-2 text-xs"
+                        title="Clear all cell history and VE corrections"
                     >
                         <RotateCcw className="w-3 h-3 mr-1" />
-                        Reset
+                        Clear History
                     </Button>
                 </div>
             </div>
