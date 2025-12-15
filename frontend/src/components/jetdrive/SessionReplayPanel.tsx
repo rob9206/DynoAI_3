@@ -55,6 +55,9 @@ function formatTime(seconds: number): string {
 }
 
 export function SessionReplayPanel({ apiUrl, sessionId, onDataUpdate }: SessionReplayPanelProps) {
+    // Constants
+    const FRAME_INTERVAL_MS = 16; // ~60 FPS
+    
     const [playback, setPlayback] = useState<PlaybackState>({
         isPlaying: false,
         currentTime: 0,
@@ -172,7 +175,7 @@ export function SessionReplayPanel({ apiUrl, sessionId, onDataUpdate }: SessionR
             }
 
             setPlayback(prev => ({ ...prev, currentTime: newTime }));
-        }, 16); // ~60 FPS
+        }, FRAME_INTERVAL_MS);
 
         return () => clearInterval(interval);
     }, [playback.isPlaying, playback.duration, playback.playbackSpeed, playback.sessionData.length]);

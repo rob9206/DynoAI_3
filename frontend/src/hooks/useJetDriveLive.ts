@@ -151,7 +151,20 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
  * Get channel configuration with flexible name matching.
  * Tries exact match, case-insensitive match, and partial match patterns.
  */
-const channelConfigCache = new Map<string, any>();
+// Cache for channel config lookups to avoid repeated string operations
+const channelConfigCache = new Map<string, {
+    label: string;
+    units: string;
+    min: number;
+    max: number;
+    decimals: number;
+    color: string;
+    warning?: number;
+    critical?: number;
+}>();
+
+// Debug logging throttle - log every N polls to avoid console spam
+const DEBUG_LOG_THROTTLE = 100;
 
 function getChannelConfig(channelName: string) {
     // Check cache first
@@ -367,8 +380,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
-                // Debug: Log raw channel names (every 100 polls to avoid spam)
-                if (pollCountRef.current % 100 === 0) {
+                // Debug: Log raw channel names (every N polls to avoid spam)
+                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
                     console.log('[useJetDriveLive] Raw channels:', Object.keys(data.channels));
                 }
 
@@ -379,7 +392,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     const config = getChannelConfig(name);
 
                     // Track unmapped channels (those using default config)
-                    if (!JETDRIVE_CHANNEL_CONFIG[name] && pollCountRef.current % 100 === 0) {
+                    if (!JETDRIVE_CHANNEL_CONFIG[name] && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
                         unmappedChannels.push(name);
                     }
 
@@ -396,12 +409,12 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 }
 
                 // Debug: Log unmapped channels
-                if (unmappedChannels.length > 0 && pollCountRef.current % 100 === 0) {
+                if (unmappedChannels.length > 0 && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
                     console.warn('[useJetDriveLive] Unmapped channels (using fallback config):', unmappedChannels);
                 }
 
                 // Debug: Log mapped channel count
-                if (pollCountRef.current % 100 === 0) {
+                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
                     console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels).length);
                 }
 

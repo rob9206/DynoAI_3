@@ -26,6 +26,9 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
   const [runId, setRunId] = useState(defaultRunId);
   const [busy, setBusy] = useState<null | 'simulate' | 'monitor' | 'live'>(null);
   
+  // Constants for auto-detection
+  const RPM_HISTORY_SIZE = 20; // Keep last 20 samples (1 second at 50ms poll rate)
+  
   // Auto-detection state
   const [autoDetectConfig, setAutoDetectConfig] = useState<AutoDetectConfig>({
     enabled: false,
@@ -70,7 +73,7 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
     
     // Update history using a more efficient approach
     setRpmHistory(prev => {
-      const newHistory = prev.length >= 20 ? prev.slice(-19) : prev;
+      const newHistory = prev.length >= RPM_HISTORY_SIZE ? prev.slice(-19) : prev;
       return [...newHistory, rpm];
     });
     
