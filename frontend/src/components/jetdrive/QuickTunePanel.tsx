@@ -1,20 +1,112 @@
-import { useMemo, useState } from 'react';
-import { Zap, Activity, Radio, RefreshCw } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Zap, Activity, Radio, RefreshCw, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
+import { Alert, AlertDescription } from '../ui/alert';
+import { useJetDriveLive } from '../../hooks/useJetDriveLive';
 
 type QuickTunePanelProps = {
   apiUrl: string; // e.g. http://127.0.0.1:5001/api/jetdrive
 };
 
+interface AutoDetectConfig {
+  enabled: boolean;
+  rpmThreshold: number;
+  minDuration: number; // seconds
+  cooldownPeriod: number; // seconds between runs
+}
+
 export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
   const defaultRunId = useMemo(() => `quick_${Date.now()}`, []);
   const [runId, setRunId] = useState(defaultRunId);
   const [busy, setBusy] = useState<null | 'simulate' | 'monitor' | 'live'>(null);
+  
+  // Auto-detection state
+  const [autoDetectConfig, setAutoDetectConfig] = useState<AutoDetectConfig>({
+    enabled: true,
+    rpmThreshold: 2000,
+    minDuration: 3,
+    cooldownPeriod: 5
+  });
+  const [rpmHistory, setRpmHistory] = useState<number[]>([]);
+  const [runDetected, setRunDetected] = useState(false);
+  const [lastRunEndTime, setLastRunEndTime] = useState<number>(0);
+
+  // Use JetDrive live hook for real-time RPM monitoring
+  const {
+    isCapturing,
+    getChannelValue,
+  } = useJetDriveLive({
+    apiUrl,
+    autoConnect: false,
+    pollInterval: 50, // 50ms = 20 Hz for responsive detection
+  });
+
+  // Get RPM from multiple possible channels
+  const getRPM = useCallback(() => {
+    const rpmChannels = [
+      'Digital RPM 1',
+      'Digital RPM 2', 
+      'RPM',
+      'chan_42',
+      'chan_43'
+    ];
+    
+    for (const channel of rpmChannels) {
+      const value = getChannelValue(channel);
+      if (value !== null && value > 0) {
+        return value;
+      }
+    }
+    
+    return 0;
+  }, [getChannelValue]);
+
+  // Monitor RPM continuously for auto-detection
+  useEffect(() => {
+    if (!isCapturing || !autoDetectConfig.enabled) return;
+    
+    const rpm = getRPM();
+    
+    // Update history (keep last 20 samples = 1 second at 50ms poll)
+    setRpmHistory(prev => [...prev.slice(-19), rpm]);
+    
+  }, [isCapturing, autoDetectConfig.enabled, getRPM]);
+
+  // Auto-detection logic
+  useEffect(() => {
+    if (!isCapturing || !autoDetectConfig.enabled || rpmHistory.length < 10) return;
+
+    const avgRPM = rpmHistory.reduce((a, b) => a + b, 0) / rpmHistory.length;
+    const threshold = autoDetectConfig.rpmThreshold;
+    const now = Date.now() / 1000;
+
+    // Check cooldown period
+    const inCooldown = (now - lastRunEndTime) < autoDetectConfig.cooldownPeriod;
+    
+    // Detect run start: RPM crosses threshold going up (and not in cooldown)
+    if (!runDetected && !inCooldown && avgRPM > threshold) {
+      console.log('[QuickTune] Run detected! Avg RPM:', avgRPM);
+      setRunDetected(true);
+      toast.success('Dyno run detected!', {
+        description: `RPM above ${threshold} - Auto-capture started`
+      });
+    }
+    
+    // Detect run end: RPM drops below threshold
+    if (runDetected && avgRPM < threshold * 0.5) {
+      console.log('[QuickTune] Run ended');
+      setRunDetected(false);
+      setLastRunEndTime(now);
+      toast.info('Dyno run completed');
+    }
+    
+  }, [isCapturing, autoDetectConfig, rpmHistory, runDetected, lastRunEndTime]);
 
   const postJson = async (url: string, body?: unknown) => {
     const res = await fetch(url, {
@@ -90,6 +182,72 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Auto-detection status */}
+        {runDetected && (
+          <Alert className="border-green-500 bg-green-500/10">
+            <Zap className="h-4 w-4 text-green-500 animate-pulse" />
+            <AlertDescription>
+              Dyno run detected! Auto-capture in progress...
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Auto-detect settings */}
+        <div className="space-y-3 p-3 rounded-lg bg-muted/30">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Auto-Detect Settings</Label>
+            <Switch
+              checked={autoDetectConfig.enabled}
+              onCheckedChange={(enabled) => 
+                setAutoDetectConfig(prev => ({ ...prev, enabled }))
+              }
+            />
+          </div>
+          
+          {autoDetectConfig.enabled && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">RPM Threshold</Label>
+                  <Input
+                    type="number"
+                    value={autoDetectConfig.rpmThreshold}
+                    onChange={(e) => 
+                      setAutoDetectConfig(prev => ({ 
+                        ...prev, 
+                        rpmThreshold: parseInt(e.target.value, 10) || 2000
+                      }))
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Cooldown (sec)</Label>
+                  <Input
+                    type="number"
+                    value={autoDetectConfig.cooldownPeriod}
+                    onChange={(e) => 
+                      setAutoDetectConfig(prev => ({ 
+                        ...prev, 
+                        cooldownPeriod: parseInt(e.target.value, 10) || 5
+                      }))
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Debug display */}
+              {process.env.NODE_ENV === 'development' && isCapturing && (
+                <div className="text-xs text-muted-foreground p-2 bg-background/50 rounded">
+                  RPM: {getRPM().toFixed(0)} | Avg: {rpmHistory.length > 0 ? (rpmHistory.reduce((a,b) => a+b, 0) / rpmHistory.length).toFixed(0) : '0'}
+                  {' '}| Detected: {runDetected ? 'YES' : 'NO'}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div className="md:col-span-1">
             <Label htmlFor="quick-run-id">Run ID</Label>
