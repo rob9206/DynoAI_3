@@ -2,21 +2,16 @@
 
 import json
 import logging
-import sys
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Callable, Dict, List, Optional
 
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 from .client import JetstreamClient
 from .models import JetstreamConfig, JetstreamRun, PollerStatus, RunStatus
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 logger = logging.getLogger(__name__)
 

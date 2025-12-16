@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dynoai.version import __version__ as DYNOAI_VERSION
+
 
 def _get_bool_env(key: str, default: bool = False) -> bool:
     """Get boolean from environment variable."""
@@ -240,7 +242,7 @@ class AppConfig:
 
     # Application metadata
     app_name: str = "DynoAI"
-    version: str = "1.2.0"
+    version: str = DYNOAI_VERSION
 
     # Sub-configurations
     server: ServerConfig = field(default_factory=ServerConfig)

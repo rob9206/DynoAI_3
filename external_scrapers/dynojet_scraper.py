@@ -16,7 +16,7 @@ from external_scrapers.dyno_models import (
     slugify_title,
 )
 from external_scrapers.http_utils import fetch
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 

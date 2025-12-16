@@ -33,4 +33,50 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    // Optimize bundle size
+    target: 'esnext',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.logs in production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+      },
+    },
+    // Split chunks for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['framer-motion', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+          'chart-vendor': ['recharts', 'd3'],
+          'query-vendor': ['@tanstack/react-query'],
+          'form-vendor': ['react-hook-form', 'zod'],
+        },
+      },
+    },
+    // Increase chunk size warning limit (500kb is reasonable for modern apps)
+    chunkSizeWarningLimit: 500,
+    // Enable source maps for production debugging (optional, can disable for smaller builds)
+    sourcemap: false,
+  },
+  // Optimize dependencies
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'framer-motion',
+      'recharts',
+    ],
+    exclude: ['@github/spark'],
+  },
+  // Enable esbuild optimizations
+  esbuild: {
+    logOverride: { 'this-is-undefined-in-esm': 'silent' },
+    legalComments: 'none',
+  },
 });

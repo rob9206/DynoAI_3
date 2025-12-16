@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock } from 'lucide-react';
+import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock, Activity } from 'lucide-react';
 import { toast } from 'sonner';
-import { getJobStatus, getVEData, getCoverageData, getDiagnostics, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest } from '../lib/api';
+import { getJobStatus, getVEData, getCoverageData, getDiagnostics, getConfidenceReport, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest, ConfidenceReport } from '../lib/api';
 import VEHeatmap from '../components/VEHeatmap';
 import { VESurface } from '../components/VESurface';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
+import { SessionReplayViewer } from '../components/session-replay';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -47,6 +48,16 @@ export default function Results() {
           });
           const coverageResult = await getCoverageData(runId!).catch(() => null);
           const diagResult = await getDiagnostics(runId!).catch(() => null);
+
+          // Try to load confidence report and merge with diagnostics
+          try {
+            const confidenceResult = await getConfidenceReport(runId!);
+            if (diagResult && confidenceResult) {
+              diagResult.confidence = confidenceResult;
+            }
+          } catch (err) {
+            console.warn('Confidence report not available:', err);
+          }
 
           setVeData(veResult);
           setCoverageData(coverageResult);
@@ -229,10 +240,11 @@ export default function Results() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md mb-6">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-6">
           <TabsTrigger value="overview">Output Files</TabsTrigger>
           <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
           <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+          <TabsTrigger value="session-replay">Session Replay</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -428,6 +440,7 @@ export default function Results() {
             <DiagnosticsPanel
               anomalies={diagnostics.anomalies.anomalies || []}
               correctionDiagnostics={diagnostics.anomalies.correction_diagnostics}
+              confidenceReport={diagnostics.confidence}
             />
           ) : (
             <Card className="py-12 text-center">
@@ -436,6 +449,11 @@ export default function Results() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Session Replay Tab */}
+        <TabsContent value="session-replay">
+          <SessionReplayViewer runId={runId!} />
         </TabsContent>
       </Tabs>
     </div>

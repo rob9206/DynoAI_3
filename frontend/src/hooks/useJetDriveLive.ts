@@ -38,6 +38,8 @@ export interface UseJetDriveLiveReturn {
     // Connection state
     isConnected: boolean;
     isCapturing: boolean;
+    isSimulated: boolean;
+    simState: string | null;
     connectionError: string | null;
     providerName: string | null;
     channelCount: number;
@@ -72,26 +74,26 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     'Temperature 1': { label: 'Temperature 1', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
     'Temperature 2': { label: 'Temperature 2', units: '°C', min: 0, max: 50, decimals: 1, color: '#fb923c' },
     'Temperature': { label: 'Temperature', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
-    
+
     // Fallback chan_X names (based on observed values from your dyno)
     'chan_6': { label: 'Temperature 1', units: '°C', min: 0, max: 50, decimals: 1, color: '#f97316' },
     'chan_7': { label: 'Temperature 2', units: '°C', min: 0, max: 50, decimals: 1, color: '#fb923c' },
     'chan_8': { label: 'Humidity', units: '%', min: 0, max: 100, decimals: 1, color: '#60a5fa' },
     'chan_9': { label: 'Pressure', units: 'kPa', min: 90, max: 110, decimals: 2, color: '#a78bfa' },
-    
+
     // === Dyno Channels ===
     'Force Drum 1': { label: 'Force', units: 'lbs', min: 0, max: 500, decimals: 1, color: '#4ade80' },
     'Acceleration': { label: 'Acceleration', units: 'g', min: -2, max: 2, decimals: 3, color: '#22d3ee' },
     'Digital RPM 1': { label: 'RPM 1', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80', warning: 6000, critical: 7000 },
     'Digital RPM 2': { label: 'RPM 2', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#22d3ee' },
     'RPM': { label: 'RPM', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80', warning: 6000, critical: 7000 },
-    
+
     // Fallback dyno chan_X names
     'chan_39': { label: 'Force', units: 'lbs', min: 0, max: 500, decimals: 1, color: '#4ade80' },
     'chan_40': { label: 'Acceleration', units: 'g', min: -2, max: 2, decimals: 3, color: '#22d3ee' },
     'chan_42': { label: 'RPM 1', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#4ade80' },
     'chan_43': { label: 'RPM 2', units: 'rpm', min: 0, max: 8000, decimals: 0, color: '#22d3ee' },
-    
+
     // === AFR / Lambda Channels ===
     'Air/Fuel Ratio 1': { label: 'AFR Front', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6', warning: 15.5, critical: 16.5 },
     'Air/Fuel Ratio 2': { label: 'AFR Rear', units: ':1', min: 10, max: 18, decimals: 2, color: '#fb923c', warning: 15.5, critical: 16.5 },
@@ -100,13 +102,35 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     'Lambda 2': { label: 'Lambda 2', units: 'λ', min: 0.7, max: 1.3, decimals: 3, color: '#fb923c' },
     'AFR 1': { label: 'AFR 1', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
     'AFR': { label: 'AFR', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
-    
+
     // Fallback AFR chan_X names (based on observed data)
     'chan_23': { label: 'AFR 1', units: ':1', min: 10, max: 18, decimals: 2, color: '#f472b6' },
     'chan_28': { label: 'AFR 2', units: ':1', min: 10, max: 18, decimals: 2, color: '#fb923c' },
     'chan_15': { label: 'Lambda', units: 'λ', min: 0.7, max: 1.3, decimals: 3, color: '#a78bfa' },
     'chan_30': { label: 'Correction', units: '', min: 0, max: 2, decimals: 3, color: '#22d3ee' },
-    
+
+    // === Dyno Performance Channels ===
+    'Horsepower': { label: 'Horsepower', units: 'HP', min: 0, max: 200, decimals: 1, color: '#10b981' },
+    'HP': { label: 'Horsepower', units: 'HP', min: 0, max: 200, decimals: 1, color: '#10b981' },
+    'Torque': { label: 'Torque', units: 'ft-lb', min: 0, max: 150, decimals: 1, color: '#8b5cf6' },
+    'TQ': { label: 'Torque', units: 'ft-lb', min: 0, max: 150, decimals: 1, color: '#8b5cf6' },
+
+    // === Engine Sensors ===
+    'MAP kPa': { label: 'MAP', units: 'kPa', min: 0, max: 105, decimals: 1, color: '#06b6d4' },
+    'MAP': { label: 'MAP', units: 'kPa', min: 0, max: 105, decimals: 1, color: '#06b6d4' },
+    'TPS': { label: 'TPS', units: '%', min: 0, max: 100, decimals: 1, color: '#14b8a6' },
+    'IAT': { label: 'IAT', units: '°F', min: 0, max: 200, decimals: 0, color: '#f59e0b' },
+    'IAT F': { label: 'IAT', units: '°F', min: 0, max: 200, decimals: 0, color: '#f59e0b' },
+    'VBatt': { label: 'Battery', units: 'V', min: 11, max: 15, decimals: 1, color: '#eab308' },
+
+    // Fallback chan_X names for performance channels
+    'chan_100': { label: 'Torque', units: 'ft-lb', min: 0, max: 150, decimals: 1, color: '#8b5cf6' },
+    'chan_101': { label: 'Horsepower', units: 'HP', min: 0, max: 200, decimals: 1, color: '#10b981' },
+    'chan_102': { label: 'MAP', units: 'kPa', min: 0, max: 105, decimals: 1, color: '#06b6d4' },
+    'chan_103': { label: 'TPS', units: '%', min: 0, max: 100, decimals: 1, color: '#14b8a6' },
+    'chan_104': { label: 'IAT', units: '°F', min: 0, max: 200, decimals: 0, color: '#f59e0b' },
+    'chan_105': { label: 'Battery', units: 'V', min: 11, max: 15, decimals: 1, color: '#eab308' },
+
     // Other observed channels
     'chan_0': { label: 'Channel 0', units: '', min: 0, max: 100, decimals: 2, color: '#888' },
     'chan_1': { label: 'Channel 1', units: '', min: 0, max: 100, decimals: 2, color: '#888' },
@@ -126,7 +150,7 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
-    pollInterval: 1000,
+    pollInterval: 50,  // 50ms = 20 updates/sec for ultra-responsive gauges and VE table
     maxHistoryPoints: 300,
 };
 
@@ -136,6 +160,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     // Connection state
     const [isConnected, setIsConnected] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [isSimulated, setIsSimulated] = useState(false);
+    const [simState, setSimState] = useState<string | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
     const [providerName, setProviderName] = useState<string | null>(null);
     const [channelCount, setChannelCount] = useState(0);
@@ -147,21 +173,22 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
     // Refs
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pollCountRef = useRef(0);  // Track polls for throttled history updates
 
     // Check monitor status
     const checkConnection = useCallback(async () => {
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/monitor/status`);
             if (!res.ok) throw new Error('Monitor endpoint unavailable');
-            
+
             const data = await res.json();
             setIsConnected(data.connected);
-            
+
             if (data.providers && data.providers.length > 0) {
                 setProviderName(data.providers[0].name);
                 setChannelCount(data.providers[0].channel_count || 0);
             }
-            
+
             setConnectionError(null);
         } catch (err) {
             setIsConnected(false);
@@ -174,10 +201,21 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/live/data`);
             if (!res.ok) throw new Error('Live data unavailable');
-            
+
             const data = await res.json();
+
+            // Increment poll counter
+            pollCountRef.current++;
+
             setIsCapturing(data.capturing);
-            
+            setIsSimulated(data.simulated || false);
+            setSimState(data.sim_state || null);
+
+            // If simulated, we're always "connected"
+            if (data.simulated) {
+                setIsConnected(true);
+            }
+
             if (data.channels && Object.keys(data.channels).length > 0) {
                 // Convert to LiveLink-compatible format
                 const newChannels: Record<string, JetDriveChannel> = {};
@@ -190,7 +228,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 for (const [name, ch] of Object.entries(data.channels)) {
                     const channel = ch as { id: number; name: string; value: number; timestamp: number };
                     const config = JETDRIVE_CHANNEL_CONFIG[name];
-                    
+
                     newChannels[name] = {
                         name,
                         value: channel.value,
@@ -198,15 +236,22 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                         timestamp: channel.timestamp,
                         id: channel.id,
                     };
-                    
+
                     newSnapshot.channels[name] = channel.value;
                     newSnapshot.units[name] = config?.units || '';
+                }
+
+                // Debug: Log HP channel specifically
+                if (newChannels['Horsepower']) {
+                    console.log('[useJetDriveLive] HP channel found:', newChannels['Horsepower']);
+                } else {
+                    console.log('[useJetDriveLive] HP channel NOT found. Available:', Object.keys(newChannels));
                 }
 
                 setChannels(newChannels);
                 setSnapshot(newSnapshot);
 
-                // Update history for charts
+                // Update history for charts (every poll for now)
                 setHistory(prev => {
                     const newHistory = { ...prev };
                     const now = Date.now();
@@ -224,7 +269,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     return newHistory;
                 });
             }
-        } catch (err) {
+        } catch {
             // Silent fail for polling
         }
     }, [opts.apiUrl, opts.maxHistoryPoints]);
@@ -290,13 +335,15 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     // Auto-connect
     useEffect(() => {
         if (opts.autoConnect && isConnected && !isCapturing) {
-            startCapture().catch(() => {});
+            startCapture().catch(() => { });
         }
     }, [opts.autoConnect, isConnected, isCapturing, startCapture]);
 
     return {
         isConnected,
         isCapturing,
+        isSimulated,
+        simState,
         connectionError,
         providerName,
         channelCount,

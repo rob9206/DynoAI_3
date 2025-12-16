@@ -18,7 +18,11 @@ from ai_tuner_toolkit_dyno_v1_2 import (
     load_generic_csv,
     load_winpep_csv,
 )
-from io_contracts import csv_schema_check, safe_path, validate_input_values
+from dynoai.core.io_contracts import (
+    csv_schema_check,
+    safe_path,
+    validate_input_values,
+)
 
 
 def run_preflight(csv_path: Path) -> dict:

@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from io_contracts import sanitize_csv_cell
+from dynoai.core.io_contracts import sanitize_csv_cell
 
 PY = sys.executable
 TOOL = ROOT / "ai_tuner_toolkit_dyno_v1_2.py"

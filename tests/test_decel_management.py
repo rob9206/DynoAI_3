@@ -16,7 +16,7 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from decel_management import (
+from dynoai.core.decel_management import (
     BASE_ENRICHMENT,
     DECEL_KPA_MAX,
     DEFAULT_DECEL_CONFIG,

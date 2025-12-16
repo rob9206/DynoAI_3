@@ -107,6 +107,23 @@ docker build -t dynoai-api:latest .
 docker build -t dynoai-frontend:latest ./frontend
 ```
 
+### Version-Aware Builds
+
+Both Dockerfiles accept a `DYNOAI_VERSION` build argument so the resulting image metadata matches the single source in `dynoai/version.py`:
+
+```bash
+VERSION=$(python -c "from dynoai.version import get_version; print(get_version())")
+docker build --build-arg DYNOAI_VERSION=$VERSION -t dynoai-api:$VERSION .
+docker build --build-arg DYNOAI_VERSION=$VERSION -t dynoai-frontend:$VERSION ./frontend
+```
+
+When using `docker compose`, pass the same build argument per service:
+
+```bash
+VERSION=$(python -c "from dynoai.version import get_version; print(get_version())")
+docker compose build --build-arg DYNOAI_VERSION=$VERSION
+```
+
 ### Build with Custom Tags
 
 ```bash

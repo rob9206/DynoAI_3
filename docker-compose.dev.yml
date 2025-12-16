@@ -19,7 +19,6 @@ services:
       # Mount source code for hot reload
       - ./api:/app/api:ro
       - ./dynoai:/app/dynoai:ro
-      - ./io_contracts.py:/app/io_contracts.py:ro
       - ./ai_tuner_toolkit_dyno_v1_2.py:/app/ai_tuner_toolkit_dyno_v1_2.py:ro
       # Persist data locally for development
       - ./uploads:/app/uploads

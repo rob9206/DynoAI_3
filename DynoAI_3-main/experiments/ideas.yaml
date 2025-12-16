@@ -1,8 +1,0 @@
-# experiments/ideas.yaml
-ideas:
-  - id: adaptive-kernel-v1
-    desc: "Adaptive kernel smoothing: fewer neighbors in sparse cells; stronger smoothing in noisy clusters."
-    params: { base_passes: 2, max_neighbors: 4 }
-  - id: edge-preserve-v1
-    desc: "Edge-preserving smoothing: median blend to avoid smearing sharp AFR transitions."
-    params: { base_passes: 2 }

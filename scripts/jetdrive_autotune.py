@@ -39,6 +39,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+# Import DynoAI VE math module for versioned calculations
+from dynoai.core.ve_math import (
+    MathVersion,
+    calculate_ve_correction,
+    correction_to_percentage,
+)
+
 # =============================================================================
 # Standard DynoAI Grid Configuration (matches dynoai/constants.py)
 # =============================================================================
@@ -69,8 +76,14 @@ class TuneConfig:
     max_ve_correction_pct: float = 10.0  # Max ±10% VE change
     min_hits_per_cell: int = 3  # Minimum samples to trust cell
 
-    # VE correction factor (7% per AFR point - DynoAI standard)
+    # VE correction factor (7% per AFR point - DynoAI v1.0.0 standard)
+    # DEPRECATED: Use math_version instead. Kept for backwards compatibility.
     ve_per_afr_point: float = 7.0
+
+    # Math version for VE calculations
+    # V1_0_0: Linear 7% per AFR point (legacy)
+    # V2_0_0: Ratio model AFR_measured/AFR_target (default, physically accurate)
+    math_version: MathVersion = MathVersion.V2_0_0
 
     # RPM bins for grid
     rpm_bins: list[int] = field(default_factory=lambda: RPM_BINS.copy())
@@ -273,20 +286,56 @@ def nearest_bin(val: float, bins: list[int]) -> int:
     return min(bins, key=lambda b: abs(b - val))
 
 
-def get_target_afr_for_map(map_kpa: float) -> float:
-    """Get target AFR based on MAP (load)."""
-    if map_kpa < 45:
-        return 14.7  # Vacuum / cruise
-    elif map_kpa < 60:
-        return 14.0  # Light load
-    elif map_kpa < 75:
-        return 13.0  # Mid load
-    else:
-        return 12.5  # WOT
+# Default AFR targets by MAP (kPa) - matches autotune_workflow.py
+DEFAULT_AFR_TARGETS: dict[int, float] = {
+    20: 14.7,  # Deep vacuum / decel
+    30: 14.7,  # Idle
+    40: 14.5,  # Light cruise
+    50: 14.0,  # Cruise
+    60: 13.5,  # Part throttle
+    70: 13.0,  # Mid load
+    80: 12.8,  # Heavy load
+    90: 12.5,  # High load
+    100: 12.2,  # WOT / boost
+}
 
 
-def analyze_dyno_data(df: pd.DataFrame, config: TuneConfig = None) -> AnalysisResult:
-    """Run full 2D grid analysis on dyno data."""
+def get_target_afr_for_map(map_kpa: float, afr_targets: dict[int, float] | None = None) -> float:
+    """Get target AFR based on MAP (load).
+    
+    Args:
+        map_kpa: Manifold absolute pressure in kPa
+        afr_targets: Optional dict mapping MAP values to target AFR.
+                     If None, uses DEFAULT_AFR_TARGETS.
+    
+    Returns:
+        Target AFR for the given MAP value (uses nearest bin)
+    """
+    targets = afr_targets or DEFAULT_AFR_TARGETS
+    map_keys = sorted(targets.keys())
+    
+    if not map_keys:
+        return 14.0  # Fallback
+    
+    # Find nearest MAP bin
+    closest = min(map_keys, key=lambda k: abs(k - map_kpa))
+    return targets[closest]
+
+
+def analyze_dyno_data(
+    df: pd.DataFrame,
+    config: TuneConfig = None,
+    afr_targets: dict[int, float] | None = None,
+) -> AnalysisResult:
+    """Run full 2D grid analysis on dyno data.
+    
+    Args:
+        df: DataFrame with RPM, AFR, MAP_kPa columns
+        config: Tuning configuration (optional)
+        afr_targets: Custom AFR targets by MAP kPa (optional).
+                     Keys are MAP values (int), values are target AFR.
+                     Example: {20: 14.7, 30: 14.7, 100: 12.2}
+    """
     config = config or TuneConfig()
 
     rpm_bins = config.rpm_bins
@@ -299,9 +348,9 @@ def analyze_dyno_data(df: pd.DataFrame, config: TuneConfig = None) -> AnalysisRe
     afr_sum = np.zeros((n_rpm, n_map))
     target_afr = np.zeros((n_rpm, n_map))
 
-    # Set target AFR for each cell based on MAP
+    # Set target AFR for each cell based on MAP (using custom targets if provided)
     for j, map_val in enumerate(map_bins):
-        target = get_target_afr_for_map(map_val)
+        target = get_target_afr_for_map(map_val, afr_targets)
         for i in range(n_rpm):
             target_afr[i, j] = target
 
@@ -346,13 +395,29 @@ def analyze_dyno_data(df: pd.DataFrame, config: TuneConfig = None) -> AnalysisRe
     valid_mask = hit_count >= config.min_hits_per_cell
     mean_afr[valid_mask] = afr_sum[valid_mask] / hit_count[valid_mask]
 
-    # Calculate AFR error and VE corrections
+    # Calculate AFR error (for diagnostics)
     afr_error = mean_afr - target_afr  # positive = lean, negative = rich
 
-    # VE correction: 7% per AFR point (DynoAI standard)
-    # Lean (+error) → need more fuel → increase VE → negative correction applied inverted
-    ve_delta_pct = -afr_error * config.ve_per_afr_point
-    ve_correction = 1 + (ve_delta_pct / 100)
+    # Calculate VE corrections using versioned math
+    # v2.0.0 (default): Ratio model - VE_correction = AFR_measured / AFR_target
+    # v1.0.0 (legacy): Linear model - VE_correction = 1 + (AFR_error * 7%)
+    ve_correction = np.ones((n_rpm, n_map))
+    ve_delta_pct = np.zeros((n_rpm, n_map))
+    
+    for i in range(n_rpm):
+        for j in range(n_map):
+            if valid_mask[i, j]:
+                measured = mean_afr[i, j]
+                target = target_afr[i, j]
+                
+                # Use the versioned VE math module
+                correction = calculate_ve_correction(
+                    measured, target,
+                    version=config.math_version,
+                    clamp=False  # We clamp below with our own limits
+                )
+                ve_correction[i, j] = correction
+                ve_delta_pct[i, j] = correction_to_percentage(correction)
 
     # Clamp corrections
     min_mult = 1 - config.max_ve_correction_pct / 100
@@ -850,9 +915,35 @@ Examples:
     parser.add_argument(
         "--output-dir", help="Output directory (default: runs/<run-id>)"
     )
+    parser.add_argument(
+        "--afr-targets",
+        help='AFR targets as JSON dict, e.g. \'{"20":14.7,"100":12.2}\''
+    )
+    parser.add_argument(
+        "--math-version",
+        choices=["1.0.0", "2.0.0"],
+        default="2.0.0",
+        help="VE calculation math version: 1.0.0 (legacy 7%% per AFR), 2.0.0 (ratio model, default)"
+    )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
 
     args = parser.parse_args()
+    
+    # Parse math version
+    math_version = MathVersion.V2_0_0 if args.math_version == "2.0.0" else MathVersion.V1_0_0
+    
+    # Parse AFR targets if provided
+    afr_targets: dict[int, float] | None = None
+    if args.afr_targets:
+        try:
+            raw_targets = json.loads(args.afr_targets)
+            # Convert string keys to int (JSON keys are always strings)
+            afr_targets = {int(k): float(v) for k, v in raw_targets.items()}
+            if not args.quiet:
+                print(f"Using custom AFR targets: {afr_targets}")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Warning: Invalid AFR targets JSON, using defaults: {e}")
+            afr_targets = None
 
     if not args.quiet:
         print_banner()
@@ -882,9 +973,11 @@ Examples:
 
     # Run analysis
     if not args.quiet:
-        print("Running analysis...")
+        print(f"Running analysis (math version {math_version})...")
 
-    result = analyze_dyno_data(df)
+    # Create config with selected math version
+    config = TuneConfig(math_version=math_version)
+    result = analyze_dyno_data(df, config=config, afr_targets=afr_targets)
     result.run_id = args.run_id
     result.source_file = source_file
 

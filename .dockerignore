@@ -108,7 +108,6 @@ Desktop.ini
 .LSOverride
 ._*
 
-# Nested duplicate directories
-DynoAI_3/
-DynoAI_3-main/
+# Legacy nested duplicate directories
+DynoAI_3*/
 

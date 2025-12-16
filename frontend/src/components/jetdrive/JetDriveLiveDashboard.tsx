@@ -3,13 +3,14 @@
  * 
  * Reuses LiveLink gauge and chart components with JetDrive data source.
  * Shows atmospheric data (humidity, temp, pressure) alongside dyno channels.
+ * Includes integrated audio capture for knock detection.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Activity, Gauge, Flame, Thermometer, Zap, Wind, Battery,
-    Droplets, Radio, Play, Square, RefreshCw, Settings2
+    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
@@ -19,11 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
 import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, type JetDriveChannel } from '../../hooks/useJetDriveLive';
+import { AudioCapturePanel } from './AudioCapturePanel';
+import type { RecordedAudio } from '../../hooks/useAudioCapture';
 
 // Infer units from channel name or value
 function inferUnits(name: string, value: number): string {
     const nameLower = name.toLowerCase();
-    
+
     // Temperature-like values (15-50 range typically)
     if (nameLower.includes('temp') || (value > 10 && value < 60 && !nameLower.includes('afr'))) {
         return '°C';
@@ -52,7 +55,7 @@ function inferUnits(name: string, value: number): string {
     if (nameLower.includes('volt') || nameLower.includes('vbat')) {
         return 'V';
     }
-    
+
     return '';
 }
 
@@ -77,7 +80,8 @@ const CHANNEL_ICONS: Record<string, typeof Activity> = {
 // Preset channel groups
 const CHANNEL_PRESETS = {
     atmospheric: ['Humidity', 'Pressure', 'Temperature 1', 'Temperature 2'],
-    dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration'],
+    dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration', 'Horsepower', 'Torque'],
+    performance: ['Horsepower', 'Torque', 'MAP kPa', 'TPS', 'IAT', 'VBatt'],
     afr: ['Air/Fuel Ratio 1', 'Air/Fuel Ratio 2', 'Lambda 1', 'Lambda 2'],
     all: Object.keys(JETDRIVE_CHANNEL_CONFIG),
 };
@@ -85,14 +89,18 @@ const CHANNEL_PRESETS = {
 interface JetDriveLiveDashboardProps {
     apiUrl?: string;
     autoStart?: boolean;
+    /** Callback when audio recording completes */
+    onAudioRecorded?: (recording: RecordedAudio) => void;
 }
 
 export function JetDriveLiveDashboard({
     apiUrl = 'http://127.0.0.1:5001/api/jetdrive',
     autoStart = false,
+    onAudioRecorded,
 }: JetDriveLiveDashboardProps) {
     const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('all');
     const [chartChannel, setChartChannel] = useState<string>('');
+    const [audioEnabled, setAudioEnabled] = useState(true);
 
     const {
         isConnected,
@@ -157,6 +165,13 @@ export function JetDriveLiveDashboard({
             console.error('Toggle capture error:', err);
         }
     };
+
+    // Handle audio recording completion
+    const handleAudioRecorded = useCallback((recording: RecordedAudio | null) => {
+        if (recording && onAudioRecorded) {
+            onAudioRecorded(recording);
+        }
+    }, [onAudioRecorded]);
 
     return (
         <div className="space-y-6">
@@ -247,6 +262,10 @@ export function JetDriveLiveDashboard({
                     <TabsList>
                         <TabsTrigger value="gauges">Gauges</TabsTrigger>
                         <TabsTrigger value="chart">Chart</TabsTrigger>
+                        <TabsTrigger value="audio" className="flex items-center gap-1.5">
+                            <Mic className="h-3.5 w-3.5" />
+                            Audio
+                        </TabsTrigger>
                         <TabsTrigger value="table">Table</TabsTrigger>
                     </TabsList>
 
@@ -258,7 +277,7 @@ export function JetDriveLiveDashboard({
                                     // Use config label, or derive from channel name
                                     const displayLabel = config.label || name.replace('chan_', 'Ch ').replace(/_/g, ' ');
                                     const displayUnits = config.units || inferUnits(name, data.value);
-                                    
+
                                     return (
                                         <LiveLinkGauge
                                             key={name}
@@ -324,6 +343,14 @@ export function JetDriveLiveDashboard({
                         </Card>
                     </TabsContent>
 
+                    {/* Audio View */}
+                    <TabsContent value="audio">
+                        <AudioCapturePanel
+                            isDynoCapturing={isCapturing}
+                            onRecordingStop={handleAudioRecorded}
+                        />
+                    </TabsContent>
+
                     {/* Table View */}
                     <TabsContent value="table">
                         <Card>
@@ -351,7 +378,7 @@ export function JetDriveLiveDashboard({
                                                 const displayUnits = config?.units || inferUnits(name, ch.value);
                                                 const decimals = config?.decimals ?? 2;
                                                 const color = config?.color || '#888';
-                                                
+
                                                 return (
                                                     <tr key={name} className="hover:bg-muted/30">
                                                         <td className="p-3 font-medium">

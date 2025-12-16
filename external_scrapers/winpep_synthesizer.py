@@ -9,7 +9,7 @@ import pandas as pd
 
 from external_scrapers import get_stdout_logger
 from external_scrapers.dyno_models import DynoChartMeta, DynoCurveSpec
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 

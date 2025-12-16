@@ -7,22 +7,43 @@
 __pycache__/
 *.pyc
 *.pyo
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # Python virtual environments
 .venv/
+venv/
+ENV/
+env/
 
 # Node modules and build output
 node_modules/
+frontend/node_modules/
 dist/
 
-# Local artifacts and run outputs
+# Coverage and test artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Logs and local run outputs
+*.log
+logs/
 outputs/
 uploads/
 runs/
 tmp/
 tmp_test/
 temp_selftest/
+test_output/
+
+# Legacy nested copies of this repo
+DynoAI_3*/
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
 .github/instructions/snyk_rules.instructions.md
+
+# Workspace-local generated artifacts (common variants)
+agent_outputs/

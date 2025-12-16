@@ -15,7 +15,7 @@ import random
 from pathlib import Path
 from typing import Any, Dict, List
 
-from io_contracts import sanitize_csv_cell
+from dynoai.core.io_contracts import sanitize_csv_cell
 
 
 def make_synthetic_csv(path: Path, rows: int = 4000, fs_hz: int = 20) -> None:
