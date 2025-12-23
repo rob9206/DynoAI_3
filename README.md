@@ -99,7 +99,20 @@ The JetDrive page provides a complete auto-tuning workflow:
 1. **Navigate to JetDrive** tab in the web UI
 2. **Run Simulation** or upload a CSV from a real dyno run
 3. **View Results** - 2D VE correction grid, AFR analysis, diagnostics
-4. **Export** - Download PVV XML for Power Vision or CSV for manual import
+4. **Export** - Download results in multiple formats:
+   - **PVV XML** for Power Vision/Power Core import
+   - **Text Export** for sharing with AI assistants (ChatGPT, Claude, etc.)
+   - **CSV** for manual analysis
+
+### Text Export for AI Analysis
+
+Export comprehensive analysis reports as human-readable text files perfect for sharing with AI assistants:
+- Complete performance summary (HP, TQ, samples)
+- VE correction grid with all RPM/MAP zones
+- AFR error analysis and zone distribution
+- Hit count data and diagnostics
+
+See [TEXT_EXPORT_GUIDE.md](docs/TEXT_EXPORT_GUIDE.md) for details.
 
 ### Hardware Testing
 
@@ -199,6 +212,8 @@ DynoAI_3/
 | `/api/jetdrive/analyze-unified` | POST | Run unified workflow analysis |
 | `/api/jetdrive/runs/<id>` | GET | Get run details and results |
 | `/api/jetdrive/runs/<id>/pvv` | GET | Download PVV XML export |
+| `/api/jetdrive/runs/<id>/export-text` | GET | Download comprehensive text export for AI analysis |
+| `/api/jetdrive/runs/<id>/report` | GET | Download diagnostics report |
 | `/api/jetdrive/hardware/diagnostics` | GET | Run hardware diagnostics |
 | `/api/jetdrive/hardware/discover` | GET | Discover JetDrive providers |
 
@@ -241,6 +256,9 @@ API_KEY=your-secret-key          # Optional API authentication
 # Run all tests
 pytest tests/ -v
 
+# Run VE math verification suite (comprehensive)
+pytest tests/test_ve_math_verification.py -v
+
 # Run specific test modules
 pytest tests/api/ -v                    # API tests
 pytest tests/test_autotune_workflow.py  # Workflow tests
@@ -250,8 +268,21 @@ pytest tests/test_jetdrive_client_protocol.py  # Protocol tests
 pytest --cov=api --cov=scripts tests/
 ```
 
+### VE Math Verification
+A comprehensive test suite verifies all VE tuning math is deterministic and consistent:
+- **25 tests** covering apply/rollback operations, clamping, precision, and kernel behavior
+- **Inverse property**: apply → rollback → exact original (verified ±0.001)
+- **Determinism**: same input → bit-identical output
+- See `docs/VE_MATH_VERIFICATION_REPORT.md` for full verification report
+
 ## Documentation
 
+- [VE_MATH_VERIFICATION_REPORT.md](docs/VE_MATH_VERIFICATION_REPORT.md) - Complete math verification report
+- [VE_MATH_VERIFICATION_QUICKREF.md](docs/VE_MATH_VERIFICATION_QUICKREF.md) - Quick reference guide
+- [JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md) - Hardware setup guide
+- [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) - Web app setup
+- [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - VE apply/rollback system
+- [TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md) - Adaptive kernel details
 ### Core Specifications
 - **[DETERMINISTIC_MATH_SPECIFICATION.md](docs/DETERMINISTIC_MATH_SPECIFICATION.md)** - Complete mathematical specification and world-class positioning
 - **[KERNEL_SPECIFICATION.md](docs/KERNEL_SPECIFICATION.md)** - Detailed kernel algorithms (K1, K2, K3) with frozen parameters

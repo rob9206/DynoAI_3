@@ -34,6 +34,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
+import { JetDriveLiveDashboard } from '../components/jetdrive';
 import { Slider } from '../components/ui/slider';
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger
@@ -850,6 +851,12 @@ export default function JetDriveAutoTunePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRpm, audioFunMode]);
 
+export default function JetDriveAutoTunePage() {
+    const [activeMainTab, setActiveMainTab] = useState('autotune');
+    const [runId, setRunId] = useState(`run_${Date.now()}`);
+    const [selectedRun, setSelectedRun] = useState<string | null>(null);
+    const [pvvContent, setPvvContent] = useState<string>('');
+    const [textExportContent, setTextExportContent] = useState<string>('');
     // Trigger AI on AFR conditions during pulls
     const lastAfrTrigger = useRef<number>(0);
     const afrCooldown = 8000; // 8 seconds between AFR comments
@@ -1033,6 +1040,24 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
+    // Fetch text export content
+    const fetchTextExport = async (rid: string) => {
+        try {
+            const res = await fetch(`${API_BASE}/run/${rid}/export-text`);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch text export: ${res.status} ${res.statusText}`);
+            }
+            const data = await res.json();
+            if (!data || typeof data.content !== 'string') {
+                throw new Error('Invalid response: missing content');
+            }
+            setTextExportContent(data.content);
+        } catch (err) {
+            toast.error('Failed to fetch text export', { description: String(err) });
+        }
+    };
+
+    // Download PVV file
     // Fetch PVV
     useEffect(() => {
         if (selectedRun) {
@@ -1054,6 +1079,25 @@ export default function JetDriveAutoTunePage() {
         a.click();
         URL.revokeObjectURL(url);
     };
+
+    // Download text export file
+    const downloadTextExport = () => {
+        if (!textExportContent || !selectedRun) return;
+        const blob = new Blob([textExportContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `DynoAI_Analysis_${selectedRun}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    useEffect(() => {
+        if (selectedRun) {
+            fetchPvv(selectedRun);
+            fetchTextExport(selectedRun);
+        }
+    }, [selectedRun]);
 
     const runs: RunInfo[] = statusData?.runs || [];
     const analysis = runData?.manifest?.analysis;
@@ -1174,6 +1218,54 @@ export default function JetDriveAutoTunePage() {
                     </div>
                 </div>
 
+            {/* Main Tabs */}
+            <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg">
+                    <TabsTrigger value="hardware" className="flex items-center gap-2">
+                        <Radio className="h-4 w-4" />
+                        Hardware
+                    </TabsTrigger>
+                    <TabsTrigger value="live" className="flex items-center gap-2">
+                        <Activity className="h-4 w-4" />
+                        Live
+                    </TabsTrigger>
+                    <TabsTrigger value="autotune" className="flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Auto-Tune
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Hardware Tab */}
+                <TabsContent value="hardware" className="mt-6">
+                    <HardwareTab />
+                </TabsContent>
+
+                {/* Live Dashboard Tab */}
+                <TabsContent value="live" className="mt-6">
+                    <JetDriveLiveDashboard apiUrl={API_BASE} />
+                </TabsContent>
+
+                {/* Auto-Tune Tab */}
+                <TabsContent value="autotune" className="mt-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Left Column - Controls */}
+                        <div className="space-y-4">
+                            {/* New Analysis Card */}
+                            <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Play className="h-5 w-5 text-orange-500" />
+                                        New Analysis
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="run-id">Run ID</Label>
+                                        <Input
+                                            id="run-id"
+                                            value={runId}
+                                            onChange={(e) => setRunId(e.target.value)}
+                                            placeholder="my_dyno_run"
                 {/* Settings Panel (collapsible) */}
                 <AnimatePresence>
                     {showSettings && (
@@ -1932,6 +2024,239 @@ export default function JetDriveAutoTunePage() {
                                 </CardContent>
                             </Card>
 
+                        {/* Right Column - Results */}
+                        <div className="lg:col-span-2 space-y-4">
+                            {selectedRun && runData ? (
+                                <>
+                                    {/* Analysis Summary */}
+                                    <Card>
+                                        <CardHeader>
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                                    {selectedRun}
+                                                </CardTitle>
+                                                <StatusBadge status={analysis?.overall_status || 'Unknown'} />
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-orange-500">
+                                                        {analysis?.peak_hp?.toFixed(1)}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Peak HP @ {analysis?.peak_hp_rpm} RPM
+                                                    </div>
+                                                </div>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold text-blue-500">
+                                                        {analysis?.peak_tq?.toFixed(1)}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Peak TQ @ {analysis?.peak_tq_rpm} RPM
+                                                    </div>
+                                                </div>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="text-2xl font-bold">
+                                                        {analysis?.total_samples}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Samples
+                                                    </div>
+                                                </div>
+                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                                    <div className="flex justify-center gap-1">
+                                                        <span className="text-green-500">{analysis?.ok_cells}</span>
+                                                        <span className="text-muted-foreground">/</span>
+                                                        <span className="text-red-500">{analysis?.lean_cells}</span>
+                                                        <span className="text-muted-foreground">/</span>
+                                                        <span className="text-blue-500">{analysis?.rich_cells}</span>
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        OK / Lean / Rich
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Tabs for Grid and Export */}
+                                    <Tabs defaultValue="grid" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-4">
+                                            <TabsTrigger value="grid">
+                                                <Grid3X3 className="h-4 w-4 mr-2" />
+                                                VE Grid
+                                            </TabsTrigger>
+                                            <TabsTrigger value="pvv">
+                                                <FileDown className="h-4 w-4 mr-2" />
+                                                PVV Export
+                                            </TabsTrigger>
+                                            <TabsTrigger value="text">
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Text Export
+                                            </TabsTrigger>
+                                            <TabsTrigger value="report">
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                JSON
+                                            </TabsTrigger>
+                                        </TabsList>
+
+                                        {/* VE Correction Grid */}
+                                        <TabsContent value="grid">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle className="text-sm">
+                                                        VE Correction Grid (% change)
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        {grid?.rpm_bins?.length} RPM × {grid?.map_bins?.length} MAP bins
+                                                    </CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-xs">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th className="p-2 text-left bg-muted/50">RPM \ MAP</th>
+                                                                    {grid?.map_bins?.map((m: number) => (
+                                                                        <th key={m} className="p-2 text-center bg-muted/50 min-w-[60px]">
+                                                                            {m} kPa
+                                                                        </th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {veGrid.map((row, i) => (
+                                                                    <tr key={row.rpm}>
+                                                                        <td className="p-2 font-medium bg-muted/30">
+                                                                            {row.rpm}
+                                                                        </td>
+                                                                        {row.values.map((val, j) => {
+                                                                            const delta = ((val - 1) * 100);
+                                                                            return (
+                                                                                <td
+                                                                                    key={j}
+                                                                                    className={`p-2 text-center font-mono ${getCellColor(val)}`}
+                                                                                >
+                                                                                    {delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
+                                                                                </td>
+                                                                            );
+                                                                        })}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    <div className="mt-4 flex items-center justify-center gap-4 text-xs">
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-red-500/40 rounded" />
+                                                            <span>Lean (+)</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-green-500/20 rounded" />
+                                                            <span>OK</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-4 h-4 bg-blue-500/40 rounded" />
+                                                            <span>Rich (−)</span>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
+                                        {/* PVV Export */}
+                                        <TabsContent value="pvv">
+                                            <Card>
+                                                <CardHeader>
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <CardTitle className="text-sm">Power Vision PVV Export</CardTitle>
+                                                            <CardDescription>
+                                                                Import directly into Power Core
+                                                            </CardDescription>
+                                                        </div>
+                                                        <Button onClick={downloadPvv} size="sm">
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Download .pvv
+                                                        </Button>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96">
+                                                        {pvvContent || 'Loading...'}
+                                                    </pre>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
+                                        {/* Text Export */}
+                                        <TabsContent value="text">
+                                            <Card>
+                                                <CardHeader>
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <CardTitle className="text-sm">Text Export for AI Analysis</CardTitle>
+                                                            <CardDescription>
+                                                                Comprehensive text report for sharing with ChatGPT or other AI assistants
+                                                            </CardDescription>
+                                                        </div>
+                                                        <Button onClick={downloadTextExport} size="sm">
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Download .txt
+                                                        </Button>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96 whitespace-pre-wrap">
+                                                        {textExportContent || 'Loading...'}
+                                                    </pre>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+
+                                        {/* Report */}
+                                        <TabsContent value="report">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle className="text-sm">JSON Manifest</CardTitle>
+                                                    <CardDescription>
+                                                        Raw JSON data from analysis
+                                                    </CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
+                                                        {runData?.manifest ? (
+                                                            JSON.stringify(runData.manifest, null, 2)
+                                                        ) : (
+                                                            'Loading...'
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                    </Tabs>
+                                </>
+                            ) : (
+                                <Card className="h-full flex items-center justify-center min-h-[400px]">
+                                    <CardContent className="text-center">
+                                        <Gauge className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
+                                        <h3 className="text-lg font-medium mb-2">No Run Selected</h3>
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Run a simulation or select a previous run to view results
+                                        </p>
+                                        <Button
+                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                            className="bg-orange-600 hover:bg-orange-700"
+                                        >
+                                            <Zap className="h-4 w-4 mr-2" />
+                                            Run Simulation
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            )}
                             {/* Tuner Tips */}
                             <Card className="bg-zinc-900/30 border-zinc-800/50">
                                 <CardHeader className="py-3">
