@@ -24,7 +24,7 @@ import {
     Activity, ChevronRight, TrendingUp,
     Wrench, Timer, Power, Settings2,
     AlertTriangle, Crosshair, Cpu, StopCircle, Mic,
-    Award, Info
+    Award, Info, Flame
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,6 +49,7 @@ import { RunComparisonTableEnhanced } from '../components/jetdrive/RunComparison
 import { TransientFuelPanel } from '../components/jetdrive/TransientFuelPanel';
 import { VirtualECUPanel, type VEScenario } from '../components/jetdrive/VirtualECUPanel';
 import { ClosedLoopTuningPanel } from '../components/jetdrive/ClosedLoopTuningPanel';
+import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
 import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
 import { useAudioEngine } from '../hooks/useAudioEngine';
@@ -1085,6 +1086,36 @@ export default function JetDriveAutoTunePage() {
                     <div className="flex items-center gap-3">
                         <WorkflowIndicator state={workflowState} rpmThreshold={rpmThreshold} />
 
+                        {/* Quick Decel Pop Fix Sheet */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="relative border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 hover:border-orange-500/50 text-orange-300 gap-2"
+                                >
+                                    <Flame className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Decel Fix</span>
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-[380px] sm:w-[420px] overflow-y-auto">
+                                <SheetHeader className="mb-4">
+                                    <SheetTitle className="flex items-center gap-2">
+                                        <Flame className="w-5 h-5 text-orange-400" />
+                                        Decel Pop Fix
+                                    </SheetTitle>
+                                    <SheetDescription>
+                                        Eliminate exhaust popping with proven enrichment patterns
+                                    </SheetDescription>
+                                </SheetHeader>
+                                <StageConfigPanel
+                                    afrTargets={afrTargets}
+                                    onAfrTargetsChange={setAfrTargets}
+                                    runId={runId}
+                                    compact={true}
+                                />
+                            </SheetContent>
+                        </Sheet>
+
                         {/* Audio Capture Sheet - Prominent Button */}
                         <Sheet>
                             <SheetTrigger asChild>
@@ -1212,6 +1243,16 @@ export default function JetDriveAutoTunePage() {
                                                 {audioFunMode ? 'Exaggerated engine sounds' : 'Natural engine sounds'}
                                             </p>
                                         </div>
+                                    </div>
+
+                                    {/* Build Configuration - Stage & Cam Presets */}
+                                    <div className="pt-4 border-t border-zinc-800">
+                                        <StageConfigPanel
+                                            afrTargets={afrTargets}
+                                            onAfrTargetsChange={setAfrTargets}
+                                            runId={runId}
+                                            compact={false}
+                                        />
                                     </div>
 
                                     {/* Transient Fuel Analysis Option */}

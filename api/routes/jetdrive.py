@@ -31,8 +31,8 @@ from typing import Any
 from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
-from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 from api.rate_limit import get_limiter
+from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
 
@@ -314,9 +314,10 @@ def analyze_run():
                 400,
             )
 
-        from api.services.dyno_simulator import get_simulator, SimState
         import csv as csv_module
         from datetime import datetime
+
+        from api.services.dyno_simulator import SimState, get_simulator
 
         sim = get_simulator()
         sim_state = sim.get_state()
@@ -1374,6 +1375,149 @@ def get_live_data():
         )
 
 
+@jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
+def discover_channels():
+    """
+    Discover all available channels with their current values.
+    Useful for debugging channel name mismatches.
+    """
+    try:
+        # Check if simulator is active first
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels_data = sim.get_channels()
+        else:
+            global _live_data
+            with _live_data_lock:
+                channels_data = _live_data["channels"]
+
+        channels = []
+        for name, ch in channels_data.items():
+            channel_info = {
+                "id": ch.get("id"),
+                "name": name,
+                "value": ch.get("value"),
+                "units": "",
+                "suggested_label": name.replace("chan_", "Channel ").replace("_", " "),
+            }
+
+            # Suggest configuration based on value range and name
+            value = ch.get("value", 0)
+            name_lower = name.lower()
+
+            # Suggest units based on value range and name patterns
+            if "rpm" in name_lower or (value > 500 and value < 15000):
+                channel_info["suggested_units"] = "rpm"
+                channel_info["suggested_type"] = "Engine Speed"
+            elif (
+                "afr" in name_lower
+                or "air/fuel" in name_lower
+                or (value > 9 and value < 20)
+            ):
+                channel_info["suggested_units"] = ":1"
+                channel_info["suggested_type"] = "Air/Fuel Ratio"
+            elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
+                channel_info["suggested_units"] = "λ"
+                channel_info["suggested_type"] = "Lambda"
+            elif "temp" in name_lower or (value > 10 and value < 150):
+                channel_info["suggested_units"] = "°C or °F"
+                channel_info["suggested_type"] = "Temperature"
+            elif (
+                "press" in name_lower
+                or "kpa" in name_lower
+                or (value > 85 and value < 115)
+            ):
+                channel_info["suggested_units"] = "kPa"
+                channel_info["suggested_type"] = "Pressure"
+            elif "humid" in name_lower or (
+                value >= 0 and value <= 100 and value != int(value)
+            ):
+                channel_info["suggested_units"] = "%"
+                channel_info["suggested_type"] = "Humidity"
+            elif "force" in name_lower or "load" in name_lower:
+                channel_info["suggested_units"] = "lbs"
+                channel_info["suggested_type"] = "Force"
+            elif "hp" in name_lower or "horsepower" in name_lower:
+                channel_info["suggested_units"] = "HP"
+                channel_info["suggested_type"] = "Horsepower"
+            elif "torque" in name_lower or "tq" in name_lower:
+                channel_info["suggested_units"] = "ft-lb"
+                channel_info["suggested_type"] = "Torque"
+            elif "map" in name_lower:
+                channel_info["suggested_units"] = "kPa"
+                channel_info["suggested_type"] = "Manifold Pressure"
+            elif "tps" in name_lower or "throttle" in name_lower:
+                channel_info["suggested_units"] = "%"
+                channel_info["suggested_type"] = "Throttle Position"
+            elif "volt" in name_lower or "vbat" in name_lower:
+                channel_info["suggested_units"] = "V"
+                channel_info["suggested_type"] = "Voltage"
+            else:
+                channel_info["suggested_units"] = ""
+                channel_info["suggested_type"] = "Unknown"
+
+            channels.append(channel_info)
+
+        return jsonify(
+            {"success": True, "channel_count": len(channels), "channels": channels}
+        )
+
+    except Exception as e:
+        logger.exception("Failed to discover channels")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/hardware/health", methods=["GET"])
+def check_hardware_health():
+    """Check hardware connection health and latency."""
+    try:
+        start_time = time.time()
+
+        # Check if we can get live data
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels = sim.get_channels()
+            latency_ms = (time.time() - start_time) * 1000
+
+            return jsonify(
+                {
+                    "healthy": True,
+                    "connected": True,
+                    "simulated": True,
+                    "latency_ms": latency_ms,
+                    "channel_count": len(channels),
+                }
+            )
+
+        global _live_data
+        with _live_data_lock:
+            capturing = _live_data["capturing"]
+            channel_count = len(_live_data["channels"])
+            latency_ms = (time.time() - start_time) * 1000
+
+        return jsonify(
+            {
+                "healthy": True,
+                "connected": True,
+                "simulated": False,
+                "capturing": capturing,
+                "latency_ms": latency_ms,
+                "channel_count": channel_count,
+            }
+        )
+
+    except Exception as e:
+        logger.exception("Health check failed")
+        return (
+            jsonify({"healthy": False, "connected": False, "error": str(e)}),
+            503,
+        )
+
+
 # =============================================================================
 # Dyno Simulator Routes
 # =============================================================================
@@ -1454,8 +1598,8 @@ def start_simulator():
         if ecu_config and ecu_config.get("enabled", False):
             from api.services.virtual_ecu import (
                 VirtualECU,
-                create_baseline_ve_table,
                 create_afr_target_table,
+                create_baseline_ve_table,
                 create_intentionally_wrong_ve_table,
             )
 
@@ -1628,7 +1772,7 @@ def trigger_pull():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator, SimState
+    from api.services.dyno_simulator import SimState, get_simulator
 
     sim = get_simulator()
     current_state = sim.get_state()
@@ -1661,7 +1805,7 @@ def get_pull_data():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator, SimState
+    from api.services.dyno_simulator import SimState, get_simulator
 
     sim = get_simulator()
     sim_state = sim.get_state()
@@ -1729,9 +1873,10 @@ def save_simulator_pull():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator
     import csv
     from datetime import datetime
+
+    from api.services.dyno_simulator import get_simulator
 
     sim = get_simulator()
     data = sim.get_pull_data()
@@ -1839,3 +1984,261 @@ def get_profiles():
         )
 
     return jsonify({"profiles": result})
+
+
+# =============================================================================
+# Debug and Diagnostics Routes
+# =============================================================================
+
+
+def suggest_channel_config(channel_name: str, channel_data: dict) -> dict:
+    """
+    Suggest configuration for a channel based on its name and value characteristics.
+    Used by channel discovery endpoint.
+    """
+    name_lower = channel_name.lower()
+    value = channel_data.get("value", 0)
+
+    # Common channel patterns
+    if "rpm" in name_lower:
+        return {
+            "label": "RPM",
+            "units": "rpm",
+            "min": 0,
+            "max": 10000,
+            "decimals": 0,
+            "color": "#4ade80",
+        }
+    elif "afr" in name_lower or "air/fuel" in name_lower or "air-fuel" in name_lower:
+        return {
+            "label": "AFR",
+            "units": ":1",
+            "min": 10,
+            "max": 18,
+            "decimals": 2,
+            "color": "#f472b6",
+        }
+    elif "lambda" in name_lower:
+        return {
+            "label": "Lambda",
+            "units": "λ",
+            "min": 0.7,
+            "max": 1.3,
+            "decimals": 3,
+            "color": "#a78bfa",
+        }
+    elif "force" in name_lower or "load" in name_lower or "drum" in name_lower:
+        return {
+            "label": "Force",
+            "units": "lbs",
+            "min": 0,
+            "max": 500,
+            "decimals": 1,
+            "color": "#4ade80",
+        }
+    elif "hp" in name_lower or "horsepower" in name_lower or "power" in name_lower:
+        return {
+            "label": "Horsepower",
+            "units": "HP",
+            "min": 0,
+            "max": 200,
+            "decimals": 1,
+            "color": "#10b981",
+        }
+    elif "tq" in name_lower or "torque" in name_lower:
+        return {
+            "label": "Torque",
+            "units": "ft-lb",
+            "min": 0,
+            "max": 150,
+            "decimals": 1,
+            "color": "#8b5cf6",
+        }
+    elif "map" in name_lower and "kpa" not in name_lower:
+        return {
+            "label": "MAP",
+            "units": "kPa",
+            "min": 0,
+            "max": 105,
+            "decimals": 1,
+            "color": "#06b6d4",
+        }
+    elif "tps" in name_lower or "throttle" in name_lower:
+        return {
+            "label": "TPS",
+            "units": "%",
+            "min": 0,
+            "max": 100,
+            "decimals": 1,
+            "color": "#14b8a6",
+        }
+    elif "temp" in name_lower or "iat" in name_lower or "ect" in name_lower:
+        # Guess based on value range
+        if value > 100:  # Likely Fahrenheit
+            return {
+                "label": "Temperature",
+                "units": "°F",
+                "min": 0,
+                "max": 250,
+                "decimals": 0,
+                "color": "#f97316",
+            }
+        else:  # Likely Celsius
+            return {
+                "label": "Temperature",
+                "units": "°C",
+                "min": 0,
+                "max": 120,
+                "decimals": 1,
+                "color": "#f97316",
+            }
+    elif "humid" in name_lower:
+        return {
+            "label": "Humidity",
+            "units": "%",
+            "min": 0,
+            "max": 100,
+            "decimals": 1,
+            "color": "#60a5fa",
+        }
+    elif "pressure" in name_lower or "baro" in name_lower:
+        return {
+            "label": "Pressure",
+            "units": "kPa",
+            "min": 90,
+            "max": 110,
+            "decimals": 2,
+            "color": "#a78bfa",
+        }
+    elif "volt" in name_lower or "vbatt" in name_lower or "battery" in name_lower:
+        return {
+            "label": "Voltage",
+            "units": "V",
+            "min": 0,
+            "max": 15,
+            "decimals": 2,
+            "color": "#eab308",
+        }
+    else:
+        # Generic fallback
+        return {
+            "label": channel_name,
+            "units": "",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "color": "#888888",
+        }
+
+
+@jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
+def discover_channels():
+    """
+    Discover all available channels with their current values.
+    Useful for debugging channel name mismatches.
+    """
+    try:
+        # Get live data (works with both real hardware and simulator)
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels_data = sim.get_channels()
+        else:
+            with _live_data_lock:
+                channels_data = _live_data.get("channels", {})
+
+        channels = []
+        for name, ch in channels_data.items():
+            # Build channel info
+            channel_info = {
+                "id": ch.get("id", 0),
+                "name": name,
+                "value": ch.get("value", 0),
+                "timestamp": ch.get("timestamp", 0),
+                "suggested_config": suggest_channel_config(name, ch),
+            }
+
+            channels.append(channel_info)
+
+        # Sort by ID for consistency
+        channels.sort(key=lambda x: x["id"])
+
+        return jsonify(
+            {
+                "success": True,
+                "channel_count": len(channels),
+                "channels": channels,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error discovering channels: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/hardware/health", methods=["GET"])
+def check_hardware_health():
+    """
+    Check hardware connection health with latency measurement.
+    """
+    try:
+        start_time = time.time()
+
+        # Check if we're using simulator
+        if _is_simulator_active():
+            latency_ms = (time.time() - start_time) * 1000
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            state = sim.get_state().value
+
+            return jsonify(
+                {
+                    "healthy": True,
+                    "connected": True,
+                    "simulated": True,
+                    "sim_state": state,
+                    "latency_ms": latency_ms,
+                    "mode": "simulator",
+                }
+            )
+
+        # Check real hardware connection
+        with _live_data_lock:
+            capturing = _live_data.get("capturing", False)
+            channel_count = len(_live_data.get("channels", {}))
+            last_update = _live_data.get("last_update")
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Consider healthy if we have channels and recent updates
+        is_healthy = capturing and channel_count > 0
+
+        if last_update:
+            try:
+                last_update_dt = datetime.fromisoformat(last_update)
+                age_seconds = (datetime.now() - last_update_dt).total_seconds()
+
+                # Stale if no update in last 5 seconds
+                if age_seconds > 5:
+                    is_healthy = False
+            except:
+                pass
+
+        return jsonify(
+            {
+                "healthy": is_healthy,
+                "connected": capturing,
+                "simulated": False,
+                "latency_ms": latency_ms,
+                "channel_count": channel_count,
+                "last_update": last_update,
+                "mode": "hardware",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error checking hardware health: {e}", exc_info=True)
+        return jsonify({"healthy": False, "connected": False, "error": str(e)}), 503

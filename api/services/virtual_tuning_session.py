@@ -417,7 +417,9 @@ class VirtualTuningOrchestrator:
         session.update_progress(0.0, f"Starting iteration {iteration}...")
 
         # Create AFR target table
+        logger.info("  📋 Creating AFR target table...")
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
+        logger.info("  ✓ AFR target table created")
 
         # Create Virtual ECU with current VE tables
         if session.current_ve_front is None or session.current_ve_rear is None:
@@ -437,6 +439,7 @@ class VirtualTuningOrchestrator:
         session.update_progress(20.0, "Virtual ECU created")
 
         # Create simulator with Virtual ECU
+        logger.info("  🏍️ Creating dyno simulator...")
         sim_config = SimulatorConfig(
             profile=session.config.engine_profile,
             enable_thermal_effects=True,
@@ -444,12 +447,13 @@ class VirtualTuningOrchestrator:
         )
 
         simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
+        logger.info("  ✓ Simulator created, starting...")
         simulator.start()
 
         # Wait for idle
         time.sleep(0.5)
 
-        logger.info(f"  Simulator state after start: {simulator.get_state().value}")
+        logger.info(f"  ✓ Simulator started (state: {simulator.get_state().value})")
 
         # Trigger pull
         # Progress: 40% - Dyno pull started
@@ -459,25 +463,39 @@ class VirtualTuningOrchestrator:
 
         # Verify pull started
         time.sleep(0.2)
-        logger.info(f"  Simulator state after trigger: {simulator.get_state().value}")
+        logger.info(f"  ⏳ Pull triggered (state: {simulator.get_state().value})")
 
         # Wait for completion (with timeout)
         max_wait = 30  # 30 second timeout
         wait_count = 0
+        last_log = 0
         while simulator.get_state().value != "idle":
             time.sleep(0.1)
             wait_count += 1
+
+            # Log progress every 2 seconds
+            if wait_count % 20 == 0 and wait_count != last_log:
+                elapsed = wait_count / 10
+                logger.info(
+                    f"  ⏳ Pull in progress... {elapsed:.1f}s elapsed (state: {simulator.get_state().value})"
+                )
+                last_log = wait_count
+
             if wait_count > max_wait * 10:  # 10 checks per second
                 logger.error(
-                    f"Timeout waiting for pull to complete (state: {simulator.get_state().value})"
+                    f"  ❌ Timeout waiting for pull to complete (state: {simulator.get_state().value})"
                 )
                 simulator.stop()
                 raise TimeoutError("Pull did not complete within 30 seconds")
+
+        pull_duration = time.time() - pull_start
+        logger.info(f"  ✓ Pull completed in {pull_duration:.1f}s")
 
         # Get pull data
         pull_data = simulator.get_pull_data()
         logger.info(f"  ✓ Dyno pull complete, {len(pull_data)} data points captured")
         simulator.stop()
+        logger.info("  ✓ Simulator stopped")
 
         # Progress: 70% - Dyno pull completed
         session.update_progress(70.0, f"Dyno pull complete ({len(pull_data)} points)")
@@ -485,6 +503,7 @@ class VirtualTuningOrchestrator:
         if not pull_data or len(pull_data) == 0:
             raise ValueError("No pull data collected - pull may not have completed")
 
+        logger.info("  📈 Converting pull data to DataFrame...")
         df = pd.DataFrame(pull_data)
 
         # Calculate AFR errors
