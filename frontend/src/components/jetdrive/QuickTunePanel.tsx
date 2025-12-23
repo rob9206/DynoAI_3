@@ -182,7 +182,7 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Auto-detection status */}
+        {/* Run Detection Alert */}
         {runDetected && (
           <Alert className="border-green-500 bg-green-500/10">
             <Zap className="h-4 w-4 text-green-500 animate-pulse" />
