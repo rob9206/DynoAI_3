@@ -256,12 +256,41 @@ export function LiveVETable({
         rpmBins.map(() => mapBins.map(() => 1.0))
     );
 
+    // Performance monitoring
+    const [updateStats, setUpdateStats] = useState({
+        updatesPerSec: 0,
+        lastUpdate: Date.now(),
+        updateCount: 0,
+    });
+
     // Reset state when engine preset changes
     useEffect(() => {
         setLiveHitCounts(rpmBins.map(() => mapBins.map(() => 0)));
         setAfrAccumulator(rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 }))));
         setLiveVeCorrections(rpmBins.map(() => mapBins.map(() => 1.0)));
+        setUpdateStats({ updatesPerSec: 0, lastUpdate: Date.now(), updateCount: 0 });
     }, [activePreset, rpmBins, mapBins]);
+
+    // Performance monitoring - calculate updates per second
+    useEffect(() => {
+        if (!isLive) return;
+
+        const interval = setInterval(() => {
+            setUpdateStats(prev => {
+                const now = Date.now();
+                const elapsed = (now - prev.lastUpdate) / 1000;
+                const updatesPerSec = elapsed > 0 ? prev.updateCount / elapsed : 0;
+                
+                return {
+                    updatesPerSec,
+                    lastUpdate: now,
+                    updateCount: 0,
+                };
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [isLive]);
 
     // Track which cells are currently active (using kPa directly)
     const cellTrace = useMemo(() => {
@@ -272,6 +301,12 @@ export function LiveVETable({
     // Update hit counts and AFR accumulator when operating point changes
     useEffect(() => {
         if (!isLive || !cellTrace || currentRpm < 800) return;
+
+        // Track updates for performance monitoring
+        setUpdateStats(prev => ({
+            ...prev,
+            updateCount: prev.updateCount + 1,
+        }));
 
         // Accumulate hits and AFR values for active cells
         setLiveHitCounts(prev => {
@@ -337,6 +372,7 @@ export function LiveVETable({
         setLiveHitCounts(rpmBins.map(() => mapBins.map(() => 0)));
         setAfrAccumulator(rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 }))));
         setLiveVeCorrections(rpmBins.map(() => mapBins.map(() => 1.0)));
+        setUpdateStats({ updatesPerSec: 0, lastUpdate: Date.now(), updateCount: 0 });
     }, [rpmBins, mapBins]);
 
     // Check if a cell is currently active
@@ -409,9 +445,9 @@ export function LiveVETable({
                     <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
                         {totalHits} hits
                     </Badge>
-                    {process.env.NODE_ENV === 'development' && isLive && (
-                        <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
-                            {updateStats.updatesPerSec.toFixed(1)} ups
+                    {isLive && updateStats.updatesPerSec > 0 && (
+                        <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400">
+                            {updateStats.updatesPerSec.toFixed(1)} updates/s
                         </Badge>
                     )}
                     <Button

@@ -56,6 +56,55 @@ export interface UseJetDriveLiveReturn {
     clearHistory: () => void;
 }
 
+// Get channel configuration with flexible matching
+export function getChannelConfig(channelName: string) {
+    // Try exact match first
+    if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
+        return JETDRIVE_CHANNEL_CONFIG[channelName];
+    }
+    
+    // Try case-insensitive match
+    const lowerName = channelName.toLowerCase();
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        if (key.toLowerCase() === lowerName) {
+            return config;
+        }
+    }
+    
+    // Try partial match for common patterns
+    if (lowerName.includes('rpm')) {
+        return JETDRIVE_CHANNEL_CONFIG['RPM'] || JETDRIVE_CHANNEL_CONFIG['Digital RPM 1'];
+    }
+    if (lowerName.includes('afr') || lowerName.includes('air/fuel')) {
+        return JETDRIVE_CHANNEL_CONFIG['AFR'] || JETDRIVE_CHANNEL_CONFIG['Air/Fuel Ratio 1'];
+    }
+    if (lowerName.includes('force') || lowerName.includes('load')) {
+        return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'];
+    }
+    if (lowerName.includes('map') || lowerName.includes('manifold')) {
+        return JETDRIVE_CHANNEL_CONFIG['MAP'] || JETDRIVE_CHANNEL_CONFIG['MAP kPa'];
+    }
+    if (lowerName.includes('tps') || lowerName.includes('throttle')) {
+        return JETDRIVE_CHANNEL_CONFIG['TPS'];
+    }
+    if (lowerName.includes('horsepower') || lowerName.includes('hp')) {
+        return JETDRIVE_CHANNEL_CONFIG['HP'] || JETDRIVE_CHANNEL_CONFIG['Horsepower'];
+    }
+    if (lowerName.includes('torque') || lowerName.includes('tq')) {
+        return JETDRIVE_CHANNEL_CONFIG['TQ'] || JETDRIVE_CHANNEL_CONFIG['Torque'];
+    }
+    
+    // Default fallback
+    return {
+        label: channelName,
+        units: '',
+        min: 0,
+        max: 100,
+        decimals: 2,
+        color: '#888'
+    };
+}
+
 // Channel configuration for display
 // Maps both JetDrive channel names and fallback chan_X names
 export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
