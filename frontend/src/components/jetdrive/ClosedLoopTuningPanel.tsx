@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap } from 'lucide-react';
+import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap, ChevronDown, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '../ui/button';
@@ -19,8 +19,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 const API_BASE = 'http://127.0.0.1:5001/api/virtual-tune';
+
+// Session recovery constants
+const HOUR_IN_MS = 60 * 60 * 1000;
+const SESSION_STORAGE_KEY = 'dynoai_active_tuning_session';
 
 interface IterationData {
     iteration: number;
@@ -38,6 +43,8 @@ interface SessionStatus {
     current_iteration: number;
     max_iterations: number;
     converged: boolean;
+    progress_pct: number;
+    progress_message: string;
     iterations: IterationData[];
     duration_sec: number;
     error_message?: string;
@@ -58,6 +65,45 @@ export function ClosedLoopTuningPanel({
 }: ClosedLoopTuningPanelProps) {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isStarting, setIsStarting] = useState(false);
+    const [showErrorDetails, setShowErrorDetails] = useState(false);
+    const [lastConfig, setLastConfig] = useState<any>(null);
+    const [isResumed, setIsResumed] = useState(false);
+
+    // Session recovery from localStorage
+    useEffect(() => {
+        const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedSession) {
+            try {
+                const { sessionId: savedId, startTime } = JSON.parse(savedSession);
+                // Only resume if session was started less than 1 hour ago
+                const hourAgo = Date.now() - HOUR_IN_MS;
+                if (startTime > hourAgo) {
+                    setSessionId(savedId);
+                    setIsResumed(true);
+                    toast.info('Resumed monitoring session', {
+                        description: `Session from ${new Date(startTime).toLocaleTimeString()}`,
+                    });
+                } else {
+                    localStorage.removeItem(SESSION_STORAGE_KEY);
+                }
+            } catch (e) {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+            }
+        }
+    }, []);
+
+    // Save active session to localStorage
+    useEffect(() => {
+        if (sessionId && status?.status === 'running') {
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+                sessionId,
+                startTime: Date.now()
+            }));
+        } else if (sessionId && (status?.status === 'converged' || status?.status === 'failed' || status?.status === 'stopped' || status?.status === 'max_iterations')) {
+            // Clear localStorage when session completes
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+    }, [sessionId, status?.status]);
 
     // Poll session status
     const { data: status, refetch } = useQuery<SessionStatus>({
@@ -79,15 +125,18 @@ export function ClosedLoopTuningPanel({
     // Start tuning mutation
     const startTuning = useMutation({
         mutationFn: async () => {
+            const config = {
+                engine_profile: engineProfile,
+                base_ve_scenario: baseScenario,
+                max_iterations: maxIterations,
+                convergence_threshold_afr: convergenceThreshold,
+            };
+            setLastConfig(config);  // Save config for retry
+            
             const res = await fetch(`${API_BASE}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    engine_profile: engineProfile,
-                    base_ve_scenario: baseScenario,
-                    max_iterations: maxIterations,
-                    convergence_threshold_afr: convergenceThreshold,
-                }),
+                body: JSON.stringify(config),
             });
             if (!res.ok) throw new Error(await res.text());
             return res.json();
@@ -121,6 +170,35 @@ export function ClosedLoopTuningPanel({
         },
     });
 
+    // Health check mutation
+    const healthCheck = useMutation({
+        mutationFn: async () => {
+            const res = await fetch(`${API_BASE}/health`);
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+        onSuccess: (data) => {
+            if (data.healthy) {
+                toast.success('All systems operational', {
+                    description: 'Virtual tuning system is healthy',
+                });
+            } else {
+                const failedComponents = Object.entries(data.components)
+                    .filter(([_, status]) => status !== 'ok')
+                    .map(([name, _]) => name)
+                    .join(', ');
+                toast.warning('Some components have issues', {
+                    description: `Failed: ${failedComponents}`,
+                });
+            }
+        },
+        onError: (error) => {
+            toast.error('Health check failed', {
+                description: error instanceof Error ? error.message : String(error),
+            });
+        },
+    });
+
     const handleStart = () => {
         setIsStarting(true);
         startTuning.mutate();
@@ -133,17 +211,37 @@ export function ClosedLoopTuningPanel({
     const handleReset = () => {
         setSessionId(null);
         setIsStarting(false);
+        setShowErrorDetails(false);
+    };
+
+    const handleRetry = () => {
+        // Reset and start a new session with the same config
+        setSessionId(null);
+        setIsStarting(true);
+        setShowErrorDetails(false);
+        startTuning.mutate();
     };
 
     const isRunning = status?.status === 'running';
     const isComplete = status?.status === 'converged' || status?.status === 'max_iterations';
     const isFailed = status?.status === 'failed';
 
-    // Calculate progress - show partial progress during first iteration
-    const progressPct = status
-        ? status.current_iteration === 0 && status.status === 'running'
-            ? 5  // Show 5% to indicate activity
-            : (status.current_iteration / status.max_iterations) * 100
+    // Helper function to calculate overall progress percentage
+    const calculateProgressPercentage = (status: SessionStatus | null | undefined): number => {
+        if (!status) return 0;
+        
+        // First iteration: use sub-iteration progress
+        if (status.current_iteration === 0 && status.status === 'running') {
+            return status.progress_pct || 5;  // Show 5% minimum to indicate activity
+        }
+        
+        // Subsequent iterations: combine iteration count with sub-progress
+        const completedProgress = status.current_iteration / status.max_iterations;
+        const currentProgress = (status.progress_pct || 0) / 100 / status.max_iterations;
+        return (completedProgress + currentProgress) * 100;
+    };
+
+    const progressPct = calculateProgressPercentage(status);
         : 0;
 
     // Get latest iteration data
@@ -209,15 +307,49 @@ export function ClosedLoopTuningPanel({
                             </div>
                         </div>
 
-                        <Button onClick={handleStart} disabled={isStarting} className="w-full bg-cyan-600 hover:bg-cyan-700">
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Closed-Loop Tuning
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={handleStart} disabled={isStarting} className="flex-1 bg-cyan-600 hover:bg-cyan-700">
+                                <Play className="h-4 w-4 mr-2" />
+                                Start Closed-Loop Tuning
+                            </Button>
+                            <Button 
+                                onClick={() => healthCheck.mutate()} 
+                                variant="outline" 
+                                size="default"
+                                disabled={healthCheck.isPending}
+                            >
+                                <Activity className="h-4 w-4 mr-2" />
+                                Test Health
+                            </Button>
+                        </div>
                     </>
                 )}
 
                 {sessionId && status && (
                     <>
+                        {/* Resumed Session Banner */}
+                        {isResumed && (
+                            <Alert className="bg-blue-500/10 border-blue-500/30">
+                                <AlertDescription className="flex items-center justify-between">
+                                    <span>
+                                        <strong>Session Resumed</strong>
+                                        <br />
+                                        Monitoring session from previous page visit
+                                    </span>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => {
+                                            setIsResumed(false);
+                                            localStorage.removeItem(SESSION_STORAGE_KEY);
+                                        }}
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                        
                         {/* Progress Bar */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
@@ -236,15 +368,17 @@ export function ClosedLoopTuningPanel({
                         </div>
 
                         {/* Current Status */}
-                        {isRunning && status.current_iteration === 0 && (
+                        {isRunning && (
                             <Alert className="bg-cyan-500/10 border-cyan-500/30">
                                 <RefreshCw className="h-4 w-4 text-cyan-500 animate-spin" />
                                 <AlertDescription>
-                                    <strong>Running first iteration...</strong>
+                                    <strong>{status.progress_message || `Running iteration ${status.current_iteration || 1}...`}</strong>
                                     <br />
-                                    This takes 10-15 seconds (running full dyno pull + analysis).
-                                    <br />
-                                    Progress will update when iteration 1 completes.
+                                    {status.current_iteration === 0 ? (
+                                        <>This takes 10-15 seconds (running full dyno pull + analysis).</>
+                                    ) : (
+                                        <>Processing iteration {status.current_iteration} of {status.max_iterations}</>
+                                    )}
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -319,14 +453,47 @@ export function ClosedLoopTuningPanel({
                         )}
 
                         {isFailed && (
-                            <Alert className="bg-red-500/10 border-red-500/30">
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                                <AlertDescription>
-                                    <strong>Tuning failed</strong>
-                                    <br />
-                                    {status.error_message || 'Unknown error'}
-                                </AlertDescription>
-                            </Alert>
+                            <div className="space-y-2">
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertDescription>
+                                        <strong>Tuning Failed</strong>
+                                        <br />
+                                        {status.error_message || 'Unknown error occurred'}
+                                    </AlertDescription>
+                                </Alert>
+                                
+                                <Collapsible open={showErrorDetails} onOpenChange={setShowErrorDetails}>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="w-full justify-between">
+                                            <span>Error Details</span>
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${showErrorDetails ? 'rotate-180' : ''}`} />
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="mt-2">
+                                        <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-sm">
+                                            <div>
+                                                <span className="text-muted-foreground">Session ID:</span>
+                                                <div className="font-mono text-xs break-all">{status.session_id}</div>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Failed at:</span>
+                                                <div>Iteration {status.current_iteration}/{status.max_iterations}</div>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Error Message:</span>
+                                                <div className="text-red-500 font-medium">{status.error_message || 'No details available'}</div>
+                                            </div>
+                                            {status.start_time && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Duration before failure:</span>
+                                                    <div>{status.duration_sec.toFixed(1)}s</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            </div>
                         )}
 
                         {/* Controls */}
@@ -337,7 +504,18 @@ export function ClosedLoopTuningPanel({
                                     Stop
                                 </Button>
                             )}
-                            {(isComplete || isFailed) && (
+                            {isFailed && (
+                                <>
+                                    <Button onClick={handleRetry} variant="outline" size="sm" className="flex-1">
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Retry Tuning
+                                    </Button>
+                                    <Button onClick={handleReset} variant="outline" size="sm" className="flex-1">
+                                        New Session
+                                    </Button>
+                                </>
+                            )}
+                            {isComplete && (
                                 <Button onClick={handleReset} variant="outline" size="sm" className="flex-1">
                                     <RefreshCw className="h-4 w-4 mr-2" />
                                     New Session

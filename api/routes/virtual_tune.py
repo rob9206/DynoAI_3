@@ -9,12 +9,14 @@ Provides REST API for managing virtual tuning sessions:
 """
 
 import logging
+import time
 
 from flask import Blueprint, jsonify, request
 
 from api.services.dyno_simulator import EngineProfile
 from api.services.virtual_tuning_session import (
     TuningSessionConfig,
+    TuningStatus,
     get_orchestrator,
 )
 
@@ -92,44 +94,32 @@ def start_tuning_session():
         orchestrator = get_orchestrator()
         session = orchestrator.create_session(config)
 
-        # Start tuning in background with exception handling
+        # Start tuning in background (non-blocking for now)
+        # In production, this would be a background task (Celery, etc.)
         import threading
 
-        def run_session_with_error_handling():
-            """Wrapper to catch and log exceptions in background thread"""
+        def run_session_with_error_handling(session):
+            """Wrapper to catch and log exceptions in the background thread."""
             try:
-                logger.info(f"[Thread] Starting tuning session: {session.session_id}")
                 orchestrator.run_session(session)
-                logger.info(f"[Thread] Tuning session completed: {session.session_id}")
             except Exception as e:
                 logger.error(
-                    f"[Thread] Tuning session failed: {session.session_id} - {e}",
+                    f"Exception in tuning session {session.session_id}: {e}",
                     exc_info=True,
                 )
-                # Update session status to FAILED
-                try:
-                    from api.services.virtual_tuning_session import TuningStatus
-
-                    session.status = TuningStatus.FAILED
-                    session.error_message = str(e)
-                    import time
-
-                    session.end_time = time.time()
-                except Exception as update_error:
-                    logger.error(
-                        f"[Thread] Failed to update session status: {update_error}"
-                    )
+                session.status = TuningStatus.FAILED
+                session.error_message = str(e)
+                session.end_time = time.time()
 
         thread = threading.Thread(
             target=run_session_with_error_handling,
-            name=f"tuning-{session.session_id}",
+            args=(session,),
             daemon=True,
+            name=f"tuning-{session.session_id}",
         )
         thread.start()
 
-        logger.info(
-            f"Started tuning session: {session.session_id} (thread: {thread.name})"
-        )
+        logger.info(f"Started tuning session: {session.session_id}")
 
         return jsonify(
             {
@@ -416,3 +406,80 @@ def get_session_results(session_id: str):
     except Exception as e:
         logger.error(f"Error getting session results: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@virtual_tune_bp.route("/health", methods=["GET"])
+def health_check():
+    """
+    Check health of all virtual tuning components.
+
+    Response:
+    {
+        "healthy": true,
+        "components": {
+            "orchestrator": "ok",
+            "dyno_simulator": "ok",
+            "virtual_ecu": "ok",
+            "afr_analysis": "ok"
+        },
+        "timestamp": "2025-12-15T19:32:00Z"
+    }
+    """
+    from datetime import datetime
+
+    from api.services.autotune_workflow import AutoTuneWorkflow
+    from api.services.dyno_simulator import DynoSimulator, SimulatorConfig
+    from api.services.virtual_ecu import (
+        VirtualECU,
+        create_afr_target_table,
+        create_baseline_ve_table,
+    )
+
+    components = {}
+    healthy = True
+
+    # Check orchestrator
+    try:
+        orchestrator = get_orchestrator()
+        components["orchestrator"] = "ok"
+    except Exception as e:
+        components["orchestrator"] = f"error: {str(e)}"
+        healthy = False
+
+    # Check dyno simulator
+    try:
+        profile = EngineProfile.m8_114()
+        sim_config = SimulatorConfig(
+            profile=profile, enable_thermal_effects=False, auto_pull=False
+        )
+        # Don't actually start it, just verify we can create it
+        components["dyno_simulator"] = "ok"
+    except Exception as e:
+        components["dyno_simulator"] = f"error: {str(e)}"
+        healthy = False
+
+    # Check virtual ECU
+    try:
+        ve_table = create_baseline_ve_table(peak_ve=0.85, peak_rpm=4000)
+        afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
+        # Don't actually create ECU, just verify imports work
+        components["virtual_ecu"] = "ok"
+    except Exception as e:
+        components["virtual_ecu"] = f"error: {str(e)}"
+        healthy = False
+
+    # Check AFR analysis
+    try:
+        workflow = AutoTuneWorkflow()
+        components["afr_analysis"] = "ok"
+    except Exception as e:
+        components["afr_analysis"] = f"error: {str(e)}"
+        healthy = False
+
+    return jsonify(
+        {
+            "healthy": healthy,
+            "components": components,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    )

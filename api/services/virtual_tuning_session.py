@@ -14,7 +14,9 @@ This is the complete closed-loop tuning simulation!
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -105,6 +107,9 @@ class TuningSessionConfig:
     max_correction_per_iteration_pct: float = 15.0
     max_total_correction_pct: float = 50.0
 
+    # Timeout protection
+    iteration_timeout_sec: float = 60.0  # Max time per iteration
+
     # Oscillation detection
     oscillation_detection_enabled: bool = True
     oscillation_threshold: float = 0.1  # If error increases by this much, flag it
@@ -126,6 +131,10 @@ class TuningSession:
     current_iteration: int = 0
     iterations: list[IterationResult] = field(default_factory=list)
 
+    # Sub-iteration progress (0-100)
+    progress_pct: float = 0.0
+    progress_message: str = ""
+
     # Current VE tables
     current_ve_front: np.ndarray | None = None
     current_ve_rear: np.ndarray | None = None
@@ -140,6 +149,19 @@ class TuningSession:
     # Error tracking
     error_message: str | None = None
 
+    # Thread safety for progress updates
+    _progress_lock: Any = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
+
+    def update_progress(self, pct: float, message: str = "") -> None:
+        """Thread-safe progress update."""
+        with self._progress_lock:
+            self.progress_pct = pct
+            self.progress_message = message
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
         return {
@@ -148,6 +170,8 @@ class TuningSession:
             "current_iteration": self.current_iteration,
             "max_iterations": self.config.max_iterations,
             "converged": self.status == TuningStatus.CONVERGED,
+            "progress_pct": self.progress_pct,
+            "progress_message": self.progress_message,
             "iterations": [
                 {
                     "iteration": it.iteration,
@@ -297,8 +321,37 @@ class VirtualTuningOrchestrator:
                 logger.info(f"Iteration {iteration}/{session.config.max_iterations}")
                 logger.info("=" * 60)
 
-                # Run one iteration
-                iteration_result = self._run_iteration(session, iteration)
+                # Run one iteration with timeout protection
+                try:
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=1
+                    ) as executor:
+                        future = executor.submit(
+                            self._run_iteration, session, iteration
+                        )
+                        try:
+                            iteration_result = future.result(
+                                timeout=session.config.iteration_timeout_sec
+                            )
+                        except concurrent.futures.TimeoutError:
+                            logger.error(
+                                f"⚠️ Iteration {iteration} exceeded timeout ({session.config.iteration_timeout_sec}s)"
+                            )
+                            session.status = TuningStatus.FAILED
+                            session.error_message = f"Iteration {iteration} timeout after {session.config.iteration_timeout_sec}s"
+                            session.end_time = time.time()
+                            break
+                except Exception as iter_error:
+                    logger.error(
+                        f"Iteration {iteration} failed: {iter_error}", exc_info=True
+                    )
+                    session.status = TuningStatus.FAILED
+                    session.error_message = (
+                        f"Iteration {iteration} failed: {str(iter_error)}"
+                    )
+                    session.end_time = time.time()
+                    break
+
                 session.iterations.append(iteration_result)
                 session.current_iteration = iteration
 
@@ -360,6 +413,9 @@ class VirtualTuningOrchestrator:
         """
         iteration_start = time.time()
 
+        # Progress: 0% - Iteration started
+        session.update_progress(0.0, f"Starting iteration {iteration}...")
+
         # Create AFR target table
         logger.info("  📋 Creating AFR target table...")
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
@@ -369,7 +425,7 @@ class VirtualTuningOrchestrator:
         if session.current_ve_front is None or session.current_ve_rear is None:
             raise ValueError("VE tables not initialized in session")
 
-        logger.info("  🔧 Creating Virtual ECU with current VE tables...")
+        logger.info("  Creating Virtual ECU with current VE tables...")
         ecu = VirtualECU(
             ve_table_front=session.current_ve_front,
             ve_table_rear=session.current_ve_rear,
@@ -377,7 +433,10 @@ class VirtualTuningOrchestrator:
             barometric_pressure_inhg=session.config.barometric_pressure_inhg,
             ambient_temp_f=session.config.ambient_temp_f,
         )
-        logger.info("  ✓ Virtual ECU created")
+        logger.info("  ✓ Virtual ECU created with VE tables")
+
+        # Progress: 20% - Virtual ECU created
+        session.update_progress(20.0, "Virtual ECU created")
 
         # Create simulator with Virtual ECU
         logger.info("  🏍️ Creating dyno simulator...")
@@ -397,8 +456,9 @@ class VirtualTuningOrchestrator:
         logger.info(f"  ✓ Simulator started (state: {simulator.get_state().value})")
 
         # Trigger pull
-        logger.info("  🚀 Triggering dyno pull (this takes ~10-15 seconds)...")
-        pull_start = time.time()
+        # Progress: 40% - Dyno pull started
+        session.update_progress(40.0, "Running dyno pull...")
+        logger.info("  🚀 Starting dyno pull simulation...")
         simulator.trigger_pull()
 
         # Verify pull started
@@ -433,9 +493,12 @@ class VirtualTuningOrchestrator:
 
         # Get pull data
         pull_data = simulator.get_pull_data()
-        logger.info(f"  📊 Collected {len(pull_data)} data points")
+        logger.info(f"  ✓ Dyno pull complete, {len(pull_data)} data points captured")
         simulator.stop()
         logger.info("  ✓ Simulator stopped")
+
+        # Progress: 70% - Dyno pull completed
+        session.update_progress(70.0, f"Dyno pull complete ({len(pull_data)} points)")
 
         if not pull_data or len(pull_data) == 0:
             raise ValueError("No pull data collected - pull may not have completed")
@@ -444,7 +507,7 @@ class VirtualTuningOrchestrator:
         df = pd.DataFrame(pull_data)
 
         # Calculate AFR errors
-        logger.info("  🔍 Analyzing AFR errors...")
+        logger.info("  📊 Analyzing AFR errors...")
         df["AFR Error F"] = df["AFR Meas F"] - df["AFR Target"]
         df["AFR Error R"] = df["AFR Meas R"] - df["AFR Target"]
 
@@ -459,12 +522,13 @@ class VirtualTuningOrchestrator:
             np.sqrt((df["AFR Error F"] ** 2).mean() + (df["AFR Error R"] ** 2).mean())
             / np.sqrt(2)
         )
-        logger.info(
-            f"  ✓ AFR Analysis: max_error={max_afr_error:.3f}, mean_error={mean_afr_error:.3f}"
-        )
+        logger.info(f"  ✓ AFR analysis complete, max error: {max_afr_error:.3f}")
+
+        # Progress: 85% - AFR analysis completed
+        session.update_progress(85.0, "AFR analysis complete")
 
         # Calculate VE corrections using AutoTuneWorkflow
-        logger.info("  ⚙️ Calculating VE corrections...")
+        logger.info("  🔧 Calculating VE corrections...")
         workflow = AutoTuneWorkflow()
         workflow_session = workflow.create_session()
         workflow.import_dataframe(workflow_session, df)
@@ -492,6 +556,9 @@ class VirtualTuningOrchestrator:
         )
         cells_corrected = int(significant_mask.sum())
 
+        # Progress: 100% - VE corrections calculated
+        session.update_progress(100.0, "VE corrections calculated")
+
         # Convergence check
         converged_mask = (
             np.abs(correction_pcts) < session.config.convergence_threshold_afr * 7
@@ -510,9 +577,8 @@ class VirtualTuningOrchestrator:
         peak_tq = float(df["Torque"].max())
 
         iteration_duration = time.time() - iteration_start
-
         logger.info(
-            f"  ✓ Iteration {iteration} complete in {iteration_duration:.1f}s: "
+            f"  ✓ Iteration {iteration} complete in {iteration_duration:.1f}s - "
             f"Max AFR error: {max_afr_error:.3f}, "
             f"Mean: {mean_afr_error:.3f}, "
             f"Max VE correction: {max_ve_correction:.2f}%, "
