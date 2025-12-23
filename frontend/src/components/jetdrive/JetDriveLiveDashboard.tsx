@@ -3,13 +3,14 @@
  * 
  * Reuses LiveLink gauge and chart components with JetDrive data source.
  * Shows atmospheric data (humidity, temp, pressure) alongside dyno channels.
+ * Includes integrated audio capture for knock detection.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Activity, Gauge, Flame, Thermometer, Zap, Wind, Battery,
-    Droplets, Radio, Play, Square, RefreshCw, Settings2
+    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic, Search
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
@@ -18,12 +19,17 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
-import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, type JetDriveChannel } from '../../hooks/useJetDriveLive';
+import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDriveChannel } from '../../hooks/useJetDriveLive';
+import { AudioCapturePanel } from './AudioCapturePanel';
+import type { RecordedAudio } from '../../hooks/useAudioCapture';
+import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { cn } from '../../lib/utils';
 
 // Infer units from channel name or value
 function inferUnits(name: string, value: number): string {
     const nameLower = name.toLowerCase();
-    
+
     // Temperature-like values (15-50 range typically)
     if (nameLower.includes('temp') || (value > 10 && value < 60 && !nameLower.includes('afr'))) {
         return '°C';
@@ -52,7 +58,7 @@ function inferUnits(name: string, value: number): string {
     if (nameLower.includes('volt') || nameLower.includes('vbat')) {
         return 'V';
     }
-    
+
     return '';
 }
 
@@ -77,7 +83,8 @@ const CHANNEL_ICONS: Record<string, typeof Activity> = {
 // Preset channel groups
 const CHANNEL_PRESETS = {
     atmospheric: ['Humidity', 'Pressure', 'Temperature 1', 'Temperature 2'],
-    dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration'],
+    dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration', 'Horsepower', 'Torque'],
+    performance: ['Horsepower', 'Torque', 'MAP kPa', 'TPS', 'IAT', 'VBatt'],
     afr: ['Air/Fuel Ratio 1', 'Air/Fuel Ratio 2', 'Lambda 1', 'Lambda 2'],
     all: Object.keys(JETDRIVE_CHANNEL_CONFIG),
 };
@@ -85,14 +92,30 @@ const CHANNEL_PRESETS = {
 interface JetDriveLiveDashboardProps {
     apiUrl?: string;
     autoStart?: boolean;
+    /** Callback when audio recording completes */
+    onAudioRecorded?: (recording: RecordedAudio) => void;
 }
 
 export function JetDriveLiveDashboard({
     apiUrl = 'http://127.0.0.1:5001/api/jetdrive',
     autoStart = false,
+    onAudioRecorded,
 }: JetDriveLiveDashboardProps) {
     const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('all');
     const [chartChannel, setChartChannel] = useState<string>('');
+    const [audioEnabled, setAudioEnabled] = useState(true);
+
+    // Health monitoring
+    const { data: health } = useQuery({
+        queryKey: ['jetdrive-health', apiUrl],
+        queryFn: async () => {
+            const res = await fetch(`${apiUrl}/hardware/health`);
+            if (!res.ok) throw new Error('Health check failed');
+            return res.json();
+        },
+        refetchInterval: 5000, // Check every 5 seconds
+        retry: false,
+    });
 
     const {
         isConnected,
@@ -119,14 +142,7 @@ export function JetDriveLiveDashboard({
             .map(([name, data]) => ({
                 name,
                 data,
-                config: JETDRIVE_CHANNEL_CONFIG[name] || {
-                    label: name,
-                    units: '',
-                    min: 0,
-                    max: 100,
-                    decimals: 2,
-                    color: '#888',
-                },
+                config: getChannelConfig(name),
             }));
     }, [channels, selectedPreset]);
 
@@ -158,16 +174,58 @@ export function JetDriveLiveDashboard({
         }
     };
 
+    // Handle audio recording completion
+    const handleAudioRecorded = useCallback((recording: RecordedAudio | null) => {
+        if (recording && onAudioRecorded) {
+            onAudioRecorded(recording);
+        }
+    }, [onAudioRecorded]);
+
+    // Handle channel discovery
+    const handleDiscoverChannels = async () => {
+        try {
+            const res = await fetch(`${apiUrl}/hardware/channels/discover`);
+            if (!res.ok) throw new Error('Failed to discover channels');
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                console.log('=== JetDrive Channel Discovery ===');
+                console.table(data.channels);
+                toast.success(`Found ${data.channel_count} channels`, {
+                    description: 'Check browser console for detailed channel information'
+                });
+            } else {
+                toast.error('Channel discovery failed', {
+                    description: data.error || 'Unknown error'
+                });
+            }
+        } catch (err) {
+            console.error('Channel discovery error:', err);
+            toast.error('Failed to discover channels', {
+                description: err instanceof Error ? err.message : 'Unknown error'
+            });
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header with status */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <div className={cn(
+                            "w-3 h-3 rounded-full",
+                            isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                        )} />
                         <span className="font-medium">
                             {isConnected ? providerName || 'Connected' : 'Disconnected'}
                         </span>
+                        {health && health.healthy && (
+                            <span className="text-xs text-muted-foreground">
+                                ({health.latency_ms?.toFixed(0)}ms)
+                            </span>
+                        )}
                     </div>
                     {isConnected && (
                         <Badge variant="secondary">
@@ -178,6 +236,11 @@ export function JetDriveLiveDashboard({
                         <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                             <Radio className="w-3 h-3 mr-1 animate-pulse" />
                             LIVE
+                        </Badge>
+                    )}
+                    {health?.simulated && (
+                        <Badge variant="outline" className="text-yellow-500 border-yellow-500/30">
+                            SIMULATED
                         </Badge>
                     )}
                 </div>
@@ -194,6 +257,15 @@ export function JetDriveLiveDashboard({
                             <SelectItem value="afr">AFR / Lambda</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleDiscoverChannels}
+                        title="Discover available channels"
+                    >
+                        <Search className="h-4 w-4" />
+                    </Button>
 
                     <Button
                         variant="outline"
@@ -247,6 +319,10 @@ export function JetDriveLiveDashboard({
                     <TabsList>
                         <TabsTrigger value="gauges">Gauges</TabsTrigger>
                         <TabsTrigger value="chart">Chart</TabsTrigger>
+                        <TabsTrigger value="audio" className="flex items-center gap-1.5">
+                            <Mic className="h-3.5 w-3.5" />
+                            Audio
+                        </TabsTrigger>
                         <TabsTrigger value="table">Table</TabsTrigger>
                     </TabsList>
 
@@ -258,7 +334,7 @@ export function JetDriveLiveDashboard({
                                     // Use config label, or derive from channel name
                                     const displayLabel = config.label || name.replace('chan_', 'Ch ').replace(/_/g, ' ');
                                     const displayUnits = config.units || inferUnits(name, data.value);
-                                    
+
                                     return (
                                         <LiveLinkGauge
                                             key={name}
@@ -324,6 +400,14 @@ export function JetDriveLiveDashboard({
                         </Card>
                     </TabsContent>
 
+                    {/* Audio View */}
+                    <TabsContent value="audio">
+                        <AudioCapturePanel
+                            isDynoCapturing={isCapturing}
+                            onRecordingStop={handleAudioRecorded}
+                        />
+                    </TabsContent>
+
                     {/* Table View */}
                     <TabsContent value="table">
                         <Card>
@@ -346,12 +430,12 @@ export function JetDriveLiveDashboard({
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {Object.entries(channels).map(([name, ch]) => {
-                                                const config = JETDRIVE_CHANNEL_CONFIG[name];
+                                                const config = getChannelConfig(name);
                                                 const displayLabel = config?.label || name.replace('chan_', 'Channel ').replace(/_/g, ' ');
                                                 const displayUnits = config?.units || inferUnits(name, ch.value);
                                                 const decimals = config?.decimals ?? 2;
                                                 const color = config?.color || '#888';
-                                                
+
                                                 return (
                                                     <tr key={name} className="hover:bg-muted/30">
                                                         <td className="p-3 font-medium">

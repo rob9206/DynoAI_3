@@ -28,9 +28,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
+from api.rate_limit import get_limiter
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,22 @@ def validate_csv_path(csv_path: str) -> Path:
 # =============================================================================
 
 
+@jetdrive_bp.route("/test-mode", methods=["GET"])
+def test_mode_validation():
+    """Test endpoint to verify mode validation logic is loaded."""
+    test_mode = "simulator_pull"
+    normalized = str(test_mode).strip().lower()
+    is_valid = normalized in ["simulate", "csv", "simulator_pull"]
+    return jsonify(
+        {
+            "original": test_mode,
+            "normalized": normalized,
+            "is_valid": is_valid,
+            "code_version": "v2_with_normalization",
+        }
+    )
+
+
 @jetdrive_bp.route("/status", methods=["GET"])
 def get_status():
     """Check JetDrive autotune status and available runs."""
@@ -178,6 +195,44 @@ def get_status():
 # =============================================================================
 
 
+@jetdrive_bp.route("/power-opportunities/<run_id>", methods=["GET"])
+def get_power_opportunities(run_id: str):
+    """
+    Get power opportunities analysis for a completed run.
+
+    Returns the PowerOpportunities.json file if it exists.
+    """
+    try:
+        # Sanitize run_id
+        safe_run_id = sanitize_run_id(run_id)
+
+        # Look for PowerOpportunities.json in the run directory
+        power_opp_path = safe_path_in_runs(safe_run_id, "PowerOpportunities.json")
+
+        if not power_opp_path.exists():
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Power opportunities analysis not found for this run",
+                    }
+                ),
+                404,
+            )
+
+        # Read and return the power opportunities data
+        with open(power_opp_path, "r") as f:
+            data = json.load(f)
+
+        return jsonify({"success": True, "run_id": safe_run_id, "data": data}), 200
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error fetching power opportunities: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @jetdrive_bp.route("/analyze", methods=["POST"])
 def analyze_run():
     """
@@ -186,9 +241,23 @@ def analyze_run():
     Request body:
     {
         "run_id": "my_run",
-        "mode": "simulate" | "csv",
-        "csv_path": "path/to/file.csv"  // Required if mode=csv
+        "mode": "simulate" | "csv" | "simulator_pull",
+        "csv_path": "path/to/file.csv",  // Required if mode=csv
+        "afr_targets": {                  // Optional AFR targets by MAP (kPa)
+            "20": 14.7,
+            "30": 14.7,
+            "40": 14.5,
+            "50": 14.0,
+            "60": 13.5,
+            "70": 13.0,
+            "80": 12.8,
+            "90": 12.5,
+            "100": 12.2
+        }
     }
+
+    mode="simulator_pull" will automatically save the last simulator pull data
+    and analyze it.
     """
     data = request.get_json()
     if not data or "run_id" not in data:
@@ -200,7 +269,19 @@ def analyze_run():
         return jsonify({"error": str(e)}), 400
 
     mode = data.get("mode", "simulate")
+    # Normalize mode: strip whitespace and convert to lowercase for comparison
+    if mode:
+        mode = str(mode).strip().lower()
+    else:
+        mode = "simulate"
+
     csv_path = data.get("csv_path")
+    afr_targets = data.get("afr_targets")
+
+    # Log the mode for debugging
+    logger.info(
+        f"Analyze request: run_id={run_id}, mode={mode!r}, simulator_active={_is_simulator_active()}"
+    )
 
     project_root = get_project_root()
     script_path = project_root / "scripts" / "jetdrive_autotune.py"
@@ -217,10 +298,142 @@ def analyze_run():
         if not csv_path:
             return jsonify({"error": "Missing 'csv_path' for CSV mode"}), 400
         cmd.extend(["--csv", csv_path])
+    elif mode == "simulator_pull":
+        # Save simulator pull data first
+        logger.info(f"Analyzing with simulator_pull mode for run_id={run_id}")
+
+        if not _is_simulator_active():
+            logger.warning("Simulator not active when trying to analyze pull data")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Simulator is not running. Please start the simulator first.",
+                    }
+                ),
+                400,
+            )
+
+        import csv as csv_module
+        from datetime import datetime
+
+        from api.services.dyno_simulator import SimState, get_simulator
+
+        sim = get_simulator()
+        sim_state = sim.get_state()
+        logger.info(f"Simulator state: {sim_state.value}")
+
+        pull_data = sim.get_pull_data()
+        logger.info(f"Pull data retrieved: {len(pull_data) if pull_data else 0} points")
+
+        if not pull_data:
+            logger.warning("No pull data available from simulator")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No simulator pull data available. Please run a pull first by clicking 'Trigger Pull' in the simulator controls.",
+                    }
+                ),
+                400,
+            )
+
+        # Validate pull data has required fields
+        if len(pull_data) == 0:
+            logger.warning("Pull data is empty list")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Simulator pull data is empty. Please run a pull first.",
+                    }
+                ),
+                400,
+            )
+
+        # Check for required fields in first data point
+        first_point = pull_data[0]
+        logger.info(f"First data point keys: {list(first_point.keys())}")
+        required_fields = ["Engine RPM", "Torque", "Horsepower"]
+        missing_fields = [f for f in required_fields if f not in first_point]
+        if missing_fields:
+            logger.error(f"Missing required fields in pull data: {missing_fields}")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
+                    }
+                ),
+                400,
+            )
+
+        # Save pull data to CSV
+        uploads_dir = project_root / "uploads"
+        uploads_dir.mkdir(exist_ok=True)
+        csv_filename = f"{run_id}_pull.csv"
+        csv_path = str(uploads_dir / csv_filename)
+
+        try:
+            with open(csv_path, "w", newline="") as f:
+                fieldnames = [
+                    "timestamp_ms",
+                    "RPM",
+                    "Torque",
+                    "Horsepower",
+                    "AFR",
+                    "MAP_kPa",
+                    "TPS",
+                    "IAT",
+                ]
+
+                writer = csv_module.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for i, row in enumerate(pull_data):
+                    # Use average of front/rear AFR
+                    afr_avg = (
+                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
+                    ) / 2
+
+                    writer.writerow(
+                        {
+                            "timestamp_ms": i
+                            * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
+                            "RPM": row.get("Engine RPM", 0),
+                            "Torque": row.get("Torque", 0),
+                            "Horsepower": row.get("Horsepower", 0),
+                            "AFR": afr_avg,
+                            "MAP_kPa": row.get("MAP kPa", 0),
+                            "TPS": row.get("TPS", 0),
+                            "IAT": row.get("IAT F", 85),
+                        }
+                    )
+        except Exception as e:
+            return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
+
+        # Now analyze the saved CSV
+        cmd.extend(["--csv", csv_path])
     else:
-        return jsonify({"error": f"Invalid mode: {mode}"}), 400
+        valid_modes = ["simulate", "csv", "simulator_pull"]
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid mode: {mode!r}. Valid modes are: {', '.join(valid_modes)}"
+                }
+            ),
+            400,
+        )
+
+    # Pass AFR targets as JSON string if provided
+    if afr_targets:
+        cmd.extend(["--afr-targets", json.dumps(afr_targets)])
 
     # Run analysis
+    # Note: Keep simulator active flag set during analysis
+    # to prevent UI from switching views mid-analysis
+    was_simulator_active = _is_simulator_active()
+
     try:
         result = subprocess.run(
             cmd,
@@ -232,6 +445,10 @@ def analyze_run():
         )
 
         if result.returncode != 0:
+            # Restore simulator active state if it was active before
+            if was_simulator_active:
+                _set_simulator_active(True)
+
             return (
                 jsonify(
                     {
@@ -280,10 +497,15 @@ def analyze_run():
                             }
                         )
 
+        # Ensure simulator stays active after analysis if it was active before
+        if was_simulator_active:
+            _set_simulator_active(True)
+
         return jsonify(
             {
                 "success": True,
                 "run_id": run_id,
+                "mode": mode,  # Include mode so frontend knows what was analyzed
                 "output_dir": str(output_dir),
                 "analysis": manifest.get("analysis", {}),
                 "grid": manifest.get("grid", {}),
@@ -293,8 +515,14 @@ def analyze_run():
         )
 
     except subprocess.TimeoutExpired:
+        # Restore simulator active state if it was active before
+        if was_simulator_active:
+            _set_simulator_active(True)
         return jsonify({"success": False, "error": "Analysis timed out"}), 500
     except Exception as e:
+        # Restore simulator active state if it was active before
+        if was_simulator_active:
+            _set_simulator_active(True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -450,6 +678,16 @@ def get_run(run_id: str):
                             values.append(None)
                     afr_grid.append({"rpm": int(parts[0]), "values": values})
 
+    # Read confidence report if available
+    confidence_path = safe_path_in_runs(run_id, "ConfidenceReport.json")
+    confidence = None
+    if confidence_path.exists():
+        try:
+            with open(confidence_path) as f:
+                confidence = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load confidence report for {run_id}: {e}")
+
     return jsonify(
         {
             "run_id": run_id,
@@ -457,6 +695,7 @@ def get_run(run_id: str):
             "ve_grid": ve_grid,
             "hit_grid": hit_grid,
             "afr_grid": afr_grid,
+            "confidence": confidence,
             "files": {
                 "pvv": str(output_dir / "VE_Correction.pvv"),
                 "csv": str(output_dir / "run.csv"),
@@ -1145,13 +1384,15 @@ def _live_capture_loop():
 
                 # Quick capture for 1 second
                 samples: list[JetDriveSample] = []
-                stop_event = asyncio.Event()
 
                 def on_sample(s: JetDriveSample):
                     samples.append(s)
 
                 async def capture_brief():
                     from api.services.jetdrive_client import subscribe
+
+                    # Create after loop is running to avoid RuntimeError: no running event loop
+                    stop_event = asyncio.Event()
 
                     # Schedule stop
                     async def stop_after():
@@ -1243,15 +1484,907 @@ def stop_live_capture():
 
 @jetdrive_bp.route("/hardware/live/data", methods=["GET"])
 def get_live_data():
-    """Get current live channel data."""
+    """Get current live channel data.
+
+    Note: Higher rate limit (600/minute) to support real-time polling
+    at 250ms intervals for live dyno data visualization.
+    """
     global _live_data
+
+    # Check if simulator is active first
+    if _is_simulator_active():
+        from api.services.dyno_simulator import get_simulator
+
+        sim = get_simulator()
+        channels = sim.get_channels()
+        state = sim.get_state().value
+        return jsonify(
+            {
+                "capturing": True,
+                "simulated": True,
+                "sim_state": state,
+                "last_update": datetime.now().isoformat(),
+                "channels": channels,
+                "channel_count": len(channels),
+            }
+        )
 
     with _live_data_lock:
         return jsonify(
             {
                 "capturing": _live_data["capturing"],
+                "simulated": False,
                 "last_update": _live_data["last_update"],
                 "channels": _live_data["channels"],
                 "channel_count": len(_live_data["channels"]),
             }
         )
+
+
+@jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
+def discover_channels():
+    """
+    Discover all available channels with their current values.
+    Useful for debugging channel name mismatches.
+    """
+    try:
+        # Check if simulator is active first
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels_data = sim.get_channels()
+        else:
+            global _live_data
+            with _live_data_lock:
+                channels_data = _live_data["channels"]
+
+        channels = []
+        for name, ch in channels_data.items():
+            channel_info = {
+                "id": ch.get("id"),
+                "name": name,
+                "value": ch.get("value"),
+                "units": "",
+                "suggested_label": name.replace("chan_", "Channel ").replace("_", " "),
+            }
+
+            # Suggest configuration based on value range and name
+            value = ch.get("value", 0)
+            name_lower = name.lower()
+
+            # Suggest units based on value range and name patterns
+            if "rpm" in name_lower or (value > 500 and value < 15000):
+                channel_info["suggested_units"] = "rpm"
+                channel_info["suggested_type"] = "Engine Speed"
+            elif (
+                "afr" in name_lower
+                or "air/fuel" in name_lower
+                or (value > 9 and value < 20)
+            ):
+                channel_info["suggested_units"] = ":1"
+                channel_info["suggested_type"] = "Air/Fuel Ratio"
+            elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
+                channel_info["suggested_units"] = "λ"
+                channel_info["suggested_type"] = "Lambda"
+            elif "temp" in name_lower or (value > 10 and value < 150):
+                channel_info["suggested_units"] = "°C or °F"
+                channel_info["suggested_type"] = "Temperature"
+            elif (
+                "press" in name_lower
+                or "kpa" in name_lower
+                or (value > 85 and value < 115)
+            ):
+                channel_info["suggested_units"] = "kPa"
+                channel_info["suggested_type"] = "Pressure"
+            elif "humid" in name_lower or (
+                value >= 0 and value <= 100 and value != int(value)
+            ):
+                channel_info["suggested_units"] = "%"
+                channel_info["suggested_type"] = "Humidity"
+            elif "force" in name_lower or "load" in name_lower:
+                channel_info["suggested_units"] = "lbs"
+                channel_info["suggested_type"] = "Force"
+            elif "hp" in name_lower or "horsepower" in name_lower:
+                channel_info["suggested_units"] = "HP"
+                channel_info["suggested_type"] = "Horsepower"
+            elif "torque" in name_lower or "tq" in name_lower:
+                channel_info["suggested_units"] = "ft-lb"
+                channel_info["suggested_type"] = "Torque"
+            elif "map" in name_lower:
+                channel_info["suggested_units"] = "kPa"
+                channel_info["suggested_type"] = "Manifold Pressure"
+            elif "tps" in name_lower or "throttle" in name_lower:
+                channel_info["suggested_units"] = "%"
+                channel_info["suggested_type"] = "Throttle Position"
+            elif "volt" in name_lower or "vbat" in name_lower:
+                channel_info["suggested_units"] = "V"
+                channel_info["suggested_type"] = "Voltage"
+            else:
+                channel_info["suggested_units"] = ""
+                channel_info["suggested_type"] = "Unknown"
+
+            channels.append(channel_info)
+
+        return jsonify(
+            {"success": True, "channel_count": len(channels), "channels": channels}
+        )
+
+    except Exception as e:
+        logger.exception("Failed to discover channels")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/hardware/health", methods=["GET"])
+def check_hardware_health():
+    """Check hardware connection health and latency."""
+    try:
+        start_time = time.time()
+
+        # Check if we can get live data
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels = sim.get_channels()
+            latency_ms = (time.time() - start_time) * 1000
+
+            return jsonify(
+                {
+                    "healthy": True,
+                    "connected": True,
+                    "simulated": True,
+                    "latency_ms": latency_ms,
+                    "channel_count": len(channels),
+                }
+            )
+
+        global _live_data
+        with _live_data_lock:
+            capturing = _live_data["capturing"]
+            channel_count = len(_live_data["channels"])
+            latency_ms = (time.time() - start_time) * 1000
+
+        return jsonify(
+            {
+                "healthy": True,
+                "connected": True,
+                "simulated": False,
+                "capturing": capturing,
+                "latency_ms": latency_ms,
+                "channel_count": channel_count,
+            }
+        )
+
+    except Exception as e:
+        logger.exception("Health check failed")
+        return (
+            jsonify({"healthy": False, "connected": False, "error": str(e)}),
+            503,
+        )
+
+
+# =============================================================================
+# Dyno Simulator Routes
+# =============================================================================
+
+# Simulator state
+_sim_active: bool = False
+_sim_lock = threading.Lock()
+
+
+def _is_simulator_active() -> bool:
+    """Thread-safe check for simulator activity."""
+    with _sim_lock:
+        return _sim_active
+
+
+def _set_simulator_active(state: bool) -> None:
+    """Thread-safe update for simulator activity flag."""
+    global _sim_active
+    with _sim_lock:
+        _sim_active = state
+
+
+@jetdrive_bp.route("/simulator/start", methods=["POST"])
+def start_simulator():
+    """
+    Start the dyno simulator for testing without hardware.
+
+    Request body (optional):
+    {
+        "profile": "m8_114" | "m8_131" | "twin_cam_103" | "sportbike_600",
+        "auto_pull": false,
+        "auto_pull_interval": 15.0,
+        "virtual_ecu": {
+            "enabled": true,
+            "scenario": "perfect" | "lean" | "rich" | "custom",
+            "ve_error_pct": -10.0,
+            "ve_error_std": 5.0,
+            "cylinder_balance": "same" | "front_rich" | "rear_rich",
+            "barometric_pressure_inhg": 29.92,
+            "ambient_temp_f": 75.0
+        }
+    }
+    """
+    try:
+        from api.services.dyno_simulator import (
+            EngineProfile,
+            SimulatorConfig,
+            reset_simulator,
+        )
+
+        data = request.get_json() or {}
+
+        # Get profile
+        profile_name = data.get("profile", "m8_114")
+        profiles = {
+            "m8_114": EngineProfile.m8_114,
+            "m8_131": EngineProfile.m8_131,
+            "twin_cam_103": EngineProfile.twin_cam_103,
+            "sportbike_600": EngineProfile.sportbike_600,
+        }
+
+        profile_factory = profiles.get(profile_name)
+        if not profile_factory:
+            return jsonify({"error": f"Unknown profile: {profile_name}"}), 400
+
+        profile = profile_factory()
+
+        # Build config
+        config = SimulatorConfig(
+            profile=profile,
+            auto_pull=data.get("auto_pull", False),
+            auto_pull_interval_sec=data.get("auto_pull_interval", 15.0),
+        )
+
+        # Virtual ECU configuration
+        virtual_ecu = None
+        ecu_config = data.get("virtual_ecu")
+        if ecu_config and ecu_config.get("enabled", False):
+            from api.services.virtual_ecu import (
+                VirtualECU,
+                create_afr_target_table,
+                create_baseline_ve_table,
+                create_intentionally_wrong_ve_table,
+            )
+
+            # Create baseline VE table
+            baseline_ve = create_baseline_ve_table(peak_ve=0.85, peak_rpm=4000)
+
+            # Apply scenario
+            scenario = ecu_config.get("scenario", "perfect")
+            if scenario == "perfect":
+                ve_front = baseline_ve
+                ve_rear = baseline_ve
+            elif scenario == "lean":
+                ve_front = create_intentionally_wrong_ve_table(
+                    baseline_ve, error_pct_mean=-10.0, error_pct_std=5.0, seed=42
+                )
+                ve_rear = ve_front
+            elif scenario == "rich":
+                ve_front = create_intentionally_wrong_ve_table(
+                    baseline_ve, error_pct_mean=10.0, error_pct_std=5.0, seed=42
+                )
+                ve_rear = ve_front
+            elif scenario == "custom":
+                ve_error = ecu_config.get("ve_error_pct", -10.0)
+                ve_std = ecu_config.get("ve_error_std", 5.0)
+                ve_front = create_intentionally_wrong_ve_table(
+                    baseline_ve, error_pct_mean=ve_error, error_pct_std=ve_std, seed=42
+                )
+                ve_rear = ve_front
+            else:
+                ve_front = baseline_ve
+                ve_rear = baseline_ve
+
+            # Apply cylinder balance
+            cylinder_balance = ecu_config.get("cylinder_balance", "same")
+            if cylinder_balance == "front_rich":
+                ve_front = ve_front * 1.05
+            elif cylinder_balance == "rear_rich":
+                ve_rear = ve_rear * 1.05
+
+            # Create AFR target table
+            afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
+
+            # Create Virtual ECU
+            virtual_ecu = VirtualECU(
+                ve_table_front=ve_front,
+                ve_table_rear=ve_rear,
+                afr_target_table=afr_table,
+                barometric_pressure_inhg=ecu_config.get(
+                    "barometric_pressure_inhg", 29.92
+                ),
+                ambient_temp_f=ecu_config.get("ambient_temp_f", 75.0),
+            )
+
+            logger.info(
+                f"Virtual ECU enabled: scenario={scenario}, ve_error={ecu_config.get('ve_error_pct', 0)}"
+            )
+
+        # Reset and start simulator
+        sim = reset_simulator(config, virtual_ecu=virtual_ecu)
+        sim.start()
+        _set_simulator_active(True)
+
+        return jsonify(
+            {
+                "success": True,
+                "virtual_ecu_enabled": virtual_ecu is not None,
+                "status": "started",
+                "profile": {
+                    "name": profile.name,
+                    "family": profile.family,
+                    "displacement_ci": profile.displacement_ci,
+                    "idle_rpm": profile.idle_rpm,
+                    "redline_rpm": profile.redline_rpm,
+                    "max_hp": profile.max_hp,
+                    "max_tq": profile.max_tq,
+                },
+                "auto_pull": config.auto_pull,
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        error_msg = str(e)
+        traceback_str = traceback.format_exc()
+        logger.error(f"Failed to start simulator: {error_msg}", exc_info=True)
+
+        # Try to get debug mode, but don't fail if current_app is not available
+        try:
+            is_debug = current_app.debug
+        except RuntimeError:
+            # Not in request context, default to False
+            is_debug = False
+
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Failed to start simulator: {error_msg}",
+                    "details": traceback_str if is_debug else None,
+                }
+            ),
+            500,
+        )
+
+
+@jetdrive_bp.route("/simulator/stop", methods=["POST"])
+def stop_simulator():
+    """Stop the dyno simulator."""
+    from api.services.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    sim.stop()
+    _set_simulator_active(False)
+
+    return jsonify({"success": True, "status": "stopped"})
+
+
+@jetdrive_bp.route("/simulator/status", methods=["GET"])
+def get_simulator_status():
+    """Get current simulator status."""
+    if not _is_simulator_active():
+        return jsonify(
+            {
+                "active": False,
+                "state": "stopped",
+            }
+        )
+
+    from api.services.dyno_simulator import get_simulator
+
+    try:
+        sim = get_simulator()
+        state = sim.get_state()
+        channels = sim.get_channels()
+    except Exception as e:
+        # If simulator errors, don't deactivate - just return last known state
+        logger.error(f"Error getting simulator status: {e}")
+        return jsonify(
+            {
+                "active": True,  # Keep showing as active
+                "state": "idle",  # Safe fallback
+                "error": str(e),
+            }
+        )
+
+    # Extract key values
+    rpm = channels.get("Digital RPM 1", {}).get("value", 0)
+    hp = channels.get("Horsepower", {}).get("value", 0)
+    tq = channels.get("Torque", {}).get("value", 0)
+    afr = channels.get("Air/Fuel Ratio 1", {}).get("value", 0)
+
+    return jsonify(
+        {
+            "active": True,
+            "state": state.value,
+            "profile": sim.config.profile.name,
+            "current": {
+                "rpm": round(rpm, 0),
+                "horsepower": round(hp, 1),
+                "torque": round(tq, 1),
+                "afr": round(afr, 2),
+            },
+        }
+    )
+
+
+@jetdrive_bp.route("/simulator/pull", methods=["POST"])
+def trigger_pull():
+    """Manually trigger a WOT pull in the simulator."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    from api.services.dyno_simulator import SimState, get_simulator
+
+    sim = get_simulator()
+    current_state = sim.get_state()
+
+    if current_state != SimState.IDLE:
+        return (
+            jsonify(
+                {
+                    "error": f"Cannot start pull in state: {current_state.value}",
+                    "current_state": current_state.value,
+                }
+            ),
+            400,
+        )
+
+    sim.trigger_pull()
+
+    return jsonify(
+        {
+            "success": True,
+            "status": "pull_started",
+            "state": "pull",
+        }
+    )
+
+
+@jetdrive_bp.route("/simulator/pull-data", methods=["GET"])
+def get_pull_data():
+    """Get data from the last completed pull."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    from api.services.dyno_simulator import SimState, get_simulator
+
+    sim = get_simulator()
+    sim_state = sim.get_state()
+    data = sim.get_pull_data()
+
+    logger.debug(
+        f"Pull data request: state={sim_state.value}, data_points={len(data) if data else 0}"
+    )
+
+    if not data or len(data) == 0:
+        return jsonify(
+            {
+                "success": True,
+                "has_data": False,
+                "data": [],
+                "state": sim_state.value,
+            }
+        )
+
+    # Calculate peak values
+    peak_hp = max((d.get("Horsepower", 0) for d in data), default=0)
+    peak_tq = max((d.get("Torque", 0) for d in data), default=0)
+
+    # Find peak RPMs
+    hp_peak_rpm = next(
+        (d["Engine RPM"] for d in data if d.get("Horsepower", 0) == peak_hp), 0
+    )
+    tq_peak_rpm = next(
+        (d["Engine RPM"] for d in data if d.get("Torque", 0) == peak_tq), 0
+    )
+
+    return jsonify(
+        {
+            "success": True,
+            "has_data": True,
+            "points": len(data),
+            "peak_hp": round(peak_hp, 1),
+            "hp_peak_rpm": round(hp_peak_rpm, 0),
+            "peak_tq": round(peak_tq, 1),
+            "tq_peak_rpm": round(tq_peak_rpm, 0),
+            "state": sim_state.value,
+            "data": data,
+        }
+    )
+
+
+@jetdrive_bp.route("/simulator/save-pull", methods=["POST"])
+def save_simulator_pull():
+    """
+    Save the last simulator pull data to a CSV file.
+
+    Request body:
+    {
+        "run_id": "my_run"  // Optional, will generate if not provided
+    }
+
+    Returns:
+    {
+        "success": true,
+        "run_id": "sim_20231215_123456",
+        "csv_path": "uploads/sim_20231215_123456.csv",
+        "points": 160
+    }
+    """
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    import csv
+    from datetime import datetime
+
+    from api.services.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    data = sim.get_pull_data()
+
+    if not data:
+        return jsonify({"error": "No pull data available"}), 400
+
+    # Get or generate run_id
+    request_data = request.get_json() or {}
+    try:
+        run_id = sanitize_run_id(
+            request_data.get("run_id")
+            or f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    # Save to uploads directory
+    project_root = get_project_root()
+    uploads_dir = project_root / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
+
+    csv_filename = f"{run_id}.csv"
+    csv_path = uploads_dir / csv_filename
+
+    # Write CSV with proper column names for analysis
+    try:
+        with open(csv_path, "w", newline="") as f:
+            if data:
+                # Map simulator columns to expected analysis columns
+                fieldnames = [
+                    "timestamp_ms",
+                    "RPM",
+                    "Torque",
+                    "Horsepower",
+                    "AFR",
+                    "MAP_kPa",
+                    "TPS",
+                    "IAT",
+                ]
+
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for i, row in enumerate(data):
+                    # Convert simulator format to analysis format
+                    # Use average of front/rear AFR
+                    afr_avg = (
+                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
+                    ) / 2
+
+                    writer.writerow(
+                        {
+                            "timestamp_ms": i * 50,  # 20Hz = 50ms per sample
+                            "RPM": row.get("Engine RPM", 0),
+                            "Torque": row.get("Torque", 0),
+                            "Horsepower": row.get("Horsepower", 0),
+                            "AFR": afr_avg,
+                            "MAP_kPa": row.get("MAP kPa", 0),
+                            "TPS": row.get("TPS", 0),
+                            "IAT": row.get("IAT F", 85),
+                        }
+                    )
+
+        return jsonify(
+            {
+                "success": True,
+                "run_id": run_id,
+                "csv_path": str(csv_path),
+                "points": len(data),
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to save CSV: {str(e)}"}), 500
+
+
+@jetdrive_bp.route("/simulator/profiles", methods=["GET"])
+def get_profiles():
+    """Get available engine profiles for simulation."""
+    from api.services.dyno_simulator import EngineProfile
+
+    profiles = {
+        "m8_114": EngineProfile.m8_114(),
+        "m8_131": EngineProfile.m8_131(),
+        "twin_cam_103": EngineProfile.twin_cam_103(),
+        "sportbike_600": EngineProfile.sportbike_600(),
+    }
+
+    result = []
+    for key, profile in profiles.items():
+        result.append(
+            {
+                "id": key,
+                "name": profile.name,
+                "family": profile.family,
+                "displacement_ci": profile.displacement_ci,
+                "idle_rpm": profile.idle_rpm,
+                "redline_rpm": profile.redline_rpm,
+                "max_hp": profile.max_hp,
+                "hp_peak_rpm": profile.hp_peak_rpm,
+                "max_tq": profile.max_tq,
+                "tq_peak_rpm": profile.tq_peak_rpm,
+            }
+        )
+
+    return jsonify({"profiles": result})
+
+
+# =============================================================================
+# Debug and Diagnostics Routes
+# =============================================================================
+
+
+def suggest_channel_config(channel_name: str, channel_data: dict) -> dict:
+    """
+    Suggest configuration for a channel based on its name and value characteristics.
+    Used by channel discovery endpoint.
+    """
+    name_lower = channel_name.lower()
+    value = channel_data.get("value", 0)
+
+    # Common channel patterns
+    if "rpm" in name_lower:
+        return {
+            "label": "RPM",
+            "units": "rpm",
+            "min": 0,
+            "max": 10000,
+            "decimals": 0,
+            "color": "#4ade80",
+        }
+    elif "afr" in name_lower or "air/fuel" in name_lower or "air-fuel" in name_lower:
+        return {
+            "label": "AFR",
+            "units": ":1",
+            "min": 10,
+            "max": 18,
+            "decimals": 2,
+            "color": "#f472b6",
+        }
+    elif "lambda" in name_lower:
+        return {
+            "label": "Lambda",
+            "units": "λ",
+            "min": 0.7,
+            "max": 1.3,
+            "decimals": 3,
+            "color": "#a78bfa",
+        }
+    elif "force" in name_lower or "load" in name_lower or "drum" in name_lower:
+        return {
+            "label": "Force",
+            "units": "lbs",
+            "min": 0,
+            "max": 500,
+            "decimals": 1,
+            "color": "#4ade80",
+        }
+    elif "hp" in name_lower or "horsepower" in name_lower or "power" in name_lower:
+        return {
+            "label": "Horsepower",
+            "units": "HP",
+            "min": 0,
+            "max": 200,
+            "decimals": 1,
+            "color": "#10b981",
+        }
+    elif "tq" in name_lower or "torque" in name_lower:
+        return {
+            "label": "Torque",
+            "units": "ft-lb",
+            "min": 0,
+            "max": 150,
+            "decimals": 1,
+            "color": "#8b5cf6",
+        }
+    elif "map" in name_lower and "kpa" not in name_lower:
+        return {
+            "label": "MAP",
+            "units": "kPa",
+            "min": 0,
+            "max": 105,
+            "decimals": 1,
+            "color": "#06b6d4",
+        }
+    elif "tps" in name_lower or "throttle" in name_lower:
+        return {
+            "label": "TPS",
+            "units": "%",
+            "min": 0,
+            "max": 100,
+            "decimals": 1,
+            "color": "#14b8a6",
+        }
+    elif "temp" in name_lower or "iat" in name_lower or "ect" in name_lower:
+        # Guess based on value range
+        if value > 100:  # Likely Fahrenheit
+            return {
+                "label": "Temperature",
+                "units": "°F",
+                "min": 0,
+                "max": 250,
+                "decimals": 0,
+                "color": "#f97316",
+            }
+        else:  # Likely Celsius
+            return {
+                "label": "Temperature",
+                "units": "°C",
+                "min": 0,
+                "max": 120,
+                "decimals": 1,
+                "color": "#f97316",
+            }
+    elif "humid" in name_lower:
+        return {
+            "label": "Humidity",
+            "units": "%",
+            "min": 0,
+            "max": 100,
+            "decimals": 1,
+            "color": "#60a5fa",
+        }
+    elif "pressure" in name_lower or "baro" in name_lower:
+        return {
+            "label": "Pressure",
+            "units": "kPa",
+            "min": 90,
+            "max": 110,
+            "decimals": 2,
+            "color": "#a78bfa",
+        }
+    elif "volt" in name_lower or "vbatt" in name_lower or "battery" in name_lower:
+        return {
+            "label": "Voltage",
+            "units": "V",
+            "min": 0,
+            "max": 15,
+            "decimals": 2,
+            "color": "#eab308",
+        }
+    else:
+        # Generic fallback
+        return {
+            "label": channel_name,
+            "units": "",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "color": "#888888",
+        }
+
+
+@jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
+def discover_channels():
+    """
+    Discover all available channels with their current values.
+    Useful for debugging channel name mismatches.
+    """
+    try:
+        # Get live data (works with both real hardware and simulator)
+        if _is_simulator_active():
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            channels_data = sim.get_channels()
+        else:
+            with _live_data_lock:
+                channels_data = _live_data.get("channels", {})
+
+        channels = []
+        for name, ch in channels_data.items():
+            # Build channel info
+            channel_info = {
+                "id": ch.get("id", 0),
+                "name": name,
+                "value": ch.get("value", 0),
+                "timestamp": ch.get("timestamp", 0),
+                "suggested_config": suggest_channel_config(name, ch),
+            }
+
+            channels.append(channel_info)
+
+        # Sort by ID for consistency
+        channels.sort(key=lambda x: x["id"])
+
+        return jsonify(
+            {
+                "success": True,
+                "channel_count": len(channels),
+                "channels": channels,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error discovering channels: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@jetdrive_bp.route("/hardware/health", methods=["GET"])
+def check_hardware_health():
+    """
+    Check hardware connection health with latency measurement.
+    """
+    try:
+        start_time = time.time()
+
+        # Check if we're using simulator
+        if _is_simulator_active():
+            latency_ms = (time.time() - start_time) * 1000
+            from api.services.dyno_simulator import get_simulator
+
+            sim = get_simulator()
+            state = sim.get_state().value
+
+            return jsonify(
+                {
+                    "healthy": True,
+                    "connected": True,
+                    "simulated": True,
+                    "sim_state": state,
+                    "latency_ms": latency_ms,
+                    "mode": "simulator",
+                }
+            )
+
+        # Check real hardware connection
+        with _live_data_lock:
+            capturing = _live_data.get("capturing", False)
+            channel_count = len(_live_data.get("channels", {}))
+            last_update = _live_data.get("last_update")
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Consider healthy if we have channels and recent updates
+        is_healthy = capturing and channel_count > 0
+
+        if last_update:
+            try:
+                last_update_dt = datetime.fromisoformat(last_update)
+                age_seconds = (datetime.now() - last_update_dt).total_seconds()
+
+                # Stale if no update in last 5 seconds
+                if age_seconds > 5:
+                    is_healthy = False
+            except:
+                pass
+
+        return jsonify(
+            {
+                "healthy": is_healthy,
+                "connected": capturing,
+                "simulated": False,
+                "latency_ms": latency_ms,
+                "channel_count": channel_count,
+                "last_update": last_update,
+                "mode": "hardware",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error checking hardware health: {e}", exc_info=True)
+        return jsonify({"healthy": False, "connected": False, "error": str(e)}), 503

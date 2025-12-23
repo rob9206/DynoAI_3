@@ -16,7 +16,7 @@ import math
 import random
 from pathlib import Path
 
-from io_contracts import sanitize_csv_cell
+from dynoai.core.io_contracts import sanitize_csv_cell
 
 
 def generate_dense_dyno_csv(

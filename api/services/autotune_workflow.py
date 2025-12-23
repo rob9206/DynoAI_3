@@ -33,6 +33,13 @@ from api.services.powercore_integration import (
     powervision_log_to_dynoai_format,
 )
 
+# Import versioned VE math module
+from dynoai.core.ve_math import (
+    MathVersion,
+    calculate_ve_correction,
+    correction_to_percentage,
+)
+
 
 class DataSource(str, Enum):
     """Supported data sources for auto-tune analysis."""
@@ -156,8 +163,14 @@ class AutoTuneWorkflow:
     ]
     DEFAULT_MAP_AXIS = [20, 30, 40, 50, 60, 70, 80, 90, 100]
 
-    # DynoAI standard correction formula
+    # DynoAI standard correction formula (v1.0.0 legacy)
+    # DEPRECATED: Use math_version instead
     VE_PCT_PER_AFR_POINT = 7.0  # 7% VE change per 1 AFR point
+
+    # Default math version for VE calculations
+    # v1.0.0: Linear 7% per AFR point (legacy)
+    # v2.0.0: Ratio model AFR_measured/AFR_target (default, physically accurate)
+    DEFAULT_MATH_VERSION = MathVersion.V2_0_0
 
     # Safety limits
     MAX_CORRECTION_PCT = 10.0  # Maximum ±10% correction
@@ -182,10 +195,18 @@ class AutoTuneWorkflow:
         rpm_axis: Optional[list[float]] = None,
         map_axis: Optional[list[float]] = None,
         max_correction_pct: float = 10.0,
+        afr_targets: Optional[dict[int, float]] = None,
+        math_version: Optional[MathVersion] = None,
     ) -> None:
         self.rpm_axis = rpm_axis or self.DEFAULT_RPM_AXIS
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
         self.max_correction_pct = max_correction_pct
+        self.math_version = math_version or self.DEFAULT_MATH_VERSION
+        # Allow custom AFR targets (keyed by MAP in kPa)
+        if afr_targets:
+            self.afr_targets_by_map = {int(k): float(v) for k, v in afr_targets.items()}
+        else:
+            self.afr_targets_by_map = dict(self.AFR_TARGETS_BY_MAP)
         self.sessions: dict[str, AutoTuneSession] = {}
 
     def create_session(
@@ -200,10 +221,25 @@ class AutoTuneWorkflow:
         return session
 
     def get_target_afr(self, map_kpa: float) -> float:
-        """Get target AFR based on MAP (load)."""
-        # Find nearest MAP bin
-        nearest_map = min(self.map_axis, key=lambda x: abs(x - map_kpa))
-        return self.AFR_TARGETS_BY_MAP.get(nearest_map, 14.0)
+        """Get target AFR based on MAP (load).
+        
+        Uses custom afr_targets_by_map if set, otherwise falls back to defaults.
+        """
+        # Find nearest MAP bin from configured targets
+        target_keys = list(self.afr_targets_by_map.keys())
+        if not target_keys:
+            return 14.0
+        nearest_map = min(target_keys, key=lambda x: abs(x - map_kpa))
+        return self.afr_targets_by_map.get(nearest_map, 14.0)
+    
+    def set_afr_targets(self, afr_targets: dict[int, float]) -> None:
+        """Update AFR targets.
+        
+        Args:
+            afr_targets: Dict mapping MAP (kPa) to target AFR.
+                         Example: {20: 14.7, 100: 12.2}
+        """
+        self.afr_targets_by_map = {int(k): float(v) for k, v in afr_targets.items()}
 
     def import_log(self, session: AutoTuneSession, log_path: str) -> bool:
         """
@@ -362,7 +398,7 @@ class AutoTuneWorkflow:
 
         Uses the DynoAI standard formula:
         - AFR error (points) = measured AFR - target AFR
-        - VE correction (%) = -AFR_error * 7%  (7% per AFR point)
+        - VE correction (%) = +AFR_error * 7%  (7% per AFR point)
 
         Requires log to be imported first.
         """
@@ -437,10 +473,15 @@ class AutoTuneWorkflow:
                     afr_error = mean_afr - target_afr
                     afr_error_matrix[i, j] = afr_error
 
-                    # VE correction using 7% per AFR point formula
-                    # Lean (+ error) -> need more fuel -> increase VE (- correction inverted)
-                    # Rich (- error) -> need less fuel -> decrease VE (+ correction inverted)
-                    ve_delta_pct = -afr_error * self.VE_PCT_PER_AFR_POINT
+                    # VE correction using versioned math module
+                    # v2.0.0 (default): Ratio model - VE_correction = AFR_measured / AFR_target
+                    # v1.0.0 (legacy): Linear model - VE_correction = 1 + (AFR_error * 7%)
+                    # Lean (+error) -> need more fuel -> INCREASE VE -> positive VE delta %
+                    # Rich (-error) -> need less fuel -> DECREASE VE -> negative VE delta %
+                    ve_correction = calculate_ve_correction(
+                        mean_afr, target_afr, version=self.math_version, clamp=False
+                    )
+                    ve_delta_pct = correction_to_percentage(ve_correction)
                     ve_delta_matrix[i, j] = ve_delta_pct
 
         # Create DataFrames with labeled axes

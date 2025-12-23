@@ -35,6 +35,7 @@ import { VEHeatmap } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { useVEData } from '../hooks/useVEData';
 import { FilePreview, useFileContent } from '../components/results/FilePreview';
+import { SessionReplayViewer } from '../components/session-replay';
 import { cn } from '../lib/utils';
 
 const statusConfig: Record<
@@ -335,6 +336,24 @@ export default function RunDetailPage() {
           {/* Per-Cylinder Balance Results */}
           {run.output_files?.some((f) => f.name === 'Cylinder_Balance_Report.json') && (
             <BalanceResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
+          )}
+
+          {/* Session Replay */}
+          {run.output_files?.some((f) => f.name === 'session_replay.json') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Session Replay
+                </CardTitle>
+                <CardDescription>
+                  Timeline of all decisions made during tuning
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SessionReplayViewer runId={run.run_id} />
+              </CardContent>
+            </Card>
           )}
 
           <Card>

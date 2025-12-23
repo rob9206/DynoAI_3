@@ -30,10 +30,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # =============================================================================
 FROM python:3.11-slim as production
 
+ARG DYNOAI_VERSION=0.0.0-dev
+
 # Labels for container metadata
 LABEL org.opencontainers.image.title="DynoAI API Server"
 LABEL org.opencontainers.image.description="AI-powered dyno tuning toolkit for Harley-Davidson ECM optimization"
-LABEL org.opencontainers.image.version="1.2.0"
+LABEL org.opencontainers.image.version="${DYNOAI_VERSION}"
 LABEL org.opencontainers.image.vendor="DynoAI"
 
 # Create non-root user for security
@@ -55,9 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application code
 COPY --chown=dynoai:dynoai api/ ./api/
 COPY --chown=dynoai:dynoai dynoai/ ./dynoai/
-COPY --chown=dynoai:dynoai io_contracts.py .
 COPY --chown=dynoai:dynoai ai_tuner_toolkit_dyno_v1_2.py .
-COPY --chown=dynoai:dynoai ve_operations.py .
 COPY --chown=dynoai:dynoai tables/ ./tables/
 COPY --chown=dynoai:dynoai templates/ ./templates/
 
@@ -73,7 +73,8 @@ ENV PYTHONUNBUFFERED=1 \
     DYNOAI_DEBUG=false \
     DYNOAI_UPLOAD_DIR=/app/uploads \
     DYNOAI_OUTPUT_DIR=/app/outputs \
-    DYNOAI_RUNS_DIR=/app/runs
+    DYNOAI_RUNS_DIR=/app/runs \
+    DYNOAI_VERSION=${DYNOAI_VERSION}
 
 # Expose the API port
 EXPOSE 5001

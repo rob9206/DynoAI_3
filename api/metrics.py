@@ -12,6 +12,8 @@ from typing import Any, Callable, Optional, TypeVar
 
 from flask import Flask, Request, Response, request
 
+from dynoai.version import __version__ as DYNOAI_VERSION
+
 # Type variable for decorator typing
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -102,7 +104,7 @@ def init_metrics(app: Flask) -> Optional["PrometheusMetrics"]:
     _metrics.info(
         "app_info",
         "DynoAI application information",
-        version=os.getenv("DYNOAI_VERSION", "1.2.0"),
+        version=os.getenv("DYNOAI_VERSION", DYNOAI_VERSION),
         environment=os.getenv("DYNOAI_ENV", "development"),
     )
 

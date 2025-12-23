@@ -1,0 +1,114 @@
+$schema: ./schema/mcp-agent.config.schema.json
+anthropic: null
+default_search_server: brave
+document_segmentation:
+  enabled: true
+  size_threshold_chars: 50000
+execution_engine: asyncio
+logger:
+  level: info
+  path_settings:
+    path_pattern: logs/mcp-agent-{unique_id}.jsonl
+    timestamp_format: '%Y%m%d_%H%M%S'
+    unique_id: timestamp
+  progress_display: true
+  transports:
+  - console
+  - file
+mcp:
+  servers:
+    bocha-mcp:
+      args:
+      - tools/bocha_search_server.py
+      command: python3
+      env:
+        BOCHA_API_KEY: ''
+        PYTHONPATH: .
+    brave:
+      # macos and linux should use this
+      args:
+      - -y
+      - '@modelcontextprotocol/server-brave-search'
+      command: npx
+
+      # windows should use this (uncomment and update path if needed)
+      # args:
+      # - C:/Users/YOUR_USERNAME/AppData/Roaming/npm/node_modules/@modelcontextprotocol/server-brave-search/dist/index.js
+      # command: node
+      env:
+        BRAVE_API_KEY: BSAfmNEGImO5uLbbY5BIEoBC-bsbc4R
+    filesystem:
+      # macos and linux should use this
+      args:
+      - -y
+      - '@modelcontextprotocol/server-filesystem'
+      - .
+      command: npx
+
+      # windows should use this (uncomment and update path if needed)
+      # args:
+      # - C:/Users/YOUR_USERNAME/AppData/Roaming/npm/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js
+      # - .
+      # command: node
+
+    code-implementation:
+      args:
+      - tools/code_implementation_server.py
+      command: python
+      description: Paper code reproduction tool server - provides file operations,
+        code execution, search and other functions
+      env:
+        PYTHONPATH: .
+    code-reference-indexer:
+      args:
+      - tools/code_reference_indexer.py
+      command: python
+      description: Code reference indexer server - Provides intelligent code reference
+        search from indexed repositories
+      env:
+        PYTHONPATH: .
+    command-executor:
+      args:
+      - tools/command_executor.py
+      command: python
+      env:
+        PYTHONPATH: .
+    document-segmentation:
+      args:
+      - tools/document_segmentation_server.py
+      command: python
+      description: Document segmentation server - Provides intelligent document analysis
+        and segmented reading to optimize token usage
+      env:
+        PYTHONPATH: .
+    fetch:
+      args:
+      - mcp-server-fetch
+      command: uvx
+    file-downloader:
+      args:
+      - tools/pdf_downloader.py
+      command: python
+      env:
+        PYTHONPATH: .
+    github-downloader:
+      args:
+      - tools/git_command.py
+      command: python
+      env:
+        PYTHONPATH: .
+    snyk-code-analyzer:
+      args:
+      - tools/snyk_code_analyzer.py
+      command: python
+      description: Snyk Code security analyzer - Provides automated security and quality analysis for generated code
+      env:
+        PYTHONPATH: .
+        SNYK_TOKEN: ''
+        SNYK_ORG_ID: ''
+openai:
+  base_max_tokens: 20000
+  default_model: gpt-4o
+  max_tokens_policy: adaptive
+  retry_max_tokens: 32768
+planning_mode: traditional

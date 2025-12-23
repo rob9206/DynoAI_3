@@ -66,8 +66,8 @@ def check_repo_structure() -> bool:
     required_paths: List[Tuple[Path, str]] = [
         # Core engine files
         (REPO_ROOT / "ai_tuner_toolkit_dyno_v1_2.py", "file"),
-        (REPO_ROOT / "ve_operations.py", "file"),
-        (REPO_ROOT / "io_contracts.py", "file"),
+        (REPO_ROOT / "dynoai" / "core" / "ve_operations.py", "file"),
+        (REPO_ROOT / "dynoai" / "core" / "io_contracts.py", "file"),
         # Test infrastructure
         (REPO_ROOT / "tests", "dir"),
         # API

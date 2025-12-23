@@ -39,10 +39,12 @@ RUN npm run build
 # =============================================================================
 FROM nginx:alpine as production
 
+ARG DYNOAI_VERSION=0.0.0-dev
+
 # Labels
 LABEL org.opencontainers.image.title="DynoAI Frontend"
 LABEL org.opencontainers.image.description="DynoAI Web Dashboard"
-LABEL org.opencontainers.image.version="1.2.0"
+LABEL org.opencontainers.image.version="${DYNOAI_VERSION}"
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf

@@ -6,6 +6,8 @@ Provides OpenAPI/Swagger documentation for the REST API using Flasgger.
 
 from flasgger import Swagger
 
+from dynoai.version import __version__ as DYNOAI_VERSION
+
 # Swagger configuration
 SWAGGER_CONFIG = {
     "headers": [],
@@ -51,7 +53,7 @@ All endpoints return errors in a consistent format:
 }
 ```
         """,
-        "version": "1.2.0",
+        "version": DYNOAI_VERSION,
         "contact": {
             "name": "DynoAI Support",
             "url": "https://github.com/your-org/dynoai",
@@ -322,7 +324,7 @@ All endpoints return errors in a consistent format:
                 "version": {
                     "type": "string",
                     "description": "API version",
-                    "example": "1.2.0",
+                    "example": DYNOAI_VERSION,
                 },
                 "app": {
                     "type": "string",

@@ -49,7 +49,7 @@ Start-Sleep -Seconds 2
 # Start frontend in background
 Write-Host "[>] Starting React frontend..." -ForegroundColor Yellow
 Push-Location frontend
-$frontend = Start-Process npm -ArgumentList "run dev" -PassThru -NoNewWindow
+$frontend = Start-Process npm.cmd -ArgumentList "run dev" -PassThru -NoNewWindow
 Pop-Location
 
 # Wait for user to stop
