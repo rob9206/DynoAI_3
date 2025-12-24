@@ -63,7 +63,7 @@ class IngestionStats:
 
     source_name: str
     state: IngestionState = IngestionState.DISCONNECTED
-    
+
     # Connection stats
     connect_attempts: int = 0
     successful_connects: int = 0
@@ -71,30 +71,30 @@ class IngestionStats:
     last_connect_time: float | None = None
     last_disconnect_time: float | None = None
     total_uptime_sec: float = 0.0
-    
+
     # Data stats
     samples_received: int = 0
     samples_processed: int = 0
     samples_failed: int = 0
     samples_dropped: int = 0
     bytes_received: int = 0
-    
+
     # Error stats
     total_errors: int = 0
     last_error: str | None = None
     last_error_time: float | None = None
     consecutive_errors: int = 0
-    
+
     # Performance stats
     avg_latency_ms: float = 0.0
     max_latency_ms: float = 0.0
     samples_per_second: float = 0.0
-    
+
     # Circuit breaker stats
     circuit_state: CircuitState = CircuitState.CLOSED
     circuit_failure_count: int = 0
     circuit_last_state_change: float | None = None
-    
+
     # Health tracking
     health_checks_passed: int = 0
     health_checks_failed: int = 0
@@ -274,7 +274,9 @@ class BaseIngestionClient(ABC, Generic[T]):
             self._stats.state = new_state
 
         if old_state != new_state:
-            logger.info(f"[{self.source_name}] State: {old_state.value} -> {new_state.value}")
+            logger.info(
+                f"[{self.source_name}] State: {old_state.value} -> {new_state.value}"
+            )
             for callback in self._on_state_change_callbacks:
                 try:
                     callback(old_state, new_state)
@@ -353,7 +355,10 @@ class BaseIngestionClient(ABC, Generic[T]):
                         f"Retrying in {actual_delay:.2f}s..."
                     )
                     time.sleep(actual_delay)
-                    delay = min(delay * retry_settings.exponential_base, retry_settings.max_delay_sec)
+                    delay = min(
+                        delay * retry_settings.exponential_base,
+                        retry_settings.max_delay_sec,
+                    )
 
         # All attempts failed
         self.state = IngestionState.ERROR
@@ -412,7 +417,10 @@ class BaseIngestionClient(ABC, Generic[T]):
                     if retry_settings.jitter:
                         actual_delay *= 0.5 + random.random()
                     await asyncio.sleep(actual_delay)
-                    delay = min(delay * retry_settings.exponential_base, retry_settings.max_delay_sec)
+                    delay = min(
+                        delay * retry_settings.exponential_base,
+                        retry_settings.max_delay_sec,
+                    )
 
         self.state = IngestionState.ERROR
         self._circuit.record_failure()
@@ -710,5 +718,3 @@ async def health_check_all(clients: list[BaseIngestionClient]) -> dict[str, Any]
         "clients": results,
         "timestamp": time.time(),
     }
-
-

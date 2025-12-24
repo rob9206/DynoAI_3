@@ -43,6 +43,7 @@ except Exception as e:
 # Register Admin UI blueprint (available at /admin)
 try:
     from api.admin import admin_bp
+
     app.register_blueprint(admin_bp)
     print("[+] Admin UI registered at /admin")
 except Exception as e:
@@ -1173,7 +1174,6 @@ def print_startup_banner():
 # Register error handlers at app initialization
 # (done once here rather than in deprecated @before_first_request)
 register_error_handlers(app)
-
 
 if __name__ == "__main__":
     print_startup_banner()

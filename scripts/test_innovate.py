@@ -24,10 +24,11 @@ print("\n[1] Testing imports...")
 try:
     from api.services.innovate_client import (
         InnovateClient,
-        list_available_ports,
         InnovateDeviceType,
         InnovateSample,
+        list_available_ports,
     )
+
     print("[OK] All imports successful")
 except ImportError as e:
     print(f"[FAIL] Import failed: {e}")
@@ -64,6 +65,7 @@ except Exception as e:
 print("\n[4] Testing data structures...")
 try:
     import time
+
     sample = InnovateSample(
         timestamp=time.time(),
         afr=14.7,
@@ -82,9 +84,9 @@ except Exception as e:
 print("\n[5] Testing API endpoints...")
 try:
     import requests
-    
+
     base_url = "http://localhost:5001"
-    
+
     # Test port listing endpoint
     try:
         response = requests.get(f"{base_url}/api/jetdrive/innovate/ports", timeout=2)
@@ -95,14 +97,16 @@ try:
                 port_count = len(data.get("ports", []))
                 print(f"  Found {port_count} port(s) via API")
         else:
-            print(f"[FAIL] GET /api/jetdrive/innovate/ports - Status {response.status_code}")
+            print(
+                f"[FAIL] GET /api/jetdrive/innovate/ports - Status {response.status_code}"
+            )
     except requests.exceptions.ConnectionError:
         print("  (Backend not running - skipping API tests)")
     except requests.exceptions.Timeout:
         print("  (Backend timeout - skipping API tests)")
     except Exception as e:
         print(f"  API test error: {e}")
-    
+
     # Test status endpoint
     try:
         response = requests.get(f"{base_url}/api/jetdrive/innovate/status", timeout=2)
@@ -111,12 +115,14 @@ try:
             print("[OK] GET /api/jetdrive/innovate/status - OK")
             print(f"  Connected: {data.get('connected', False)}")
         else:
-            print(f"[FAIL] GET /api/jetdrive/innovate/status - Status {response.status_code}")
+            print(
+                f"[FAIL] GET /api/jetdrive/innovate/status - Status {response.status_code}"
+            )
     except requests.exceptions.ConnectionError:
         pass  # Already reported
     except Exception as e:
         print(f"  Status endpoint error: {e}")
-        
+
 except ImportError:
     print("  (requests library not available - skipping API tests)")
 
@@ -124,7 +130,7 @@ except ImportError:
 print("\n[6] Testing protocol parsing...")
 try:
     client = InnovateClient(port="COM99", device_type=InnovateDeviceType.LC2)
-    
+
     # Test various data formats
     test_cases = [
         (b"AFR: 14.7\r\n", 14.7),
@@ -134,7 +140,7 @@ try:
         (b"invalid\r\n", None),
         (b"", None),
     ]
-    
+
     passed = 0
     for data_bytes, expected_afr in test_cases:
         sample = client._parse_data(data_bytes, channel=1)
@@ -144,9 +150,9 @@ try:
         else:
             if sample and abs(sample.afr - expected_afr) < 0.1:
                 passed += 1
-    
+
     print(f"[OK] Protocol parsing: {passed}/{len(test_cases)} test cases passed")
-    
+
 except Exception as e:
     print(f"[FAIL] Protocol parsing test failed: {e}")
 
@@ -161,4 +167,3 @@ print("      2. Find the COM port (use /api/jetdrive/innovate/ports)")
 print("      3. Connect via POST /api/jetdrive/innovate/connect")
 print("      4. Start live capture: POST /api/jetdrive/hardware/live/start")
 print("      5. View data: GET /api/jetdrive/hardware/live/data")
-

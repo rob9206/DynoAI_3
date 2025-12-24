@@ -19,15 +19,19 @@ for i in range(min(len(old), len(new))):
     new_b = new[i]
     change = new_b - old_b
     status = "SAME" if change == 0 else f"CHANGED ({change:+d})"
-    print(f"  Byte {i}: 0x{old_b:02x} ({old_b:3d}) -> 0x{new_b:02x} ({new_b:3d})  {status}")
+    print(
+        f"  Byte {i}: 0x{old_b:02x} ({old_b:3d}) -> 0x{new_b:02x} ({new_b:3d})  {status}"
+    )
 
 print("\n16-bit word changes:")
-for i in range(1, min(len(old), len(new))-1, 2):
-    old_w = int.from_bytes(old[i:i+2], 'big')
-    new_w = int.from_bytes(new[i:i+2], 'big')
+for i in range(1, min(len(old), len(new)) - 1, 2):
+    old_w = int.from_bytes(old[i: i + 2], "big")
+    new_w = int.from_bytes(new[i: i + 2], "big")
     change = new_w - old_w
     status = "SAME" if change == 0 else f"CHANGED ({change:+d})"
-    print(f"  Word @ {i}: 0x{old_w:04x} ({old_w:5d}) -> 0x{new_w:04x} ({new_w:5d})  {status}")
+    print(
+        f"  Word @ {i}: 0x{old_w:04x} ({old_w:5d}) -> 0x{new_w:04x} ({new_w:5d})  {status}"
+    )
 
 print("\n" + "=" * 60)
 print("ANALYSIS")
@@ -39,16 +43,10 @@ print("  [b2] [word1] [word2] [word3] [word1] [word2] [word3]")
 print("  Header + 3 words repeated twice")
 print()
 print("  Word 1: 0x8447 -> 0x845b  (changed)")
-print("  Word 2: 0x1301 -> 0x1300  (changed)")  
+print("  Word 2: 0x1301 -> 0x1300  (changed)")
 print("  Word 3: 0x5147 -> 0x025b  (changed)")
 print()
 print("This suggests the data IS changing with AFR!")
 print("The values must encode the AFR, we just need the right formula.")
 
 print("\n" + "=" * 60)
-
-
-
-
-
-

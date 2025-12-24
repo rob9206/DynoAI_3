@@ -11,14 +11,13 @@ Tests:
 """
 
 import math
-import pytest
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import pytest
 
 from api.services.ingestion.schemas import (
+    SENSOR_RANGES,
     DataSample,
     DynoDataPointSchema,
     DynoRunSchema,
@@ -32,8 +31,10 @@ from api.services.ingestion.schemas import (
     batch_validate,
     get_range_for_channel,
     sanitize_value,
-    SENSOR_RANGES,
 )
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 class TestDataSample:
@@ -184,10 +185,8 @@ class TestValueRange:
 
     def test_warning_thresholds(self):
         """Test warning thresholds."""
-        range_def = ValueRange(
-            min_value=0, max_value=100, warn_min=20, warn_max=80
-        )
-        
+        range_def = ValueRange(min_value=0, max_value=100, warn_min=20, warn_max=80)
+
         # Valid but below warning threshold
         is_valid, warning = range_def.validate(10.0)
         assert is_valid
@@ -440,7 +439,9 @@ class TestDynoRunSchema:
     def test_compute_summary(self):
         """Test summary computation."""
         points = [
-            DynoDataPointSchema(timestamp_ms=i * 50, rpm=2000 + i * 10, horsepower=50 + i, torque=80 + i)
+            DynoDataPointSchema(
+                timestamp_ms=i * 50, rpm=2000 + i * 10, horsepower=50 + i, torque=80 + i
+            )
             for i in range(100)
         ]
         run = DynoRunSchema(
@@ -527,8 +528,12 @@ class TestBatchValidate:
         """Test batch validation with some invalid items."""
         items = [
             DataSample(timestamp_ms=1, source="test", channel="rpm", value=3000.0),
-            DataSample(timestamp_ms=-1, source="test", channel="rpm", value=3000.0),  # Invalid timestamp
-            DataSample(timestamp_ms=2, source="test", channel="rpm", value=float("nan")),  # Invalid value (NaN + range)
+            DataSample(
+                timestamp_ms=-1, source="test", channel="rpm", value=3000.0
+            ),  # Invalid timestamp
+            DataSample(
+                timestamp_ms=2, source="test", channel="rpm", value=float("nan")
+            ),  # Invalid value (NaN + range)
         ]
         result = batch_validate(items)
         assert not result.is_valid
@@ -548,4 +553,3 @@ class TestBatchValidate:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

@@ -190,7 +190,9 @@ SENSOR_RANGES: dict[str, ValueRange] = {
     "humidity": ValueRange(0, 100, None, None, "%", "Relative humidity"),
     "ambient_temp_f": ValueRange(-40, 150, 32, 110, "°F", "Ambient temperature"),
     # Timestamps
-    "timestamp_ms": ValueRange(0, 3600000, None, None, "ms", "Timestamp in milliseconds"),
+    "timestamp_ms": ValueRange(
+        0, 3600000, None, None, "ms", "Timestamp in milliseconds"
+    ),
 }
 
 
@@ -283,7 +285,9 @@ class DataSample:
 
         # Check timestamp
         if self.timestamp_ms < 0:
-            result.add_error("Timestamp cannot be negative", "timestamp_ms", self.timestamp_ms)
+            result.add_error(
+                "Timestamp cannot be negative", "timestamp_ms", self.timestamp_ms
+            )
 
         # Check value for NaN/Inf
         if math.isnan(self.value):
@@ -404,7 +408,9 @@ class JetDriveSampleSchema(DataSample):
         result = super().validate()
 
         if self.provider_id < 0 or self.provider_id > 65535:
-            result.add_error("Provider ID out of range", "provider_id", self.provider_id)
+            result.add_error(
+                "Provider ID out of range", "provider_id", self.provider_id
+            )
 
         if self.channel_id < 0 or self.channel_id > 65535:
             result.add_error("Channel ID out of range", "channel_id", self.channel_id)
@@ -438,7 +444,9 @@ class JetDriveProviderSchema:
         result = ValidationResult(is_valid=True)
 
         if self.provider_id < 0 or self.provider_id > 65535:
-            result.add_error("Provider ID out of range", "provider_id", self.provider_id)
+            result.add_error(
+                "Provider ID out of range", "provider_id", self.provider_id
+            )
 
         if not self.name or len(self.name) > 50:
             result.add_error("Provider name invalid", "name", self.name)
@@ -567,7 +575,9 @@ class DynoDataPointSchema:
 
         # Validate timestamp
         if self.timestamp_ms < 0:
-            result.add_error("Timestamp cannot be negative", "timestamp_ms", self.timestamp_ms)
+            result.add_error(
+                "Timestamp cannot be negative", "timestamp_ms", self.timestamp_ms
+            )
 
         # Validate RPM
         rpm_range = SENSOR_RANGES["rpm"]
@@ -636,7 +646,9 @@ class DynoDataPointSchema:
     def from_dict(cls, data: dict[str, Any]) -> "DynoDataPointSchema":
         """Create from dictionary with flexible column mapping."""
         # Map common column name variations
-        timestamp = data.get("timestamp_ms") or data.get("time_ms") or data.get("Time") or 0
+        timestamp = (
+            data.get("timestamp_ms") or data.get("time_ms") or data.get("Time") or 0
+        )
 
         # RPM variations
         rpm = (
@@ -855,5 +867,3 @@ def batch_validate(
 
     result.is_valid = len(result.errors) == 0
     return result
-
-

@@ -180,7 +180,9 @@ class DataSourceConfig:
     read_timeout_sec: float = 30.0
     buffer_size: int = 4096
     retry: RetrySettings = field(default_factory=RetrySettings)
-    circuit_breaker: CircuitBreakerSettings = field(default_factory=CircuitBreakerSettings)
+    circuit_breaker: CircuitBreakerSettings = field(
+        default_factory=CircuitBreakerSettings
+    )
     validation: ValidationSettings = field(default_factory=ValidationSettings)
     custom_settings: dict[str, Any] = field(default_factory=dict)
 
@@ -432,7 +434,6 @@ class IngestionConfig:
 # Global Configuration Instance
 # =============================================================================
 
-
 _config: IngestionConfig | None = None
 
 
@@ -561,5 +562,3 @@ def create_low_latency_config() -> IngestionConfig:
             reject_out_of_range=False,
         ),
     )
-
-

@@ -18,7 +18,7 @@ import queue
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import IntEnum
 from pathlib import Path
@@ -352,7 +352,9 @@ class IngestionQueue:
                             # Calculate rate
                             elapsed = now - last_process if last_process else 1.0
                             with self._lock:
-                                self._stats.processing_rate_per_sec = processed / elapsed
+                                self._stats.processing_rate_per_sec = (
+                                    processed / elapsed
+                                )
                         last_process = now
 
                     time.sleep(0.1)  # Small sleep to prevent busy waiting
@@ -389,9 +391,7 @@ class IngestionQueue:
             f"Item {item.id} sent to dead letter queue after {item.retry_count} retries"
         )
 
-    def get_dead_letter_items(
-        self, limit: int = 100
-    ) -> list[QueueItem]:
+    def get_dead_letter_items(self, limit: int = 100) -> list[QueueItem]:
         """Get items from dead letter queue."""
         with self._lock:
             return self._dead_letter_queue[:limit]
@@ -506,7 +506,9 @@ class IngestionQueue:
                         item = QueueItem.from_dict(data)
                         self._dead_letter_queue.append(item)
                     except Exception as e:
-                        logger.warning(f"Failed to load dead letter item {item_path}: {e}")
+                        logger.warning(
+                            f"Failed to load dead letter item {item_path}: {e}"
+                        )
 
             if loaded > 0:
                 logger.info(f"Loaded {loaded} persisted queue items")
@@ -570,5 +572,3 @@ def drain_queue(
         total_processed += processed
 
     return total_processed
-
-

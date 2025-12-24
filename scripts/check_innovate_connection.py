@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Quick script to check Innovate device connection and data."""
 
-import requests
 import json
 import sys
+
+import requests
 
 base_url = "http://localhost:5001"
 
@@ -17,14 +18,16 @@ try:
     r = requests.get(f"{base_url}/api/jetdrive/innovate/status", timeout=5)
     status = r.json()
     print(f"  Connected: {status.get('connected', False)}")
-    if status.get('connected'):
+    if status.get("connected"):
         print(f"  Port: {status.get('port', 'N/A')}")
         print(f"  Device Type: {status.get('device_type', 'N/A')}")
-        samples = status.get('samples', {})
+        samples = status.get("samples", {})
         if samples:
             print("  Latest Samples:")
             for ch, data in samples.items():
-                print(f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}")
+                print(
+                    f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}"
+                )
     else:
         print("  [Not connected]")
 except Exception as e:
@@ -37,15 +40,17 @@ try:
     data = r.json()
     print(f"  Capturing: {data.get('capturing', False)}")
     print(f"  Channel Count: {data.get('channel_count', 0)}")
-    
-    channels = data.get('channels', {})
-    innovate_channels = {k: v for k, v in channels.items() if 'Innovate' in k or 'innovate' in k.lower()}
-    
+
+    channels = data.get("channels", {})
+    innovate_channels = {
+        k: v for k, v in channels.items() if "Innovate" in k or "innovate" in k.lower()
+    }
+
     if innovate_channels:
         print("  Innovate Channels Found:")
         for name, ch_data in innovate_channels.items():
-            value = ch_data.get('value', 'N/A')
-            units = ch_data.get('units', '')
+            value = ch_data.get("value", "N/A")
+            units = ch_data.get("units", "")
             print(f"    {name}: {value} {units}")
     else:
         print("  [No Innovate channels in live data]")
@@ -59,8 +64,8 @@ print("\n[3] Available Serial Ports:")
 try:
     r = requests.get(f"{base_url}/api/jetdrive/innovate/ports", timeout=5)
     ports_data = r.json()
-    if ports_data.get('success'):
-        ports = ports_data.get('ports', [])
+    if ports_data.get("success"):
+        ports = ports_data.get("ports", [])
         if ports:
             for p in ports:
                 print(f"  {p['port']}: {p.get('description', 'N/A')}")
@@ -76,4 +81,3 @@ print("To connect your device:")
 print(f"  POST /api/jetdrive/innovate/connect")
 print(f"  Body: {{'port': 'COM5', 'device_type': 'LC-2'}}")
 print("=" * 60)
-

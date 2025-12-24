@@ -39,7 +39,6 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-
 # =============================================================================
 # Base Adapter
 # =============================================================================
@@ -304,7 +303,9 @@ class InnovateAdapter(DataAdapter):
             return dyno_points
 
         # Sort both by timestamp
-        sorted_afr = sorted(afr_samples, key=lambda s: getattr(s, "timestamp", 0) * 1000)
+        sorted_afr = sorted(
+            afr_samples, key=lambda s: getattr(s, "timestamp", 0) * 1000
+        )
         sorted_dyno = sorted(dyno_points, key=lambda p: p.timestamp_ms)
 
         # Match AFR to dyno points
@@ -373,8 +374,7 @@ class CSVAdapter(DataAdapter):
             path = Path(data)
             return path.suffix.lower() == ".csv"
         if isinstance(data, dict) and any(
-            key.lower() in ["rpm", "engine rpm", "horsepower"]
-            for key in data.keys()
+            key.lower() in ["rpm", "engine rpm", "horsepower"] for key in data.keys()
         ):
             return True
         return False
@@ -569,7 +569,7 @@ class WP8Adapter(DataAdapter):
                 try:
                     msg_len = content[i + 1]
                     if 5 < msg_len < 200 and i + 2 + msg_len <= len(content):
-                        msg_data = content[i + 2 : i + 2 + msg_len]
+                        msg_data = content[i + 2: i + 2 + msg_len]
                         channel_info = self._parse_channel_def(msg_data)
                         if channel_info:
                             chan_id, name = channel_info
@@ -605,7 +605,9 @@ class WP8Adapter(DataAdapter):
                     i += 1
                     if i + str_len > len(data):
                         break
-                    string_data = data[i : i + str_len].decode("utf-8", errors="replace")
+                    string_data = data[i: i + str_len].decode(
+                        "utf-8", errors="replace"
+                    )
                     i += str_len
 
                     if field_num == 2:
@@ -663,7 +665,6 @@ class WP8Adapter(DataAdapter):
 # Factory Functions
 # =============================================================================
 
-
 _adapters: dict[str, DataAdapter] = {}
 
 
@@ -720,5 +721,3 @@ def convert_to_standard(
         return adapter.convert(data)
 
     return None
-
-

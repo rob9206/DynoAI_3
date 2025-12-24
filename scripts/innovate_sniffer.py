@@ -27,24 +27,34 @@ Protocol Notes:
 """
 
 import argparse
-import serial
+import queue
+import sys
 import threading
 import time
-import sys
-import queue
+
+import serial
 
 # Thread-safe print
 print_lock = threading.Lock()
+
 
 def log(direction, data):
     timestamp = time.time()
     hex_str = " ".join([f"{b:02X}" for b in data])
     ascii_str = "".join([chr(b) if 32 <= b <= 126 else "." for b in data])
-    
-    with print_lock:
-        print(f"[{timestamp:.3f}] {direction:<10} | HEX: {hex_str:<20} | ASCII: {ascii_str}")
 
-def forward(source: serial.Serial, destination: serial.Serial, direction: str, stop_event: threading.Event):
+    with print_lock:
+        print(
+            f"[{timestamp:.3f}] {direction:<10} | HEX: {hex_str:<20} | ASCII: {ascii_str}"
+        )
+
+
+def forward(
+    source: serial.Serial,
+    destination: serial.Serial,
+    direction: str,
+    stop_event: threading.Event,
+):
     """Forward data from source to destination and log it."""
     try:
         while not stop_event.is_set():
@@ -60,37 +70,48 @@ def forward(source: serial.Serial, destination: serial.Serial, direction: str, s
             print(f"Error in {direction} thread: {e}")
         stop_event.set()
 
+
 def main():
     parser = argparse.ArgumentParser(description="Innovate Serial Sniffer")
-    parser.add_argument("--real", required=True, help="Real COM port (connected to device)")
-    parser.add_argument("--app", required=True, help="Application-facing COM port (virtual)")
-    parser.add_argument("--baud", type=int, default=19200, help="Baud rate (default 19200)")
-    
+    parser.add_argument(
+        "--real", required=True, help="Real COM port (connected to device)"
+    )
+    parser.add_argument(
+        "--app", required=True, help="Application-facing COM port (virtual)"
+    )
+    parser.add_argument(
+        "--baud", type=int, default=19200, help="Baud rate (default 19200)"
+    )
+
     args = parser.parse_args()
-    
+
     print(f"Opening Real Port: {args.real}")
     print(f"Opening App Port:  {args.app}")
     print("Press Ctrl+C to stop...")
-    
+
     try:
         real_ser = serial.Serial(args.real, args.baud, timeout=0.1)
         app_ser = serial.Serial(args.app, args.baud, timeout=0.1)
-        
+
         stop_event = threading.Event()
-        
+
         # Create threads
-        t1 = threading.Thread(target=forward, args=(real_ser, app_ser, "DEV -> APP", stop_event))
-        t2 = threading.Thread(target=forward, args=(app_ser, real_ser, "APP -> DEV", stop_event))
-        
+        t1 = threading.Thread(
+            target=forward, args=(real_ser, app_ser, "DEV -> APP", stop_event)
+        )
+        t2 = threading.Thread(
+            target=forward, args=(app_ser, real_ser, "APP -> DEV", stop_event)
+        )
+
         t1.daemon = True
         t2.daemon = True
-        
+
         t1.start()
         t2.start()
-        
+
         while not stop_event.is_set():
             time.sleep(0.1)
-            
+
     except KeyboardInterrupt:
         print("\nStopping...")
         stop_event.set()
@@ -99,11 +120,11 @@ def main():
     except Exception as e:
         print(f"\nError: {e}")
     finally:
-        if 'real_ser' in locals() and real_ser.is_open:
+        if "real_ser" in locals() and real_ser.is_open:
             real_ser.close()
-        if 'app_ser' in locals() and app_ser.is_open:
+        if "app_ser" in locals() and app_ser.is_open:
             app_ser.close()
+
 
 if __name__ == "__main__":
     main()
-

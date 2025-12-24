@@ -3,14 +3,15 @@ DynoAI Backend Admin UI
 A simple, self-contained admin dashboard for the API.
 """
 
-from flask import Blueprint, render_template_string
-from datetime import datetime
 import os
 import sys
+from datetime import datetime
 
-admin_bp = Blueprint('admin', __name__)
+from flask import Blueprint, render_template_string
 
-ADMIN_HTML = '''
+admin_bp = Blueprint("admin", __name__)
+
+ADMIN_HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -430,49 +431,49 @@ ADMIN_HTML = '''
     </script>
 </body>
 </html>
-'''
+"""
 
-@admin_bp.route('/admin')
+
+@admin_bp.route("/admin")
 def admin_dashboard():
     """Render the admin dashboard."""
     from flask import current_app, request
-    
+
     # Get version
     try:
         from dynoai.version import __version__
+
         version = __version__
     except:
         version = "1.2.1"
-    
+
     # Collect endpoints
     endpoints = []
     for rule in current_app.url_map.iter_rules():
-        if rule.endpoint != 'static' and not rule.rule.startswith('/flasgger'):
-            methods = [m for m in rule.methods if m not in ('HEAD', 'OPTIONS')]
+        if rule.endpoint != "static" and not rule.rule.startswith("/flasgger"):
+            methods = [m for m in rule.methods if m not in ("HEAD", "OPTIONS")]
             if methods:
                 # Generate description from endpoint name
-                desc = rule.endpoint.replace('_', ' ').replace('.', ' - ').title()
-                endpoints.append({
-                    'path': rule.rule,
-                    'methods': sorted(methods),
-                    'desc': desc
-                })
-    
+                desc = rule.endpoint.replace("_", " ").replace(".", " - ").title()
+                endpoints.append(
+                    {"path": rule.rule, "methods": sorted(methods), "desc": desc}
+                )
+
     # Sort by path
-    endpoints.sort(key=lambda x: x['path'])
-    
+    endpoints.sort(key=lambda x: x["path"])
+
     # Get config values
-    upload_folder = str(current_app.config.get('UPLOAD_FOLDER', 'uploads'))
-    output_folder = str(current_app.config.get('OUTPUT_FOLDER', 'outputs'))
-    
-    return render_template_string(ADMIN_HTML,
+    upload_folder = str(current_app.config.get("UPLOAD_FOLDER", "uploads"))
+    output_folder = str(current_app.config.get("OUTPUT_FOLDER", "outputs"))
+
+    return render_template_string(
+        ADMIN_HTML,
         version=version,
         endpoints=endpoints,
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        host=request.host.split(':')[0],
-        port=request.host.split(':')[1] if ':' in request.host else '5001',
+        host=request.host.split(":")[0],
+        port=request.host.split(":")[1] if ":" in request.host else "5001",
         upload_folder=upload_folder,
         output_folder=output_folder,
-        rate_limit='Enabled'
+        rate_limit="Enabled",
     )
-

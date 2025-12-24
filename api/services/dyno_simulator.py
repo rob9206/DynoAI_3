@@ -33,7 +33,6 @@ import numpy as np
 
 from api.config import get_config
 
-
 # Physics Constants
 # =================
 # Unit conversion factors for rotational dynamics
@@ -1195,7 +1194,7 @@ class DynoSimulator:
         # Using actual drum specs from DynoConfig (Dynoware RT-150)
         dyno_config = get_config().dyno
         drum_radius_ft = dyno_config.drum1.radius_ft
-        
+
         if drum_radius_ft > 0:
             # Real calculation: Force = Torque / Radius
             force = torque / drum_radius_ft

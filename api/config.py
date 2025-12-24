@@ -225,31 +225,32 @@ class RateLimitConfig:
 @dataclass
 class DrumConfig:
     """Individual dyno drum configuration."""
-    
+
     serial_number: str = ""
     mass_kg: float = 0.0  # Drum mass in kg (Dynoware calibration factor)
     retarder_mass_kg: float = 0.0  # Retarder/brake mass
     circumference_ft: float = 0.0  # Drum circumference in feet
     num_tabs: int = 1  # Number of pickup tabs
-    
+
     @property
     def radius_ft(self) -> float:
         """Calculate drum radius from circumference."""
         import math
+
         if self.circumference_ft <= 0:
             return 0.0
         return self.circumference_ft / (2 * math.pi)
-    
+
     @property
     def radius_m(self) -> float:
         """Drum radius in meters."""
         return self.radius_ft * 0.3048
-    
+
     @property
     def total_mass_kg(self) -> float:
         """Total rotating mass including retarder."""
         return self.mass_kg + self.retarder_mass_kg
-    
+
     @property
     def rotational_inertia_kgm2(self) -> float:
         """
@@ -258,14 +259,14 @@ class DrumConfig:
         """
         if self.radius_m <= 0 or self.total_mass_kg <= 0:
             return 0.0
-        return 0.5 * self.total_mass_kg * (self.radius_m ** 2)
-    
+        return 0.5 * self.total_mass_kg * (self.radius_m**2)
+
     @property
     def rotational_inertia_lbft2(self) -> float:
         """Rotational inertia in lb·ft² (for compatibility with simulator)."""
         # 1 kg·m² = 23.73 lb·ft²
         return self.rotational_inertia_kgm2 * 23.73
-    
+
     def is_configured(self) -> bool:
         """Check if drum has valid configuration."""
         return self.mass_kg > 0 and self.circumference_ft > 0
@@ -275,11 +276,11 @@ class DrumConfig:
 class DynoConfig:
     """
     Dynoware RT hardware configuration.
-    
+
     Stores actual drum specifications from the connected dynamometer
     for accurate power calculations. Values should match the Device
     Information dialog in Dynoware RT software.
-    
+
     Power calculation for inertia dyno:
         HP = (I × α × ω) / 5252
     Where:
@@ -287,7 +288,7 @@ class DynoConfig:
         α = angular acceleration (rad/s²)
         ω = angular velocity (rad/s)
     """
-    
+
     # Dyno identification
     model: str = field(
         default_factory=lambda: os.environ.get("DYNO_MODEL", "Dynoware RT-150")
@@ -298,7 +299,7 @@ class DynoConfig:
     location: str = field(
         default_factory=lambda: os.environ.get("DYNO_LOCATION", "Dawson Dynamics")
     )
-    
+
     # Network configuration
     ip_address: str = field(
         default_factory=lambda: os.environ.get("DYNO_IP", "192.168.1.115")
@@ -306,7 +307,7 @@ class DynoConfig:
     jetdrive_port: int = field(
         default_factory=lambda: _get_int_env("DYNO_JETDRIVE_PORT", 22344)
     )
-    
+
     # Drum 1 configuration (primary/front drum)
     # Values from Dynoware RT Device Information > Drum Information
     drum1_serial: str = field(
@@ -316,15 +317,17 @@ class DynoConfig:
         default_factory=lambda: float(os.environ.get("DYNO_DRUM1_MASS_KG", "14.121"))
     )
     drum1_retarder_mass_kg: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM1_RETARDER_MASS_KG", "0.0"))
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM1_RETARDER_MASS_KG", "0.0")
+        )
     )
     drum1_circumference_ft: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM1_CIRCUMFERENCE_FT", "4.673"))
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM1_CIRCUMFERENCE_FT", "4.673")
+        )
     )
-    drum1_tabs: int = field(
-        default_factory=lambda: _get_int_env("DYNO_DRUM1_TABS", 1)
-    )
-    
+    drum1_tabs: int = field(default_factory=lambda: _get_int_env("DYNO_DRUM1_TABS", 1))
+
     # Drum 2 configuration (secondary/rear drum, if equipped)
     drum2_serial: str = field(
         default_factory=lambda: os.environ.get("DYNO_DRUM2_SERIAL", "")
@@ -333,15 +336,17 @@ class DynoConfig:
         default_factory=lambda: float(os.environ.get("DYNO_DRUM2_MASS_KG", "0.0"))
     )
     drum2_retarder_mass_kg: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM2_RETARDER_MASS_KG", "0.0"))
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM2_RETARDER_MASS_KG", "0.0")
+        )
     )
     drum2_circumference_ft: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM2_CIRCUMFERENCE_FT", "0.0"))
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM2_CIRCUMFERENCE_FT", "0.0")
+        )
     )
-    drum2_tabs: int = field(
-        default_factory=lambda: _get_int_env("DYNO_DRUM2_TABS", 0)
-    )
-    
+    drum2_tabs: int = field(default_factory=lambda: _get_int_env("DYNO_DRUM2_TABS", 0))
+
     # Firmware/hardware info
     firmware_version: str = field(
         default_factory=lambda: os.environ.get("DYNO_FIRMWARE", "2.1.7034.17067")
@@ -352,7 +357,7 @@ class DynoConfig:
     num_modules: int = field(
         default_factory=lambda: _get_int_env("DYNO_NUM_MODULES", 4)
     )
-    
+
     @property
     def drum1(self) -> DrumConfig:
         """Get Drum 1 configuration object."""
@@ -363,7 +368,7 @@ class DynoConfig:
             circumference_ft=self.drum1_circumference_ft,
             num_tabs=self.drum1_tabs,
         )
-    
+
     @property
     def drum2(self) -> DrumConfig:
         """Get Drum 2 configuration object."""
@@ -374,48 +379,48 @@ class DynoConfig:
             circumference_ft=self.drum2_circumference_ft,
             num_tabs=self.drum2_tabs,
         )
-    
+
     def calculate_hp_from_force(self, force_lbs: float, rpm: float) -> float:
         """
         Calculate horsepower from drum force and RPM.
-        
+
         HP = (Force × Drum Surface Velocity) / 550
            = (Force × π × Circumference × RPM) / (60 × 550)
            = (Force × Circumference × RPM) / 10504.2
-        
+
         Args:
             force_lbs: Force measured on drum (lbs)
             rpm: Drum RPM
-        
+
         Returns:
             Calculated horsepower
         """
         if rpm <= 0 or force_lbs <= 0:
             return 0.0
-        
+
         # Surface velocity = circumference × RPM / 60 (ft/s)
         surface_velocity_fps = self.drum1_circumference_ft * rpm / 60.0
-        
+
         # Power = Force × Velocity (ft-lbs/s)
         # 1 HP = 550 ft-lbs/s
         hp = (force_lbs * surface_velocity_fps) / 550.0
-        
+
         return hp
-    
+
     def calculate_torque_from_force(self, force_lbs: float) -> float:
         """
         Calculate torque from drum force.
-        
+
         Torque = Force × Radius
-        
+
         Args:
             force_lbs: Force measured on drum (lbs)
-        
+
         Returns:
             Calculated torque in ft-lbs
         """
         return force_lbs * self.drum1.radius_ft
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""
         return {

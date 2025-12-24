@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Test Innovate device connection and data flow."""
 
-import requests
 import json
 import time
+
+import requests
 
 base_url = "http://localhost:5001"
 
@@ -17,7 +18,7 @@ try:
     r = requests.post(
         f"{base_url}/api/jetdrive/innovate/connect",
         json={"port": "COM5", "device_type": "LC-2"},
-        timeout=10
+        timeout=10,
     )
     result = r.json()
     print(f"  Success: {result.get('success')}")
@@ -44,11 +45,13 @@ try:
     r = requests.get(f"{base_url}/api/jetdrive/innovate/status", timeout=5)
     status = r.json()
     print(f"  Connected: {status.get('connected')}")
-    samples = status.get('samples', {})
+    samples = status.get("samples", {})
     if samples:
         print("  Samples received:")
         for ch, data in samples.items():
-            print(f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}")
+            print(
+                f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}"
+            )
     else:
         print("  [No samples yet]")
 except Exception as e:
@@ -61,15 +64,17 @@ try:
     data = r.json()
     print(f"  Capturing: {data.get('capturing')}")
     print(f"  Total Channels: {data.get('channel_count', 0)}")
-    
-    channels = data.get('channels', {})
-    innovate_channels = {k: v for k, v in channels.items() if 'Innovate' in k or 'innovate' in k.lower()}
-    
+
+    channels = data.get("channels", {})
+    innovate_channels = {
+        k: v for k, v in channels.items() if "Innovate" in k or "innovate" in k.lower()
+    }
+
     if innovate_channels:
         print("\n  [SUCCESS] Innovate channels found:")
         for name, ch_data in innovate_channels.items():
-            value = ch_data.get('value', 'N/A')
-            units = ch_data.get('units', '')
+            value = ch_data.get("value", "N/A")
+            units = ch_data.get("units", "")
             print(f"    {name}: {value} {units}")
     else:
         print("\n  [No Innovate channels in live data]")
@@ -79,9 +84,8 @@ try:
         print("    3. Check backend logs for errors")
         print("    4. Device may need to be in a specific mode")
         print("    5. Try different baud rates (some devices use 9600)")
-        
+
 except Exception as e:
     print(f"  Error: {e}")
 
 print("\n" + "=" * 60)
-

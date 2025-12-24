@@ -34,13 +34,17 @@ print(f"Decimal: {' '.join(f'{b:3d}' for b in data_bytes)}")
 
 # Try: 84 47 = Sensor A, 13 01 = Sensor B, 51 = checksum?
 print("\n[Test 1] 84 47 = Sensor A, 13 01 = Sensor B")
-s1_be = int.from_bytes(bytes([0x84, 0x47]), 'big')
-s1_le = int.from_bytes(bytes([0x84, 0x47]), 'little')
-s2_be = int.from_bytes(bytes([0x13, 0x01]), 'big')
-s2_le = int.from_bytes(bytes([0x13, 0x01]), 'little')
+s1_be = int.from_bytes(bytes([0x84, 0x47]), "big")
+s1_le = int.from_bytes(bytes([0x84, 0x47]), "little")
+s2_be = int.from_bytes(bytes([0x13, 0x01]), "big")
+s2_le = int.from_bytes(bytes([0x13, 0x01]), "little")
 
-print(f"  Sensor A (84 47): BE={s1_be} ({s1_be/10:.1f}), LE={s1_le} ({s1_le/10:.1f})")
-print(f"  Sensor B (13 01): BE={s2_be} ({s2_be/10:.1f}), LE={s2_le} ({s2_le/10:.1f})")
+print(
+    f"  Sensor A (84 47): BE={s1_be} ({s1_be / 10:.1f}), LE={s1_le} ({s1_le / 10:.1f})"
+)
+print(
+    f"  Sensor B (13 01): BE={s2_be} ({s2_be / 10:.1f}), LE={s2_le} ({s2_le / 10:.1f})"
+)
 
 # Try different divisions
 for div in [1, 10, 100, 128, 256]:
@@ -57,7 +61,9 @@ for b in data_bytes:
     lambda_val = b / 100.0
     afr_from_lambda = lambda_val * 14.7
     if 20 <= afr_from_lambda <= 25:
-        print(f"  Byte 0x{b:02x} ({b}): Lambda={lambda_val:.2f}, AFR={afr_from_lambda:.1f}")
+        print(
+            f"  Byte 0x{b:02x} ({b}): Lambda={lambda_val:.2f}, AFR={afr_from_lambda:.1f}"
+        )
 
 # Try special MTS format: 2 bytes per channel with status bits
 print("\n[Test 3] MTS format with status bits")
@@ -68,11 +74,11 @@ print("\n[Test 3] MTS format with status bits")
 # If top 4 bits are status: 1000 = 8
 # Bottom 12 bits for data: 0100 0100 0111 = 0x447 = 1095
 val_12bit = ((0x84 & 0x0F) << 8) | 0x47
-print(f"  12-bit from 84 47: {val_12bit} = {val_12bit/10:.1f} AFR")
+print(f"  12-bit from 84 47: {val_12bit} = {val_12bit / 10:.1f} AFR")
 
 # Try: top 3 bits status, 13 bits data
 val_13bit = ((0x84 & 0x1F) << 8) | 0x47
-print(f"  13-bit from 84 47: {val_13bit} = {val_13bit/10:.1f} AFR")
+print(f"  13-bit from 84 47: {val_13bit} = {val_13bit / 10:.1f} AFR")
 
 # Maybe it's scaled differently - try /128 (7-bit fraction)
 val_scaled = s1_be / 128.0
@@ -84,4 +90,3 @@ afr_10k = lambda_10k * 14.7
 print(f"  Lambda*10000: {lambda_10k:.4f} -> AFR={afr_10k:.1f}")
 
 print("\n" + "=" * 60)
-

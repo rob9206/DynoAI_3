@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Debug script to check Innovate data flow."""
 
-import requests
 import json
 import time
+
+import requests
 
 base_url = "http://localhost:5001"
 
@@ -17,12 +18,14 @@ try:
     r = requests.get(f"{base_url}/api/jetdrive/innovate/status", timeout=5)
     status = r.json()
     print(json.dumps(status, indent=2))
-    
-    samples = status.get('samples', {})
+
+    samples = status.get("samples", {})
     if samples:
         print("\n  Latest Samples from Device:")
         for ch, data in samples.items():
-            print(f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}")
+            print(
+                f"    {ch}: AFR={data.get('afr', 'N/A')}, Lambda={data.get('lambda', 'N/A')}"
+            )
     else:
         print("  [No samples yet - device may not be sending data]")
 except Exception as e:
@@ -35,23 +38,27 @@ try:
     data = r.json()
     print(f"  Capturing: {data.get('capturing')}")
     print(f"  Total Channels: {data.get('channel_count', 0)}")
-    
-    channels = data.get('channels', {})
+
+    channels = data.get("channels", {})
     print(f"\n  All Channel Names:")
     for name in sorted(channels.keys())[:20]:
         ch_data = channels[name]
-        value = ch_data.get('value', 'N/A')
+        value = ch_data.get("value", "N/A")
         print(f"    {name}: {value}")
-    
-    innovate_channels = {k: v for k, v in channels.items() if 'Innovate' in k or 'innovate' in k.lower()}
+
+    innovate_channels = {
+        k: v for k, v in channels.items() if "Innovate" in k or "innovate" in k.lower()
+    }
     if innovate_channels:
         print(f"\n  Innovate Channels Found:")
         for name, ch_data in innovate_channels.items():
             print(f"    {name}: {ch_data.get('value', 'N/A')}")
     else:
         print(f"\n  [No Innovate channels found]")
-        print(f"  This means the integration may not be working, or device isn't sending data yet.")
-        
+        print(
+            f"  This means the integration may not be working, or device isn't sending data yet."
+        )
+
 except Exception as e:
     print(f"  Error: {e}")
 
@@ -62,4 +69,3 @@ print("2. Verify device is sending data (check device display)")
 print("3. The device may need time to warm up the sensor")
 print("4. Check backend logs for any errors")
 print("=" * 60)
-

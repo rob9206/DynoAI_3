@@ -32,7 +32,7 @@ def hexdump(data: bytes, width: int = 16) -> str:
     """Return a simple hex dump string."""
     lines: list[str] = []
     for i in range(0, len(data), width):
-        chunk = data[i : i + width]
+        chunk = data[i: i + width]
         hex_part = " ".join(f"{b:02x}" for b in chunk)
         printable = "".join(chr(b) if 32 <= b <= 126 else "." for b in chunk)
         lines.append(f"{i:04x}: {hex_part:<{width * 3}} {printable}")
@@ -147,17 +147,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="mode", required=True)
 
-    cap = sub.add_parser("capture", help="Capture bytes while clicking Program in LM Programmer.")
+    cap = sub.add_parser(
+        "capture", help="Capture bytes while clicking Program in LM Programmer."
+    )
     cap.add_argument("--port", default="COM5", help="Serial port (default: COM5).")
-    cap.add_argument("--baudrate", type=int, default=19200, help="Baud rate (default: 19200).")
-    cap.add_argument("--duration", type=float, default=8.0, help="Capture window in seconds.")
+    cap.add_argument(
+        "--baudrate", type=int, default=19200, help="Baud rate (default: 19200)."
+    )
+    cap.add_argument(
+        "--duration", type=float, default=8.0, help="Capture window in seconds."
+    )
     cap.add_argument(
         "--outfile",
         type=Path,
         default=Path("capture/innovate_program.bin"),
         help="Where to write the capture.",
     )
-    cap.add_argument("--arm-seconds", type=int, default=3, help="Countdown before capture starts.")
+    cap.add_argument(
+        "--arm-seconds", type=int, default=3, help="Countdown before capture starts."
+    )
     cap.add_argument(
         "--max-bytes",
         type=int,
@@ -172,8 +180,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     rep = sub.add_parser("replay", help="Replay a captured byte sequence.")
     rep.add_argument("--port", default="COM5", help="Serial port (default: COM5).")
-    rep.add_argument("--baudrate", type=int, default=19200, help="Baud rate (default: 19200).")
-    rep.add_argument("--infile", type=Path, required=True, help="Captured file to replay.")
+    rep.add_argument(
+        "--baudrate", type=int, default=19200, help="Baud rate (default: 19200)."
+    )
+    rep.add_argument(
+        "--infile", type=Path, required=True, help="Captured file to replay."
+    )
     rep.add_argument(
         "--inter-byte-delay",
         type=float,
@@ -212,4 +224,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

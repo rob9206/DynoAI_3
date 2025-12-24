@@ -135,7 +135,7 @@ class _Wire:
             return None
         if len(data) < cls.HEADER.size + length:
             return None
-        value = data[cls.HEADER.size : cls.HEADER.size + length]
+        value = data[cls.HEADER.size: cls.HEADER.size + length]
         return key, length, host, seq, dest, value
 
 
@@ -209,11 +209,11 @@ def _parse_channel_info(
     idx = PROVIDER_NAME_LEN
     channels: dict[int, ChannelInfo] = {}
     while idx + CHANNEL_INFO_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx : idx + 2], "little")
+        chan_id = int.from_bytes(value[idx: idx + 2], "little")
         idx += 2
         vendor = value[idx]
         idx += 1
-        raw_name = value[idx : idx + CHANNEL_NAME_LEN]
+        raw_name = value[idx: idx + CHANNEL_NAME_LEN]
         idx += CHANNEL_NAME_LEN
         unit = value[idx]
         idx += 1
@@ -238,9 +238,9 @@ def _parse_channel_values(
     samples: list[JetDriveSample] = []
     idx = 0
     while idx + CHANNEL_VALUES_BLOCK <= len(value):
-        chan_id = int.from_bytes(value[idx : idx + 2], "little")
+        chan_id = int.from_bytes(value[idx: idx + 2], "little")
         idx += 2
-        ts = int.from_bytes(value[idx : idx + 4], "little")
+        ts = int.from_bytes(value[idx: idx + 4], "little")
         idx += 4
         try:
             val = struct.unpack_from("<f", value, idx)[0]
@@ -365,10 +365,10 @@ async def subscribe(
 ) -> dict[str, int] | None:
     """
     Listen for ChannelValues from a provider and invoke the callback.
-    
+
     Args:
         return_stats: If True, returns frame statistics dict instead of None
-    
+
     Returns:
         None or dict with 'dropped_frames', 'non_provider_frames', 'total_frames' if return_stats=True
     """
@@ -398,7 +398,7 @@ async def subscribe(
                 )
             except asyncio.TimeoutError:
                 continue
-            
+
             total_frames += 1  # Count all received frames
             decoded = _Wire.decode(data)
             if not decoded:
@@ -428,7 +428,7 @@ async def subscribe(
                 f"non_provider_frames={non_provider_frames}, total_frames={total_frames}",
                 flush=True,
             )
-        
+
         if return_stats:
             return {
                 "dropped_frames": dropped_frames,

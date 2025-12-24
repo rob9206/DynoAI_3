@@ -27,7 +27,6 @@ except ImportError as exc:  # pragma: no cover - runtime dependency guard
     print("pyserial is required. Install with: pip install pyserial", file=sys.stderr)
     raise SystemExit(1) from exc
 
-
 SYNC0 = 0xB2
 SYNC1 = 0x84
 FRAME_LEN = 10  # B2 84 + 4 bytes ch1 + 4 bytes ch2
@@ -51,7 +50,9 @@ class Frame:
     raw: bytes
 
 
-def best_candidate(candidates: Iterable[Tuple[str, float]]) -> Optional[Tuple[str, float]]:
+def best_candidate(
+    candidates: Iterable[Tuple[str, float]],
+) -> Optional[Tuple[str, float]]:
     """Pick the first candidate in range 7–25 AFR."""
     for label, val in candidates:
         if AFR_MIN <= val <= AFR_MAX:
@@ -106,14 +107,18 @@ def iter_frames(stream: bytes) -> Iterable[bytes]:
     i = 0
     while i <= len(stream) - FRAME_LEN:
         if stream[i] == SYNC0 and stream[i + 1] == SYNC1:
-            yield stream[i : i + FRAME_LEN]
+            yield stream[i: i + FRAME_LEN]
             i += FRAME_LEN
         else:
             i += 1
 
 
-def run_live(port: str, baud: int, duration: float, max_packets: int, quiet: bool) -> None:
-    print(f"[live] port={port} baud={baud} duration={duration}s max_packets={max_packets or '∞'}")
+def run_live(
+    port: str, baud: int, duration: float, max_packets: int, quiet: bool
+) -> None:
+    print(
+        f"[live] port={port} baud={baud} duration={duration}s max_packets={max_packets or '∞'}"
+    )
 
     frames: List[Frame] = []
     buffer = bytearray()
@@ -127,7 +132,9 @@ def run_live(port: str, baud: int, duration: float, max_packets: int, quiet: boo
         stopbits=serial.STOPBITS_ONE,
         timeout=0.05,
     ) as ser:
-        while time.time() < end_time and (max_packets == 0 or len(frames) < max_packets):
+        while time.time() < end_time and (
+            max_packets == 0 or len(frames) < max_packets
+        ):
             waiting = ser.in_waiting
             if waiting:
                 buffer.extend(ser.read(waiting))
@@ -183,10 +190,23 @@ def summarize(frames: List[Frame]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Decode Innovate DLG-1 MTS stream.")
     p.add_argument("--port", default="COM5", help="Serial port (default: COM5)")
-    p.add_argument("--baudrate", type=int, default=19200, help="Baud rate (default: 19200)")
-    p.add_argument("--duration", type=float, default=5.0, help="Duration to read seconds")
-    p.add_argument("--max-packets", type=int, default=0, help="Stop after N packets (0 = unlimited)")
-    p.add_argument("--quiet", action="store_true", help="Suppress per-frame output; show summary only")
+    p.add_argument(
+        "--baudrate", type=int, default=19200, help="Baud rate (default: 19200)"
+    )
+    p.add_argument(
+        "--duration", type=float, default=5.0, help="Duration to read seconds"
+    )
+    p.add_argument(
+        "--max-packets",
+        type=int,
+        default=0,
+        help="Stop after N packets (0 = unlimited)",
+    )
+    p.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-frame output; show summary only",
+    )
     return p
 
 
@@ -204,4 +224,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
