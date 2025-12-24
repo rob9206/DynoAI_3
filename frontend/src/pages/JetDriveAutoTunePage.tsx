@@ -538,11 +538,13 @@ export default function JetDriveAutoTunePage() {
     const [afrTargets, setAfrTargets] = useState<Record<number, number>>(() => ({ ...DEFAULT_AFR_TARGETS }));
     const [rpmThreshold, setRpmThreshold] = useState(2000);
     const [showSettings, setShowSettings] = useState(false);
+    const [activeMainTab, setActiveMainTab] = useState('autotune');
 
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
+    const [textExportContent, setTextExportContent] = useState<string>('');
     const [isStartingMonitor, setIsStartingMonitor] = useState(false);
     const [useEnhancedTable, setUseEnhancedTable] = useState(true); // Toggle for enhanced table
 
@@ -850,13 +852,6 @@ export default function JetDriveAutoTunePage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRpm, audioFunMode]);
-
-export default function JetDriveAutoTunePage() {
-    const [activeMainTab, setActiveMainTab] = useState('autotune');
-    const [runId, setRunId] = useState(`run_${Date.now()}`);
-    const [selectedRun, setSelectedRun] = useState<string | null>(null);
-    const [pvvContent, setPvvContent] = useState<string>('');
-    const [textExportContent, setTextExportContent] = useState<string>('');
     // Trigger AI on AFR conditions during pulls
     const lastAfrTrigger = useRef<number>(0);
     const afrCooldown = 8000; // 8 seconds between AFR comments
@@ -1247,25 +1242,6 @@ export default function JetDriveAutoTunePage() {
 
                 {/* Auto-Tune Tab */}
                 <TabsContent value="autotune" className="mt-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left Column - Controls */}
-                        <div className="space-y-4">
-                            {/* New Analysis Card */}
-                            <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Play className="h-5 w-5 text-orange-500" />
-                                        New Analysis
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="run-id">Run ID</Label>
-                                        <Input
-                                            id="run-id"
-                                            value={runId}
-                                            onChange={(e) => setRunId(e.target.value)}
-                                            placeholder="my_dyno_run"
                 {/* Settings Panel (collapsible) */}
                 <AnimatePresence>
                     {showSettings && (
@@ -2289,6 +2265,8 @@ export default function JetDriveAutoTunePage() {
                         </div>
                     </div>
                 )}
+                </TabsContent>
+            </Tabs>
             </div>
         </div>
     );

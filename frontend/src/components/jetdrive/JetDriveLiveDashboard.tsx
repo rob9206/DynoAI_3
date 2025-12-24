@@ -21,6 +21,7 @@ import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
 import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDriveChannel } from '../../hooks/useJetDriveLive';
 import { AudioCapturePanel } from './AudioCapturePanel';
+import { InnovateAFRPanel } from './InnovateAFRPanel';
 import type { RecordedAudio } from '../../hooks/useAudioCapture';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -318,6 +319,10 @@ export function JetDriveLiveDashboard({
                 <Tabs defaultValue="gauges" className="space-y-4">
                     <TabsList>
                         <TabsTrigger value="gauges">Gauges</TabsTrigger>
+                        <TabsTrigger value="wideband" className="flex items-center gap-1.5">
+                            <Flame className="h-3.5 w-3.5 text-orange-500" />
+                            Wideband
+                        </TabsTrigger>
                         <TabsTrigger value="chart">Chart</TabsTrigger>
                         <TabsTrigger value="audio" className="flex items-center gap-1.5">
                             <Mic className="h-3.5 w-3.5" />
@@ -358,6 +363,61 @@ export function JetDriveLiveDashboard({
                                 </CardContent>
                             </Card>
                         )}
+                    </TabsContent>
+
+                    {/* Wideband AFR View */}
+                    <TabsContent value="wideband">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <InnovateAFRPanel
+                                apiUrl={apiUrl}
+                                defaultPort="COM5"
+                                afrTarget={14.7}
+                                showChart={true}
+                            />
+                            <Card className="bg-gray-900/50 border-gray-700">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Gauge className="h-5 w-5 text-blue-500" />
+                                        AFR Tuning Guide
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <div className="font-medium text-green-400">Target Zones</div>
+                                            <div className="text-gray-400 space-y-1 mt-1">
+                                                <div>Idle: 14.0 - 14.7</div>
+                                                <div>Cruise: 14.7 - 15.5</div>
+                                                <div>WOT: 12.5 - 13.2</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-orange-400">Status Colors</div>
+                                            <div className="text-gray-400 space-y-1 mt-1">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded bg-green-500" />
+                                                    On Target (±3%)
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded bg-yellow-500" />
+                                                    Close (±10%)
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded bg-red-500" />
+                                                    Off Target ({'>'}15%)
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-700">
+                                        <div className="font-medium text-blue-400">Sensor Setup</div>
+                                        <div className="text-gray-400 mt-1">
+                                            Sensor A = Front Cylinder | Sensor B = Rear Cylinder
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </TabsContent>
 
                     {/* Chart View */}

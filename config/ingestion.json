@@ -1,0 +1,169 @@
+{
+  "$schema": "dynoai.ingestion-config@1",
+  "description": "Data ingestion configuration for JetDrive/DynoAI",
+  "last_updated": "2024-12-16",
+  
+  "global_enabled": true,
+  "log_level": "INFO",
+  "metrics_enabled": true,
+  "metrics_interval_sec": 60.0,
+  
+  "queue": {
+    "max_size": 10000,
+    "batch_size": 100,
+    "flush_interval_sec": 5.0,
+    "persist_to_disk": false,
+    "persist_path": "data/ingestion_queue",
+    "priority_enabled": true,
+    "drop_on_full": true,
+    "drop_oldest": true
+  },
+  
+  "default_retry": {
+    "max_attempts": 3,
+    "initial_delay_sec": 0.1,
+    "max_delay_sec": 30.0,
+    "exponential_base": 2.0,
+    "jitter": true,
+    "retry_on_timeout": true,
+    "retry_on_connection_error": true
+  },
+  
+  "default_circuit_breaker": {
+    "failure_threshold": 5,
+    "success_threshold": 2,
+    "timeout_sec": 60.0,
+    "half_open_max_calls": 3,
+    "enabled": true
+  },
+  
+  "default_validation": {
+    "enabled": true,
+    "strict_mode": false,
+    "max_validation_errors": 100,
+    "sanitize_values": true,
+    "reject_nan": true,
+    "reject_inf": true,
+    "reject_out_of_range": false,
+    "log_warnings": true
+  },
+  
+  "jetdrive": {
+    "multicast_group": "224.0.2.10",
+    "port": 22344,
+    "interface": "0.0.0.0",
+    "discovery_timeout_sec": 3.0,
+    "subscribe_timeout_sec": 0.5,
+    "channel_filter": [],
+    "provider_filter": [],
+    "auto_reconnect": true,
+    "reconnect_delay_sec": 5.0
+  },
+  
+  "innovate": {
+    "port": null,
+    "baudrate": 19200,
+    "device_type": "AUTO",
+    "channels": [1, 2],
+    "auto_detect_port": true,
+    "auto_reconnect": true,
+    "reconnect_delay_sec": 3.0,
+    "read_interval_sec": 0.08,
+    "buffer_size": 1024
+  },
+  
+  "data_sources": {
+    "jetdrive": {
+      "name": "jetdrive",
+      "enabled": true,
+      "connection_timeout_sec": 5.0,
+      "read_timeout_sec": 0.5,
+      "buffer_size": 4096,
+      "retry": {
+        "max_attempts": 3,
+        "initial_delay_sec": 0.2,
+        "max_delay_sec": 2.0
+      },
+      "circuit_breaker": {
+        "failure_threshold": 5,
+        "success_threshold": 2,
+        "timeout_sec": 30.0
+      },
+      "custom_settings": {
+        "max_frame_drop_rate_percent": 5.0,
+        "stale_data_threshold_sec": 5.0
+      }
+    },
+    
+    "innovate": {
+      "name": "innovate",
+      "enabled": true,
+      "connection_timeout_sec": 5.0,
+      "read_timeout_sec": 1.0,
+      "retry": {
+        "max_attempts": 5,
+        "initial_delay_sec": 0.5,
+        "max_delay_sec": 5.0
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "success_threshold": 1,
+        "timeout_sec": 15.0
+      },
+      "custom_settings": {
+        "warmup_timeout_sec": 30.0,
+        "free_air_afr_threshold": 28.0
+      }
+    },
+    
+    "csv": {
+      "name": "csv",
+      "enabled": true,
+      "connection_timeout_sec": 10.0,
+      "read_timeout_sec": 60.0,
+      "retry": {
+        "max_attempts": 1
+      },
+      "custom_settings": {
+        "max_file_size_mb": 100,
+        "supported_encodings": ["utf-8", "latin-1", "cp1252"]
+      }
+    },
+    
+    "wp8": {
+      "name": "wp8",
+      "enabled": true,
+      "connection_timeout_sec": 10.0,
+      "read_timeout_sec": 30.0,
+      "retry": {
+        "max_attempts": 1
+      },
+      "custom_settings": {
+        "max_file_size_mb": 50
+      }
+    }
+  },
+  
+  "sensor_ranges": {
+    "_description": "Override default sensor ranges here if needed",
+    "rpm": {
+      "min": 0,
+      "max": 20000,
+      "warn_min": 500,
+      "warn_max": 15000
+    },
+    "afr": {
+      "min": 6.0,
+      "max": 35.0,
+      "warn_min": 10.0,
+      "warn_max": 20.0
+    },
+    "horsepower": {
+      "min": -50,
+      "max": 2000,
+      "warn_max": 1000
+    }
+  }
+}
+
+

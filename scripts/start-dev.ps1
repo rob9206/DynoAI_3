@@ -24,47 +24,78 @@ Write-Host "  DynoAI Development Server Launcher" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Kill any existing processes on our ports
-Write-Host "[*] Cleaning up existing processes..." -ForegroundColor Yellow
-Get-Process -Name python -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+# Check if backend is already running on port 5001
+Write-Host "[*] Checking if backend is already running..." -ForegroundColor Yellow
+$backendRunning = $false
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:5001/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+    if ($response.StatusCode -eq 200) {
+        $backendRunning = $true
+        Write-Host "[+] Backend is already running on port 5001" -ForegroundColor Green
+    }
+} catch {
+    # Backend not running, continue
+}
+
+# Kill any existing processes on our ports (only if backend is not running)
+if (-not $backendRunning) {
+    Write-Host "[*] Cleaning up existing processes..." -ForegroundColor Yellow
+    # Only kill processes that might be blocking our ports, not all Python processes
+    $port5001Processes = Get-NetTCPConnection -LocalPort 5001 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+    if ($port5001Processes) {
+        foreach ($pid in $port5001Processes) {
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*frontend*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
 
 # Start Backend
 if (-not $FrontendOnly) {
-    Write-Host "[>] Starting Backend API on port 5001..." -ForegroundColor Green
-    
-    $backendJob = Start-Job -ScriptBlock {
-        param($root)
-        Set-Location $root
-        $env:FLASK_APP = 'api.app'
-        $env:JETSTREAM_STUB_MODE = 'true'
-        python -m flask run --host=0.0.0.0 --port=5001
-    } -ArgumentList $ProjectRoot
-    
-    # Wait for backend to be ready
-    Write-Host "[*] Waiting for backend to start..." -ForegroundColor Yellow
-    $maxAttempts = 30
-    $attempt = 0
-    $backendReady = $false
-    
-    while ($attempt -lt $maxAttempts -and -not $backendReady) {
-        Start-Sleep -Seconds 1
-        $attempt++
-        try {
-            $response = Invoke-WebRequest -Uri "http://localhost:5001/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
-            if ($response.StatusCode -eq 200) {
-                $backendReady = $true
-                Write-Host "[+] Backend ready!" -ForegroundColor Green
+    if ($backendRunning) {
+        Write-Host "[+] Using existing backend on port 5001" -ForegroundColor Green
+        $backendJob = $null
+    } else {
+        Write-Host "[>] Starting Backend API on port 5001..." -ForegroundColor Green
+        
+        $backendJob = Start-Job -ScriptBlock {
+            param($root)
+            Set-Location $root
+            $env:FLASK_APP = 'api.app'
+            $env:JETSTREAM_STUB_MODE = 'true'
+            python -m flask run --host=0.0.0.0 --port=5001
+        } -ArgumentList $ProjectRoot
+        
+        # Wait for backend to be ready
+        Write-Host "[*] Waiting for backend to start..." -ForegroundColor Yellow
+        $maxAttempts = 30
+        $attempt = 0
+        $backendReady = $false
+        
+        while ($attempt -lt $maxAttempts -and -not $backendReady) {
+            Start-Sleep -Seconds 1
+            $attempt++
+            try {
+                $response = Invoke-WebRequest -Uri "http://localhost:5001/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+                if ($response.StatusCode -eq 200) {
+                    $backendReady = $true
+                    Write-Host "[+] Backend ready!" -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "    Attempt $attempt/$maxAttempts..." -ForegroundColor DarkGray
             }
-        } catch {
-            Write-Host "    Attempt $attempt/$maxAttempts..." -ForegroundColor DarkGray
         }
-    }
-    
-    if (-not $backendReady) {
-        Write-Host "[!] Backend failed to start. Check logs." -ForegroundColor Red
-        exit 1
+        
+        if (-not $backendReady) {
+            Write-Host "[!] Backend failed to start. Check logs." -ForegroundColor Red
+            if ($backendJob) {
+                Receive-Job $backendJob
+                Stop-Job $backendJob -ErrorAction SilentlyContinue
+                Remove-Job $backendJob -ErrorAction SilentlyContinue
+            }
+            exit 1
+        }
     }
 }
 
@@ -116,7 +147,7 @@ try {
         Start-Sleep -Seconds 5
         
         # Check if jobs are still running
-        if (-not $FrontendOnly -and $backendJob.State -eq "Failed") {
+        if (-not $FrontendOnly -and $backendJob -and $backendJob.State -eq "Failed") {
             Write-Host "[!] Backend crashed!" -ForegroundColor Red
             Receive-Job $backendJob
         }

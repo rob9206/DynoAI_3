@@ -242,7 +242,6 @@ export function ClosedLoopTuningPanel({
     };
 
     const progressPct = calculateProgressPercentage(status);
-        : 0;
 
     // Get latest iteration data
     const latestIteration = status?.iterations?.[status.iterations.length - 1];
