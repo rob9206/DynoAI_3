@@ -429,9 +429,10 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
-                // Debug: Log raw channel names (every N polls to avoid spam)
-                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.log('[useJetDriveLive] Raw channels:', Object.keys(data.channels));
+                // Debug: Log raw channel names (on first poll or periodically)
+                const rawChannelNames = Object.keys(data.channels);
+                if (pollCountRef.current === 1 || pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
+                    console.log('[useJetDriveLive] Raw channels:', rawChannelNames);
                 }
 
                 const unmappedChannels: string[] = [];
@@ -440,8 +441,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     const channel = ch as { id: number; name: string; value: number; timestamp: number };
                     const config = getChannelConfig(name);
 
-                    // Track unmapped channels (those using default config)
-                    if (!JETDRIVE_CHANNEL_CONFIG[name] && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
+                    // Track unmapped channels (those not in JETDRIVE_CHANNEL_CONFIG)
+                    if (!JETDRIVE_CHANNEL_CONFIG[name]) {
                         unmappedChannels.push(name);
                     }
 
@@ -457,14 +458,16 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     newSnapshot.units[name] = config?.units || '';
                 }
 
-                // Debug: Log unmapped channels
-                if (unmappedChannels.length > 0 && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.warn('[useJetDriveLive] Unmapped channels (using fallback config):', unmappedChannels);
+                // Log unmapped channels (only on first poll or periodically)
+                if (unmappedChannels.length > 0 && (pollCountRef.current === 1 || pollCountRef.current % DEBUG_LOG_THROTTLE === 0)) {
+                    console.warn('[useJetDriveLive] Unmapped channels:', unmappedChannels);
+                    console.warn('[useJetDriveLive] Available mapped channels:', Object.keys(JETDRIVE_CHANNEL_CONFIG));
                 }
 
-                // Debug: Log mapped channel count
-                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels).length);
+                // Debug: Log mapped channels summary
+                if (pollCountRef.current === 1 || pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
+                    console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels));
+                    console.log('[useJetDriveLive] Channel count:', Object.keys(newChannels).length);
                 }
 
                 setChannels(newChannels);

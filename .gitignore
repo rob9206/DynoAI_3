@@ -47,3 +47,9 @@ DynoAI_3*/
 
 # Workspace-local generated artifacts (common variants)
 agent_outputs/
+
+# DeepCode integration - generated code and workspace
+deepcode_lab/
+deepcode_generated/
+mcp_agent.config.yaml
+mcp_agent.secrets.yaml

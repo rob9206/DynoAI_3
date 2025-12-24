@@ -41,8 +41,8 @@ export function JetstreamProcessingCard({ runId, progress }: JetstreamProcessing
       <CardContent className="space-y-4 pt-4">
         {/* Run ID */}
         <div className="flex justify-between items-center text-xs font-mono text-muted-foreground">
-            <span className="uppercase tracking-wider">Target ID:</span>
-            <span className="text-foreground">{runId}</span>
+          <span className="uppercase tracking-wider">Target ID:</span>
+          <span className="text-foreground">{runId}</span>
         </div>
 
         {/* Progress bar */}

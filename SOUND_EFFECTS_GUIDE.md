@@ -205,3 +205,9 @@ If you want to disable sound effects:
 
 Every action now has audio confirmation, making the tuning experience more engaging and intuitive!
 
+
+
+
+
+
+

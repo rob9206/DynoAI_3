@@ -207,7 +207,12 @@ def print_header(state: DiagnosticState):
     mins, secs = divmod(int(runtime), 60)
 
     print(c("=" * 70, Colors.CYAN))
-    print(c("  DynoAI Lite Diagnostic - Dynoware RT-150 Data Monitor", Colors.BOLD + Colors.CYAN))
+    print(
+        c(
+            "  DynoAI Lite Diagnostic - Dynoware RT-150 Data Monitor",
+            Colors.BOLD + Colors.CYAN,
+        )
+    )
     print(c("=" * 70, Colors.CYAN))
     print()
 
@@ -222,7 +227,9 @@ def print_header(state: DiagnosticState):
     print(f"  Status: {status}  Runtime: {c(f'{mins:02d}:{secs:02d}', Colors.WHITE)}")
 
     if state.provider:
-        print(f"  Provider: {c(state.provider.name, Colors.GREEN)} @ {c(state.provider.host, Colors.YELLOW)}")
+        print(
+            f"  Provider: {c(state.provider.name, Colors.GREEN)} @ {c(state.provider.host, Colors.YELLOW)}"
+        )
         print(
             f"  Channels: {c(str(len(state.provider.channels)), Colors.CYAN)} available, "
             f"{c(str(len(state.channels)), Colors.GREEN)} receiving data"
@@ -231,7 +238,9 @@ def print_header(state: DiagnosticState):
     # Sample rate
     if state.total_samples > 0:
         rate = state.total_samples / max(runtime, 1)
-        print(f"  Samples: {c(f'{state.total_samples:,}', Colors.WHITE)} total ({c(f'{rate:.1f}/sec', Colors.CYAN)})")
+        print(
+            f"  Samples: {c(f'{state.total_samples:,}', Colors.WHITE)} total ({c(f'{rate:.1f}/sec', Colors.CYAN)})"
+        )
 
     print()
 
@@ -324,7 +333,9 @@ def print_channel_list(state: DiagnosticState):
     print(c("  ALL AVAILABLE CHANNELS", Colors.BOLD + Colors.YELLOW))
     print(c("─" * 70, Colors.DIM))
 
-    for chan_id, info in sorted(state.provider.channels.items(), key=lambda x: x[1].name):
+    for chan_id, info in sorted(
+        state.provider.channels.items(), key=lambda x: x[1].name
+    ):
         receiving = chan_id in state.channels
         indicator = c("●", Colors.GREEN) if receiving else c("○", Colors.DIM)
         print(f"    {indicator} [{chan_id:3}] {info.name}")
@@ -335,7 +346,9 @@ def print_channel_list(state: DiagnosticState):
 def print_instructions():
     """Print usage instructions."""
     print(c("─" * 70, Colors.DIM))
-    print(f"  Press {c('Ctrl+C', Colors.YELLOW)} to exit  |  Data updates every {c('250ms', Colors.CYAN)}")
+    print(
+        f"  Press {c('Ctrl+C', Colors.YELLOW)} to exit  |  Data updates every {c('250ms', Colors.CYAN)}"
+    )
     print(c("─" * 70, Colors.DIM))
 
 
@@ -368,7 +381,9 @@ async def run_diagnostic():
 
     # Configure JetDrive
     config = JetDriveConfig.from_env()
-    print(f"  JetDrive config: {config.multicast_group}:{config.port} on {config.iface}")
+    print(
+        f"  JetDrive config: {config.multicast_group}:{config.port} on {config.iface}"
+    )
     print()
 
     # Discover providers
@@ -401,7 +416,12 @@ async def run_diagnostic():
             print(f"    Attempt {attempt + 2}/4...")
 
         if not providers:
-            print(c("\n  Could not find any JetDrive providers after multiple attempts.", Colors.RED))
+            print(
+                c(
+                    "\n  Could not find any JetDrive providers after multiple attempts.",
+                    Colors.RED,
+                )
+            )
             return
 
     # Use first provider (should be the RT-150)
@@ -441,7 +461,9 @@ async def run_diagnostic():
                 unit=unit,
             )
 
-        state.channels[sample.channel_id].update(sample.value, sample.timestamp_ms / 1000.0)
+        state.channels[sample.channel_id].update(
+            sample.value, sample.timestamp_ms / 1000.0
+        )
 
     # Create stop event for clean shutdown
     stop_event = asyncio.Event()
@@ -480,19 +502,28 @@ async def run_diagnostic():
 
 def main():
     """Entry point."""
+    # Set console to UTF-8 for Windows
+    if os.name == "nt":
+        try:
+            import sys
+
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     print(
         c(
             """
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                                                                  ║
-    ║     DynoAI Lite Diagnostic                                       ║
-    ║     Dynoware RT-150 Data Confirmation Tool                       ║
-    ║                                                                  ║
-    ║     Confirms data flow from:                                     ║
-    ║       • Dynojet Dynoware RT dyno                                 ║
-    ║       • Wideband AFR sensors                                     ║
-    ║                                                                  ║
-    ╚══════════════════════════════════════════════════════════════════╝
+    ====================================================================
+    
+         DynoAI Lite Diagnostic
+         Dynoware RT-150 Data Confirmation Tool
+    
+         Confirms data flow from:
+           - Dynojet Dynoware RT dyno
+           - Wideband AFR sensors
+    
+    ====================================================================
     """,
             Colors.CYAN,
         )

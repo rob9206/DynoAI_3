@@ -1526,6 +1526,23 @@ def discover_channels():
     """
     Discover all available channels with their current values.
     Useful for debugging channel name mismatches.
+
+    Response:
+    {
+        "success": true,
+        "channel_count": 25,
+        "channels": [
+            {
+                "id": 42,
+                "name": "Digital RPM 1",
+                "value": 3500.0,
+                "sample_values": [3500, 3501, 3499, ...],
+                "value_range": {"min": 0, "max": 8000},
+                "suggested_config": {...}
+            },
+            ...
+        ]
+    }
     """
     try:
         # Check if simulator is active first
@@ -1537,82 +1554,138 @@ def discover_channels():
         else:
             global _live_data
             with _live_data_lock:
-                channels_data = _live_data["channels"]
+                channels_data = _live_data.get("channels", {})
 
+        if not channels_data:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No channel data available. Start live capture first.",
+                        "channel_count": 0,
+                        "channels": [],
+                    }
+                ),
+                404,
+            )
+
+        # Build channel discovery info
         channels = []
         for name, ch in channels_data.items():
-            channel_info = {
-                "id": ch.get("id"),
-                "name": name,
-                "value": ch.get("value"),
-                "units": "",
-                "suggested_label": name.replace("chan_", "Channel ").replace("_", " "),
-            }
+            channel = (
+                ch if isinstance(ch, dict) else {"value": ch, "id": 0, "name": name}
+            )
 
-            # Suggest configuration based on value range and name
-            value = ch.get("value", 0)
+            # Get recent values (if available in history)
+            sample_values = []
+            value_range = {"min": None, "max": None}
+
+            # Suggest config based on channel name patterns and value ranges
             name_lower = name.lower()
+            value = channel.get("value", 0)
+            
+            suggested_config = {
+                "label": name.replace("chan_", "Channel ").replace("_", " "),
+                "units": "",
+                "min": 0,
+                "max": 100,
+                "decimals": 2,
+                "color": "#888",
+            }
 
             # Suggest units based on value range and name patterns
             if "rpm" in name_lower or (value > 500 and value < 15000):
-                channel_info["suggested_units"] = "rpm"
-                channel_info["suggested_type"] = "Engine Speed"
-            elif (
-                "afr" in name_lower
-                or "air/fuel" in name_lower
-                or (value > 9 and value < 20)
-            ):
-                channel_info["suggested_units"] = ":1"
-                channel_info["suggested_type"] = "Air/Fuel Ratio"
+                suggested_config = {
+                    "label": "RPM",
+                    "units": "rpm",
+                    "min": 0,
+                    "max": 8000,
+                    "decimals": 0,
+                    "color": "#4ade80",
+                }
+            elif "afr" in name_lower or "air/fuel" in name_lower or (value > 9 and value < 20):
+                suggested_config = {
+                    "label": "AFR",
+                    "units": ":1",
+                    "min": 10,
+                    "max": 18,
+                    "decimals": 2,
+                    "color": "#f472b6",
+                }
             elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
-                channel_info["suggested_units"] = "λ"
-                channel_info["suggested_type"] = "Lambda"
-            elif "temp" in name_lower or (value > 10 and value < 150):
-                channel_info["suggested_units"] = "°C or °F"
-                channel_info["suggested_type"] = "Temperature"
-            elif (
-                "press" in name_lower
-                or "kpa" in name_lower
-                or (value > 85 and value < 115)
-            ):
-                channel_info["suggested_units"] = "kPa"
-                channel_info["suggested_type"] = "Pressure"
-            elif "humid" in name_lower or (
-                value >= 0 and value <= 100 and value != int(value)
-            ):
-                channel_info["suggested_units"] = "%"
-                channel_info["suggested_type"] = "Humidity"
+                suggested_config = {
+                    "label": "Lambda",
+                    "units": "λ",
+                    "min": 0.5,
+                    "max": 2.0,
+                    "decimals": 2,
+                    "color": "#f472b6",
+                }
             elif "force" in name_lower or "load" in name_lower:
-                channel_info["suggested_units"] = "lbs"
-                channel_info["suggested_type"] = "Force"
-            elif "hp" in name_lower or "horsepower" in name_lower:
-                channel_info["suggested_units"] = "HP"
-                channel_info["suggested_type"] = "Horsepower"
-            elif "torque" in name_lower or "tq" in name_lower:
-                channel_info["suggested_units"] = "ft-lb"
-                channel_info["suggested_type"] = "Torque"
+                suggested_config = {
+                    "label": "Force",
+                    "units": "lbs",
+                    "min": 0,
+                    "max": 500,
+                    "decimals": 1,
+                    "color": "#4ade80",
+                }
             elif "map" in name_lower:
-                channel_info["suggested_units"] = "kPa"
-                channel_info["suggested_type"] = "Manifold Pressure"
+                suggested_config = {
+                    "label": "MAP",
+                    "units": "kPa",
+                    "min": 0,
+                    "max": 105,
+                    "decimals": 1,
+                    "color": "#06b6d4",
+                }
+            elif "temp" in name_lower or (value > 10 and value < 150):
+                suggested_config = {
+                    "label": "Temperature",
+                    "units": "°C",
+                    "min": 0,
+                    "max": 150,
+                    "decimals": 1,
+                    "color": "#f59e0b",
+                }
             elif "tps" in name_lower or "throttle" in name_lower:
-                channel_info["suggested_units"] = "%"
-                channel_info["suggested_type"] = "Throttle Position"
-            elif "volt" in name_lower or "vbat" in name_lower:
-                channel_info["suggested_units"] = "V"
-                channel_info["suggested_type"] = "Voltage"
-            else:
-                channel_info["suggested_units"] = ""
-                channel_info["suggested_type"] = "Unknown"
+                suggested_config = {
+                    "label": "Throttle",
+                    "units": "%",
+                    "min": 0,
+                    "max": 100,
+                    "decimals": 1,
+                    "color": "#8b5cf6",
+                }
 
-            channels.append(channel_info)
+            channels.append(
+                {
+                    "id": channel.get("id", 0),
+                    "name": name,
+                    "value": channel.get("value", 0),
+                    "sample_values": sample_values,
+                    "value_range": value_range,
+                    "suggested_config": suggested_config,
+                }
+            )
 
         return jsonify(
-            {"success": True, "channel_count": len(channels), "channels": channels}
+            {
+                "success": True,
+                "channel_count": len(channels),
+                "channels": channels,
+                "timestamp": datetime.now().isoformat(),
+            }
         )
 
     except Exception as e:
-        logger.exception("Failed to discover channels")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Error discovering channels: {e}", exc_info=True)
+        return (
+            jsonify(
+                {"success": False, "error": str(e), "channel_count": 0, "channels": []}
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/hardware/health", methods=["GET"])

@@ -255,7 +255,8 @@ def health_check():
 
     # Check virtual ECU
     try:
-        from api.services.virtual_ecu import VirtualECU
+        # Just check if import works
+        import api.services.virtual_ecu  # noqa: F401
 
         components["virtual_ecu"] = "ok"
     except Exception as e:
@@ -294,7 +295,11 @@ def list_sessions():
         orchestrator = get_orchestrator()
 
         sessions_list = []
-        for session_id, session in orchestrator.sessions.items():
+        # Use lock when accessing sessions
+        with orchestrator._lock:
+            sessions_copy = list(orchestrator.sessions.items())
+
+        for session_id, session in sessions_copy:
             sessions_list.append(
                 {
                     "session_id": session_id,
@@ -483,3 +488,50 @@ def health_check():
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
     )
+
+
+@virtual_tune_bp.route("/cleanup", methods=["POST"])
+def cleanup_sessions():
+    """
+    Manually trigger cleanup of completed tuning sessions.
+
+    Request body (optional):
+    {
+        "all_completed": true,  // Clean up all completed sessions
+        "max_age_minutes": 60   // Override max age for this cleanup
+    }
+
+    Response:
+    {
+        "success": true,
+        "removed": ["tune_1234567890_5678", ...],
+        "remaining": 5
+    }
+    """
+    try:
+        orchestrator = get_orchestrator()
+        data = request.get_json() or {}
+
+        if data.get("all_completed"):
+            # Clean up all completed sessions
+            removed = orchestrator.cleanup_completed_sessions()
+        else:
+            # Run normal cleanup
+            orchestrator._cleanup_old_sessions()
+            removed = []  # Normal cleanup doesn't return list
+
+        with orchestrator._lock:
+            remaining = len(orchestrator.sessions)
+
+        return jsonify(
+            {
+                "success": True,
+                "removed": removed if isinstance(removed, list) else [],
+                "remaining": remaining,
+                "message": f"Cleaned up {len(removed) if isinstance(removed, list) else 0} session(s)",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error cleaning up sessions: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
