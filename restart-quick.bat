@@ -5,6 +5,9 @@ REM Stops all services and restarts WITHOUT reinstalling dependencies
 REM Use this for faster restarts when dependencies are already installed
 REM ======================================================================
 
+REM Change to the script's directory (ensures we're in the project root)
+cd /d "%~dp0"
+
 color 0E
 echo.
 echo ======================================================================
@@ -101,7 +104,7 @@ echo.
 
 REM Start Flask backend in a new window
 echo [*] Starting Flask backend on http://localhost:5001
-start "DynoAI Backend (Quick)" cmd /k "color 0B && python api/app.py"
+start "DynoAI Backend (Quick)" cmd /k "cd /d %~dp0 && color 0B && python api/app.py"
 
 REM Wait for backend to initialize
 echo [*] Waiting for backend to initialize...
@@ -109,9 +112,7 @@ timeout /t 3 /nobreak >nul
 
 REM Start Vite frontend in a new window
 echo [*] Starting Vite frontend on http://localhost:5173
-cd frontend
-start "DynoAI Frontend (Quick)" cmd /k "color 0D && npm run dev"
-cd ..
+start "DynoAI Frontend (Quick)" cmd /k "cd /d %~dp0frontend && color 0D && npm run dev"
 
 REM Wait for frontend to initialize
 timeout /t 2 /nobreak >nul

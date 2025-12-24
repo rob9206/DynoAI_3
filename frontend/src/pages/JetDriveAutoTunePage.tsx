@@ -34,7 +34,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
-import { JetDriveLiveDashboard } from '../components/jetdrive';
 import { Slider } from '../components/ui/slider';
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger
@@ -43,7 +42,7 @@ import { useJetDriveLive } from '../hooks/useJetDriveLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
 import { LiveVETable } from '../components/jetdrive/LiveVETable';
 import { AFRTargetTable, DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
-import { AudioEngineControls } from '../components/jetdrive/AudioEngineControls';
+// import { AudioEngineControls } from '../components/jetdrive/AudioEngineControls';
 import { AudioCapturePanel } from '../components/jetdrive/AudioCapturePanel';
 import { RunComparisonTable } from '../components/jetdrive/RunComparisonTable';
 import { RunComparisonTableEnhanced } from '../components/jetdrive/RunComparisonTableEnhanced';
@@ -53,10 +52,11 @@ import { ClosedLoopTuningPanel } from '../components/jetdrive/ClosedLoopTuningPa
 import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
 import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
-import { useAudioEngine } from '../hooks/useAudioEngine';
-import { useAIAssistant } from '../hooks/useAIAssistant';
+// import { useAudioEngine } from '../hooks/useAudioEngine';
+// import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
 import { getConfidenceReport } from '../lib/api';
+import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 
 const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
 
@@ -560,15 +560,39 @@ export default function JetDriveAutoTunePage() {
     const [veErrorPct, setVeErrorPct] = useState(-10.0);
     const [veErrorStd, setVeErrorStd] = useState(5.0);
 
-    // AI Assistant (voice reactions when fun mode is enabled)
-    const aiAssistant = useAIAssistant({ enabled: audioFunMode });
+    // AI Assistant (voice reactions when fun mode is enabled) - DISABLED
+    // const aiAssistant = useAIAssistant({ enabled: audioFunMode });
 
-    // Audio engine for sound effects AND live engine sound
-    const audioEngine = useAudioEngine({
-        cylinders: 2,
-        funMode: audioFunMode
-    });
-    const { playStartup, playShutdown, playSuccess, playWarning, playBeep, setRpm, setLoad, startEngine, stopEngine, state: audioState } = audioEngine;
+    // Stub AI Assistant to prevent errors
+    const aiAssistant = {
+        state: { voiceName: null },
+        onPullStart: () => { },
+        onPullEnd: () => { },
+        onHighRpm: () => { },
+        onGoodPull: () => { },
+        onAfrLean: () => { },
+        onAfrRich: () => { },
+        onKnockDetected: () => { },
+        testVoice: () => { },
+    };
+
+    // Audio engine for sound effects AND live engine sound - DISABLED
+    // const audioEngine = useAudioEngine({
+    //     cylinders: 2,
+    //     funMode: audioFunMode
+    // });
+    // const { playStartup, playShutdown, playSuccess, playWarning, playBeep, setRpm, setLoad, startEngine, stopEngine, state: audioState } = audioEngine;
+    // Stub functions to prevent errors (audio engine disabled)
+    const playStartup = () => { };
+    const playShutdown = () => { };
+    const playSuccess = () => { };
+    const playWarning = () => { };
+    const playBeep = (_frequency?: number, _duration?: number) => { };
+    const setRpm = (_rpm: number) => { };
+    const setLoad = (_load: number) => { };
+    const startEngine = async () => { };
+    const stopEngine = () => { };
+    const audioState = { isPlaying: false };
 
     // Workflow state
     const [workflowState, setWorkflowState] = useState<WorkflowState>('disconnected');
@@ -723,8 +747,9 @@ export default function JetDriveAutoTunePage() {
                 setIsSimulatorActive(true);
                 playStartup(); // 🔊 Startup sound!
                 const ecuStatus = data.virtual_ecu_enabled ? ' with Virtual ECU' : '';
+                const veScenarioSuffix = virtualECUEnabled ? ` • ${veScenario} VE scenario` : '';
                 toast.success(`Simulator started${ecuStatus}: ${data.profile?.name}`, {
-                    description: `${data.profile?.max_hp} HP @ ${data.profile?.redline_rpm} RPM redline${virtualECUEnabled ? ` • ${veScenario} VE scenario` : ''}`
+                    description: `${data.profile?.max_hp} HP @ ${data.profile?.redline_rpm} RPM redline${veScenarioSuffix}`
                 });
                 // Also start live capture
                 await startCapture();
@@ -780,49 +805,51 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
-    // Sync audio engine with live RPM/MAP data for realistic engine sound
-    useEffect(() => {
-        if (!audioState.isPlaying && (isCapturing || isSimulatorActive) && currentRpm > 500) {
-            // Start audio engine when capture starts
-            startEngine().catch(console.error);
-        } else if (audioState.isPlaying && !isCapturing && !isSimulatorActive) {
-            // Stop audio engine when capture stops
-            stopEngine();
-        }
+    // Sync audio engine with live RPM/MAP data for realistic engine sound - DISABLED
+    // useEffect(() => {
+    //     if (!audioState.isPlaying && (isCapturing || isSimulatorActive) && currentRpm > 500) {
+    //         // Start audio engine when capture starts
+    //         startEngine().catch(console.error);
+    //     } else if (audioState.isPlaying && !isCapturing && !isSimulatorActive) {
+    //         // Stop audio engine when capture stops
+    //         stopEngine();
+    //     }
 
-        // Update RPM and load in real-time
-        if (audioState.isPlaying) {
-            setRpm(currentRpm);
-            // Calculate load from MAP (0-100 kPa -> 0-1 load)
-            const load = Math.min(1, Math.max(0, currentMap / 100));
-            setLoad(load);
-        }
-    }, [currentRpm, currentMap, isCapturing, isSimulatorActive, audioState.isPlaying, setRpm, setLoad, startEngine, stopEngine]);
+    //     // Update RPM and load in real-time
+    //     if (audioState.isPlaying) {
+    //         setRpm(currentRpm);
+    //         // Calculate load from MAP (0-100 kPa -> 0-1 load)
+    //         const load = Math.min(1, Math.max(0, currentMap / 100));
+    //         setLoad(load);
+    //     }
+    // }, [currentRpm, currentMap, isCapturing, isSimulatorActive, audioState.isPlaying, setRpm, setLoad, startEngine, stopEngine]);
 
     // Update workflow state based on connection/capture/rpm
     useEffect(() => {
         // Simulator mode takes priority
         if (isSimulatorActive) {
+            // Always preserve 'complete' state after analysis - don't override it
             if (simState === 'pull') {
-                setWorkflowState('capturing');
+                setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'capturing');
             } else if (simState === 'decel' || simState === 'cooldown') {
-                setWorkflowState('analyzing');
+                setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'analyzing');
             } else {
-                setWorkflowState('monitoring');
+                setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'monitoring');
             }
             return;
         }
 
         if (!isConnected) {
-            setWorkflowState('disconnected');
+            // Preserve 'complete' state even when disconnected - analysis results should persist
+            setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'disconnected');
         } else if (isCapturing) {
             if (currentRpm > rpmThreshold) {
-                setWorkflowState('capturing');
+                setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'capturing');
             } else {
-                setWorkflowState('monitoring');
+                setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'monitoring');
             }
         } else {
-            setWorkflowState('idle');
+            setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'idle');
         }
     }, [isConnected, isCapturing, currentRpm, rpmThreshold, isSimulatorActive, simState]);
 
@@ -851,12 +878,6 @@ export default function JetDriveAutoTunePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRpm, audioFunMode]);
 
-export default function JetDriveAutoTunePage() {
-    const [activeMainTab, setActiveMainTab] = useState('autotune');
-    const [runId, setRunId] = useState(`run_${Date.now()}`);
-    const [selectedRun, setSelectedRun] = useState<string | null>(null);
-    const [pvvContent, setPvvContent] = useState<string>('');
-    const [textExportContent, setTextExportContent] = useState<string>('');
     // Trigger AI on AFR conditions during pulls
     const lastAfrTrigger = useRef<number>(0);
     const afrCooldown = 8000; // 8 seconds between AFR comments
@@ -931,8 +952,13 @@ export default function JetDriveAutoTunePage() {
         queryKey: ['jetdrive-run', selectedRun],
         queryFn: async () => {
             if (!selectedRun) return null;
-            const res = await fetch(`${API_BASE}/run/${selectedRun}`);
-            return res.json();
+            try {
+                const res = await fetch(`${API_BASE}/run/${selectedRun}`);
+                const data = await res.json();
+                return data;
+            } catch (err) {
+                throw err;
+            }
         },
         enabled: !!selectedRun,
     });
@@ -949,7 +975,8 @@ export default function JetDriveAutoTunePage() {
         queryFn: async () => {
             if (!selectedRun) return null;
             try {
-                return await getConfidenceReport(selectedRun);
+                const result = await getConfidenceReport(selectedRun);
+                return result;
             } catch (err) {
                 console.warn('Confidence report not available:', err);
                 return null;
@@ -985,7 +1012,9 @@ export default function JetDriveAutoTunePage() {
             });
 
             if (!res.ok) {
-                const errorData = await res.json().catch(() => ({ error: 'Analysis request failed' }));
+                const errorData = await res.json().catch(() => {
+                    return { error: 'Analysis request failed' };
+                });
                 console.error('[Analyze] Request failed:', res.status, errorData);
                 throw new Error(errorData.error || `Analysis failed with status ${res.status}`);
             }
@@ -1008,7 +1037,7 @@ export default function JetDriveAutoTunePage() {
                 });
                 setSelectedRun(data.run_id);
                 setWorkflowState('complete');
-                refetchStatus();
+                void refetchStatus();
                 // Generate new run ID for next run
                 setRunId(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
             } else {
@@ -1040,24 +1069,6 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
-    // Fetch text export content
-    const fetchTextExport = async (rid: string) => {
-        try {
-            const res = await fetch(`${API_BASE}/run/${rid}/export-text`);
-            if (!res.ok) {
-                throw new Error(`Failed to fetch text export: ${res.status} ${res.statusText}`);
-            }
-            const data = await res.json();
-            if (!data || typeof data.content !== 'string') {
-                throw new Error('Invalid response: missing content');
-            }
-            setTextExportContent(data.content);
-        } catch (err) {
-            toast.error('Failed to fetch text export', { description: String(err) });
-        }
-    };
-
-    // Download PVV file
     // Fetch PVV
     useEffect(() => {
         if (selectedRun) {
@@ -1079,25 +1090,6 @@ export default function JetDriveAutoTunePage() {
         a.click();
         URL.revokeObjectURL(url);
     };
-
-    // Download text export file
-    const downloadTextExport = () => {
-        if (!textExportContent || !selectedRun) return;
-        const blob = new Blob([textExportContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `DynoAI_Analysis_${selectedRun}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    useEffect(() => {
-        if (selectedRun) {
-            fetchPvv(selectedRun);
-            fetchTextExport(selectedRun);
-        }
-    }, [selectedRun]);
 
     const runs: RunInfo[] = statusData?.runs || [];
     const analysis = runData?.manifest?.analysis;
@@ -1218,54 +1210,6 @@ export default function JetDriveAutoTunePage() {
                     </div>
                 </div>
 
-            {/* Main Tabs */}
-            <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 max-w-lg">
-                    <TabsTrigger value="hardware" className="flex items-center gap-2">
-                        <Radio className="h-4 w-4" />
-                        Hardware
-                    </TabsTrigger>
-                    <TabsTrigger value="live" className="flex items-center gap-2">
-                        <Activity className="h-4 w-4" />
-                        Live
-                    </TabsTrigger>
-                    <TabsTrigger value="autotune" className="flex items-center gap-2">
-                        <Zap className="h-4 w-4" />
-                        Auto-Tune
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* Hardware Tab */}
-                <TabsContent value="hardware" className="mt-6">
-                    <HardwareTab />
-                </TabsContent>
-
-                {/* Live Dashboard Tab */}
-                <TabsContent value="live" className="mt-6">
-                    <JetDriveLiveDashboard apiUrl={API_BASE} />
-                </TabsContent>
-
-                {/* Auto-Tune Tab */}
-                <TabsContent value="autotune" className="mt-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left Column - Controls */}
-                        <div className="space-y-4">
-                            {/* New Analysis Card */}
-                            <Card className="border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Play className="h-5 w-5 text-orange-500" />
-                                        New Analysis
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="run-id">Run ID</Label>
-                                        <Input
-                                            id="run-id"
-                                            value={runId}
-                                            onChange={(e) => setRunId(e.target.value)}
-                                            placeholder="my_dyno_run"
                 {/* Settings Panel (collapsible) */}
                 <AnimatePresence>
                     {showSettings && (
@@ -1316,7 +1260,8 @@ export default function JetDriveAutoTunePage() {
                                                 placeholder="my_dyno_run"
                                             />
                                         </div>
-                                        <div>
+                                        {/* Audio Mode Toggle - DISABLED */}
+                                        {/* <div>
                                             <Label className="text-xs text-zinc-400">Audio Mode</Label>
                                             <div className="flex items-center gap-2 mt-2">
                                                 <Button
@@ -1334,7 +1279,7 @@ export default function JetDriveAutoTunePage() {
                                             <p className="text-[10px] text-zinc-500 mt-1">
                                                 {audioFunMode ? 'Exaggerated engine sounds' : 'Natural engine sounds'}
                                             </p>
-                                        </div>
+                                        </div> */}
                                     </div>
 
                                     {/* Build Configuration - Stage & Cam Presets */}
@@ -1577,55 +1522,8 @@ export default function JetDriveAutoTunePage() {
                                 />
                             </div>
 
-                            {/* Audio Engine Controls - Compact inline */}
-                            <div className={`flex items-center justify-between gap-3 p-3 rounded-lg transition-all ${audioFunMode
-                                ? 'bg-gradient-to-r from-purple-900/20 via-pink-900/20 to-orange-900/20 border border-orange-500/30'
-                                : 'bg-zinc-900/30 border border-zinc-800/50'
-                                }`}>
-                                <div className="flex items-center gap-3 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-2xl">{audioFunMode ? '🎀' : '🔊'}</span>
-                                        <div className="flex flex-col">
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${audioFunMode ? 'text-orange-400' : 'text-zinc-500'}`}>
-                                                {audioFunMode ? 'Fun Mode Active!' : 'Realistic Mode'}
-                                            </span>
-                                            {audioFunMode && aiAssistant.state.voiceName && (
-                                                <span className="text-[10px] text-pink-400/70">
-                                                    🎤 AI Assistant: {aiAssistant.state.voiceName.split(' ')[0]}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            console.log('[JetDrive] Toggling Fun Mode from', audioFunMode, 'to', !audioFunMode);
-                                            setAudioFunMode(!audioFunMode);
-                                        }}
-                                        className={`h-6 px-2 text-xs ${audioFunMode
-                                            ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                            }`}
-                                    >
-                                        {audioFunMode ? '🔥' : '🎵'} Toggle
-                                    </Button>
-                                    {audioFunMode && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                console.log('[JetDrive] Say Hi clicked, aiAssistant:', aiAssistant);
-                                                aiAssistant.testVoice();
-                                            }}
-                                            className="h-6 px-2 text-xs bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                                            title="Test AI Assistant Voice"
-                                        >
-                                            👋 Say Hi
-                                        </Button>
-                                    )}
-                                </div>
-                                <AudioEngineControls
+                            {/* Audio Engine Controls - DISABLED */}
+                            {/* <AudioEngineControls
                                     rpm={currentRpm}
                                     load={currentMap / 100} // Use MAP for load (0-100 kPa -> 0-1)
                                     autoStart={false} // Manual control only - user must click power button
@@ -1634,8 +1532,7 @@ export default function JetDriveAutoTunePage() {
                                     cylinders={2}
                                     funMode={audioFunMode}
                                     externalAudioEngine={audioEngine} // Pass the audio engine instance for sync
-                                />
-                            </div>
+                                /> */}
 
                             {/* Capture Controls */}
                             <div className="flex items-center gap-3">
@@ -1798,26 +1695,26 @@ export default function JetDriveAutoTunePage() {
                                     <CardContent className="space-y-4">
                                         {/* Quick Stats */}
                                         <div className="grid grid-cols-5 gap-3">
-                                            <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 text-center">
+                                            <div className="p-3 rounded-md bg-orange-500/10 border border-orange-500/20 text-center">
                                                 <div className="text-2xl font-bold text-orange-400">{analysis?.peak_hp?.toFixed(1)}</div>
                                                 <div className="text-[10px] text-zinc-500">HP @ {analysis?.peak_hp_rpm}</div>
                                             </div>
-                                            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-center">
+                                            <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20 text-center">
                                                 <div className="text-2xl font-bold text-blue-400">{analysis?.peak_tq?.toFixed(1)}</div>
                                                 <div className="text-[10px] text-zinc-500">TQ @ {analysis?.peak_tq_rpm}</div>
                                             </div>
-                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                                            <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20 text-center">
                                                 <div className="text-2xl font-bold text-green-400">{analysis?.ok_cells}</div>
                                                 <div className="text-[10px] text-zinc-500">OK Cells</div>
                                             </div>
-                                            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
+                                            <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-center">
                                                 <div className="text-2xl font-bold text-red-400">
                                                     {(analysis?.lean_cells || 0) + (analysis?.rich_cells || 0)}
                                                 </div>
                                                 <div className="text-[10px] text-zinc-500">Needs Fix</div>
                                             </div>
                                             {confidenceReport && (
-                                                <div className={`p-3 rounded-lg border text-center ${confidenceReport.letter_grade === 'A' ? 'bg-green-500/10 border-green-500/20' :
+                                                <div className={`p-3 rounded-md border text-center ${confidenceReport.letter_grade === 'A' ? 'bg-green-500/10 border-green-500/20' :
                                                     confidenceReport.letter_grade === 'B' ? 'bg-blue-500/10 border-blue-500/20' :
                                                         confidenceReport.letter_grade === 'C' ? 'bg-yellow-500/10 border-yellow-500/20' :
                                                             'bg-red-500/10 border-red-500/20'
@@ -1870,22 +1767,25 @@ export default function JetDriveAutoTunePage() {
                                                 </h4>
                                                 <div className="grid grid-cols-3 gap-3">
                                                     {/* Regions */}
-                                                    {Object.entries(confidenceReport.region_breakdown).map(([region, data]) => (
-                                                        <div key={region} className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
-                                                            <div className="text-[10px] text-zinc-500 uppercase font-medium mb-1">
-                                                                {region}
+                                                    {confidenceReport.region_breakdown && Object.entries(confidenceReport.region_breakdown).map(([region, data]) => {
+                                                        const regionData = data as ConfidenceReport['region_breakdown'][string];
+                                                        return (
+                                                            <div key={region} className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+                                                                <div className="text-[10px] text-zinc-500 uppercase font-medium mb-1">
+                                                                    {region}
+                                                                </div>
+                                                                <div className="text-xs text-zinc-300">
+                                                                    <span className="font-mono">{regionData.coverage_percentage.toFixed(0)}%</span>
+                                                                    <span className="text-zinc-600 mx-1">•</span>
+                                                                    <span className="text-zinc-500">MAD {regionData.average_mad.toFixed(2)}</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="text-xs text-zinc-300">
-                                                                <span className="font-mono">{data.coverage_percentage.toFixed(0)}%</span>
-                                                                <span className="text-zinc-600 mx-1">•</span>
-                                                                <span className="text-zinc-500">MAD {data.average_mad.toFixed(2)}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
 
                                                 {/* Recommendations */}
-                                                {confidenceReport.recommendations.length > 0 && (
+                                                {confidenceReport.recommendations && Array.isArray(confidenceReport.recommendations) && confidenceReport.recommendations.length > 0 && (
                                                     <div className="mt-3 space-y-1.5">
                                                         {confidenceReport.recommendations.slice(0, 2).map((rec, idx) => (
                                                             <div key={idx} className="text-[11px] text-zinc-400 flex items-start gap-2 p-2 rounded bg-zinc-800/30">
@@ -2024,239 +1924,6 @@ export default function JetDriveAutoTunePage() {
                                 </CardContent>
                             </Card>
 
-                        {/* Right Column - Results */}
-                        <div className="lg:col-span-2 space-y-4">
-                            {selectedRun && runData ? (
-                                <>
-                                    {/* Analysis Summary */}
-                                    <Card>
-                                        <CardHeader>
-                                            <div className="flex items-center justify-between">
-                                                <CardTitle className="flex items-center gap-2">
-                                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                                    {selectedRun}
-                                                </CardTitle>
-                                                <StatusBadge status={analysis?.overall_status || 'Unknown'} />
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                                    <div className="text-2xl font-bold text-orange-500">
-                                                        {analysis?.peak_hp?.toFixed(1)}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        Peak HP @ {analysis?.peak_hp_rpm} RPM
-                                                    </div>
-                                                </div>
-                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                                    <div className="text-2xl font-bold text-blue-500">
-                                                        {analysis?.peak_tq?.toFixed(1)}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        Peak TQ @ {analysis?.peak_tq_rpm} RPM
-                                                    </div>
-                                                </div>
-                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                                    <div className="text-2xl font-bold">
-                                                        {analysis?.total_samples}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        Samples
-                                                    </div>
-                                                </div>
-                                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                                    <div className="flex justify-center gap-1">
-                                                        <span className="text-green-500">{analysis?.ok_cells}</span>
-                                                        <span className="text-muted-foreground">/</span>
-                                                        <span className="text-red-500">{analysis?.lean_cells}</span>
-                                                        <span className="text-muted-foreground">/</span>
-                                                        <span className="text-blue-500">{analysis?.rich_cells}</span>
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        OK / Lean / Rich
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* Tabs for Grid and Export */}
-                                    <Tabs defaultValue="grid" className="w-full">
-                                        <TabsList className="grid w-full grid-cols-4">
-                                            <TabsTrigger value="grid">
-                                                <Grid3X3 className="h-4 w-4 mr-2" />
-                                                VE Grid
-                                            </TabsTrigger>
-                                            <TabsTrigger value="pvv">
-                                                <FileDown className="h-4 w-4 mr-2" />
-                                                PVV Export
-                                            </TabsTrigger>
-                                            <TabsTrigger value="text">
-                                                <FileText className="h-4 w-4 mr-2" />
-                                                Text Export
-                                            </TabsTrigger>
-                                            <TabsTrigger value="report">
-                                                <FileText className="h-4 w-4 mr-2" />
-                                                JSON
-                                            </TabsTrigger>
-                                        </TabsList>
-
-                                        {/* VE Correction Grid */}
-                                        <TabsContent value="grid">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle className="text-sm">
-                                                        VE Correction Grid (% change)
-                                                    </CardTitle>
-                                                    <CardDescription>
-                                                        {grid?.rpm_bins?.length} RPM × {grid?.map_bins?.length} MAP bins
-                                                    </CardDescription>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full text-xs">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th className="p-2 text-left bg-muted/50">RPM \ MAP</th>
-                                                                    {grid?.map_bins?.map((m: number) => (
-                                                                        <th key={m} className="p-2 text-center bg-muted/50 min-w-[60px]">
-                                                                            {m} kPa
-                                                                        </th>
-                                                                    ))}
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {veGrid.map((row, i) => (
-                                                                    <tr key={row.rpm}>
-                                                                        <td className="p-2 font-medium bg-muted/30">
-                                                                            {row.rpm}
-                                                                        </td>
-                                                                        {row.values.map((val, j) => {
-                                                                            const delta = ((val - 1) * 100);
-                                                                            return (
-                                                                                <td
-                                                                                    key={j}
-                                                                                    className={`p-2 text-center font-mono ${getCellColor(val)}`}
-                                                                                >
-                                                                                    {delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
-                                                                                </td>
-                                                                            );
-                                                                        })}
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-
-                                                    <div className="mt-4 flex items-center justify-center gap-4 text-xs">
-                                                        <div className="flex items-center gap-1">
-                                                            <div className="w-4 h-4 bg-red-500/40 rounded" />
-                                                            <span>Lean (+)</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            <div className="w-4 h-4 bg-green-500/20 rounded" />
-                                                            <span>OK</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            <div className="w-4 h-4 bg-blue-500/40 rounded" />
-                                                            <span>Rich (−)</span>
-                                                        </div>
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-
-                                        {/* PVV Export */}
-                                        <TabsContent value="pvv">
-                                            <Card>
-                                                <CardHeader>
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <CardTitle className="text-sm">Power Vision PVV Export</CardTitle>
-                                                            <CardDescription>
-                                                                Import directly into Power Core
-                                                            </CardDescription>
-                                                        </div>
-                                                        <Button onClick={downloadPvv} size="sm">
-                                                            <Download className="h-4 w-4 mr-2" />
-                                                            Download .pvv
-                                                        </Button>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96">
-                                                        {pvvContent || 'Loading...'}
-                                                    </pre>
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-
-                                        {/* Text Export */}
-                                        <TabsContent value="text">
-                                            <Card>
-                                                <CardHeader>
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <CardTitle className="text-sm">Text Export for AI Analysis</CardTitle>
-                                                            <CardDescription>
-                                                                Comprehensive text report for sharing with ChatGPT or other AI assistants
-                                                            </CardDescription>
-                                                        </div>
-                                                        <Button onClick={downloadTextExport} size="sm">
-                                                            <Download className="h-4 w-4 mr-2" />
-                                                            Download .txt
-                                                        </Button>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <pre className="bg-muted/50 p-4 rounded-lg text-xs overflow-x-auto max-h-96 whitespace-pre-wrap">
-                                                        {textExportContent || 'Loading...'}
-                                                    </pre>
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-
-                                        {/* Report */}
-                                        <TabsContent value="report">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle className="text-sm">JSON Manifest</CardTitle>
-                                                    <CardDescription>
-                                                        Raw JSON data from analysis
-                                                    </CardDescription>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <div className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
-                                                        {runData?.manifest ? (
-                                                            JSON.stringify(runData.manifest, null, 2)
-                                                        ) : (
-                                                            'Loading...'
-                                                        )}
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-                                    </Tabs>
-                                </>
-                            ) : (
-                                <Card className="h-full flex items-center justify-center min-h-[400px]">
-                                    <CardContent className="text-center">
-                                        <Gauge className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
-                                        <h3 className="text-lg font-medium mb-2">No Run Selected</h3>
-                                        <p className="text-sm text-muted-foreground mb-4">
-                                            Run a simulation or select a previous run to view results
-                                        </p>
-                                        <Button
-                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                            className="bg-orange-600 hover:bg-orange-700"
-                                        >
-                                            <Zap className="h-4 w-4 mr-2" />
-                                            Run Simulation
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            )}
                             {/* Tuner Tips */}
                             <Card className="bg-zinc-900/30 border-zinc-800/50">
                                 <CardHeader className="py-3">

@@ -39,10 +39,23 @@ export default function FileUpload({
 
   const handleFile = useCallback(
     (file: File) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FileUpload.tsx:40',message:'handleFile called',data:{fileName:file.name,fileSize:file.size,fileType:file.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       if (validateFile(file)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FileUpload.tsx:42',message:'File validation passed',data:{fileName:file.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         setSelectedFile(file);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FileUpload.tsx:44',message:'Calling onFileSelect callback',data:{fileName:file.name,hasCallback:typeof onFileSelect==='function'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         onFileSelect(file);
         toast.success(`File selected: ${file.name}`);
+      } else {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FileUpload.tsx:47',message:'File validation failed',data:{fileName:file.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
       }
     },
     [onFileSelect, accept, maxSize]

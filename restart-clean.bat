@@ -1,8 +1,17 @@
 @echo off
+setlocal enabledelayedexpansion
 REM ======================================================================
 REM DynoAI Clean Restart Script
 REM Stops all services, clears caches, and restarts everything fresh
 REM ======================================================================
+
+REM Change to the script's directory (ensures we're in the project root)
+cd /d "%~dp0"
+
+REM Disable Ctrl+C interruption prompt
+if not defined IN_PARENT ( 
+    set "IN_PARENT=1"
+)
 
 color 0E
 echo.
@@ -15,20 +24,28 @@ echo.
 
 REM Kill all Python processes (Flask backend)
 echo   [*] Stopping Python/Flask processes...
-taskkill /F /IM python.exe >nul 2>&1
-taskkill /F /IM pythonw.exe >nul 2>&1
+taskkill /F /T /IM python.exe >nul 2>&1
+taskkill /F /T /IM pythonw.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 REM Kill all Node processes (Vite frontend)
 echo   [*] Stopping Node/Vite processes...
-taskkill /F /IM node.exe >nul 2>&1
-taskkill /F /IM npm.cmd >nul 2>&1
+taskkill /F /T /IM node.exe >nul 2>&1
+taskkill /F /T /IM npm.cmd >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 REM Kill processes on specific ports
 echo   [*] Freeing up ports 5001 and 5173...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5001') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5173') do taskkill /F /PID %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :5001') do (
+    if not "%%a"=="" if not "%%a"=="0" (
+        taskkill /F /T /PID %%a >nul 2>&1
+    )
+)
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :5173') do (
+    if not "%%a"=="" if not "%%a"=="0" (
+        taskkill /F /T /PID %%a >nul 2>&1
+    )
+)
 timeout /t 1 /nobreak >nul
 
 echo   [+] All services stopped
@@ -123,7 +140,13 @@ if errorlevel 1 (
 
 REM Install/update Node dependencies
 echo [*] Checking Node dependencies...
-cd frontend
+if not exist "frontend\package.json" (
+    color 0C
+    echo [ERROR] frontend\package.json not found. Make sure you're running this from the project root.
+    pause
+    exit /b 1
+)
+pushd "%~dp0frontend"
 call npm install --silent
 if errorlevel 1 (
     color 0E
@@ -131,7 +154,7 @@ if errorlevel 1 (
     echo [*] If the app doesn't work, try: cd frontend ^&^& npm install
     timeout /t 2 /nobreak >nul
 )
-cd ..
+popd
 
 echo.
 color 0A
@@ -142,7 +165,7 @@ echo.
 
 REM Start Flask backend in a new window
 echo [*] Starting Flask backend on http://localhost:5001
-start "DynoAI Backend (Clean)" cmd /k "color 0B && python api/app.py"
+start "DynoAI Backend (Clean)" cmd /k "cd /d %~dp0 && color 0B && python api/app.py"
 
 REM Wait for backend to initialize
 echo [*] Waiting for backend to initialize...
@@ -150,9 +173,7 @@ timeout /t 4 /nobreak >nul
 
 REM Start Vite frontend in a new window
 echo [*] Starting Vite frontend on http://localhost:5173
-cd frontend
-start "DynoAI Frontend (Clean)" cmd /k "color 0D && npm run dev"
-cd ..
+start "DynoAI Frontend (Clean)" cmd /k "cd /d %~dp0frontend && color 0D && npm run dev"
 
 REM Wait for frontend to initialize
 timeout /t 3 /nobreak >nul

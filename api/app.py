@@ -495,7 +495,21 @@ def analyze():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        import logging
+        error_msg = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"[!] Error in /api/analyze: {error_msg}")
+        print(f"[!] Traceback:\n{error_traceback}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in analyze endpoint: {error_msg}", exc_info=True)
+        try:
+            return jsonify({"error": error_msg, "details": error_traceback if app.debug else None}), 500
+        except Exception as json_error:
+            # If jsonify itself fails, return plain text
+            print(f"[!] Failed to create JSON response: {json_error}")
+            from flask import Response
+            return Response(f"Error: {error_msg}", status=500, mimetype="text/plain")
 
 
 @app.route("/api/status/<run_id>", methods=["GET"])

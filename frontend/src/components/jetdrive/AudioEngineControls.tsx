@@ -14,7 +14,7 @@ import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { useAudioEngine, type UseAudioEngineReturn } from '../../hooks/useAudioEngine';
 
 interface AudioEngineControlsProps {
     /** Current RPM from dyno */
@@ -31,6 +31,8 @@ interface AudioEngineControlsProps {
     cylinders?: number;
     /** Fun mode - exaggerated sounds */
     funMode?: boolean;
+    /** External audio engine instance to use instead of creating internal one */
+    externalAudioEngine?: UseAudioEngineReturn;
 }
 
 export function AudioEngineControls({
@@ -41,7 +43,16 @@ export function AudioEngineControls({
     compact = false,
     cylinders = 2,
     funMode = true,
+    externalAudioEngine,
 }: AudioEngineControlsProps) {
+    // #region agent log
+    const internalEngine = useAudioEngine({ cylinders, funMode });
+    useEffect(() => {
+        fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AudioEngineControls.tsx:50', message: 'AudioEngineControls render', data: { hasExternalEngine: !!externalAudioEngine, internalEngineState: internalEngine.state.isPlaying, externalEngineState: externalAudioEngine?.state.isPlaying }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
+    }, [externalAudioEngine, internalEngine.state.isPlaying]);
+    // #endregion
+    
+    // Use external engine if provided, otherwise use internal one
     const {
         state,
         startEngine,
@@ -50,7 +61,7 @@ export function AudioEngineControls({
         setLoad,
         setVolume,
         toggleMute,
-    } = useAudioEngine({ cylinders, funMode });
+    } = externalAudioEngine ?? internalEngine;
 
     // Update RPM and load when props change
     useEffect(() => {
