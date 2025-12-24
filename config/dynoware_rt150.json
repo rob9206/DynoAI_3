@@ -1,0 +1,86 @@
+{
+  "$schema": "dynoai.dyno-config@1",
+  "description": "Dynoware RT-150 configuration for Dawson Dynamics",
+  "last_updated": "2024-12-15",
+  
+  "device": {
+    "model": "Dynoware RT-150",
+    "serial_number": "RT00220413",
+    "location": "Dawson Dynamics",
+    "hardware_version": 0,
+    "configuration_version": 4,
+    "brake_configuration": "0 Load Controller(s)",
+    "max_brake_temp_c": 371,
+    "datafile_checksum": "5FE98760"
+  },
+  
+  "modules": {
+    "count": 4,
+    "versions": {
+      "PV": "0",
+      "DWRT": "2.1.7034.17067",
+      "ATMO": "1.1"
+    }
+  },
+  
+  "network": {
+    "ip_address": "192.168.1.115",
+    "jetdrive_port": 22344,
+    "protocol": "Power Core JetDrive (UDP multicast)"
+  },
+  
+  "drums": {
+    "drum1": {
+      "serial_number": "1000588",
+      "mass_kg": 14.121,
+      "retarder_mass_kg": 0,
+      "circumference_ft": 4.673,
+      "num_tabs": 1,
+      "_calculated": {
+        "radius_ft": 0.7437,
+        "radius_m": 0.2267,
+        "diameter_ft": 1.4874,
+        "diameter_in": 17.85,
+        "inertia_kgm2": 0.363,
+        "inertia_lbft2": 8.61
+      }
+    },
+    "drum2": {
+      "serial_number": "0",
+      "mass_kg": 0,
+      "retarder_mass_kg": 0,
+      "circumference_ft": 0,
+      "num_tabs": 0,
+      "_note": "Drum 2 not configured/installed"
+    }
+  },
+  
+  "power_calculation": {
+    "method": "force_velocity",
+    "formulas": {
+      "horsepower": "HP = (Force_lbs × Circumference_ft × RPM) / 33000",
+      "torque": "Torque_ftlb = Force_lbs × Radius_ft",
+      "velocity": "Velocity_fps = Circumference_ft × RPM / 60"
+    },
+    "notes": [
+      "Inertia dyno - power calculated from drum acceleration",
+      "Force Drum 1 channel provides direct force measurement in lbs",
+      "Acceleration channel provides g-force for validation"
+    ]
+  },
+  
+  "channels": {
+    "available": [
+      "Force Drum 1",
+      "Acceleration", 
+      "Digital RPM 1",
+      "Digital RPM 2",
+      "Temperature 1",
+      "Temperature 2",
+      "Humidity",
+      "Pressure"
+    ],
+    "afr_source": "Innovate LC-2 / LM-2 via separate serial connection"
+  }
+}
+

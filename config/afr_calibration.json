@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "description": "AFR sensor calibration data for Innovate DLG-1 dual wideband controller",
+  "version": "1.0.0",
+  "last_calibrated": null,
+  "calibration_notes": "Free air calibration should read 20.9 AFR (atmospheric O2 content). Adjust offsets if sensors consistently read high or low in free air.",
+  "base_divisor": 409.6,
+  "base_divisor_notes": "Empirically determined from DLG-1 protocol analysis. Do not change unless retesting protocol.",
+  "channels": {
+    "1": {
+      "name": "Sensor A / Channel 1",
+      "enabled": true,
+      "offset_afr": 0.0,
+      "offset_notes": "AFR offset applied after base calculation. Positive = add to reading, Negative = subtract from reading.",
+      "multiplier": 1.0,
+      "multiplier_notes": "Multiplier applied after offset. Use for sensor-specific calibration drift.",
+      "last_free_air_reading": null,
+      "expected_free_air_afr": 20.9,
+      "calibration_date": null
+    },
+    "2": {
+      "name": "Sensor B / Channel 2",
+      "enabled": true,
+      "offset_afr": 0.0,
+      "offset_notes": "AFR offset applied after base calculation. Positive = add to reading, Negative = subtract from reading.",
+      "multiplier": 1.0,
+      "multiplier_notes": "Multiplier applied after offset. Use for sensor-specific calibration drift.",
+      "last_free_air_reading": null,
+      "expected_free_air_afr": 20.9,
+      "calibration_date": null
+    }
+  },
+  "calibration_procedure": [
+    "1. Remove both sensors from exhaust (free air)",
+    "2. Start engine to power sensors (or use bench power supply)",
+    "3. Wait 30 seconds for sensors to warm up",
+    "4. Run calibration monitor: python scripts/calibrate_afr.py",
+    "5. Observe readings - should be close to 20.9 AFR",
+    "6. If readings are off, calibration tool will calculate offsets",
+    "7. Apply offsets and verify readings",
+    "8. Reinstall sensors in exhaust"
+  ],
+  "troubleshooting": {
+    "reading_too_high": "Use negative offset to bring reading down",
+    "reading_too_low": "Use positive offset to bring reading up",
+    "erratic_readings": "Check sensor warmup, connections, or sensor may need replacement",
+    "no_readings": "Check COM port, sensor power, and cable connections"
+  }
+}
+
+
+
