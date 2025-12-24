@@ -16,7 +16,7 @@ timeout /t 2 /nobreak >nul
 
 REM Start backend in new window
 echo [^>] Starting Backend API on port 5001...
-start "DynoAI Backend" cmd /k "cd /d %~dp0.. && set FLASK_APP=api.app && set JETSTREAM_STUB_MODE=true && python -m flask run --host=0.0.0.0 --port=5001"
+start "DynoAI Backend" cmd /k "cd /d %~dp0.. && set JETSTREAM_STUB_MODE=true && python -m api.app"
 
 REM Wait for backend
 echo [*] Waiting for backend...

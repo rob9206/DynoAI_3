@@ -57,7 +57,8 @@ Write-Host "[3/6] Clearing Flask logs..." -ForegroundColor Cyan
 if (Test-Path "flask_debug.log") {
     Remove-Item "flask_debug.log" -Force -ErrorAction SilentlyContinue
     Write-Host "  [+] Flask logs cleared" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "  [*] No Flask logs to clear" -ForegroundColor Gray
 }
 
@@ -72,7 +73,8 @@ Write-Host "[4/6] Clearing Vite cache..." -ForegroundColor Cyan
 if (Test-Path "frontend\node_modules\.vite") {
     Remove-Item "frontend\node_modules\.vite" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "  [+] Vite cache cleared" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "  [*] No Vite cache to clear" -ForegroundColor Gray
 }
 Write-Host ""
@@ -220,5 +222,8 @@ finally {
     
     Write-Host ""
     Write-Host "[*] Goodbye!" -ForegroundColor Cyan
+}
+
+}
 }
 

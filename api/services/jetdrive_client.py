@@ -54,6 +54,22 @@ class JDUnit(IntEnum):
     NoUnit = 255
 
 
+# Fallback channel name mapping for common Dynojet RT module channels
+# Used when RT module broadcasts values without channel info metadata
+FALLBACK_CHANNEL_NAMES = {
+    3: "Torque",
+    4: "Horsepower",
+    7: "Speed",
+    8: "Distance",
+    9: "Acceleration",
+    10: "Digital RPM 1",
+    11: "Digital RPM 2",
+    12: "Force Drum 1",
+    19: "Force Drum 2",
+    38: "Pressure",
+}
+
+
 @dataclass
 class JetDriveConfig:
     multicast_group: str = DEFAULT_MCAST_GROUP
@@ -232,7 +248,13 @@ def _parse_channel_values(
             break
         idx += 4
         chan = channel_lookup.get(chan_id)
-        name = chan.name if chan else f"chan_{chan_id}"
+        # Use channel metadata name, fallback to known dyno channels, or generic name
+        if chan:
+            name = chan.name
+        elif chan_id in FALLBACK_CHANNEL_NAMES:
+            name = FALLBACK_CHANNEL_NAMES[chan_id]
+        else:
+            name = f"chan_{chan_id}"
         samples.append(
             JetDriveSample(
                 provider_id=provider_id,
@@ -339,9 +361,16 @@ async def subscribe(
     stop_event: asyncio.Event | None = None,
     recv_timeout: float = 0.5,
     debug: bool = False,
-) -> None:
+    return_stats: bool = False,
+) -> dict[str, int] | None:
     """
     Listen for ChannelValues from a provider and invoke the callback.
+    
+    Args:
+        return_stats: If True, returns frame statistics dict instead of None
+    
+    Returns:
+        None or dict with 'dropped_frames', 'non_provider_frames', 'total_frames' if return_stats=True
     """
     cfg = config or JetDriveConfig.from_env()
     loop = asyncio.get_running_loop()
@@ -357,6 +386,7 @@ async def subscribe(
 
     dropped_frames = 0
     non_provider_frames = 0
+    total_frames = 0
 
     try:
         while True:
@@ -368,6 +398,8 @@ async def subscribe(
                 )
             except asyncio.TimeoutError:
                 continue
+            
+            total_frames += 1  # Count all received frames
             decoded = _Wire.decode(data)
             if not decoded:
                 dropped_frames += 1
@@ -393,9 +425,17 @@ async def subscribe(
         if debug:
             print(
                 f"[jetdrive_client.subscribe] dropped_frames={dropped_frames}, "
-                f"non_provider_frames={non_provider_frames}",
+                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}",
                 flush=True,
             )
+        
+        if return_stats:
+            return {
+                "dropped_frames": dropped_frames,
+                "non_provider_frames": non_provider_frames,
+                "total_frames": total_frames,
+            }
+        return None
 
 
 async def run_until_cancelled(

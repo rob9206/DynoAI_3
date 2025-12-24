@@ -11,6 +11,12 @@ Physics-Based Simulation:
 - Realistic throttle response
 
 This allows full testing of the JetDrive Command Center without hardware.
+
+Dyno Configuration:
+- Uses actual drum specs from DynoConfig (Dynoware RT-150)
+- Drum 1: Mass 14.121 kg, Circumference 4.673 ft
+- Force calculation: F = τ / r (torque / drum radius)
+- HP calculation: P = F × v / 550 (force × velocity / conversion)
 """
 
 from __future__ import annotations
@@ -24,6 +30,8 @@ from enum import Enum
 from typing import Any, Callable
 
 import numpy as np
+
+from api.config import get_config
 
 
 # Physics Constants
@@ -1183,9 +1191,17 @@ class DynoSimulator:
         hp_display = self._add_noise(hp, self.config.torque_noise_pct)
 
         # Force calculation (dyno drum force)
-        # F = T × gear_ratio / drum_radius
-        # Simplified: Force ≈ Torque × 2.5 for typical gearing
-        force = torque * 2.5
+        # F = τ / r (Torque / Drum Radius)
+        # Using actual drum specs from DynoConfig (Dynoware RT-150)
+        dyno_config = get_config().dyno
+        drum_radius_ft = dyno_config.drum1.radius_ft
+        
+        if drum_radius_ft > 0:
+            # Real calculation: Force = Torque / Radius
+            force = torque / drum_radius_ft
+        else:
+            # Fallback to approximation if drum not configured
+            force = torque * 2.5
 
         # MAP follows throttle
         map_target = 30 + (self.physics.tps_actual / 100.0) * 70

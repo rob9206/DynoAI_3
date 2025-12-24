@@ -37,9 +37,17 @@ echo.
 echo Dependencies installed
 echo.
 
-REM Start Flask backend in a new window
-echo Starting Flask backend on http://localhost:5001
-start "DynoAI Backend" cmd /k "python api/app.py"
+REM Check if backend is already running
+echo Checking if backend is already running...
+netstat -ano | findstr :5001 >nul 2>&1
+if errorlevel 1 (
+    REM Start Flask backend in a new window
+    echo Starting Flask backend on http://localhost:5001
+    start "DynoAI Backend" cmd /k "cd /d %~dp0.. && python -m api.app"
+) else (
+    echo Backend is already running on port 5001
+    echo Skipping backend startup...
+)
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul
