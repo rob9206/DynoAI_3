@@ -1,73 +1,72 @@
 """
-DynoAI API Key Authentication.
+API Key Authentication for DynoAI.
 
-Provides API key validation and authentication decorator for protecting endpoints.
+Provides decorator-based API key authentication for protecting endpoints.
+Supports:
+- Environment variable configuration (API_KEYS)
+- File-based key storage (API_KEYS_FILE)
+- Optional enforcement (disabled by default for development)
+- API key generation utilities
 """
 
-import logging
 import os
 import secrets
+import logging
 from functools import wraps
-from typing import Callable, Optional, Set, TypeVar
+from typing import Optional, Set
+from pathlib import Path
 
-from flask import g, jsonify, request
+from flask import request, g, jsonify
 
 logger = logging.getLogger(__name__)
 
-F = TypeVar("F", bound=Callable)
-
 
 class APIKeyAuth:
-    """
-    API Key authentication handler.
+    """API Key authentication handler."""
 
-    Supports loading API keys from:
-    - Environment variable (comma-separated)
-    - File (one key per line)
-    """
-
-    def __init__(self) -> None:
-        """Initialize authentication handler."""
+    def __init__(self):
+        """Initialize auth handler and load API keys."""
         self.enabled = os.getenv("API_AUTH_ENABLED", "false").lower() == "true"
-        self._valid_keys: Set[str] = self._load_api_keys()
+        self._valid_keys = self._load_api_keys()
 
         if self.enabled:
-            key_count = len(self._valid_keys)
-            logger.info(f"API authentication enabled with {key_count} valid key(s)")
+            logger.info(f"API authentication ENABLED with {len(self._valid_keys)} valid key(s)")
         else:
-            logger.debug("API authentication disabled")
+            logger.info("API authentication DISABLED (development mode)")
 
     def _load_api_keys(self) -> Set[str]:
         """
         Load valid API keys from environment or file.
 
         Returns:
-            Set of valid API keys.
+            Set of valid API key strings
         """
         keys: Set[str] = set()
 
-        # Load from environment variable (comma-separated)
+        # Load from environment (comma-separated)
         env_keys = os.getenv("API_KEYS", "")
         if env_keys:
-            loaded_keys = [k.strip() for k in env_keys.split(",") if k.strip()]
-            keys.update(loaded_keys)
-            if loaded_keys:
-                logger.debug(f"Loaded {len(loaded_keys)} API key(s) from environment")
+            loaded = [k.strip() for k in env_keys.split(",") if k.strip()]
+            keys.update(loaded)
+            logger.debug(f"Loaded {len(loaded)} key(s) from API_KEYS environment variable")
 
-        # Load from file if specified and exists
+        # Load from file if exists
         keys_file = os.getenv("API_KEYS_FILE", "")
-        if keys_file and os.path.exists(keys_file):
-            try:
-                with open(keys_file, "r", encoding="utf-8") as f:
-                    file_keys = [
-                        line.strip()
-                        for line in f
-                        if line.strip() and not line.strip().startswith("#")
-                    ]
-                    keys.update(file_keys)
-                    logger.debug(f"Loaded {len(file_keys)} API key(s) from file")
-            except (IOError, OSError) as e:
-                logger.warning(f"Failed to load API keys from file: {e}")
+        if keys_file:
+            keys_path = Path(keys_file)
+            if keys_path.exists():
+                try:
+                    with open(keys_path) as f:
+                        file_keys = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                        keys.update(file_keys)
+                        logger.debug(f"Loaded {len(file_keys)} key(s) from {keys_file}")
+                except Exception as e:
+                    logger.error(f"Failed to load API keys from {keys_file}: {e}")
+            else:
+                logger.warning(f"API_KEYS_FILE specified but not found: {keys_file}")
+
+        if self.enabled and not keys:
+            logger.warning("API authentication enabled but no keys configured!")
 
         return keys
 
@@ -76,41 +75,53 @@ class APIKeyAuth:
         Validate an API key.
 
         Args:
-            api_key: The API key to validate.
+            api_key: The API key to validate
 
         Returns:
-            True if valid (or auth disabled), False otherwise.
+            True if valid, False otherwise
         """
         if not self.enabled:
             return True
+
+        if not api_key:
+            return False
+
+        # Constant-time comparison to prevent timing attacks
         return api_key in self._valid_keys
 
-    def reload_keys(self) -> None:
-        """Reload API keys from sources (useful for key rotation)."""
-        self._valid_keys = self._load_api_keys()
-        logger.info(f"Reloaded API keys: {len(self._valid_keys)} valid key(s)")
-
-    @staticmethod
-    def generate_key() -> str:
+    def generate_key(self) -> str:
         """
-        Generate a new secure API key.
+        Generate a new API key.
 
         Returns:
-            A new API key in format 'dynoai_<random>'.
+            A new random API key with dynoai_ prefix
         """
         return f"dynoai_{secrets.token_urlsafe(32)}"
 
+    def reload_keys(self) -> int:
+        """
+        Reload API keys from environment/file.
 
-# Global instance (lazy loaded)
+        Returns:
+            Number of keys loaded
+
+        Useful for hot-reloading keys without restarting the server.
+        """
+        self._valid_keys = self._load_api_keys()
+        logger.info(f"Reloaded API keys: {len(self._valid_keys)} valid key(s)")
+        return len(self._valid_keys)
+
+
+# Global instance
 _auth: Optional[APIKeyAuth] = None
 
 
 def get_auth() -> APIKeyAuth:
     """
-    Get or create the global authentication instance.
+    Get or create the global auth instance.
 
     Returns:
-        The APIKeyAuth instance.
+        The global APIKeyAuth instance
     """
     global _auth
     if _auth is None:
@@ -118,92 +129,105 @@ def get_auth() -> APIKeyAuth:
     return _auth
 
 
-def reset_auth() -> None:
+def require_api_key(f):
     """
-    Reset the global authentication instance.
-
-    Useful for testing or reloading configuration.
-    """
-    global _auth
-    _auth = None
-
-
-def require_api_key(f: F) -> F:
-    """
-    Decorator to require API key authentication.
-
-    When API_AUTH_ENABLED=true:
-    - Requires X-API-Key header
-    - Returns 401 if header missing
-    - Returns 403 if key invalid
-    - Sets g.api_key for downstream use
-
-    When API_AUTH_ENABLED=false:
-    - Passes through without validation
+    Decorator to require API key authentication on an endpoint.
 
     Usage:
-        @app.route("/api/sensitive", methods=["POST"])
+        @app.route("/api/protected")
         @require_api_key
-        def sensitive_endpoint():
-            # Only accessible with valid API key
-            pass
+        def protected():
+            return jsonify({"message": "Access granted"})
+
+    The API key should be provided in the X-API-Key header.
+    If authentication is disabled (development mode), this decorator does nothing.
+
+    Returns 401 if no key is provided.
+    Returns 403 if an invalid key is provided.
     """
 
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = get_auth()
 
-        # Skip authentication if disabled
+        # If auth is disabled, allow all requests
         if not auth.enabled:
             return f(*args, **kwargs)
 
-        # Get API key from header
+        # Extract API key from header
         api_key = request.headers.get("X-API-Key")
 
-        # Get request ID for error responses
-        request_id = getattr(g, "request_id", None)
-
-        # Check if key is provided
         if not api_key:
             logger.warning(
-                f"Authentication failed: Missing API key "
-                f"(path={request.path}, ip={request.remote_addr})"
+                f"Unauthorized request to {request.path} - No API key provided. "
+                f"IP: {request.remote_addr}"
             )
-            error_response = {
-                "error": {
-                    "code": "AUTH_REQUIRED",
-                    "message": "API key required. Provide X-API-Key header.",
-                }
-            }
-            if request_id:
-                error_response["error"]["request_id"] = request_id
-            return jsonify(error_response), 401
+            return (
+                jsonify(
+                    {
+                        "error": {
+                            "code": "AUTH_REQUIRED",
+                            "message": "API key required. Provide X-API-Key header.",
+                        }
+                    }
+                ),
+                401,
+            )
 
-        # Validate key
         if not auth.validate_key(api_key):
-            # Log with masked key for security audit
-            masked_key = api_key[:8] + "..." if len(api_key) > 8 else "***"
             logger.warning(
-                f"Authentication failed: Invalid API key "
-                f"(key={masked_key}, path={request.path}, ip={request.remote_addr})"
+                f"Forbidden request to {request.path} - Invalid API key. "
+                f"IP: {request.remote_addr}, Key prefix: {api_key[:10]}..."
             )
-            error_response = {
-                "error": {
-                    "code": "INVALID_API_KEY",
-                    "message": "Invalid or expired API key.",
-                }
-            }
-            if request_id:
-                error_response["error"]["request_id"] = request_id
-            return jsonify(error_response), 403
+            return (
+                jsonify(
+                    {
+                        "error": {
+                            "code": "INVALID_API_KEY",
+                            "message": "Invalid or expired API key.",
+                        }
+                    }
+                ),
+                403,
+            )
 
-        # Store validated key in request context
+        # Store the API key in Flask's g object for potential logging/auditing
         g.api_key = api_key
+        g.authenticated = True
 
-        # Log successful authentication at debug level
-        masked_key = api_key[:8] + "..." if len(api_key) > 8 else api_key[:4] + "..."
-        logger.debug(f"Authenticated request (key={masked_key}, path={request.path})")
+        logger.debug(f"Authenticated request to {request.path} (Key: {api_key[:10]}...)")
 
         return f(*args, **kwargs)
 
-    return decorated  # type: ignore
+    return decorated
+
+
+def generate_api_key() -> str:
+    """
+    Utility function to generate a new API key.
+
+    Returns:
+        A new random API key
+
+    Example:
+        >>> from api.auth import generate_api_key
+        >>> key = generate_api_key()
+        >>> print(f"New API key: {key}")
+    """
+    return get_auth().generate_key()
+
+
+# CLI utility for generating keys
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "generate":
+        count = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+        print(f"Generating {count} API key(s):\n")
+        for i in range(count):
+            key = generate_api_key()
+            print(f"{i + 1}. {key}")
+    else:
+        print("Usage: python -m api.auth generate [count]")
+        print("\nExample:")
+        print("  python -m api.auth generate 5")

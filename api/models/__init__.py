@@ -1,11 +1,13 @@
 """
-DynoAI Database Models.
+Database models for DynoAI.
 
-This package contains SQLAlchemy ORM models for the DynoAI persistence layer.
+Provides SQLAlchemy ORM models for:
+- Analysis runs
+- Run files/outputs
+- Virtual tuning sessions
+- User data (future)
 """
 
-from api.models.base import Base
-from api.models.external_dyno import ExternalDynoChart, SyntheticWinpepRun
-from api.models.run import Run, RunFile
+from api.models.run import Base, Run, RunFile
 
-__all__ = ["Base", "Run", "RunFile", "ExternalDynoChart", "SyntheticWinpepRun"]
+__all__ = ["Base", "Run", "RunFile"]

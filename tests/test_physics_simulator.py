@@ -351,6 +351,31 @@ class TestSimulatorBehavior:
 
         sim.stop()
 
+    def test_decel_reports_inertial_loss_power_not_instant_zero(self):
+        """
+        Regression: after a pull transitions to DECEL, the live channels should not
+        instantly flatline Horsepower/Torque to zero. We report positive magnitude
+        of inertial (loss) power during coastdown.
+        """
+        sim = DynoSimulator()
+        profile = sim.config.profile
+        dt = 1.0 / sim.config.update_rate_hz
+
+        # Seed state as if we're at the beginning of decel from a high RPM
+        sim.state = SimState.DECEL
+        sim.physics.rpm = profile.redline_rpm * 0.95
+        sim.physics.angular_velocity = sim._rpm_to_rad_s(sim.physics.rpm)
+        sim.physics.tps_actual = 0.0
+        sim.physics.tps_target = 0.0
+
+        # Run a few decel steps and ensure horsepower is non-zero at least once.
+        hps = []
+        for _ in range(10):
+            sim._handle_decel_state(dt, profile)
+            hps.append(sim.channels.horsepower)
+
+        assert max(hps) > 0.5, f"Expected decel loss HP > 0, got max={max(hps)}"
+
 
 class TestDifferentProfiles:
     """Test different engine profiles."""

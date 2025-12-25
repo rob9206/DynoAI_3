@@ -357,10 +357,30 @@ class AutoTuneWorkflow:
 
         df = session.dynoai_data
 
-        # Look for HP column
-        hp_col = next(
-            (c for c in df.columns if "Horsepower" in c or "HP" in c or "Power" in c),
-            None,
+        def _find_col_case_insensitive(columns, *, prefers: list[str]) -> str | None:
+            """
+            Find a likely column by case-insensitive substring matching.
+            `prefers` should be ordered from most-specific to least-specific.
+            """
+            for pref in prefers:
+                pref_l = pref.lower()
+                for c in columns:
+                    c_s = str(c)
+                    c_l = c_s.lower()
+                    if pref_l in c_l:
+                        return c_s
+            return None
+
+        # Look for HP column (case-insensitive; prefer explicit names)
+        hp_col = _find_col_case_insensitive(
+            df.columns,
+            prefers=[
+                "horsepower",
+                "horse power",
+                " hp",  # suffix form "Engine HP"
+                "hp ",  # prefix form "HP Engine"
+                "power",
+            ],
         )
         if hp_col and hp_col in df.columns:
             peak_idx = df[hp_col].idxmax()
@@ -369,8 +389,15 @@ class AutoTuneWorkflow:
             if rpm_col in df.columns:
                 session.peak_hp_rpm = float(df.loc[peak_idx, rpm_col])
 
-        # Look for torque column
-        tq_col = next((c for c in df.columns if "Torque" in c or "TQ" in c), None)
+        # Look for torque column (case-insensitive)
+        tq_col = _find_col_case_insensitive(
+            df.columns,
+            prefers=[
+                "torque",
+                " tq",
+                "tq ",
+            ],
+        )
         if tq_col and tq_col in df.columns:
             peak_idx = df[tq_col].idxmax()
             session.peak_tq = float(df.loc[peak_idx, tq_col])
@@ -792,6 +819,77 @@ class AutoTuneWorkflow:
 
     def get_session_summary(self, session: AutoTuneSession) -> dict:
         """Get a summary of the session for display."""
+        def _build_power_curve_from_df(df: "pd.DataFrame") -> list[dict[str, float]]:
+            try:
+                if df is None or df.empty:
+                    return []
+
+                rpm_col = next((c for c in df.columns if c in ["Engine RPM", "RPM"]), None)
+                if rpm_col is None:
+                    return []
+
+                def _find_col_case_insensitive(columns, *, prefers: list[str]) -> str | None:
+                    for pref in prefers:
+                        pref_l = pref.lower()
+                        for c in columns:
+                            c_s = str(c)
+                            c_l = c_s.lower()
+                            if pref_l in c_l:
+                                return c_s
+                    return None
+
+                hp_col = _find_col_case_insensitive(
+                    df.columns,
+                    prefers=[
+                        "horsepower",
+                        "horse power",
+                        " hp",
+                        "hp ",
+                        "power",
+                    ],
+                )
+                tq_col = _find_col_case_insensitive(
+                    df.columns,
+                    prefers=[
+                        "torque",
+                        " tq",
+                        "tq ",
+                    ],
+                )
+                if hp_col is None or tq_col is None:
+                    return []
+
+                work = df[[rpm_col, hp_col, tq_col]].copy()
+                work[rpm_col] = pd.to_numeric(work[rpm_col], errors="coerce")
+                work[hp_col] = pd.to_numeric(work[hp_col], errors="coerce")
+                work[tq_col] = pd.to_numeric(work[tq_col], errors="coerce")
+                work = work.dropna(subset=[rpm_col, hp_col, tq_col])
+                work = work[(work[rpm_col] > 0) & (work[rpm_col] < 20000)]
+                if work.empty:
+                    return []
+
+                rpm_bin_size = 100.0
+                work["_rpm_bin"] = (work[rpm_col] / rpm_bin_size).round() * rpm_bin_size
+                grouped = (
+                    work.groupby("_rpm_bin", as_index=False)
+                    .agg({hp_col: "max", tq_col: "max"})
+                    .sort_values("_rpm_bin")
+                )
+
+                curve: list[dict[str, float]] = []
+                for _, row in grouped.iterrows():
+                    rpm = float(row["_rpm_bin"])
+                    curve.append(
+                        {
+                            "rpm": float(int(round(rpm))),
+                            "hp": round(float(row[hp_col]), 2),
+                            "tq": round(float(row[tq_col]), 2),
+                        }
+                    )
+                return curve
+            except Exception:
+                return []
+
         summary: dict = {
             "run_id": session.id,
             "status": session.status,
@@ -855,6 +953,14 @@ class AutoTuneWorkflow:
             if session.peak_tq > 0:
                 summary["analysis"]["peak_tq"] = round(session.peak_tq, 1)
                 summary["analysis"]["peak_tq_rpm"] = round(session.peak_tq_rpm, 0)
+
+        # Power curve for UI overlay charts (optional)
+        if session.dynoai_data is not None:
+            curve = _build_power_curve_from_df(session.dynoai_data)
+            if curve:
+                if "analysis" not in summary or not isinstance(summary.get("analysis"), dict):
+                    summary["analysis"] = {}
+                summary["analysis"]["power_curve"] = curve
 
         if session.ve_corrections:
             corr = session.ve_corrections

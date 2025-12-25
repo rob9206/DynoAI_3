@@ -5,6 +5,7 @@
  */
 
 import api from '@/lib/api';
+import { encodePathSegment, sanitizeDownloadName } from '@/lib/sanitize';
 
 // ============================================================================
 // Types
@@ -44,10 +45,18 @@ export interface SessionSummary {
   active_snapshot_id: string | null;
 }
 
+export interface Pagination {
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
 export interface TimelineResponse {
   run_id: string;
   summary: SessionSummary;
   events: TimelineEvent[];
+  pagination?: Pagination;
 }
 
 export interface SnapshotData {
@@ -103,8 +112,13 @@ export interface ReplayStepResponse {
 /**
  * Get the complete timeline for a run.
  */
-export async function getTimeline(runId: string): Promise<TimelineResponse> {
-  const response = await api.get(`/api/timeline/${runId}`);
+export async function getTimeline(
+  runId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<TimelineResponse> {
+  const response = await api.get(`/api/timeline/${encodePathSegment(runId)}`, {
+    params: options,
+  });
   return response.data;
 }
 
@@ -112,7 +126,9 @@ export async function getTimeline(runId: string): Promise<TimelineResponse> {
  * Get details for a specific timeline event.
  */
 export async function getEvent(runId: string, eventId: string): Promise<TimelineEvent> {
-  const response = await api.get(`/api/timeline/${runId}/events/${eventId}`);
+  const response = await api.get(
+    `/api/timeline/${encodePathSegment(runId)}/events/${encodePathSegment(eventId)}`
+  );
   return response.data;
 }
 
@@ -120,7 +136,9 @@ export async function getEvent(runId: string, eventId: string): Promise<Timeline
  * Get parsed data for a snapshot.
  */
 export async function getSnapshot(runId: string, snapshotId: string): Promise<SnapshotData> {
-  const response = await api.get(`/api/timeline/${runId}/snapshots/${snapshotId}`);
+  const response = await api.get(
+    `/api/timeline/${encodePathSegment(runId)}/snapshots/${encodePathSegment(snapshotId)}`
+  );
   return response.data;
 }
 
@@ -128,9 +146,12 @@ export async function getSnapshot(runId: string, snapshotId: string): Promise<Sn
  * Download a snapshot as CSV.
  */
 export async function downloadSnapshot(runId: string, snapshotId: string): Promise<Blob> {
-  const response = await api.get(`/api/timeline/${runId}/snapshots/${snapshotId}?format=csv`, {
+  const response = await api.get(
+    `/api/timeline/${encodePathSegment(runId)}/snapshots/${encodePathSegment(snapshotId)}?format=csv`,
+    {
     responseType: 'blob',
-  });
+    }
+  );
   return response.data;
 }
 
@@ -142,7 +163,7 @@ export async function getDiff(
   fromSnapshotId: string,
   toSnapshotId: string
 ): Promise<DiffResponse> {
-  const response = await api.get(`/api/timeline/${runId}/diff`, {
+  const response = await api.get(`/api/timeline/${encodePathSegment(runId)}/diff`, {
     params: { from: fromSnapshotId, to: toSnapshotId },
   });
   return response.data;
@@ -156,7 +177,7 @@ export async function compareEvents(
   fromEventId: string,
   toEventId: string
 ): Promise<DiffResponse & { from_event: TimelineEvent; to_event: TimelineEvent }> {
-  const response = await api.get(`/api/timeline/${runId}/compare-events`, {
+  const response = await api.get(`/api/timeline/${encodePathSegment(runId)}/compare-events`, {
     params: { from_event: fromEventId, to_event: toEventId },
   });
   return response.data;
@@ -166,7 +187,7 @@ export async function compareEvents(
  * Get the VE state at a specific step in the timeline.
  */
 export async function replayStep(runId: string, step: number): Promise<ReplayStepResponse> {
-  const response = await api.get(`/api/timeline/${runId}/replay/${step}`);
+  const response = await api.get(`/api/timeline/${encodePathSegment(runId)}/replay/${step}`);
   return response.data;
 }
 
@@ -186,11 +207,12 @@ export function exportTimelineAsJSON(timeline: TimelineResponse, runId: string):
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `timeline_${runId}_${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(a);
+  a.download = sanitizeDownloadName(
+    `timeline_${runId}_${new Date().toISOString().split('T')[0]}.json`,
+    'timeline.json'
+  );
   a.click();
   window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
 }
 
 // ============================================================================

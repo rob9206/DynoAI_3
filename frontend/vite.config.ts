@@ -7,6 +7,7 @@ import createIconImportProxy from "@github/spark/vitePhosphorIconProxyPlugin";
 import { resolve } from 'path'
 
 const projectRoot = process.env.PROJECT_ROOT || import.meta.dirname
+const enableSpark = process.env.SPARK === "true" || process.env.GITHUB_SPARK === "true"
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -15,7 +16,9 @@ export default defineConfig({
     tailwindcss(),
     // DO NOT REMOVE
     createIconImportProxy() as PluginOption,
-    sparkPlugin() as PluginOption,
+    // Spark plugin injects dev hooks (e.g. `/_spark/loaded`) that require Spark auth.
+    // Enable it only when running inside a Spark environment.
+    ...(enableSpark ? [sparkPlugin({ port: 5173 }) as PluginOption] : []),
   ],
   resolve: {
     alias: {

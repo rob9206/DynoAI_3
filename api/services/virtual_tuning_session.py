@@ -14,7 +14,6 @@ This is the complete closed-loop tuning simulation!
 
 from __future__ import annotations
 
-import concurrent.futures
 import logging
 import threading
 import time
@@ -341,26 +340,12 @@ class VirtualTuningOrchestrator:
                 logger.info(f"Iteration {iteration}/{session.config.max_iterations}")
                 logger.info("=" * 60)
 
-                # Run one iteration with timeout protection
+                # Run one iteration
+                # Note: Removed ThreadPoolExecutor timeout protection to avoid issues
+                # with Flask's debug mode reloader. Iterations are bounded by internal
+                # timeouts in the simulator (~30s max per pull).
                 try:
-                    with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=1
-                    ) as executor:
-                        future = executor.submit(
-                            self._run_iteration, session, iteration
-                        )
-                        try:
-                            iteration_result = future.result(
-                                timeout=session.config.iteration_timeout_sec
-                            )
-                        except concurrent.futures.TimeoutError:
-                            logger.error(
-                                f"⚠️ Iteration {iteration} exceeded timeout ({session.config.iteration_timeout_sec}s)"
-                            )
-                            session.status = TuningStatus.FAILED
-                            session.error_message = f"Iteration {iteration} timeout after {session.config.iteration_timeout_sec}s"
-                            session.end_time = time.time()
-                            break
+                    iteration_result = self._run_iteration(session, iteration)
                 except Exception as iter_error:
                     logger.error(
                         f"Iteration {iteration} failed: {iter_error}", exc_info=True
@@ -460,6 +445,7 @@ class VirtualTuningOrchestrator:
 
         # Create simulator with Virtual ECU
         logger.info("  🏍️ Creating dyno simulator...")
+        print(f"[TUNING] Creating dyno simulator for iteration {iteration}")
         sim_config = SimulatorConfig(
             profile=session.config.engine_profile,
             enable_thermal_effects=True,
@@ -468,17 +454,20 @@ class VirtualTuningOrchestrator:
 
         simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
         logger.info("  ✓ Simulator created, starting...")
+        print(f"[TUNING] Simulator created, starting...")
         simulator.start()
 
         # Wait for idle
         time.sleep(0.5)
 
         logger.info(f"  ✓ Simulator started (state: {simulator.get_state().value})")
+        print(f"[TUNING] Simulator started, state: {simulator.get_state().value}")
 
         # Trigger pull
         # Progress: 40% - Dyno pull started
         session.update_progress(40.0, "Running dyno pull...")
         logger.info("  🚀 Starting dyno pull simulation...")
+        pull_start = time.time()  # Record start time for duration calculation
         simulator.trigger_pull()
 
         # Verify pull started

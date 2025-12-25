@@ -216,7 +216,7 @@ async def health_check_jetdrive() -> dict[str, Any]:
         )
         return {
             "status": "unhealthy",
-            "message": f"JetDrive error: {e}",
+            "message": "JetDrive error (details logged server-side)",
             "latency_ms": latency_ms,
         }
 
@@ -269,7 +269,7 @@ def health_check_jetstream(client) -> dict[str, Any]:
         )
         return {
             "status": "unhealthy",
-            "message": f"Jetstream error: {e}",
+            "message": "Jetstream error (details logged server-side)",
             "latency_ms": latency_ms,
         }
 

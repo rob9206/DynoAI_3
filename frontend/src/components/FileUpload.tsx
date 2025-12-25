@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Upload, File, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from './ui/button';
 
 interface FileUploadProps {

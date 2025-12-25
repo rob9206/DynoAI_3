@@ -23,7 +23,7 @@ import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDri
 import { AudioCapturePanel } from './AudioCapturePanel';
 import { InnovateAFRPanel } from './InnovateAFRPanel';
 import type { RecordedAudio } from '../../hooks/useAudioCapture';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 

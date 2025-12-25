@@ -10,7 +10,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { useJetstreamConfig, useUpdateJetstreamConfig } from '../../hooks/useJetstream';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export function JetstreamConfig() {
   const { data: config, isLoading } = useJetstreamConfig();

@@ -1,41 +1,35 @@
 """
-DynoAI Database Connection and Session Management.
+Database connection and session management for DynoAI.
 
-Provides SQLAlchemy engine configuration, session management, and
-database initialization utilities.
-
-Usage:
-    from api.services.database import get_db, init_database
-
-    # Initialize tables on startup
-    init_database()
-
-    # Use sessions
-    with get_db() as db:
-        runs = db.query(Run).filter(Run.status == "complete").all()
+Provides:
+- Database initialization
+- Connection pooling
+- Session context managers
+- SQLite and PostgreSQL support
 """
 
-import logging
 import os
+import logging
 from contextlib import contextmanager
-from typing import Generator, Optional
+from typing import Generator
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
-
-from api.models.base import Base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Configuration
+# =============================================================================
 
 
 def get_database_url() -> str:
     """
     Get database URL from environment.
 
-    Supports:
-        - SQLite (default): sqlite:///./dynoai.db
-        - PostgreSQL: postgresql://user:pass@localhost:5432/dynoai
+    Defaults to SQLite if DATABASE_URL not set.
 
     Returns:
         Database connection URL
@@ -43,118 +37,101 @@ def get_database_url() -> str:
     return os.getenv("DATABASE_URL", "sqlite:///./dynoai.db")
 
 
-def _configure_sqlite_pragmas(dbapi_conn, connection_record) -> None:
-    """
-    Configure SQLite connection for better performance and reliability.
-
-    Sets:
-        - WAL mode for better concurrency
-        - Foreign key enforcement
-        - Synchronous mode for durability
-    """
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
+def is_sqlite(url: str) -> bool:
+    """Check if database URL is SQLite."""
+    return url.startswith("sqlite")
 
 
-def create_db_engine(database_url: Optional[str] = None) -> Engine:
+# =============================================================================
+# Engine Configuration
+# =============================================================================
+
+
+def create_db_engine() -> Engine:
     """
     Create SQLAlchemy engine with appropriate settings.
 
-    Args:
-        database_url: Optional override for database URL
-
     Returns:
-        Configured SQLAlchemy Engine
+        Configured SQLAlchemy engine
     """
-    url = database_url or get_database_url()
+    url = get_database_url()
 
-    # Engine configuration varies by database type
-    if url.startswith("sqlite"):
-        # SQLite-specific settings
+    # SQLite-specific settings
+    if is_sqlite(url):
         engine = create_engine(
             url,
-            connect_args={"check_same_thread": False},  # Allow multi-threaded access
-            pool_pre_ping=True,
-            echo=os.getenv("DATABASE_ECHO", "false").lower() == "true",
+            connect_args={"check_same_thread": False},  # Allow multi-threading
+            poolclass=StaticPool,  # Use static pool for SQLite
+            echo=False,  # Set to True for SQL debug logging
         )
-        # Register SQLite pragma configuration
-        event.listen(engine, "connect", _configure_sqlite_pragmas)
+
+        # Enable foreign keys for SQLite
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+        logger.info(f"Database initialized: SQLite ({url})")
+
+    # PostgreSQL/MySQL settings
     else:
-        # PostgreSQL and other databases
         engine = create_engine(
             url,
-            pool_size=int(os.getenv("DATABASE_POOL_SIZE", "5")),
-            max_overflow=int(os.getenv("DATABASE_MAX_OVERFLOW", "10")),
-            pool_pre_ping=True,
-            echo=os.getenv("DATABASE_ECHO", "false").lower() == "true",
+            pool_size=5,  # Connection pool size
+            max_overflow=10,  # Max overflow connections
+            pool_pre_ping=True,  # Verify connections before using
+            echo=False,
         )
+
+        logger.info(f"Database initialized: {url.split('@')[0]}...")  # Don't log credentials
 
     return engine
 
 
-# Module-level engine and session factory (lazy initialization)
-_engine: Optional[Engine] = None
-_SessionLocal: Optional[sessionmaker] = None
+# Create global engine and session factory
+engine = create_db_engine()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_engine() -> Engine:
+# =============================================================================
+# Initialization
+# =============================================================================
+
+
+def init_database():
     """
-    Get or create the database engine.
+    Initialize database tables.
 
-    Returns:
-        SQLAlchemy Engine instance
+    Creates all tables defined in Base.metadata.
+    Safe to call multiple times (won't recreate existing tables).
     """
-    global _engine
-    if _engine is None:
-        _engine = create_db_engine()
-        logger.info(f"Database engine created: {get_database_url()}")
-    return _engine
+    from api.models import Base
 
-
-def get_session_factory() -> sessionmaker:
-    """
-    Get or create the session factory.
-
-    Returns:
-        SQLAlchemy sessionmaker instance
-    """
-    global _SessionLocal
-    if _SessionLocal is None:
-        _SessionLocal = sessionmaker(
-            bind=get_engine(),
-            autocommit=False,
-            autoflush=False,
-            expire_on_commit=False,
-        )
-    return _SessionLocal
-
-
-def init_database(create_tables: bool = True) -> None:
-    """
-    Initialize the database.
-
-    Creates all tables defined in the models if they don't exist.
-    For production, use Alembic migrations instead.
-
-    Args:
-        create_tables: Whether to create tables (set False for Alembic-managed DBs)
-    """
-    engine = get_engine()
-
-    if create_tables:
-        # Import models to ensure they're registered
-        from api.models import (  # noqa: F401
-            ExternalDynoChart,
-            Run,
-            RunFile,
-            SyntheticWinpepRun,
-        )
-
+    try:
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized")
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database tables: {e}")
+        raise
+
+
+def drop_all_tables():
+    """
+    Drop all database tables.
+
+    ⚠️ WARNING: This deletes all data! Only use for testing or development.
+    """
+    from api.models import Base
+
+    logger.warning("Dropping all database tables...")
+    Base.metadata.drop_all(bind=engine)
+    logger.info("All tables dropped")
+
+
+# =============================================================================
+# Session Management
+# =============================================================================
 
 
 @contextmanager
@@ -162,18 +139,17 @@ def get_db() -> Generator[Session, None, None]:
     """
     Get database session context manager.
 
-    Handles session lifecycle, commit, and rollback automatically.
-
     Usage:
         with get_db() as db:
-            run = db.query(Run).filter(Run.id == run_id).first()
-            run.status = "complete"
-            # Commits automatically on exit
+            run = Run(id="test", status="pending")
+            db.add(run)
+            # Auto-commits on success, rolls back on exception
 
     Yields:
-        SQLAlchemy Session
+        Database session
+
+    Automatically commits on success, rolls back on exception.
     """
-    SessionLocal = get_session_factory()
     db = SessionLocal()
     try:
         yield db
@@ -185,31 +161,106 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def reset_engine() -> None:
+def get_db_session() -> Session:
     """
-    Reset the database engine and session factory.
+    Get a database session (manual management).
 
-    Useful for testing or reconfiguration.
+    Returns:
+        Database session
+
+    Note: Caller is responsible for committing and closing the session.
+    Prefer using get_db() context manager when possible.
     """
-    global _engine, _SessionLocal
-    if _engine:
-        _engine.dispose()
-    _engine = None
-    _SessionLocal = None
+    return SessionLocal()
 
 
-def check_database_connection() -> bool:
+# =============================================================================
+# Utilities
+# =============================================================================
+
+
+def get_database_info() -> dict:
     """
-    Check if database connection is working.
+    Get database connection information.
+
+    Returns:
+        Dictionary with database info (safe for logging)
+    """
+    url = get_database_url()
+
+    if is_sqlite(url):
+        return {
+            "type": "sqlite",
+            "url": url,
+            "pool_size": "N/A (StaticPool)",
+        }
+    else:
+        # Don't expose credentials
+        safe_url = url.split("@")[0] if "@" in url else url
+        return {
+            "type": "postgresql" if "postgresql" in url else "other",
+            "url": safe_url + "@...",
+            "pool_size": engine.pool.size(),
+        }
+
+
+def test_connection() -> bool:
+    """
+    Test database connection.
 
     Returns:
         True if connection successful, False otherwise
     """
     try:
-        engine = get_engine()
+        from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
-        logger.error(f"Database connection check failed: {e}")
+        logger.error(f"Database connection test failed: {e}")
         return False
+
+
+# =============================================================================
+# CLI Utilities
+# =============================================================================
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1:
+        command = sys.argv[1]
+
+        if command == "init":
+            print("Initializing database...")
+            init_database()
+            print("✓ Database initialized")
+
+        elif command == "info":
+            info = get_database_info()
+            print("\nDatabase Information:")
+            print(f"  Type: {info['type']}")
+            print(f"  URL: {info['url']}")
+            print(f"  Pool Size: {info['pool_size']}")
+
+        elif command == "test":
+            print("Testing database connection...")
+            if test_connection():
+                print("✓ Connection successful")
+            else:
+                print("✗ Connection failed")
+                sys.exit(1)
+
+        elif command == "drop":
+            confirm = input("⚠️  This will delete all data! Type 'yes' to confirm: ")
+            if confirm.lower() == "yes":
+                drop_all_tables()
+                print("✓ All tables dropped")
+            else:
+                print("Cancelled")
+
+        else:
+            print(f"Unknown command: {command}")
+            sys.exit(1)
+    else:
+        print("Usage: python -m api.services.database [init|info|test|drop]")

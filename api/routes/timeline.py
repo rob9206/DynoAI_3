@@ -8,7 +8,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, Response, jsonify, request
+from werkzeug.utils import secure_filename
 
 from api.config import RUNS_DIR
 from api.errors import APIError
@@ -30,8 +31,18 @@ def validate_snapshot_id(snapshot_id: str) -> str:
 
 def get_run_dir(run_id: str) -> Path:
     """Get run directory path, validating it exists."""
+    safe_run_id = secure_filename(run_id)
+    if not safe_run_id or safe_run_id != run_id:
+        raise APIError("Invalid run ID", status_code=400)
+
     # Check runs folder first (for Jetstream runs)
-    run_dir = Path(RUNS_DIR) / run_id
+    runs_root = Path(RUNS_DIR).resolve()
+    run_dir = (runs_root / run_id).resolve()
+    try:
+        run_dir.relative_to(runs_root)
+    except ValueError:
+        raise APIError("Invalid run ID", status_code=400)
+
     if run_dir.exists():
         return run_dir
 
@@ -39,7 +50,13 @@ def get_run_dir(run_id: str) -> Path:
     from api.config import get_config
 
     config = get_config()
-    output_dir = config.storage.output_folder / run_id
+    outputs_root = Path(config.storage.output_folder).resolve()
+    output_dir = (outputs_root / run_id).resolve()
+    try:
+        output_dir.relative_to(outputs_root)
+    except ValueError:
+        raise APIError("Invalid run ID", status_code=400)
+
     if output_dir.exists():
         return output_dir
 
@@ -131,6 +148,10 @@ def get_snapshot(run_id: str, snapshot_id: str) -> Any:
     """
     # Validate snapshot ID format
     snapshot_id = validate_snapshot_id(snapshot_id)
+    # Make the sanitization explicit for static analyzers.
+    safe_snapshot_id = secure_filename(snapshot_id)
+    if not safe_snapshot_id or safe_snapshot_id != snapshot_id:
+        raise APIError("Invalid snapshot ID", status_code=400)
 
     run_dir = get_run_dir(run_id)
     logger = SessionLogger(run_dir)
@@ -138,10 +159,24 @@ def get_snapshot(run_id: str, snapshot_id: str) -> Any:
     output_format = request.args.get("format", "json")
 
     if output_format == "csv":
-        path = logger.get_snapshot_path(snapshot_id)
-        if not path:
+        # Snapshot files are always stored as <snapshot_id>.csv in the snapshots dir.
+        snapshots_root = Path(logger.snapshots_dir).resolve()
+        resolved = (snapshots_root / f"{safe_snapshot_id}.csv").resolve()
+        try:
+            resolved.relative_to(snapshots_root)
+        except ValueError:
+            raise APIError("Invalid snapshot path", status_code=400)
+        if not resolved.exists():
             raise APIError(f"Snapshot not found: {snapshot_id}", status_code=404)
-        return send_file(path, mimetype="text/csv", as_attachment=True)
+
+        csv_bytes = resolved.read_bytes()
+        return Response(
+            csv_bytes,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_snapshot_id}.csv"'
+            },
+        )
 
     data = logger.get_snapshot_data(snapshot_id)
     if not data:

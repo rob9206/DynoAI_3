@@ -1,301 +1,311 @@
 """
-DynoAI Prometheus Metrics Module.
+Prometheus Metrics for DynoAI API.
 
-Provides application metrics for monitoring and observability.
-Exports metrics at /metrics endpoint in Prometheus format.
+Provides:
+- Standard Flask metrics (request duration, count, etc.)
+- Custom business metrics (analysis count, VE corrections, etc.)
+- Optional metrics export (can be disabled in development)
+- Prometheus-compatible /metrics endpoint
 """
 
 import os
-import time
-from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+import logging
+from typing import Optional
 
-from flask import Flask, Request, Response, request
+from flask import Flask
+from prometheus_client import Counter, Histogram, Gauge, Info
 
-from dynoai.version import __version__ as DYNOAI_VERSION
+logger = logging.getLogger(__name__)
 
-# Type variable for decorator typing
-F = TypeVar("F", bound=Callable[..., Any])
+# =============================================================================
+# Global Metrics Instance
+# =============================================================================
 
-# Module-level metrics instance
-_metrics: Optional["PrometheusMetrics"] = None  # type: ignore
-_enabled: bool = False
+_metrics_enabled: bool = False
+_flask_metrics = None
 
-# Import prometheus_flask_exporter only if metrics are enabled
-# This allows graceful degradation when the package isn't installed
-try:
-    from prometheus_client import Counter, Gauge, Histogram, Info
-    from prometheus_flask_exporter import PrometheusMetrics
+# =============================================================================
+# Custom Business Metrics
+# =============================================================================
 
-    _PROMETHEUS_AVAILABLE = True
-except ImportError:
-    _PROMETHEUS_AVAILABLE = False
-    PrometheusMetrics = None  # type: ignore
-    Counter = None  # type: ignore
-    Histogram = None  # type: ignore
-    Gauge = None  # type: ignore
-    Info = None  # type: ignore
+# Analysis metrics
+analysis_total = Counter(
+    "dynoai_analysis_total",
+    "Total number of analyses run",
+    ["status", "source"],  # success/error, upload/jetstream/simulator
+)
 
-# Custom business metrics (created after init)
-_analysis_counter: Optional["Counter"] = None
-_analysis_duration: Optional["Histogram"] = None
-_file_upload_size: Optional["Histogram"] = None
-_jetstream_runs_counter: Optional["Counter"] = None
-_ve_corrections_histogram: Optional["Histogram"] = None
-_active_analyses: Optional["Gauge"] = None
+analysis_duration = Histogram(
+    "dynoai_analysis_duration_seconds",
+    "Time spent on analysis operations",
+    ["source"],
+    buckets=[1, 5, 10, 30, 60, 120, 300],  # seconds
+)
+
+# VE correction metrics
+ve_corrections_count = Histogram(
+    "dynoai_ve_corrections_count",
+    "Number of VE corrections per analysis",
+    buckets=[0, 10, 25, 50, 100, 250, 500, 1000],
+)
+
+ve_corrections_magnitude = Histogram(
+    "dynoai_ve_corrections_magnitude_percent",
+    "Magnitude of VE corrections (percent)",
+    buckets=[0.5, 1, 2, 5, 7, 10, 15],  # percent
+)
+
+# Jetstream integration metrics
+jetstream_runs_total = Counter(
+    "dynoai_jetstream_runs_total",
+    "Total Jetstream runs processed",
+    ["status"],  # pending/processing/complete/error
+)
+
+jetstream_poll_duration = Histogram(
+    "dynoai_jetstream_poll_duration_seconds",
+    "Time spent polling Jetstream API",
+    buckets=[0.1, 0.5, 1, 2, 5, 10],
+)
+
+# Virtual tuning metrics
+virtual_tuning_sessions_total = Counter(
+    "dynoai_virtual_tuning_sessions_total",
+    "Total virtual tuning sessions",
+    ["status"],  # running/converged/failed/stopped
+)
+
+virtual_tuning_iterations = Histogram(
+    "dynoai_virtual_tuning_iterations",
+    "Number of iterations to convergence",
+    buckets=[1, 2, 3, 5, 7, 10, 15, 20],
+)
+
+# Upload metrics
+file_upload_bytes = Histogram(
+    "dynoai_file_upload_bytes",
+    "Size of uploaded files in bytes",
+    buckets=[
+        1024,  # 1 KB
+        10240,  # 10 KB
+        102400,  # 100 KB
+        1048576,  # 1 MB
+        10485760,  # 10 MB
+        52428800,  # 50 MB
+    ],
+)
+
+# System metrics
+active_sessions = Gauge(
+    "dynoai_active_sessions",
+    "Number of active tuning sessions",
+)
+
+# Application info
+app_info = Info(
+    "dynoai_app",
+    "DynoAI application information",
+)
 
 
-def is_metrics_enabled() -> bool:
-    """Check if metrics collection is enabled."""
-    return _enabled and _PROMETHEUS_AVAILABLE
+# =============================================================================
+# Initialization
+# =============================================================================
 
 
-def get_metrics() -> Optional["PrometheusMetrics"]:
-    """Get the PrometheusMetrics instance, if initialized."""
-    return _metrics
-
-
-def init_metrics(app: Flask) -> Optional["PrometheusMetrics"]:
+def init_metrics(app: Flask) -> Optional[object]:
     """
-    Initialize Prometheus metrics for the Flask application.
-
-    Environment variables:
-        METRICS_ENABLED: "true" or "false" (default: "true")
-        METRICS_PATH: Path for metrics endpoint (default: "/metrics")
+    Initialize Prometheus metrics for the Flask app.
 
     Args:
         app: Flask application instance
 
     Returns:
-        PrometheusMetrics instance if enabled and available, None otherwise
+        PrometheusMetrics instance if enabled, None otherwise
+
+    Environment Variables:
+        PROMETHEUS_METRICS_ENABLED: Enable/disable metrics (default: false)
+        PROMETHEUS_METRICS_PORT: Port for metrics endpoint (default: uses main Flask port)
     """
-    global _metrics, _enabled
-    global _analysis_counter, _analysis_duration, _file_upload_size
-    global _jetstream_runs_counter, _ve_corrections_histogram, _active_analyses
+    global _metrics_enabled, _flask_metrics
 
-    # Check if metrics are enabled
-    _enabled = os.getenv("METRICS_ENABLED", "true").lower() == "true"
+    enabled = os.getenv("PROMETHEUS_METRICS_ENABLED", "false").lower() == "true"
 
-    if not _enabled:
-        app.logger.info("Prometheus metrics disabled via METRICS_ENABLED=false")
+    if not enabled:
+        logger.info("Prometheus metrics DISABLED (set PROMETHEUS_METRICS_ENABLED=true to enable)")
         return None
 
-    if not _PROMETHEUS_AVAILABLE:
-        app.logger.warning(
+    try:
+        from prometheus_flask_exporter import PrometheusMetrics
+
+        _flask_metrics = PrometheusMetrics(
+            app,
+            path="/metrics",  # Endpoint for Prometheus scraping
+            export_defaults=True,  # Export default Flask metrics
+            defaults_prefix="dynoai",  # Prefix for default metrics
+            group_by="endpoint",  # Group metrics by endpoint
+        )
+
+        _metrics_enabled = True
+
+        # Set application info
+        from dynoai import __version__
+
+        app_info.info(
+            {
+                "version": __version__,
+                "python_version": "3.10+",
+                "environment": os.getenv("FLASK_ENV", "production"),
+            }
+        )
+
+        logger.info(f"Prometheus metrics ENABLED at /metrics (DynoAI v{__version__})")
+
+        return _flask_metrics
+
+    except ImportError:
+        logger.warning(
             "prometheus-flask-exporter not installed. "
             "Install with: pip install prometheus-flask-exporter"
         )
         return None
+    except Exception as e:
+        logger.error(f"Failed to initialize Prometheus metrics: {e}")
+        return None
 
-    # Get metrics path from environment
-    metrics_path = os.getenv("METRICS_PATH", "/metrics")
 
-    # Initialize PrometheusMetrics with DynoAI prefix
-    _metrics = PrometheusMetrics(
-        app,
-        path=metrics_path,
-        export_defaults=True,
-        defaults_prefix="dynoai",
-        # Exclude health endpoints from default metrics to reduce noise
-        excluded_paths=["^/api/health"],
-    )
+def get_metrics():
+    """
+    Get the Flask metrics instance.
 
-    # Register application info metric
-    _metrics.info(
-        "app_info",
-        "DynoAI application information",
-        version=os.getenv("DYNOAI_VERSION", DYNOAI_VERSION),
-        environment=os.getenv("DYNOAI_ENV", "development"),
-    )
+    Returns:
+        PrometheusMetrics instance if enabled, None otherwise
+    """
+    return _flask_metrics
 
-    # Create custom business metrics
-    _analysis_counter = Counter(
-        "dynoai_analysis_total",
-        "Total number of analyses performed",
-        ["status", "source"],
-    )
 
-    _analysis_duration = Histogram(
-        "dynoai_analysis_duration_seconds",
-        "Time spent performing analysis",
-        ["source"],
-        buckets=[0.5, 1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
-    )
+def is_enabled() -> bool:
+    """
+    Check if metrics are enabled.
 
-    _file_upload_size = Histogram(
-        "dynoai_file_upload_bytes",
-        "Size of uploaded files in bytes",
-        buckets=[
-            1024,  # 1KB
-            10240,  # 10KB
-            102400,  # 100KB
-            1048576,  # 1MB
-            10485760,  # 10MB
-            52428800,  # 50MB
-        ],
-    )
-
-    _jetstream_runs_counter = Counter(
-        "dynoai_jetstream_runs_total",
-        "Total Jetstream runs processed",
-        ["status"],
-    )
-
-    _ve_corrections_histogram = Histogram(
-        "dynoai_ve_corrections_count",
-        "Number of VE corrections applied per analysis",
-        buckets=[0, 10, 50, 100, 250, 500, 1000, 2500],
-    )
-
-    _active_analyses = Gauge(
-        "dynoai_active_analyses",
-        "Number of currently running analyses",
-    )
-
-    app.logger.info(f"Prometheus metrics initialized at {metrics_path}")
-
-    return _metrics
+    Returns:
+        True if metrics are enabled, False otherwise
+    """
+    return _metrics_enabled
 
 
 # =============================================================================
-# Metric Recording Functions
+# Metric Recording Helpers
 # =============================================================================
 
 
-def record_analysis_started(source: str = "upload") -> None:
+def record_analysis(status: str, source: str = "upload", duration: float = 0):
     """
-    Record that an analysis has started.
+    Record an analysis operation.
 
     Args:
-        source: Source of the analysis ("upload" or "jetstream")
+        status: "success" or "error"
+        source: "upload", "jetstream", or "simulator"
+        duration: Time taken in seconds
     """
-    if _active_analyses is not None:
-        _active_analyses.inc()
+    if not _metrics_enabled:
+        return
+
+    analysis_total.labels(status=status, source=source).inc()
+    if duration > 0:
+        analysis_duration.labels(source=source).observe(duration)
 
 
-def record_analysis_completed(
-    source: str = "upload",
-    success: bool = True,
-    duration_seconds: Optional[float] = None,
-    corrections_count: Optional[int] = None,
-) -> None:
+def record_ve_corrections(count: int, max_magnitude: float):
     """
-    Record that an analysis has completed.
+    Record VE corrections applied.
 
     Args:
-        source: Source of the analysis ("upload" or "jetstream")
-        success: Whether the analysis succeeded
-        duration_seconds: Time taken for analysis
-        corrections_count: Number of VE corrections applied
+        count: Number of corrections applied
+        max_magnitude: Maximum correction magnitude in percent
     """
-    status = "success" if success else "error"
+    if not _metrics_enabled:
+        return
 
-    if _analysis_counter is not None:
-        _analysis_counter.labels(status=status, source=source).inc()
-
-    if _active_analyses is not None:
-        _active_analyses.dec()
-
-    if duration_seconds is not None and _analysis_duration is not None:
-        _analysis_duration.labels(source=source).observe(duration_seconds)
-
-    if corrections_count is not None and _ve_corrections_histogram is not None:
-        _ve_corrections_histogram.observe(corrections_count)
+    ve_corrections_count.observe(count)
+    ve_corrections_magnitude.observe(abs(max_magnitude))
 
 
-def record_file_upload(size_bytes: int) -> None:
+def record_jetstream_run(status: str):
+    """
+    Record a Jetstream run.
+
+    Args:
+        status: "pending", "processing", "complete", or "error"
+    """
+    if not _metrics_enabled:
+        return
+
+    jetstream_runs_total.labels(status=status).inc()
+
+
+def record_virtual_tuning_session(status: str, iterations: int = 0):
+    """
+    Record a virtual tuning session.
+
+    Args:
+        status: "running", "converged", "failed", or "stopped"
+        iterations: Number of iterations (if converged)
+    """
+    if not _metrics_enabled:
+        return
+
+    virtual_tuning_sessions_total.labels(status=status).inc()
+    if iterations > 0:
+        virtual_tuning_iterations.observe(iterations)
+
+
+def record_file_upload(size_bytes: int):
     """
     Record a file upload.
 
     Args:
-        size_bytes: Size of the uploaded file in bytes
+        size_bytes: File size in bytes
     """
-    if _file_upload_size is not None:
-        _file_upload_size.observe(size_bytes)
+    if not _metrics_enabled:
+        return
+
+    file_upload_bytes.observe(size_bytes)
 
 
-def record_jetstream_run(status: str) -> None:
+def set_active_sessions(count: int):
     """
-    Record a Jetstream run event.
+    Set the number of active tuning sessions.
 
     Args:
-        status: Status of the run ("queued", "processing", "complete", "error")
+        count: Number of active sessions
     """
-    if _jetstream_runs_counter is not None:
-        _jetstream_runs_counter.labels(status=status).inc()
+    if not _metrics_enabled:
+        return
+
+    active_sessions.set(count)
 
 
 # =============================================================================
-# Decorator for Tracking Analysis Duration
+# CLI Utility
 # =============================================================================
 
+if __name__ == "__main__":
+    import sys
 
-def track_analysis_duration(source: str = "upload") -> Callable[[F], F]:
-    """
-    Decorator to track analysis duration.
-
-    Usage:
-        @track_analysis_duration("upload")
-        def analyze_file(path):
-            ...
-
-    Args:
-        source: Source identifier for the analysis
-
-    Returns:
-        Decorated function
-    """
-
-    def decorator(f: F) -> F:
-        @wraps(f)
-        def wrapped(*args: Any, **kwargs: Any) -> Any:
-            if not is_metrics_enabled():
-                return f(*args, **kwargs)
-
-            record_analysis_started(source)
-            start_time = time.time()
-            success = True
-
-            try:
-                result = f(*args, **kwargs)
-                return result
-            except Exception:
-                success = False
-                raise
-            finally:
-                duration = time.time() - start_time
-                record_analysis_completed(
-                    source=source,
-                    success=success,
-                    duration_seconds=duration,
-                )
-
-        return wrapped  # type: ignore
-
-    return decorator
-
-
-def track_file_upload() -> Callable[[F], F]:
-    """
-    Decorator to track uploaded file size from Flask request.
-
-    Usage:
-        @track_file_upload()
-        def upload_handler():
-            file = request.files['file']
-            ...
-
-    Returns:
-        Decorated function
-    """
-
-    def decorator(f: F) -> F:
-        @wraps(f)
-        def wrapped(*args: Any, **kwargs: Any) -> Any:
-            if is_metrics_enabled() and request.content_length:
-                record_file_upload(request.content_length)
-            return f(*args, **kwargs)
-
-        return wrapped  # type: ignore
-
-    return decorator
+    print("DynoAI Prometheus Metrics")
+    print("=" * 50)
+    print("\nAvailable metrics:")
+    print("  - dynoai_analysis_total")
+    print("  - dynoai_analysis_duration_seconds")
+    print("  - dynoai_ve_corrections_count")
+    print("  - dynoai_ve_corrections_magnitude_percent")
+    print("  - dynoai_jetstream_runs_total")
+    print("  - dynoai_jetstream_poll_duration_seconds")
+    print("  - dynoai_virtual_tuning_sessions_total")
+    print("  - dynoai_virtual_tuning_iterations")
+    print("  - dynoai_file_upload_bytes")
+    print("  - dynoai_active_sessions")
+    print("  - dynoai_app (info)")
+    print("\nEndpoint: /metrics")
+    print("\nEnable with: PROMETHEUS_METRICS_ENABLED=true")

@@ -26,7 +26,7 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 - **Realistic audio generation** based on RPM, load, and cylinder count
 - **Exhaust effects** including deceleration crackle and harmonics
 - **Auto-start** during dyno captures for immersive experience
-- See [Audio Engine Documentation](docs/AUDIO_ENGINE.md) for details
+ 
 
 ### Core Features
 
@@ -228,7 +228,59 @@ DynoAI_3/
 
 ## Configuration
 
-### Environment Variables
+### Environment Setup
+
+DynoAI uses environment variables for configuration. Three template files are provided:
+
+```bash
+# Development (local)
+cp .env.example .env
+
+# Staging/Testing
+cp .env.staging.example .env
+
+# Production
+cp .env.production.example .env
+```
+
+**Key Configuration Sections:**
+
+1. **Server Settings** - Host, port, debug mode
+2. **Security** - API authentication, secrets
+3. **Rate Limiting** - API throttling controls
+4. **Storage** - Upload/output directories
+5. **Database** - SQLite (dev) or PostgreSQL (prod)
+6. **Integrations** - JetDrive, Jetstream, xAI (Grok)
+7. **Features** - Enable/disable features
+8. **Performance** - Workers, threads, limits
+
+### Required Environment Variables
+
+**For Development:**
+```bash
+# Minimum required - defaults work for local development
+DYNOAI_DEBUG=true
+```
+
+**For Production:**
+```bash
+# Generate a secure secret key
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Required settings
+API_AUTH_ENABLED=true
+API_KEYS=your_generated_api_key
+SECRET_KEY=your_generated_secret
+DYNOAI_CORS_ORIGINS=https://yourdomain.com
+RATE_LIMIT_STORAGE=redis://redis:6379
+DATABASE_URL=postgresql://user:pass@postgres:5432/dynoai
+```
+
+### Environment Variables Reference
+
+See `.env.example` for complete documentation of all available environment variables.
+
+**Commonly Used:**
 
 ```bash
 # JetDrive Network
@@ -237,8 +289,13 @@ JETDRIVE_PORT=22344              # UDP port
 JETDRIVE_IFACE=0.0.0.0           # Network interface
 
 # API Settings
+API_AUTH_ENABLED=true            # Enable API key authentication
 RATE_LIMIT_ENABLED=true          # Enable rate limiting
-API_KEY=your-secret-key          # Optional API authentication
+LOG_LEVEL=INFO                   # Logging level (DEBUG, INFO, WARNING, ERROR)
+
+# Feature Flags
+FEATURE_VIRTUAL_ECU=true         # Enable virtual ECU simulation
+FEATURE_CLOSED_LOOP=true         # Enable closed-loop tuning
 ```
 
 ### AFR Targets (MAP-based)

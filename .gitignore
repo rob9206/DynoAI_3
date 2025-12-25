@@ -61,3 +61,13 @@ deepcode_lab/
 deepcode_generated/
 mcp_agent.config.yaml
 mcp_agent.secrets.yaml
+
+
+# Local runtime artifacts (do not commit)
+dynoai.db
+dynoai.db-shm
+dynoai.db-wal
+jetdrive_log_*.csv
+
+# Public repo export output (generated)
+public_export/

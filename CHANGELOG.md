@@ -390,9 +390,6 @@ This prompt library is now the **go-to resource** for debugging async operations
 **Documentation:**
 - `AFR_VOICE_FEEDBACK_SUMMARY.md`
 - `AFR_VOICE_FEEDBACK_TEST_GUIDE.md`
-- `AUDIO_TEST_INSTRUCTIONS.md`
-- `SOUND_EFFECTS_GUIDE.md`
-- `docs/AUDIO_ENGINE.md`
 - `docs/AI_VOICE_ASSISTANT.md`
 - `docs/AFR_VOICE_INTEGRATION_DIAGRAM.md`
 

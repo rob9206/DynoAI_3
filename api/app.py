@@ -29,6 +29,8 @@ from api.errors import (
     register_error_handlers,
     with_error_handling,
 )
+from api.auth import require_api_key
+from api.metrics import init_metrics, record_analysis, record_file_upload
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
@@ -39,6 +41,24 @@ try:
     swagger = init_swagger(app)
 except Exception as e:
     print(f"[!] Warning: Swagger UI disabled due to: {e}")
+
+# Initialize Prometheus metrics (available at /metrics)
+try:
+    metrics = init_metrics(app)
+except Exception as e:
+    print(f"[!] Warning: Prometheus metrics disabled: {e}")
+
+# Initialize database
+try:
+    from api.services.database import init_database, test_connection
+
+    if test_connection():
+        init_database()
+        print("[+] Database initialized successfully")
+    else:
+        print("[!] Warning: Database connection test failed")
+except Exception as e:
+    print(f"[!] Warning: Database initialization skipped: {e}")
 
 # Register Admin UI blueprint (available at /admin)
 try:
@@ -192,6 +212,15 @@ try:
     app.register_blueprint(virtual_tune_bp)
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Virtual Tuning: {e}")
+
+# Register Power Core Integration blueprint
+try:
+    from api.routes.powercore import powercore_bp
+
+    app.register_blueprint(powercore_bp)
+    print("[+] Power Core integration registered at /api/powercore")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Power Core integration: {e}")
 
 # Store active analysis jobs
 active_jobs = {}
@@ -513,6 +542,9 @@ def analyze():
     except Exception as e:
         import logging
 
+        # Record failed analysis
+        record_analysis(status="error", source="upload")
+        
         error_msg = str(e)
         print(f"[!] Error in /api/analyze: {error_msg}")
         logger = logging.getLogger(__name__)
@@ -922,6 +954,7 @@ def get_coverage(run_id):
 
 
 @app.route("/api/apply", methods=["POST"])
+@require_api_key  # Protect state-changing VE operations
 @with_error_handling
 def apply_ve_corrections():
     """

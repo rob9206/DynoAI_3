@@ -26,7 +26,7 @@ import {
     AlertTriangle, Crosshair, Cpu, StopCircle, Mic,
     Award, Info, Flame
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -35,6 +35,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger
 } from '../components/ui/sheet';
@@ -42,17 +43,18 @@ import { useJetDriveLive } from '../hooks/useJetDriveLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
 import { LiveVETable } from '../components/jetdrive/LiveVETable';
 import { AFRTargetTable, DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
-// import { AudioEngineControls } from '../components/jetdrive/AudioEngineControls';
 import { AudioCapturePanel } from '../components/jetdrive/AudioCapturePanel';
 import { RunComparisonTable } from '../components/jetdrive/RunComparisonTable';
 import { RunComparisonTableEnhanced } from '../components/jetdrive/RunComparisonTableEnhanced';
+import { RunComparisonChart } from '../components/jetdrive/RunComparisonChart';
 import { TransientFuelPanel } from '../components/jetdrive/TransientFuelPanel';
 import { VirtualECUPanel, type VEScenario } from '../components/jetdrive/VirtualECUPanel';
 import { ClosedLoopTuningPanel } from '../components/jetdrive/ClosedLoopTuningPanel';
 import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
+import { JetDriveLiveDashboard } from '../components/jetdrive/JetDriveLiveDashboard';
+import { HardwareTab } from '../components/jetdrive/HardwareTab';
 import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
-// import { useAudioEngine } from '../hooks/useAudioEngine';
 // import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
 import { getConfidenceReport } from '../lib/api';
@@ -68,6 +70,7 @@ interface RunInfo {
     peak_hp: number;
     peak_tq: number;
     status: string;
+    source?: 'simulator_pull' | 'real' | 'simulate' | 'unknown' | string;
     notes?: string;
     tags?: string[];
 }
@@ -547,10 +550,16 @@ export default function JetDriveAutoTunePage() {
     const [textExportContent, setTextExportContent] = useState<string>('');
     const [isStartingMonitor, setIsStartingMonitor] = useState(false);
     const [useEnhancedTable, setUseEnhancedTable] = useState(true); // Toggle for enhanced table
+    const [comparisonMetric, setComparisonMetric] = useState<'hp' | 'tq' | 'both'>('hp');
+    const [comparisonSelectedRunIds, setComparisonSelectedRunIds] = useState<string[]>([]);
+    const [comparisonBaselineRunId, setComparisonBaselineRunId] = useState<string | null>(null);
+    const [comparisonSource, setComparisonSource] = useState<'actual' | 'simulator' | 'real' | 'simulated' | 'all'>('actual');
+    const [simThrottle, setSimThrottle] = useState<number>(0);
+    const simThrottleSendRef = useRef<number | null>(null);
+    const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Audio state
-    const [audioFunMode, setAudioFunMode] = useState(false); // For AudioEngineControls (synthetic sound) - OFF by default
-    const [audioRecording, setAudioRecording] = useState(false); // For AudioCapturePanel (real recording)
+    // Audio capture state (real recording)
+    const [audioRecording, setAudioRecording] = useState(false);
     const [audioKnockDetected, setAudioKnockDetected] = useState(false);
 
     // Transient Fuel Analysis state
@@ -562,10 +571,7 @@ export default function JetDriveAutoTunePage() {
     const [veErrorPct, setVeErrorPct] = useState(-10.0);
     const [veErrorStd, setVeErrorStd] = useState(5.0);
 
-    // AI Assistant (voice reactions when fun mode is enabled) - DISABLED
-    // const aiAssistant = useAIAssistant({ enabled: audioFunMode });
-
-    // Stub AI Assistant to prevent errors
+    // AI Assistant - DISABLED (kept as stub to prevent errors)
     const aiAssistant = {
         state: { voiceName: null },
         onPullStart: () => { },
@@ -578,23 +584,7 @@ export default function JetDriveAutoTunePage() {
         testVoice: () => { },
     };
 
-    // Audio engine for sound effects AND live engine sound - DISABLED
-    // const audioEngine = useAudioEngine({
-    //     cylinders: 2,
-    //     funMode: audioFunMode
-    // });
-    // const { playStartup, playShutdown, playSuccess, playWarning, playBeep, setRpm, setLoad, startEngine, stopEngine, state: audioState } = audioEngine;
-    // Stub functions to prevent errors (audio engine disabled)
-    const playStartup = () => { };
-    const playShutdown = () => { };
-    const playSuccess = () => { };
-    const playWarning = () => { };
-    const playBeep = (_frequency?: number, _duration?: number) => { };
-    const setRpm = (_rpm: number) => { };
-    const setLoad = (_load: number) => { };
-    const startEngine = async () => { };
-    const stopEngine = () => { };
-    const audioState = { isPlaying: false };
+    // Audio engine removed
 
     // Workflow state
     const [workflowState, setWorkflowState] = useState<WorkflowState>('disconnected');
@@ -631,8 +621,18 @@ export default function JetDriveAutoTunePage() {
     }, [channels]);
 
     const currentForce = useMemo(() => {
-        const ch = channels['Force Drum 1'] || channels['chan_39'];
-        return ch?.value || 0;
+        const ch =
+            channels['Force Drum 1'] ||
+            channels['Force'] ||
+            channels['Load'] ||
+            channels['chan_39'];
+        if (ch && typeof ch.value === 'number') return ch.value;
+
+        // Fallback: find any channel containing "force" (handles name mismatches like
+        // "Force Drum #1", "Tractive Force", etc.)
+        const key = Object.keys(channels).find(k => k.toLowerCase().includes('force'));
+        const fallback = key ? channels[key] : undefined;
+        return fallback?.value || 0;
     }, [channels]);
 
     const currentMap = useMemo(() => {
@@ -718,6 +718,46 @@ export default function JetDriveAutoTunePage() {
         }
     }, [simStatus]);
 
+    // Keep the throttle slider roughly in sync with simulator TPS (when running)
+    useEffect(() => {
+        if (!simStatus?.active) return;
+        const tps = simStatus.current?.tps;
+        if (typeof tps === 'number' && !Number.isNaN(tps)) {
+            // Avoid fighting the user's drag: only update if we're not in the middle of sending
+            if (simThrottleTimerRef.current === null) {
+                setSimThrottle(tps);
+            }
+        }
+    }, [simStatus?.active, simStatus?.current?.tps]);
+
+    const sendSimThrottle = useCallback(async (tps: number) => {
+        try {
+            await fetch(`${API_BASE}/simulator/throttle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tps }),
+            });
+        } catch {
+            // Silent; UI will keep moving but backend may ignore if sim not running
+        }
+    }, []);
+
+    const onSimThrottleChange = useCallback((next: number) => {
+        setSimThrottle(next);
+        simThrottleSendRef.current = next;
+        // Debounce network calls while dragging
+        if (simThrottleTimerRef.current) {
+            clearTimeout(simThrottleTimerRef.current);
+        }
+        simThrottleTimerRef.current = setTimeout(() => {
+            const v = simThrottleSendRef.current;
+            simThrottleTimerRef.current = null;
+            if (typeof v === 'number') {
+                sendSimThrottle(v);
+            }
+        }, 80);
+    }, [sendSimThrottle]);
+
     // Start simulator
     const handleStartSimulator = async () => {
         setIsStartingSimulator(true);
@@ -747,7 +787,7 @@ export default function JetDriveAutoTunePage() {
             const data = await res.json();
             if (data.success) {
                 setIsSimulatorActive(true);
-                playStartup(); // 🔊 Startup sound!
+                setSimThrottle(0);
                 const ecuStatus = data.virtual_ecu_enabled ? ' with Virtual ECU' : '';
                 const veScenarioSuffix = virtualECUEnabled ? ` • ${veScenario} VE scenario` : '';
                 toast.success(`Simulator started${ecuStatus}: ${data.profile?.name}`, {
@@ -756,13 +796,11 @@ export default function JetDriveAutoTunePage() {
                 // Also start live capture
                 await startCapture();
             } else {
-                playWarning(); // 🔊 Warning sound!
                 toast.error('Failed to start simulator', {
                     description: data.error || 'Unknown error occurred'
                 });
             }
         } catch (error) {
-            playWarning(); // 🔊 Warning sound!
             const errorMessage = error instanceof Error ? error.message : 'Failed to start simulator';
             toast.error('Failed to start simulator', {
                 description: errorMessage
@@ -780,10 +818,8 @@ export default function JetDriveAutoTunePage() {
             await stopCapture();
             setIsSimulatorActive(false);
             setSimState('stopped');
-            playShutdown(); // 🔊 Shutdown sound!
             toast.info('Simulator stopped');
         } catch {
-            playWarning(); // 🔊 Warning sound!
             toast.error('Failed to stop simulator');
         }
     };
@@ -791,18 +827,18 @@ export default function JetDriveAutoTunePage() {
     // Trigger a simulated pull
     const handleTriggerPull = async () => {
         try {
+            // Ensure WOT for pulls unless user intentionally holds lower TPS
+            // (Operator can always drag the slider back down mid-pull.)
+            await sendSimThrottle(Math.max(0, Math.min(100, simThrottle)));
             const res = await fetch(`${API_BASE}/simulator/pull`, { method: 'POST' });
             const data = await res.json();
             if (!data.success) {
-                playWarning(); // 🔊 Warning sound!
                 toast.warning(data.error || 'Cannot start pull');
             } else {
-                playBeep(600, 0.1); // 🔊 Quick beep to confirm!
                 console.log('[JetDrive] Calling aiAssistant.onPullStart()');
                 aiAssistant.onPullStart(); // 🎤 AI: "Let's go!"
             }
         } catch {
-            playWarning(); // 🔊 Warning sound!
             toast.error('Failed to trigger pull');
         }
     };
@@ -867,50 +903,7 @@ export default function JetDriveAutoTunePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [simState, currentHp]);
 
-    // Trigger AI on high RPM
-    const lastHighRpmTrigger = useRef<number>(0);
-    useEffect(() => {
-        if (!audioFunMode) return;
-        const now = Date.now();
-        // Trigger at high RPM (over 7000) once every 10 seconds
-        if (currentRpm > 7000 && now - lastHighRpmTrigger.current > 10000) {
-            lastHighRpmTrigger.current = now;
-            aiAssistant.onHighRpm();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentRpm, audioFunMode]);
-    // Trigger AI on AFR conditions during pulls
-    const lastAfrTrigger = useRef<number>(0);
-    const afrCooldown = 8000; // 8 seconds between AFR comments
-    useEffect(() => {
-        if (!audioFunMode || !isCapturing || currentRpm < 2000) return;
-
-        const now = Date.now();
-        if (now - lastAfrTrigger.current < afrCooldown) return;
-
-        // Only check AFR during active pulls (RPM > threshold)
-        if (currentAfr > 0 && currentTargetAfr > 0) {
-            const afrError = currentAfr - currentTargetAfr;
-            const afrErrorPercent = Math.abs(afrError / currentTargetAfr) * 100;
-
-            // Good pull - within 2% of target
-            if (afrErrorPercent < 2) {
-                lastAfrTrigger.current = now;
-                aiAssistant.onGoodPull();
-            }
-            // Lean - more than 4% above target (e.g., 14.6 when target is 13.8)
-            else if (afrError > 0 && afrErrorPercent > 4) {
-                lastAfrTrigger.current = now;
-                aiAssistant.onAfrLean();
-            }
-            // Rich - more than 4% below target (e.g., 13.0 when target is 13.8)
-            else if (afrError < 0 && afrErrorPercent > 4) {
-                lastAfrTrigger.current = now;
-                aiAssistant.onAfrRich();
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentAfr, currentTargetAfr, currentRpm, isCapturing, audioFunMode]);
+    // AI Assistant triggers removed (audio/voice features disabled)
 
     // Status query
     const { data: statusData, refetch: refetchStatus } = useQuery({
@@ -922,14 +915,24 @@ export default function JetDriveAutoTunePage() {
         refetchInterval: 10000,
     });
 
+    const comparisonRunsList: RunInfo[] = useMemo(() => {
+        const raw: RunInfo[] = statusData?.runs || [];
+        if (comparisonSource === 'all') return raw;
+        if (comparisonSource === 'simulated') return raw.filter(r => r.source === 'simulate');
+        if (comparisonSource === 'simulator') return raw.filter(r => r.source === 'simulator_pull');
+        if (comparisonSource === 'real') return raw.filter(r => r.source === 'real');
+        // actual = simulator pulls + real (exclude synthetic)
+        return raw.filter(r => r.source !== 'simulate');
+    }, [statusData?.runs, comparisonSource]);
+
     // Fetch detailed data for all runs for comparison
     const { data: allRunsData } = useQuery({
-        queryKey: ['jetdrive-all-runs', statusData?.runs],
+        queryKey: ['jetdrive-all-runs', comparisonRunsList.map(r => r.run_id).join('|')],
         queryFn: async () => {
-            if (!statusData?.runs) return [];
+            if (!comparisonRunsList) return [];
 
             // Fetch details for up to 5 most recent runs
-            const runPromises = statusData.runs.slice(0, 5).map(async (run: RunInfo) => {
+            const runPromises = comparisonRunsList.slice(0, 10).map(async (run: RunInfo) => {
                 try {
                     const res = await fetch(`${API_BASE}/run/${run.run_id}`);
                     const data = await res.json() as { manifest?: unknown };
@@ -944,9 +947,46 @@ export default function JetDriveAutoTunePage() {
 
             return Promise.all(runPromises);
         },
-        enabled: !!statusData?.runs && statusData.runs.length > 0,
+        enabled: comparisonRunsList.length > 0,
         staleTime: 30000, // Cache for 30 seconds
     });
+
+    // Keep selection/baseline consistent when the filter changes
+    useEffect(() => {
+        const valid = new Set(comparisonRunsList.map(r => r.run_id));
+        setComparisonSelectedRunIds(prev => prev.filter(id => valid.has(id)));
+        setComparisonBaselineRunId(prev => (prev && valid.has(prev) ? prev : null));
+    }, [comparisonRunsList]);
+
+    // Runs (with power_curve) to drive the overlay chart
+    const comparisonRunsForChart = useMemo(() => {
+        if (!allRunsData || allRunsData.length === 0) return [];
+
+        // If explicit selection exists, use it; otherwise default to the most recent 5
+        const baseList = comparisonSelectedRunIds.length > 0
+            ? allRunsData.filter((r) => comparisonSelectedRunIds.includes(r.run_id))
+            : allRunsData.slice(0, 5);
+
+        const baselineId = comparisonBaselineRunId ?? baseList[0]?.run_id ?? null;
+        const baseline = baselineId ? allRunsData.find((r) => r.run_id === baselineId) : null;
+
+        // Order: baseline first (if present), then remaining
+        const ordered = [
+            ...(baseline ? [baseline] : []),
+            ...baseList.filter((r) => !baseline || r.run_id !== baseline.run_id),
+        ].slice(0, 5);
+
+        return ordered.map((r) => {
+            const manifestAny = (r as unknown as { manifest?: any }).manifest;
+            const curve = manifestAny?.analysis?.power_curve;
+            return {
+                run_id: r.run_id,
+                peak_hp: r.peak_hp,
+                peak_tq: r.peak_tq,
+                power_curve: Array.isArray(curve) ? curve : undefined,
+            };
+        });
+    }, [allRunsData, comparisonSelectedRunIds, comparisonBaselineRunId]);
 
     // Run details query
     const { data: runData } = useQuery({
@@ -1026,8 +1066,6 @@ export default function JetDriveAutoTunePage() {
         },
         onSuccess: (data) => {
             if (data.success) {
-                playSuccess(); // 🔊 Success sound!
-
                 // Safely access analysis data with null checks
                 const peakHp = data.analysis?.peak_hp ?? 0;
                 const peakHpRpm = data.analysis?.peak_hp_rpm ?? 0;
@@ -1042,12 +1080,10 @@ export default function JetDriveAutoTunePage() {
                 // Generate new run ID for next run
                 setRunId(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
             } else {
-                playWarning(); // 🔊 Warning sound!
                 toast.error('Analysis failed', { description: data.error });
             }
         },
         onError: (error: Error) => {
-            playWarning(); // 🔊 Warning sound!
             toast.error('Analysis failed', { description: error.message });
         },
     });
@@ -1059,10 +1095,8 @@ export default function JetDriveAutoTunePage() {
         try {
             const res = await fetch(`${API_BASE}/hardware/monitor/start`, { method: 'POST' });
             if (!res.ok) throw new Error('Failed to start monitor');
-            playStartup(); // 🔊 Startup sound!
             toast.success('Hardware monitor started');
         } catch {
-            playWarning(); // 🔊 Warning sound!
             toast.error('Failed to start monitor');
             setWorkflowState('disconnected');
         } finally {
@@ -1184,15 +1218,12 @@ export default function JetDriveAutoTunePage() {
                                     rpmThreshold={rpmThreshold}
                                     onRecordingStart={() => {
                                         setAudioRecording(true);
-                                        playBeep(800, 0.1); // 🔊 Quick high beep!
                                     }}
                                     onRecordingStop={() => {
                                         setAudioRecording(false);
-                                        playBeep(400, 0.1); // 🔊 Quick low beep!
                                     }}
                                     onKnockDetected={() => {
                                         setAudioKnockDetected(true);
-                                        playWarning(); // 🔊 Warning sound for knock!
                                         aiAssistant.onKnockDetected(); // 🎤 AI: "Knock detected!"
                                         setTimeout(() => setAudioKnockDetected(false), 3000);
                                     }}
@@ -1230,7 +1261,7 @@ export default function JetDriveAutoTunePage() {
 
                 {/* Hardware Tab */}
                 <TabsContent value="hardware" className="mt-6">
-                    <HardwareTab />
+                    <HardwareTab apiUrl={API_BASE} />
                 </TabsContent>
 
                 {/* Live Dashboard Tab */}
@@ -1290,26 +1321,7 @@ export default function JetDriveAutoTunePage() {
                                                 placeholder="my_dyno_run"
                                             />
                                         </div>
-                                        {/* Audio Mode Toggle - DISABLED */}
-                                        {/* <div>
-                                            <Label className="text-xs text-zinc-400">Audio Mode</Label>
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setAudioFunMode(!audioFunMode)}
-                                                    className={`flex-1 h-9 ${audioFunMode
-                                                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 hover:bg-orange-500/30'
-                                                        : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
-                                                        }`}
-                                                >
-                                                    {audioFunMode ? '🔥 Fun Mode' : '🎵 Realistic'}
-                                                </Button>
-                                            </div>
-                                            <p className="text-[10px] text-zinc-500 mt-1">
-                                                {audioFunMode ? 'Exaggerated engine sounds' : 'Natural engine sounds'}
-                                            </p>
-                                        </div> */}
+                                        {/* Audio engine removed */}
                                     </div>
 
                                     {/* Build Configuration - Stage & Cam Presets */}
@@ -1468,6 +1480,28 @@ export default function JetDriveAutoTunePage() {
                                                     )}
                                                     Start Simulator
                                                 </Button>
+
+                                        {/* Manual throttle control (simulator only) */}
+                                        {isSimulatorActive && (
+                                            <div className="mt-4 p-3 rounded-md bg-zinc-950/40 border border-zinc-800">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-xs text-zinc-400 font-medium">Throttle (TPS)</div>
+                                                    <div className="text-xs font-mono text-zinc-200 tabular-nums">
+                                                        {Math.round(simThrottle)}%
+                                                    </div>
+                                                </div>
+                                                <Slider
+                                                    value={[simThrottle]}
+                                                    onValueChange={(v) => onSimThrottleChange(v?.[0] ?? 0)}
+                                                    min={0}
+                                                    max={100}
+                                                    step={1}
+                                                />
+                                                <div className="mt-2 text-[10px] text-zinc-500">
+                                                    Drag to set throttle; use <span className="font-mono">Trigger Pull</span> for a WOT sweep.
+                                                </div>
+                                            </div>
+                                        )}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -1552,17 +1586,7 @@ export default function JetDriveAutoTunePage() {
                                 />
                             </div>
 
-                            {/* Audio Engine Controls - DISABLED */}
-                            {/* <AudioEngineControls
-                                    rpm={currentRpm}
-                                    load={currentMap / 100} // Use MAP for load (0-100 kPa -> 0-1)
-                                    autoStart={false} // Manual control only - user must click power button
-                                    autoStartRpm={1000}
-                                    compact={true}
-                                    cylinders={2}
-                                    funMode={audioFunMode}
-                                    externalAudioEngine={audioEngine} // Pass the audio engine instance for sync
-                                /> */}
+                            {/* Audio engine removed */}
 
                             {/* Capture Controls */}
                             <div className="flex items-center gap-3">
@@ -1572,6 +1596,7 @@ export default function JetDriveAutoTunePage() {
                                         <Button
                                             onClick={handleTriggerPull}
                                             disabled={simState !== 'idle'}
+                                            uiSound="pull"
                                             className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
                                         >
                                             <Play className="w-4 h-4 mr-2" />
@@ -1865,32 +1890,108 @@ export default function JetDriveAutoTunePage() {
                             {/* Run Comparison Table - Show when we have multiple runs */}
                             {runs.length > 1 && allRunsData && allRunsData.length > 1 && (
                                 <>
-                                    {/* Table Toggle */}
-                                    <div className="flex items-center justify-end gap-2 mb-2">
-                                        <span className="text-xs text-zinc-500">Comparison View:</span>
-                                        <Button
-                                            variant={useEnhancedTable ? "ghost" : "outline"}
-                                            size="sm"
-                                            onClick={() => setUseEnhancedTable(false)}
-                                            className="h-7 text-xs"
-                                        >
-                                            Standard
-                                        </Button>
-                                        <Button
-                                            variant={useEnhancedTable ? "outline" : "ghost"}
-                                            size="sm"
-                                            onClick={() => setUseEnhancedTable(true)}
-                                            className="h-7 text-xs border-cyan-500/30 text-cyan-400"
-                                        >
-                                            Enhanced
-                                        </Button>
+                                    {/* Chart + View Toggles */}
+                                    <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-500">Curve:</span>
+                                            <Button
+                                                variant={comparisonMetric === 'hp' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonMetric('hp')}
+                                                className="h-7 text-xs"
+                                            >
+                                                HP
+                                            </Button>
+                                            <Button
+                                                variant={comparisonMetric === 'tq' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonMetric('tq')}
+                                                className="h-7 text-xs"
+                                            >
+                                                TQ
+                                            </Button>
+                                            <Button
+                                                variant={comparisonMetric === 'both' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonMetric('both')}
+                                                className="h-7 text-xs border-cyan-500/30 text-cyan-400"
+                                            >
+                                                Both
+                                            </Button>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-500">Comparison View:</span>
+                                            <Button
+                                                variant={useEnhancedTable ? "ghost" : "outline"}
+                                                size="sm"
+                                                onClick={() => setUseEnhancedTable(false)}
+                                                className="h-7 text-xs"
+                                            >
+                                                Standard
+                                            </Button>
+                                            <Button
+                                                variant={useEnhancedTable ? "outline" : "ghost"}
+                                                size="sm"
+                                                onClick={() => setUseEnhancedTable(true)}
+                                                className="h-7 text-xs border-cyan-500/30 text-cyan-400"
+                                            >
+                                                Enhanced
+                                            </Button>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-500">Data:</span>
+                                            <Button
+                                                variant={comparisonSource === 'actual' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonSource('actual')}
+                                                className="h-7 text-xs"
+                                            >
+                                                Actual
+                                            </Button>
+                                            <Button
+                                                variant={comparisonSource === 'simulator' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonSource('simulator')}
+                                                className="h-7 text-xs"
+                                            >
+                                                Simulator
+                                            </Button>
+                                            <Button
+                                                variant={comparisonSource === 'real' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonSource('real')}
+                                                className="h-7 text-xs"
+                                            >
+                                                Real
+                                            </Button>
+                                            <Button
+                                                variant={comparisonSource === 'simulated' ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() => setComparisonSource('simulated')}
+                                                className="h-7 text-xs"
+                                            >
+                                                Synthetic
+                                            </Button>
+                                        </div>
                                     </div>
+
+                                    <RunComparisonChart
+                                        runs={comparisonRunsForChart}
+                                        metric={comparisonMetric}
+                                        height={280}
+                                    />
 
                                     {useEnhancedTable ? (
                                         <RunComparisonTableEnhanced
                                             runs={allRunsData}
                                             onRunClick={setSelectedRun}
                                             maxRuns={10}
+                                            selectedRunIds={comparisonSelectedRunIds}
+                                            onSelectedRunIdsChange={setComparisonSelectedRunIds}
+                                            baselineRunId={comparisonBaselineRunId}
+                                            onBaselineRunIdChange={setComparisonBaselineRunId}
                                         />
                                     ) : (
                                         <RunComparisonTable

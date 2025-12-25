@@ -409,7 +409,7 @@ export function LiveVETable({
             )}
 
             {/* VE Table Grid */}
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
+            <div className="overflow-x-scroll rounded-lg border border-zinc-800">
                 <table className="border-collapse w-full">
                     <thead>
                         <tr className="bg-zinc-900/80">

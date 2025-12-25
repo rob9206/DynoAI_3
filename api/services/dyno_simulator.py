@@ -50,13 +50,10 @@ TORQUE_TO_ANGULAR_ACCEL_SCALE = 50.0
 # Quadratic drag: drag_factor = 1.0 - (DRAG_COEFF × rpm/1000) × dt
 DRAG_COEFFICIENT = 0.00015
 
-# Engine braking coefficient during deceleration
-# Angular velocity reduction: ω_new = ω × (1.0 - ENGINE_BRAKE_COEFF * dt)
-# This gives realistic dyno deceleration over 5-8 seconds from redline to idle
-# (dyno drum has massive inertia, so decel is gradual)
-ENGINE_BRAKE_COEFFICIENT = (
-    0.8  # Coefficient (applied with dt, so ~0.8 * 0.02 = 1.6% per timestep at 50Hz)
-)
+# Default engine braking coefficient during deceleration (configurable via SimulatorConfig)
+# Angular velocity reduction: ω_new = ω × (1.0 - brake_coeff * dt)
+# Tuned so coastdown is gradual (multi-second), not an instant RPM cliff.
+DEFAULT_ENGINE_BRAKE_COEFFICIENT = 0.18
 
 # Knock detection thresholds
 KNOCK_AFR_LEAN_THRESHOLD = 1.0  # AFR above target at high load triggers knock
@@ -211,6 +208,11 @@ class SimulatorConfig:
     # Timing
     update_rate_hz: float = 50.0  # Data points per second (higher for physics)
 
+    # Physics scaling
+    # Torque -> angular acceleration scaling factor (units/gear calibration)
+    # Default is tuned so a typical V-twin pull lasts ~8-10s from idle to redline.
+    torque_to_angular_accel_scale: float = 5.5
+
     # Behavior
     auto_pull: bool = False  # Auto-start pulls periodically
     auto_pull_interval_sec: float = 15.0
@@ -232,6 +234,9 @@ class SimulatorConfig:
     enable_thermal_effects: bool = True
     enable_air_density_correction: bool = True
     enable_pumping_losses: bool = True
+
+    # Coastdown / engine braking
+    engine_brake_coefficient: float = DEFAULT_ENGINE_BRAKE_COEFFICIENT
 
 
 @dataclass
@@ -456,6 +461,7 @@ class DynoSimulator:
 
         # Pull data collection
         self._pull_data: list[dict[str, float]] = []
+        self._pull_elapsed_s: float = 0.0
 
         # Physics snapshot collection (for detailed analysis)
         self._physics_snapshots: list[PhysicsSnapshot] = []
@@ -474,7 +480,18 @@ class DynoSimulator:
         self.physics.angular_velocity = self._rpm_to_rad_s(profile.idle_rpm)
 
         # Ensure total inertia is never zero (would cause division by zero in physics)
-        total_inertia = profile.engine_inertia + profile.dyno_inertia
+        # Prefer the configured dyno drum inertia when available, so the simulator matches
+        # your actual RT-150 drum inertia. Fall back to the profile's dyno_inertia.
+        dyno_inertia = float(profile.dyno_inertia)
+        try:
+            dyno_cfg = get_config().dyno
+            cfg_inertia = float(dyno_cfg.drum1.rotational_inertia_lbft2)
+            if cfg_inertia > 0:
+                dyno_inertia = cfg_inertia
+        except Exception:
+            pass
+
+        total_inertia = float(profile.engine_inertia) + dyno_inertia
         self.physics.total_inertia = max(0.1, total_inertia)  # Minimum 0.1 lb·ft²
 
         self.physics.engine_temp_f = profile.optimal_temp_f
@@ -495,26 +512,65 @@ class DynoSimulator:
         # Generate RPM points
         rpm_points = np.linspace(profile.idle_rpm, profile.redline_rpm, 1000)
 
-        # Torque curve using asymmetric gaussian-like shape
-        # This represents the engine's mechanical breathing characteristics
-        tq_left_sigma = max(350.0, (profile.tq_peak_rpm - profile.idle_rpm) / 2.5)
-        tq_right_sigma = max(450.0, (profile.redline_rpm - profile.tq_peak_rpm) / 3.0)
+        # Build a base torque curve that matches BOTH:
+        # - peak torque (max_tq @ tq_peak_rpm)
+        # - peak horsepower (max_hp @ hp_peak_rpm), by ensuring torque at hp_peak_rpm is consistent:
+        #   hp = tq * rpm / 5252  => tq_required = hp * 5252 / rpm
+        #
+        # The previous implementation only matched max_tq, which can produce unrealistic HP peaks/values.
+        if profile.hp_peak_rpm > 0:
+            tq_at_hp_peak = float(profile.max_hp) * 5252.0 / float(profile.hp_peak_rpm)
+        else:
+            tq_at_hp_peak = float(profile.max_tq) * 0.8
 
-        torque = np.zeros_like(rpm_points)
-        left_mask = rpm_points <= profile.tq_peak_rpm
-        right_mask = ~left_mask
+        # Sanity clamp: HP peak torque should never exceed peak torque for typical NA engines.
+        tq_at_hp_peak = max(0.0, min(float(profile.max_tq), tq_at_hp_peak))
 
-        torque[left_mask] = np.exp(
-            -((rpm_points[left_mask] - profile.tq_peak_rpm) ** 2)
-            / (2 * tq_left_sigma**2)
+        # Anchor points for a plausible curve (piecewise linear, then smoothed/adjusted).
+        # Idle torque roughly 35% of peak torque for big twins; sportbikes will be corrected by VE/efficiency later.
+        tq_idle = float(profile.max_tq) * 0.35
+        tq_redline = max(0.0, tq_at_hp_peak * 0.78)
+
+        anchor_rpm = np.array(
+            [
+                float(profile.idle_rpm),
+                float(profile.tq_peak_rpm),
+                float(profile.hp_peak_rpm),
+                float(profile.redline_rpm),
+            ]
         )
-        torque[right_mask] = np.exp(
-            -((rpm_points[right_mask] - profile.tq_peak_rpm) ** 2)
-            / (2 * tq_right_sigma**2)
-        )
+        anchor_tq = np.array([tq_idle, float(profile.max_tq), tq_at_hp_peak, tq_redline])
 
-        # Scale to match peak
-        torque = torque / np.max(torque) * profile.max_tq
+        # Ensure anchors are strictly increasing in RPM (guard against bad profile inputs).
+        order = np.argsort(anchor_rpm)
+        anchor_rpm = anchor_rpm[order]
+        anchor_tq = anchor_tq[order]
+
+        torque = np.interp(rpm_points, anchor_rpm, anchor_tq)
+
+        # Gentle smoothing to avoid sharp corners (simple moving average).
+        # Keep window small so we don't destroy peaks.
+        window = 9
+        kernel = np.ones(window) / window
+        torque = np.convolve(torque, kernel, mode="same")
+
+        # Enforce exact peak torque at tq_peak_rpm via global scaling (smoothing can reduce the peak slightly).
+        tq_at_tq_peak_now = float(np.interp(float(profile.tq_peak_rpm), rpm_points, torque))
+        if tq_at_tq_peak_now > 1e-6:
+            torque *= float(profile.max_tq) / tq_at_tq_peak_now
+
+        # Enforce torque at hp_peak_rpm with a smooth high-RPM adjustment that doesn't perturb low-RPM torque.
+        tq_at_hp_now = float(np.interp(float(profile.hp_peak_rpm), rpm_points, torque))
+        if tq_at_hp_now > 1e-6 and tq_at_hp_peak > 0:
+            f = tq_at_hp_peak / tq_at_hp_now
+            # Smoothstep from tq_peak_rpm -> hp_peak_rpm
+            start = float(profile.tq_peak_rpm)
+            end = float(profile.hp_peak_rpm) if float(profile.hp_peak_rpm) > start else start + 1.0
+            x = np.clip((rpm_points - start) / (end - start), 0.0, 1.0)
+            w = x * x * (3.0 - 2.0 * x)  # smoothstep
+            torque *= 1.0 + (f - 1.0) * w
+
+        torque = np.maximum(0.0, torque)
 
         # HP = TQ * RPM / 5252
         horsepower = torque * rpm_points / 5252.0
@@ -541,35 +597,78 @@ class DynoSimulator:
         profile = self.config.profile
 
         # RPM-based VE (breathing efficiency)
-        # Protect against division by zero
-        if profile.tq_peak_rpm > 0:
-            rpm_ratio = rpm / profile.tq_peak_rpm
-        else:
-            rpm_ratio = 1.0  # Fallback
+        #
+        # Important realism note:
+        # The simulator already has a shaped base torque curve. If we apply a symmetric
+        # gaussian VE curve on top (centered at tq_peak_rpm), the resulting torque/HP
+        # often becomes an unrealistic "bell" early in the pull.
+        #
+        # To avoid that, at (near) WOT we use a flatter, more realistic VE profile:
+        # - ramps up from idle
+        # - plateaus through midrange
+        # - gently tapers near redline
+        ve_peak = float(profile.volumetric_efficiency_peak)
 
-        # Gaussian-like curve centered at torque peak
-        rpm_ve = profile.volumetric_efficiency_peak * math.exp(
-            -0.5 * ((rpm_ratio - 1.0) / 0.4) ** 2
+        # Guard against invalid profile values
+        idle = float(profile.idle_rpm)
+        tq_peak = float(profile.tq_peak_rpm) if profile.tq_peak_rpm > 0 else idle * 2.5
+        hp_peak = (
+            float(profile.hp_peak_rpm)
+            if profile.hp_peak_rpm > 0
+            else max(tq_peak + 500.0, idle * 4.0)
         )
+        redline = float(profile.redline_rpm) if profile.redline_rpm > 0 else hp_peak + 500.0
 
-        # Low RPM penalty (poor scavenging)
-        if rpm < profile.idle_rpm * 1.5 and profile.idle_rpm > 0:
-            low_rpm_factor = rpm / (profile.idle_rpm * 1.5)
-            rpm_ve *= 0.6 + 0.4 * low_rpm_factor
+        rpm_f = float(rpm)
+        rpm_f = max(idle * 0.5, min(redline * 1.05, rpm_f))
 
-        # High RPM penalty (flow restrictions)
-        if rpm > profile.hp_peak_rpm:
-            rpm_range = profile.redline_rpm - profile.hp_peak_rpm
-            if rpm_range > 0:
-                high_rpm_factor = (profile.redline_rpm - rpm) / rpm_range
-                rpm_ve *= 0.7 + 0.3 * max(0, high_rpm_factor)
+        if tps >= 80.0:
+            # WOT: flat-ish VE so HP keeps building with RPM (no early bell).
+            # Start slightly under peak, reach peak by tq_peak, hold until hp_peak, then taper.
+            ve_low = ve_peak * 0.88
+            ve_high = ve_peak * 0.86
+
+            if rpm_f <= tq_peak:
+                denom = max(1.0, tq_peak - idle)
+                x = (rpm_f - idle) / denom
+                x = max(0.0, min(1.0, x))
+                # Smoothstep ramp
+                w = x * x * (3.0 - 2.0 * x)
+                rpm_ve = ve_low + (ve_peak - ve_low) * w
+            elif rpm_f <= hp_peak:
+                rpm_ve = ve_peak
+            else:
+                denom = max(1.0, redline - hp_peak)
+                x = (rpm_f - hp_peak) / denom
+                x = max(0.0, min(1.0, x))
+                w = x * x * (3.0 - 2.0 * x)
+                rpm_ve = ve_peak + (ve_high - ve_peak) * w
+        else:
+            # Part-throttle: keep a stronger RPM-shaped VE (helps realism under load transitions).
+            if tq_peak > 0:
+                rpm_ratio = rpm_f / tq_peak
+            else:
+                rpm_ratio = 1.0
+            rpm_ve = ve_peak * math.exp(-0.5 * ((rpm_ratio - 1.0) / 0.45) ** 2)
+
+            # Low RPM penalty (poor scavenging)
+            if rpm_f < idle * 1.5 and idle > 0:
+                low_rpm_factor = rpm_f / (idle * 1.5)
+                rpm_ve *= 0.6 + 0.4 * low_rpm_factor
+
+            # High RPM penalty (flow restrictions)
+            if rpm_f > hp_peak:
+                rpm_range = redline - hp_peak
+                if rpm_range > 0:
+                    high_rpm_factor = (redline - rpm_f) / rpm_range
+                    rpm_ve *= 0.75 + 0.25 * max(0.0, high_rpm_factor)
 
         # Throttle-based VE (pumping losses at partial throttle)
         # At closed throttle (0%), engine barely breathes (5% VE)
         # This ensures proper deceleration with closed throttle
         throttle_ve = 0.05 + 0.95 * (tps / 100.0)  # 5% at closed, 100% at WOT
 
-        return min(1.0, rpm_ve * throttle_ve)
+        return min(1.0, max(0.0, rpm_ve * throttle_ve))
 
     def _get_pumping_losses(self, rpm: float, tps: float) -> float:
         """
@@ -873,18 +972,22 @@ class DynoSimulator:
         """
         profile = self.config.profile
 
-        # Get effective torque at current RPM and throttle
+        # Net angular acceleration (and thus dyno-inferred torque/HP) is computed from the
+        # drum's change in angular velocity over time. Capture ω_old so we can compute it.
+        omega_prev = float(self.physics.angular_velocity)
+
+        # Get effective engine torque at current RPM and throttle
         torque, factors = self._calculate_effective_torque(
             self.physics.rpm, self.physics.tps_actual, afr
         )
 
         # Calculate angular acceleration: α = τ / I
         # Using documented scaling factor for unit conversions and dyno gearing
-        torque_scaled = torque * TORQUE_TO_ANGULAR_ACCEL_SCALE
-        self.physics.angular_acceleration = torque_scaled / self.physics.total_inertia
+        torque_scaled = torque * float(self.config.torque_to_angular_accel_scale)
+        alpha_from_engine = torque_scaled / self.physics.total_inertia
 
         # Update angular velocity: ω = ω + α·dt
-        self.physics.angular_velocity += self.physics.angular_acceleration * dt
+        self.physics.angular_velocity += alpha_from_engine * dt
 
         # Apply drag/friction (quadratic with RPM)
         drag_factor = 1.0 - (DRAG_COEFFICIENT * self.physics.rpm / 1000.0) * dt
@@ -903,13 +1006,31 @@ class DynoSimulator:
         # Resync angular velocity
         self.physics.angular_velocity = self._rpm_to_rad_s(self.physics.rpm)
 
-        # Calculate HP from torque and RPM
-        hp = torque * self.physics.rpm / 5252.0
+        # Compute NET angular acceleration from the drum's actual ω change this step.
+        omega_now = float(self.physics.angular_velocity)
+        alpha_net = (omega_now - omega_prev) / max(dt, 1e-6)
+        self.physics.angular_acceleration = alpha_net
+
+        # Dyno-inferred torque and HP from inertia physics of the drum:
+        # τ_dyno ≈ I_total * α / SCALE
+        # HP_dyno = τ_dyno * RPM / 5252
+        scale = float(self.config.torque_to_angular_accel_scale) or 1.0
+        dyno_torque = (float(self.physics.total_inertia) * alpha_net) / scale
+        dyno_hp = dyno_torque * float(self.physics.rpm) / 5252.0
+
+        # Engine power (for thermal model)
+        hp_engine = torque * self.physics.rpm / 5252.0
 
         # Update thermal state
-        self._update_thermal(dt, hp)
+        self._update_thermal(dt, hp_engine)
 
-        return torque, hp, factors
+        # Expose dyno-inferred values in factors so the pull can log/display them
+        factors["dyno_torque"] = dyno_torque
+        factors["dyno_hp"] = dyno_hp
+        factors["alpha_net"] = alpha_net
+        factors["hp_engine"] = hp_engine
+
+        return torque, hp_engine, factors
 
     def _get_target_afr(self, rpm: float, tps: float) -> float:
         """Calculate target AFR based on RPM and throttle position."""
@@ -1017,6 +1138,7 @@ class DynoSimulator:
                 self._pull_progress = 0.0
                 self._pull_data = []
                 self._physics_snapshots = []
+                self._pull_elapsed_s = 0.0
 
                 # Set throttle target to WOT
                 self.physics.tps_target = 100.0
@@ -1150,9 +1272,27 @@ class DynoSimulator:
         """Handle PULL state behavior."""
         # WOT acceleration - physics-based
         elapsed = time.time() - self._pull_start_time
+        self._pull_elapsed_s += dt
 
         # Update throttle (realistic lag)
         self._update_throttle(dt)
+
+        # If the operator chops throttle during an active pull, end the power-sweep immediately
+        # and transition to DECEL (coastdown). This prevents the live HP trace from flatlining
+        # for a few ticks while TPS is closed but we're still in the PULL handler.
+        if (
+            self._pull_elapsed_s > 0.5
+            and self.physics.tps_target < 5.0
+            and self.physics.tps_actual < 5.0
+            and self.physics.rpm > profile.idle_rpm * 1.5
+        ):
+            self.state = SimState.DECEL
+            self._pull_start_time = time.time()
+            self.physics.tps_target = 0.0
+            self.physics.tps_actual = 0.0
+            if self._on_state_change:
+                self._on_state_change(self.state)
+            return
 
         # Get target AFR for knock detection
         target_afr = self._get_target_afr(self.physics.rpm, self.physics.tps_actual)
@@ -1182,12 +1322,27 @@ class DynoSimulator:
             current_afr = target_afr + afr_error
 
         # Physics update with AFR for knock detection
-        torque, hp, factors = self._update_physics(dt, current_afr)
+        engine_torque, engine_hp, factors = self._update_physics(dt, current_afr)
+
+        # Dyno-measured torque/HP are inferred from drum inertia (I * α), not directly from engine torque.
+        # This matches how an inertia dyno derives power from drum acceleration.
+        dyno_torque = float(factors.get("dyno_torque", engine_torque))
+        dyno_hp = float(factors.get("dyno_hp", engine_hp))
 
         # Add realistic noise
         rpm_display = self._add_noise(self.physics.rpm, self.config.rpm_noise_pct)
-        torque_display = self._add_noise(torque, self.config.torque_noise_pct)
-        hp_display = self._add_noise(hp, self.config.torque_noise_pct)
+        # When throttle closes, dyno-inferred power can go negative (engine braking / coast).
+        # If we clamp negatives to 0, the UI appears to "spike then instantly drop to zero".
+        # Instead, show positive magnitude as "loss power" so the trace remains continuous.
+        if dyno_hp < 0.0:
+            disp_tq = abs(dyno_torque)
+            disp_hp = abs(dyno_hp)
+        else:
+            disp_tq = max(0.0, dyno_torque)
+            disp_hp = max(0.0, dyno_hp)
+
+        torque_display = self._add_noise(disp_tq, self.config.torque_noise_pct)
+        hp_display = self._add_noise(disp_hp, self.config.torque_noise_pct)
 
         # Force calculation (dyno drum force)
         # F = τ / r (Torque / Drum Radius)
@@ -1197,13 +1352,21 @@ class DynoSimulator:
 
         if drum_radius_ft > 0:
             # Real calculation: Force = Torque / Radius
-            force = torque / drum_radius_ft
+            force = dyno_torque / drum_radius_ft
         else:
             # Fallback to approximation if drum not configured
-            force = torque * 2.5
+            force = dyno_torque * 2.5
 
-        # MAP follows throttle
-        map_target = 30 + (self.physics.tps_actual / 100.0) * 70
+        # MAP follows throttle, but also dips slightly at high RPM as VE drops (more realistic than a flat ~100kPa).
+        # This also helps avoid a perfectly flat load trace in the UI.
+        ve_now = factors.get("ve", 1.0)
+        rpm_norm = (self.physics.rpm - profile.idle_rpm) / max(
+            1.0, (profile.redline_rpm - profile.idle_rpm)
+        )
+        high_rpm_drop = 1.0 - 0.03 * max(0.0, min(1.0, rpm_norm))  # up to ~3% drop
+        map_target = (30.0 + (self.physics.tps_actual / 100.0) * 70.0) * (
+            0.92 + 0.08 * max(0.0, min(1.0, ve_now))
+        ) * high_rpm_drop
         self.channels.map_kpa = self._add_noise(map_target, 2)
 
         # Acceleration (from angular acceleration)
@@ -1251,8 +1414,9 @@ class DynoSimulator:
         self._pull_data.append(
             {
                 "Engine RPM": self.physics.rpm,
-                "Torque": torque,
-                "Horsepower": hp,
+                # Dyno-inferred values (what the UI/analysis expects for an inertia dyno)
+                "Torque": dyno_torque,
+                "Horsepower": dyno_hp,
                 "Force": force,
                 "AFR Meas F": self.channels.afr_front,
                 "AFR Meas R": self.channels.afr_rear,
@@ -1262,6 +1426,10 @@ class DynoSimulator:
                 "IAT F": self.physics.iat_f,
                 "timestamp": time.time(),
                 "Knock": 1 if self.physics.knock_detected else 0,
+                # Extra debug/telemetry fields (safe to ignore downstream)
+                "Engine Torque": engine_torque,
+                "Engine HP": engine_hp,
+                "Alpha Net": float(factors.get("alpha_net", 0.0)),
             }
         )
 
@@ -1298,12 +1466,16 @@ class DynoSimulator:
         self.physics.tps_target = 0.0
         self.physics.tps_actual = 0.0  # Force immediate throttle closure
 
+        # Capture ω at the start of the timestep so we can compute inertial decel power.
+        omega_prev = float(self.physics.angular_velocity)
+
         # Physics with engine braking (throttle closed, so minimal torque)
-        torque, hp, factors = self._update_physics(dt)
+        engine_torque, engine_hp, factors = self._update_physics(dt)
 
         # Additional engine braking for realistic deceleration
         # Apply stronger braking than drag alone to simulate engine compression braking
-        self.physics.angular_velocity *= 1.0 - (ENGINE_BRAKE_COEFFICIENT * dt)
+        brake_coeff = float(self.config.engine_brake_coefficient)
+        self.physics.angular_velocity *= 1.0 - (brake_coeff * dt)
         self.physics.rpm = self._rad_s_to_rpm(self.physics.angular_velocity)
 
         # Clamp RPM to prevent going below idle or exceeding redline
@@ -1313,12 +1485,31 @@ class DynoSimulator:
         )
         self.physics.angular_velocity = self._rpm_to_rad_s(self.physics.rpm)
 
+        # Inertia-derived decel "power" (loss power). This avoids the live trace dropping to 0
+        # instantly at the pull->decel transition while still representing drum inertia physics.
+        omega_now = float(self.physics.angular_velocity)
+        alpha_net = (omega_now - omega_prev) / max(dt, 1e-6)  # negative during decel
+        scale = float(self.config.torque_to_angular_accel_scale) or 1.0
+        dyno_torque = (float(self.physics.total_inertia) * alpha_net) / scale
+        dyno_hp = dyno_torque * float(self.physics.rpm) / 5252.0
+
+        # Report positive magnitude as "loss power" during coastdown (common dyno concept).
+        loss_torque = abs(dyno_torque)
+        loss_hp = abs(dyno_hp)
+
         self.channels.rpm = self._add_noise(self.physics.rpm, self.config.rpm_noise_pct)
         self.channels.tps_pct = self.physics.tps_actual
         self.channels.map_kpa = 30 + (self.physics.tps_actual / 100.0) * 70
-        self.channels.torque_ftlb = 0.0  # No load during decel
-        self.channels.horsepower = 0.0
-        self.channels.force_lbs = random.gauss(0, 5)
+        self.channels.torque_ftlb = self._add_noise(loss_torque, self.config.torque_noise_pct)
+        self.channels.horsepower = self._add_noise(loss_hp, self.config.torque_noise_pct)
+
+        dyno_config = get_config().dyno
+        drum_radius_ft = dyno_config.drum1.radius_ft
+        if drum_radius_ft > 0:
+            force = loss_torque / drum_radius_ft
+        else:
+            force = loss_torque * 2.5
+        self.channels.force_lbs = self._add_noise(force, self.config.torque_noise_pct)
         self.channels.acceleration_g = self._add_noise(-0.3, 20)
 
         # AFR goes lean during decel fuel cut

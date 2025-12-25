@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock, Activity } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { getJobStatus, getVEData, getCoverageData, getDiagnostics, getConfidenceReport, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest, ConfidenceReport } from '../lib/api';
+import { sanitizeDownloadName } from '../lib/sanitize';
 import VEHeatmap from '../components/VEHeatmap';
 import { VESurface } from '../components/VESurface';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
@@ -88,11 +89,9 @@ export default function Results() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
+      a.download = sanitizeDownloadName(filename, 'download');
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       toast.success(`Downloaded ${filename}`);
     } catch (error) {
       toast.error(`Failed to download ${filename}`);

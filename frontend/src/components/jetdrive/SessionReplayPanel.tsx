@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';

@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from '@/lib/toast';
 import { Loader2, CheckCircle, Play, Activity, FileText, Clock, AlertCircle, Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
 import { uploadAndAnalyze, pollJobStatus, handleApiError, AnalysisParams, healthCheck } from '../lib/api';
-import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
@@ -17,12 +16,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const location = useLocation();
-  
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisMessage, setAnalysisMessage] = useState('');
   const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [apiHealth, setApiHealth] = useState<{ ok: boolean; version?: string; error?: string }>({
+    ok: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await healthCheck();
+        if (cancelled) return;
+        setApiHealth({ ok: true, version: res.version });
+      } catch (err) {
+        if (cancelled) return;
+        setApiHealth({ ok: false, error: handleApiError(err) });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
   // Tuning parameters
   const [params, setParams] = useState<AnalysisParams>({
@@ -103,6 +123,21 @@ export default function Dashboard() {
           <p className="text-muted-foreground">System Ready. Waiting for log data.</p>
         </div>
         <div className="flex items-center gap-4 text-sm">
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 bg-card rounded-md border shadow-sm ${
+              apiHealth.ok ? 'border-green-500/20' : 'border-red-500/20'
+            }`}
+            title={apiHealth.ok ? 'Backend reachable' : apiHealth.error || 'Backend not reachable'}
+          >
+            {apiHealth.ok ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-red-500" />
+            )}
+            <span className="font-medium">
+              API: {apiHealth.ok ? `Online${apiHealth.version ? ` v${apiHealth.version}` : ''}` : 'Offline'}
+            </span>
+          </div>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-card rounded-md border shadow-sm">
             <Activity className="h-4 w-4 text-green-500" />
             <span className="font-medium">Engine: Idle</span>
@@ -315,6 +350,35 @@ export default function Dashboard() {
               <AlertTitle>Operator Note</AlertTitle>
               <AlertDescription>
                 Ensure log files contain RPM, MAP (kPa), and Torque/HP channels. For best results, log at 20Hz or higher.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Offline Guidance Panel */}
+          {!apiHealth.ok && (
+            <Alert className="bg-red-500/5 border-red-500/20 animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertTitle className="text-red-400">API Offline</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p className="text-muted-foreground">
+                  Cannot connect to the DynoAI backend server. The API may not be running.
+                </p>
+                <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                  <p className="text-xs font-medium text-zinc-400 mb-2">Quick Fix (Local):</p>
+                  <code className="text-sm text-primary font-mono block">restart-quick.bat</code>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Run this from the project root to restart the backend and frontend servers.
+                  </p>
+                </div>
+                <div className="flex gap-2 text-xs text-muted-foreground">
+                  <span className="bg-zinc-800/50 px-2 py-1 rounded">Backend: localhost:5001</span>
+                  <span className="bg-zinc-800/50 px-2 py-1 rounded">Frontend: localhost:5173</span>
+                </div>
+                {apiHealth.error && (
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Error: {apiHealth.error}
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           )}

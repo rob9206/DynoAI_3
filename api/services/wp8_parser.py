@@ -177,6 +177,27 @@ def parse_wp8_file(wp8_path: str) -> WP8Run:
     variations that aren't fully handled.
     """
     path = Path(wp8_path).expanduser().resolve()
+    # Security: only allow reading WP8 files from known Power Core data dirs.
+    # This prevents arbitrary file reads if a caller forwards untrusted input.
+    if path.suffix.lower() != ".wp8":
+        raise ValueError(f"Invalid WP8 file type: {path.suffix}")
+
+    try:
+        from api.services.powercore_integration import find_powercore_data_dirs
+
+        allowed_roots = [p.resolve() for p in find_powercore_data_dirs()]
+    except Exception:
+        allowed_roots = []
+
+    def _is_within(child: Path, root: Path) -> bool:
+        try:
+            child.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    if allowed_roots and not any(_is_within(path, root) for root in allowed_roots):
+        raise PermissionError("WP8 path is outside allowed Power Core data directories")
     if not path.exists():
         raise FileNotFoundError(f"WP8 file not found: {wp8_path}")
 

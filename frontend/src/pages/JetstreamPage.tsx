@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { JetstreamStatus, JetstreamFeed, JetstreamConfig } from '../components/jetstream';
 import { useJetstreamSync } from '../hooks/useJetstream';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export default function JetstreamPage() {
   const [configOpen, setConfigOpen] = useState(false);

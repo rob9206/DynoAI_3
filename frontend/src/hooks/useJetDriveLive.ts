@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { playUiSound } from '@/lib/ui-sounds';
 
 // Same types as useLiveLink for compatibility
 export interface JetDriveChannel {
@@ -207,6 +208,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const pollCountRef = useRef(0);  // Track polls for throttled history updates
 
+    // UI sound state (debounced to avoid flapping/poll noise)
+    const prevConnectedRef = useRef<boolean | null>(null);
+    const lastStatusSoundAtRef = useRef<number>(0);
+    const STATUS_SOUND_DEBOUNCE_MS = 3000;
+
     // Check monitor status
     const checkConnection = useCallback(async () => {
         try {
@@ -378,6 +384,27 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             startCapture().catch(() => { });
         }
     }, [opts.autoConnect, monitorConnected, isCapturing, startCapture]);
+
+    // Status sounds on connect/disconnect transitions
+    useEffect(() => {
+        const isConnectedNow = monitorConnected || liveConnected;
+        const prev = prevConnectedRef.current;
+
+        // Ignore first render (no initial chirp)
+        if (prev === null) {
+            prevConnectedRef.current = isConnectedNow;
+            return;
+        }
+
+        if (prev !== isConnectedNow) {
+            const now = Date.now();
+            if (now - lastStatusSoundAtRef.current > STATUS_SOUND_DEBOUNCE_MS) {
+                playUiSound(isConnectedNow ? 'connect' : 'disconnect');
+                lastStatusSoundAtRef.current = now;
+            }
+            prevConnectedRef.current = isConnectedNow;
+        }
+    }, [monitorConnected, liveConnected]);
 
     return {
         isConnected: monitorConnected || liveConnected,

@@ -14,6 +14,7 @@ Uses the unified AutoTuneWorkflow engine for all analysis.
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import logging
 import os
@@ -25,6 +26,7 @@ import sys
 import threading
 import time
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +122,98 @@ def validate_csv_path(csv_path: str) -> Path:
     raise ValueError("CSV path must be under uploads/ or runs/")
 
 
+def _compute_power_curve_from_run_csv(
+    run_id: str, rpm_bin_size: int = 100
+) -> list[dict[str, float]] | None:
+    """
+    Best-effort power curve extraction for UI overlay charts.
+
+    Compatibility fallback for older runs whose manifest.json doesn't yet include
+    analysis.power_curve. This does NOT write back to disk.
+    """
+    try:
+        csv_path = safe_path_in_runs(run_id, "run.csv")
+        if not csv_path.exists():
+            return None
+
+        buckets: dict[int, dict[str, float]] = {}
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rpm_raw = row.get("RPM") or row.get("Engine RPM") or row.get("rpm")
+                hp_raw = row.get("Horsepower") or row.get("HP") or row.get("hp")
+                tq_raw = row.get("Torque") or row.get("TQ") or row.get("tq")
+                if rpm_raw is None or hp_raw is None or tq_raw is None:
+                    continue
+
+                try:
+                    rpm = float(rpm_raw)
+                    hp = float(hp_raw)
+                    tq = float(tq_raw)
+                except (TypeError, ValueError):
+                    continue
+
+                if not (isfinite(rpm) and isfinite(hp) and isfinite(tq)):
+                    continue
+                if rpm <= 0 or rpm >= 20000:
+                    continue
+
+                rpm_bin = int(round(rpm / float(rpm_bin_size)) * rpm_bin_size)
+                b = buckets.get(rpm_bin)
+                if b is None:
+                    buckets[rpm_bin] = {"hp": hp, "tq": tq}
+                else:
+                    if hp > b["hp"]:
+                        b["hp"] = hp
+                    if tq > b["tq"]:
+                        b["tq"] = tq
+
+        if not buckets:
+            return None
+
+        return [
+            {"rpm": float(rpm_bin), "hp": round(vals["hp"], 2), "tq": round(vals["tq"], 2)}
+            for rpm_bin, vals in sorted(buckets.items(), key=lambda kv: kv[0])
+        ]
+    except Exception:
+        return None
+
+
+def _infer_run_source_from_manifest(manifest: dict[str, Any]) -> str:
+    """
+    Infer the run source for UI comparison/filtering.
+
+    Returns one of:
+    - simulator_pull: captured pull from built-in simulator (analyzed from CSV but origin is simulator)
+    - simulate: fully synthetic simulated data (--simulate)
+    - real: non-synthetic file-backed runs (hardware capture or imported logs)
+    - unknown: cannot determine
+    """
+    try:
+        inputs = manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
+        mode = inputs.get("mode")
+        if isinstance(mode, str):
+            mode_norm = mode.strip().lower()
+            if mode_norm in {"simulator_pull", "simulate"}:
+                return mode_norm
+
+        src = manifest.get("source_file", "")
+        if src == "simulated":
+            return "simulate"
+
+        if isinstance(src, str):
+            src_norm = src.replace("\\", "/").lower()
+            if src_norm.endswith("_pull.csv"):
+                return "simulator_pull"
+            # Any other file-backed source is treated as "real" for UI purposes.
+            if src_norm.endswith(".csv") or src_norm.endswith(".wp8"):
+                return "real"
+
+        return "unknown"
+    except Exception:
+        return "unknown"
+
+
 # =============================================================================
 # Status Routes
 # =============================================================================
@@ -147,6 +241,12 @@ def get_status():
     project_root = get_project_root()
     runs_dir = project_root / "runs"
 
+    source_filter = request.args.get("source")
+    if source_filter is not None:
+        source_filter = str(source_filter).strip().lower()
+        if source_filter not in {"simulator_pull", "real", "simulate", "unknown"}:
+            return jsonify({"error": "Invalid source filter"}), 400
+
     runs = []
     if runs_dir.exists():
         for run_dir in sorted(runs_dir.iterdir(), reverse=True):
@@ -156,19 +256,40 @@ def get_status():
                     try:
                         with open(manifest_path) as f:
                             manifest = json.load(f)
+                        analysis = manifest.get("analysis", {}) or {}
+                        peak_perf = manifest.get("peak_performance", {}) or {}
+
+                        # Support multiple historical key conventions
+                        peak_hp = (
+                            analysis.get("peak_hp")
+                            or peak_perf.get("peak_hp")
+                            or manifest.get("peak_hp")
+                            or 0
+                        )
+                        peak_tq = (
+                            analysis.get("peak_tq")
+                            or analysis.get("peak_torque")
+                            or peak_perf.get("peak_tq")
+                            or peak_perf.get("peak_torque")
+                            or manifest.get("peak_tq")
+                            or manifest.get("peak_torque")
+                            or 0
+                        )
+                        source = (
+                            _infer_run_source_from_manifest(manifest)
+                            if isinstance(manifest, dict)
+                            else "unknown"
+                        )
+                        if source_filter and source != source_filter:
+                            continue
                         runs.append(
                             {
                                 "run_id": run_dir.name,
                                 "timestamp": manifest.get("timestamp", ""),
-                                "peak_hp": manifest.get("analysis", {}).get(
-                                    "peak_hp", 0
-                                ),
-                                "peak_tq": manifest.get("analysis", {}).get(
-                                    "peak_tq", 0
-                                ),
-                                "status": manifest.get("analysis", {}).get(
-                                    "overall_status", ""
-                                ),
+                                "peak_hp": peak_hp or 0,
+                                "peak_tq": peak_tq or 0,
+                                "status": analysis.get("overall_status", ""),
+                                "source": source,
                             }
                         )
                     except Exception:
@@ -177,6 +298,7 @@ def get_status():
                                 "run_id": run_dir.name,
                                 "timestamp": "",
                                 "status": "unknown",
+                                "source": "unknown",
                             }
                         )
 
@@ -482,6 +604,21 @@ def analyze_run():
         with open(manifest_path) as f:
             manifest = json.load(f)
 
+        # Persist the requested mode into the manifest so the UI can filter runs by source.
+        # (Important for simulator_pull: it analyzes a CSV, but origin is simulator.)
+        try:
+            if isinstance(manifest, dict):
+                inputs = manifest.get("inputs")
+                if not isinstance(inputs, dict):
+                    inputs = {}
+                    manifest["inputs"] = inputs
+                inputs["mode"] = mode
+                inputs["mode_recorded_at"] = datetime.utcnow().isoformat() + "Z"
+                with open(manifest_path, "w", encoding="utf-8") as wf:
+                    json.dump(manifest, wf, indent=2)
+        except Exception:
+            logger.warning("Failed to persist inputs.mode into manifest.json", exc_info=True)
+
         # Read VE correction grid
         ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
         ve_grid = []
@@ -634,6 +771,16 @@ def get_run(run_id: str):
 
     with open(manifest_path) as f:
         manifest = json.load(f)
+
+    # Backfill power curve for older runs (do not write back to disk)
+    try:
+        analysis = manifest.get("analysis")
+        if isinstance(analysis, dict) and not analysis.get("power_curve"):
+            curve = _compute_power_curve_from_run_csv(run_id)
+            if curve:
+                analysis["power_curve"] = curve
+    except Exception:
+        pass
 
     # Read VE correction grid
     ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
@@ -796,11 +943,18 @@ def export_text(run_id: str):
     if analysis:
         lines.append("PERFORMANCE SUMMARY")
         lines.append("-" * 80)
-        lines.append(
-            f"Peak Horsepower: {analysis.get('peak_hp', 0):.2f} HP @ {analysis.get('peak_hp_rpm', 0):.0f} RPM"
+        peak_hp = analysis.get("peak_hp", 0)
+        peak_hp_rpm = analysis.get("peak_hp_rpm", analysis.get("hp_peak_rpm", 0))
+        peak_tq = analysis.get("peak_tq", analysis.get("peak_torque", 0))
+        peak_tq_rpm = analysis.get(
+            "peak_tq_rpm",
+            analysis.get("tq_peak_rpm", analysis.get("torque_peak_rpm", 0)),
         )
         lines.append(
-            f"Peak Torque: {analysis.get('peak_tq', 0):.2f} lb-ft @ {analysis.get('peak_tq_rpm', 0):.0f} RPM"
+            f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM"
+        )
+        lines.append(
+            f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM"
         )
         lines.append(f"Total Samples: {analysis.get('total_samples', 0)}")
         lines.append(f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
@@ -1410,12 +1564,18 @@ def _live_capture_loop():
                 # Update live data with latest values
                 channel_values = {}
                 for s in samples:
-                    channel_values[s.channel_name] = {
+                    entry = {
                         "id": s.channel_id,
                         "name": s.channel_name,
                         "value": s.value,
                         "timestamp": s.timestamp_ms,
                     }
+                    channel_values[s.channel_name] = entry
+                    # Also add a stable chan_<id> alias so the frontend can fall back
+                    # even if the provider's channel_name differs from expected.
+                    chan_key = f"chan_{s.channel_id}"
+                    if s.channel_name != chan_key and chan_key not in channel_values:
+                        channel_values[chan_key] = entry
 
                 with _live_data_lock:
                     _live_data["channels"] = channel_values
@@ -1510,16 +1670,65 @@ def get_live_data():
             }
         )
 
+    def _get_value(channels_dict: dict[str, Any], keys: list[str]) -> float | None:
+        for k in keys:
+            v = channels_dict.get(k)
+            if isinstance(v, dict) and "value" in v:
+                try:
+                    return float(v.get("value"))
+                except Exception:
+                    continue
+        return None
+
     with _live_data_lock:
-        return jsonify(
-            {
-                "capturing": _live_data["capturing"],
-                "simulated": False,
-                "last_update": _live_data["last_update"],
-                "channels": _live_data["channels"],
-                "channel_count": len(_live_data["channels"]),
-            }
-        )
+        # Copy so we can safely augment without racing the capture thread
+        channels: dict[str, Any] = dict(_live_data.get("channels", {}) or {})
+
+    # If the hardware stream doesn't broadcast Horsepower/Torque, compute them from Force + RPM
+    try:
+        from api.config import get_config
+
+        rpm = _get_value(channels, ["Digital RPM 1", "RPM", "chan_42", "chan_10"])
+        force = _get_value(channels, ["Force Drum 1", "Force", "chan_39", "chan_12"])
+
+        if rpm is not None and force is not None and rpm > 0:
+            cfg = get_config().dyno
+            # During throttle lift / coastdown, Force Drum can go negative (engine braking),
+            # which would otherwise produce 0 HP due to guardrails in calculate_hp_from_force.
+            # For live display, use magnitude so the trace doesn't instantly flatline.
+            force_mag = abs(float(force))
+            hp_calc = float(cfg.calculate_hp_from_force(force_mag, rpm))
+            tq_calc = float(cfg.calculate_torque_from_force(force_mag))
+
+            now_ms = int(time.time() * 1000)
+            # Only inject if missing (or clearly not present)
+            if "Horsepower" not in channels and "HP" not in channels:
+                channels["Horsepower"] = {
+                    "id": 101,
+                    "name": "Horsepower",
+                    "value": hp_calc,
+                    "timestamp": now_ms,
+                }
+            if "Torque" not in channels and "TQ" not in channels:
+                channels["Torque"] = {
+                    "id": 100,
+                    "name": "Torque",
+                    "value": tq_calc,
+                    "timestamp": now_ms,
+                }
+    except Exception:
+        # Never break live polling due to a calc error; UI will just show raw channels.
+        pass
+
+    return jsonify(
+        {
+            "capturing": bool(_live_data.get("capturing")),
+            "simulated": False,
+            "last_update": _live_data.get("last_update"),
+            "channels": channels,
+            "channel_count": len(channels),
+        }
+    )
 
 
 @jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
@@ -2053,6 +2262,7 @@ def get_simulator_status():
     hp = channels.get("Horsepower", {}).get("value", 0)
     tq = channels.get("Torque", {}).get("value", 0)
     afr = channels.get("Air/Fuel Ratio 1", {}).get("value", 0)
+    tps = channels.get("TPS", {}).get("value", 0)
 
     return jsonify(
         {
@@ -2064,6 +2274,7 @@ def get_simulator_status():
                 "horsepower": round(hp, 1),
                 "torque": round(tq, 1),
                 "afr": round(afr, 2),
+                "tps": round(tps, 1),
             },
         }
     )
@@ -2100,6 +2311,35 @@ def trigger_pull():
             "state": "pull",
         }
     )
+
+
+@jetdrive_bp.route("/simulator/throttle", methods=["POST"])
+def set_simulator_throttle():
+    """
+    Set simulator throttle target (TPS %) for manual operator control.
+
+    Body:
+      { "tps": 0-100 }
+    """
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    data = request.get_json() or {}
+    try:
+        tps = float(data.get("tps"))
+    except Exception:
+        return jsonify({"error": "Missing or invalid 'tps' (0-100)"}), 400
+
+    if not (0.0 <= tps <= 100.0):
+        return jsonify({"error": "'tps' must be between 0 and 100"}), 400
+
+    from api.services.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    # Only allow manual throttle while simulator is running.
+    sim.physics.tps_target = tps
+
+    return jsonify({"success": True, "tps_target": tps})
 
 
 @jetdrive_bp.route("/simulator/pull-data", methods=["GET"])
