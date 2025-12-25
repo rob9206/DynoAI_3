@@ -28,10 +28,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
-from api.rate_limit import get_limiter
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
@@ -315,9 +314,7 @@ def analyze_run():
             )
 
         import csv as csv_module
-        from datetime import datetime
-
-        from api.services.dyno_simulator import SimState, get_simulator
+        from api.services.dyno_simulator import get_simulator
 
         sim = get_simulator()
         sim_state = sim.get_state()
@@ -332,7 +329,10 @@ def analyze_run():
                 jsonify(
                     {
                         "success": False,
-                        "error": "No simulator pull data available. Please run a pull first by clicking 'Trigger Pull' in the simulator controls.",
+                        "error": (
+                            "No simulator pull data available. Please run a pull first by clicking "
+                            "'Trigger Pull' in the simulator controls."
+                        ),
                     }
                 ),
                 400,
@@ -674,7 +674,8 @@ def get_run(run_id: str):
                         try:
                             values.append(float(v))
                         except ValueError:
-                            values.append(None)
+                            # Keep shape stable; treat invalid entries as 0.0
+                            values.append(0.0)
                     afr_grid.append({"rpm": int(parts[0]), "values": values})
 
     # Read confidence report if available
@@ -1991,25 +1992,15 @@ def start_simulator():
             }
         )
     except Exception as e:
-        import traceback
-
         error_msg = str(e)
-        traceback_str = traceback.format_exc()
         logger.error(f"Failed to start simulator: {error_msg}", exc_info=True)
-
-        # Try to get debug mode, but don't fail if current_app is not available
-        try:
-            is_debug = current_app.debug
-        except RuntimeError:
-            # Not in request context, default to False
-            is_debug = False
 
         return (
             jsonify(
                 {
                     "success": False,
                     "error": f"Failed to start simulator: {error_msg}",
-                    "details": traceback_str if is_debug else None,
+                    # Never return stack traces to clients (logged server-side via exc_info=True)
                 }
             ),
             500,
@@ -2116,7 +2107,7 @@ def get_pull_data():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import SimState, get_simulator
+    from api.services.dyno_simulator import get_simulator
 
     sim = get_simulator()
     sim_state = sim.get_state()

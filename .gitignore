@@ -48,6 +48,14 @@ DynoAI_3*/
 # Workspace-local generated artifacts (common variants)
 agent_outputs/
 
+# Build artifacts / IDE outputs
+**/obj/
+**/bin/
+**/*.AssemblyReference.cache
+
+# Root lockfile (frontend uses its own lockfile)
+/package-lock.json
+
 # DeepCode integration - generated code and workspace
 deepcode_lab/
 deepcode_generated/

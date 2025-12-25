@@ -496,12 +496,9 @@ def analyze():
 
     except Exception as e:
         import logging
-        import traceback
 
         error_msg = str(e)
-        error_traceback = traceback.format_exc()
         print(f"[!] Error in /api/analyze: {error_msg}")
-        print(f"[!] Traceback:\n{error_traceback}")
         logger = logging.getLogger(__name__)
         logger.error(f"Error in analyze endpoint: {error_msg}", exc_info=True)
         try:
@@ -509,7 +506,7 @@ def analyze():
                 jsonify(
                     {
                         "error": error_msg,
-                        "details": error_traceback if app.debug else None,
+                        # Never return stack traces to clients (logged server-side via exc_info=True)
                     }
                 ),
                 500,
