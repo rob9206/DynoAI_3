@@ -21,12 +21,6 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 
 ## Features
 
-### 🔊 Audio Engine (NEW!)
-- **Real-time engine sound synthesis** synchronized with dyno pulls
-- **Realistic audio generation** based on RPM, load, and cylinder count
-- **Exhaust effects** including deceleration crackle and harmonics
-- **Auto-start** during dyno captures for immersive experience
-- See [Audio Engine Documentation](docs/AUDIO_ENGINE.md) for details
 
 ### Core Features
 
