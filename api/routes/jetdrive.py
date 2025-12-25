@@ -1592,8 +1592,11 @@ def discover_channels():
                 "color": "#888",
             }
 
-            # Suggest units based on value range and name patterns
-            if "rpm" in name_lower or (value > 500 and value < 15000):
+            # Suggest units based on name patterns FIRST, then fall back to value ranges
+            # Priority 1: Keyword-based detection (most reliable)
+            keyword_matched = False
+
+            if "rpm" in name_lower or "speed" in name_lower:
                 suggested_config = {
                     "label": "RPM",
                     "units": "rpm",
@@ -1602,11 +1605,8 @@ def discover_channels():
                     "decimals": 0,
                     "color": "#4ade80",
                 }
-            elif (
-                "afr" in name_lower
-                or "air/fuel" in name_lower
-                or (value > 9 and value < 20)
-            ):
+                keyword_matched = True
+            elif "afr" in name_lower or "air/fuel" in name_lower or "a/f" in name_lower:
                 suggested_config = {
                     "label": "AFR",
                     "units": ":1",
@@ -1615,7 +1615,8 @@ def discover_channels():
                     "decimals": 2,
                     "color": "#f472b6",
                 }
-            elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
+                keyword_matched = True
+            elif "lambda" in name_lower:
                 suggested_config = {
                     "label": "Lambda",
                     "units": "λ",
@@ -1624,6 +1625,7 @@ def discover_channels():
                     "decimals": 2,
                     "color": "#f472b6",
                 }
+                keyword_matched = True
             elif "force" in name_lower or "load" in name_lower:
                 suggested_config = {
                     "label": "Force",
@@ -1633,7 +1635,8 @@ def discover_channels():
                     "decimals": 1,
                     "color": "#4ade80",
                 }
-            elif "map" in name_lower:
+                keyword_matched = True
+            elif "map" in name_lower or "manifold" in name_lower:
                 suggested_config = {
                     "label": "MAP",
                     "units": "kPa",
@@ -1642,7 +1645,13 @@ def discover_channels():
                     "decimals": 1,
                     "color": "#06b6d4",
                 }
-            elif "temp" in name_lower or (value > 10 and value < 150):
+                keyword_matched = True
+            elif (
+                "temp" in name_lower
+                or "iat" in name_lower
+                or "ect" in name_lower
+                or "coolant" in name_lower
+            ):
                 suggested_config = {
                     "label": "Temperature",
                     "units": "°C",
@@ -1651,6 +1660,7 @@ def discover_channels():
                     "decimals": 1,
                     "color": "#f59e0b",
                 }
+                keyword_matched = True
             elif "tps" in name_lower or "throttle" in name_lower:
                 suggested_config = {
                     "label": "Throttle",
@@ -1660,6 +1670,85 @@ def discover_channels():
                     "decimals": 1,
                     "color": "#8b5cf6",
                 }
+                keyword_matched = True
+            elif "volt" in name_lower or "battery" in name_lower:
+                suggested_config = {
+                    "label": "Voltage",
+                    "units": "V",
+                    "min": 0,
+                    "max": 16,
+                    "decimals": 2,
+                    "color": "#eab308",
+                }
+                keyword_matched = True
+            elif (
+                "hp" in name_lower
+                or "horsepower" in name_lower
+                or "power" in name_lower
+            ):
+                suggested_config = {
+                    "label": "Horsepower",
+                    "units": "HP",
+                    "min": 0,
+                    "max": 500,
+                    "decimals": 1,
+                    "color": "#ef4444",
+                }
+                keyword_matched = True
+            elif "torque" in name_lower:
+                suggested_config = {
+                    "label": "Torque",
+                    "units": "ft-lb",
+                    "min": 0,
+                    "max": 200,
+                    "decimals": 1,
+                    "color": "#22c55e",
+                }
+                keyword_matched = True
+
+            # Priority 2: Value-range based detection (fallback for unknown channels)
+            # Use NON-OVERLAPPING ranges to avoid ambiguity
+            if not keyword_matched:
+                if value > 500 and value < 15000:
+                    # High values likely RPM
+                    suggested_config = {
+                        "label": "RPM",
+                        "units": "rpm",
+                        "min": 0,
+                        "max": 8000,
+                        "decimals": 0,
+                        "color": "#4ade80",
+                    }
+                elif value >= 9 and value <= 20:
+                    # AFR range (narrower, more specific)
+                    suggested_config = {
+                        "label": "AFR",
+                        "units": ":1",
+                        "min": 10,
+                        "max": 18,
+                        "decimals": 2,
+                        "color": "#f472b6",
+                    }
+                elif value > 0.5 and value < 2.0:
+                    # Lambda range (distinct from others)
+                    suggested_config = {
+                        "label": "Lambda",
+                        "units": "λ",
+                        "min": 0.5,
+                        "max": 2.0,
+                        "decimals": 2,
+                        "color": "#f472b6",
+                    }
+                elif value > 50 and value < 250:
+                    # Temperature range (above AFR range to avoid overlap)
+                    suggested_config = {
+                        "label": "Temperature",
+                        "units": "°C",
+                        "min": 0,
+                        "max": 150,
+                        "decimals": 1,
+                        "color": "#f59e0b",
+                    }
 
             channels.append(
                 {

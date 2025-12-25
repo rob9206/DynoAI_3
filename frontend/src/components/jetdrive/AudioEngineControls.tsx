@@ -45,14 +45,14 @@ export function AudioEngineControls({
     funMode = true,
     externalAudioEngine,
 }: AudioEngineControlsProps) {
-    // #region agent log
+    // Create internal engine (required by React hooks rules - must be unconditional)
+    // Note: If external engine is provided, the internal one will be created but not used
+    // This is a limitation of React hooks - they cannot be called conditionally
     const internalEngine = useAudioEngine({ cylinders, funMode });
-    useEffect(() => {
-        fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'AudioEngineControls.tsx:50', message: 'AudioEngineControls render', data: { hasExternalEngine: !!externalAudioEngine, internalEngineState: internalEngine.state.isPlaying, externalEngineState: externalAudioEngine?.state.isPlaying }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-    }, [externalAudioEngine, internalEngine.state.isPlaying]);
-    // #endregion
     
     // Use external engine if provided, otherwise use internal one
+    const audioEngine = externalAudioEngine ?? internalEngine;
+    
     const {
         state,
         startEngine,
@@ -61,7 +61,7 @@ export function AudioEngineControls({
         setLoad,
         setVolume,
         toggleMute,
-    } = externalAudioEngine ?? internalEngine;
+    } = audioEngine;
 
     // Update RPM and load when props change
     useEffect(() => {

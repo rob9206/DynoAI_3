@@ -147,6 +147,37 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
     'chan_29': { label: 'Sensor', units: '', min: 0, max: 1, decimals: 3, color: '#888' },
 };
 
+/**
+ * Get channel configuration with flexible name matching.
+ * Tries exact match first, then case-insensitive, then partial match.
+ * Returns undefined if no match found.
+ */
+export function getChannelConfig(name: string): typeof JETDRIVE_CHANNEL_CONFIG[string] | undefined {
+    // Try exact match first
+    if (JETDRIVE_CHANNEL_CONFIG[name]) {
+        return JETDRIVE_CHANNEL_CONFIG[name];
+    }
+
+    // Try case-insensitive match
+    const nameLower = name.toLowerCase();
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        if (key.toLowerCase() === nameLower) {
+            return config;
+        }
+    }
+
+    // Try partial match (e.g., "RPM" matches "Digital RPM 1")
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        const keyLower = key.toLowerCase();
+        if (keyLower.includes(nameLower) || nameLower.includes(keyLower)) {
+            return config;
+        }
+    }
+
+    // No match found - return undefined to allow fallback logic
+    return undefined;
+}
+
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
@@ -227,7 +258,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
                 for (const [name, ch] of Object.entries(data.channels)) {
                     const channel = ch as { id: number; name: string; value: number; timestamp: number };
-                    const config = JETDRIVE_CHANNEL_CONFIG[name];
+                    const config = getChannelConfig(name);
 
                     newChannels[name] = {
                         name,

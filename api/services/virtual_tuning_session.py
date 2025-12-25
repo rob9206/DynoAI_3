@@ -849,11 +849,25 @@ class VirtualTuningOrchestrator:
 
 # Global orchestrator instance
 _orchestrator: VirtualTuningOrchestrator | None = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> VirtualTuningOrchestrator:
-    """Get or create the global orchestrator instance."""
+    """
+    Get or create the global orchestrator instance.
+
+    Uses double-checked locking to ensure thread-safe singleton initialization.
+    This prevents race conditions where multiple threads could create separate
+    orchestrator instances with independent session dictionaries and cleanup threads.
+    """
     global _orchestrator
+
+    # First check (without lock) - fast path for already initialized
     if _orchestrator is None:
-        _orchestrator = VirtualTuningOrchestrator()
+        # Acquire lock for initialization
+        with _orchestrator_lock:
+            # Second check (with lock) - another thread may have initialized it
+            if _orchestrator is None:
+                _orchestrator = VirtualTuningOrchestrator()
+
     return _orchestrator

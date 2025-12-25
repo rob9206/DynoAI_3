@@ -19,17 +19,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:18',message:'Component mounted',data:{pathname:location.pathname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // Test API connectivity
-    healthCheck().then((result) => {
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:20',message:'API health check succeeded',data:{status:result.status,version:result.version},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    }).catch((error) => {
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:22',message:'API health check failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    });
-  }, [location.pathname]);
-  // #endregion
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisMessage, setAnalysisMessage] = useState('');
@@ -56,23 +45,11 @@ export default function Dashboard() {
   const [balanceMaxCorrection, setBalanceMaxCorrection] = useState(3.0);
 
   const handleFileSelect = (file: File) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:44',message:'File selected',data:{fileName:file.name,fileSize:file.size,fileType:file.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     setCurrentFile(file);
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:47',message:'State updated after file select',data:{currentFileSet:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
   };
 
   const startAnalysis = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:48',message:'startAnalysis called',data:{hasCurrentFile:!!currentFile,fileName:currentFile?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     if (!currentFile) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:50',message:'No file selected error',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       toast.error('Please select a file first');
       return;
     }
@@ -80,9 +57,6 @@ export default function Dashboard() {
     setIsAnalyzing(true);
     setAnalysisProgress(0);
     setAnalysisMessage('Uploading file...');
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:57',message:'Analysis state initialized',data:{isAnalyzing:true,progress:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
 
     try {
       // Combine params with decel and balance options
@@ -96,15 +70,9 @@ export default function Dashboard() {
         balanceMode,
         balanceMaxCorrection,
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:71',message:'Before API call',data:{params:allParams,apiBase:import.meta.env.VITE_API_URL||'http://localhost:5001'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
 
       // Upload file and start analysis
       const { runId } = await uploadAndAnalyze(currentFile, allParams);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:74',message:'API call succeeded',data:{runId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       
       setAnalysisMessage('Analysis started...');
 
@@ -118,34 +86,13 @@ export default function Dashboard() {
       );
 
       toast.success('Analysis completed successfully!');
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:87',message:'Before navigation',data:{targetPath:`/results/${runId}`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       navigate(`/results/${runId}`);
     } catch (error) {
-      // #region agent log
-      let errorDetails: any = {error:error instanceof Error?error.message:String(error),errorType:error?.constructor?.name};
-      if (axios.isAxiosError(error)) {
-        const axiosError = error as any;
-        errorDetails.responseStatus = axiosError.response?.status;
-        errorDetails.responseData = axiosError.response?.data;
-        errorDetails.responseHeaders = axiosError.response?.headers;
-        errorDetails.requestUrl = axiosError.config?.url;
-        errorDetails.requestMethod = axiosError.config?.method;
-      }
-      fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:90',message:'API call failed',data:errorDetails,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       console.error('Analysis error:', error);
       toast.error(handleApiError(error));
       setIsAnalyzing(false);
     }
   };
-
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7243/ingest/37165f1d-9e5e-4804-b2ff-ca654a1191f3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:96',message:'Component rendering',data:{isAnalyzing,hasCurrentFile:!!currentFile,analysisProgress},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  }, [isAnalyzing, currentFile, analysisProgress]);
-  // #endregion
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 md:p-6">
