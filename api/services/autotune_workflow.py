@@ -222,7 +222,7 @@ class AutoTuneWorkflow:
 
     def get_target_afr(self, map_kpa: float) -> float:
         """Get target AFR based on MAP (load).
-        
+
         Uses custom afr_targets_by_map if set, otherwise falls back to defaults.
         """
         # Find nearest MAP bin from configured targets
@@ -231,10 +231,10 @@ class AutoTuneWorkflow:
             return 14.0
         nearest_map = min(target_keys, key=lambda x: abs(x - map_kpa))
         return self.afr_targets_by_map.get(nearest_map, 14.0)
-    
+
     def set_afr_targets(self, afr_targets: dict[int, float]) -> None:
         """Update AFR targets.
-        
+
         Args:
             afr_targets: Dict mapping MAP (kPa) to target AFR.
                          Example: {20: 14.7, 100: 12.2}
@@ -819,16 +819,21 @@ class AutoTuneWorkflow:
 
     def get_session_summary(self, session: AutoTuneSession) -> dict:
         """Get a summary of the session for display."""
+
         def _build_power_curve_from_df(df: "pd.DataFrame") -> list[dict[str, float]]:
             try:
                 if df is None or df.empty:
                     return []
 
-                rpm_col = next((c for c in df.columns if c in ["Engine RPM", "RPM"]), None)
+                rpm_col = next(
+                    (c for c in df.columns if c in ["Engine RPM", "RPM"]), None
+                )
                 if rpm_col is None:
                     return []
 
-                def _find_col_case_insensitive(columns, *, prefers: list[str]) -> str | None:
+                def _find_col_case_insensitive(
+                    columns, *, prefers: list[str]
+                ) -> str | None:
                     for pref in prefers:
                         pref_l = pref.lower()
                         for c in columns:
@@ -958,7 +963,9 @@ class AutoTuneWorkflow:
         if session.dynoai_data is not None:
             curve = _build_power_curve_from_df(session.dynoai_data)
             if curve:
-                if "analysis" not in summary or not isinstance(summary.get("analysis"), dict):
+                if "analysis" not in summary or not isinstance(
+                    summary.get("analysis"), dict
+                ):
                     summary["analysis"] = {}
                 summary["analysis"]["power_curve"] = curve
 

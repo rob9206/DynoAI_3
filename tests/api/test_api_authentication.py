@@ -10,12 +10,12 @@ Tests:
 """
 
 import os
+from unittest.mock import mock_open, patch
+
 import pytest
-from unittest.mock import patch, mock_open
 from flask import Flask
 
-from api.auth import APIKeyAuth, require_api_key, generate_api_key, get_auth
-
+from api.auth import APIKeyAuth, generate_api_key, get_auth, require_api_key
 
 # =============================================================================
 # Test APIKeyAuth Class
@@ -295,4 +295,3 @@ def test_auth_with_multiple_keys():
             # Invalid key should still be rejected
             response = client.get("/test", headers={"X-API-Key": "invalid"})
             assert response.status_code == 403
-

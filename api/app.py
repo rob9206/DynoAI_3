@@ -19,6 +19,7 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+from api.auth import require_api_key
 from api.config import get_config
 from api.docs import init_swagger
 from api.errors import (
@@ -29,7 +30,6 @@ from api.errors import (
     register_error_handlers,
     with_error_handling,
 )
-from api.auth import require_api_key
 from api.metrics import init_metrics, record_analysis, record_file_upload
 
 load_dotenv()  # Load environment variables from .env if present
@@ -544,7 +544,7 @@ def analyze():
 
         # Record failed analysis
         record_analysis(status="error", source="upload")
-        
+
         error_msg = str(e)
         print(f"[!] Error in /api/analyze: {error_msg}")
         logger = logging.getLogger(__name__)

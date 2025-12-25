@@ -8,12 +8,12 @@ Provides:
 - Prometheus-compatible /metrics endpoint
 """
 
-import os
 import logging
+import os
 from typing import Optional
 
 from flask import Flask
-from prometheus_client import Counter, Histogram, Gauge, Info
+from prometheus_client import Counter, Gauge, Histogram, Info
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,6 @@ app_info = Info(
     "DynoAI application information",
 )
 
-
 # =============================================================================
 # Initialization
 # =============================================================================
@@ -132,7 +131,9 @@ def init_metrics(app: Flask) -> Optional[object]:
     enabled = os.getenv("PROMETHEUS_METRICS_ENABLED", "false").lower() == "true"
 
     if not enabled:
-        logger.info("Prometheus metrics DISABLED (set PROMETHEUS_METRICS_ENABLED=true to enable)")
+        logger.info(
+            "Prometheus metrics DISABLED (set PROMETHEUS_METRICS_ENABLED=true to enable)"
+        )
         return None
 
     try:

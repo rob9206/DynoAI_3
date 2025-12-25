@@ -27,5 +27,3 @@ def test_peak_extraction_is_case_insensitive_for_hp_and_torque():
     assert session.peak_hp_rpm == 3000.0
     assert session.peak_tq == 120.0
     assert session.peak_tq_rpm == 2000.0
-
-
