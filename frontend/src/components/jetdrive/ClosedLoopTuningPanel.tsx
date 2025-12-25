@@ -12,15 +12,15 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import api, { handleApiError } from '@/lib/api';
+import { encodePathSegment } from '@/lib/sanitize';
 
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
-
-const API_BASE = 'http://127.0.0.1:5001/api/virtual-tune';
 
 interface IterationData {
     iteration: number;
@@ -38,6 +38,8 @@ interface SessionStatus {
     current_iteration: number;
     max_iterations: number;
     converged: boolean;
+    progress_pct?: number;
+    progress_message?: string;
     iterations: IterationData[];
     duration_sec: number;
     error_message?: string;
@@ -57,16 +59,32 @@ export function ClosedLoopTuningPanel({
     convergenceThreshold = 0.3,
 }: ClosedLoopTuningPanelProps) {
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [isStarting, setIsStarting] = useState(false);
 
     // Poll session status
     const { data: status, refetch } = useQuery<SessionStatus>({
         queryKey: ['closed-loop-status', sessionId],
         queryFn: async () => {
-            if (!sessionId) return null;
-            const res = await fetch(`${API_BASE}/status/${sessionId}`);
-            if (!res.ok) throw new Error('Failed to get status');
-            return res.json();
+            if (!sessionId) {
+                throw new Error('No session ID');
+            }
+            try {
+                const res = await api.get<SessionStatus>(
+                    `/api/virtual-tune/status/${encodePathSegment(sessionId)}`
+                );
+                return res.data;
+            } catch (error: any) {
+                // If session not found (404), auto-reset UI
+                if (error?.response?.status === 404) {
+                    console.warn(`Session ${sessionId} not found (likely cleaned up), resetting UI`);
+                    setSessionId(null);
+                    setIsStarting(false);
+                    toast.error('Session expired or was cleaned up', {
+                        description: 'Please start a new tuning session',
+                    });
+                    return null;
+                }
+                throw error;
+            }
         },
         enabled: !!sessionId,
         refetchInterval: (data) => {
@@ -74,23 +92,19 @@ export function ClosedLoopTuningPanel({
             if (data?.status === 'running' || data?.status === 'initializing') return 3000;
             return false; // Stop polling when complete
         },
+        retry: false, // Don't retry 404s repeatedly
     });
 
     // Start tuning mutation
     const startTuning = useMutation({
         mutationFn: async () => {
-            const res = await fetch(`${API_BASE}/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    engine_profile: engineProfile,
-                    base_ve_scenario: baseScenario,
-                    max_iterations: maxIterations,
-                    convergence_threshold_afr: convergenceThreshold,
-                }),
+            const res = await api.post<{ session_id: string }>(`/api/virtual-tune/start`, {
+                engine_profile: engineProfile,
+                base_ve_scenario: baseScenario,
+                max_iterations: maxIterations,
+                convergence_threshold_afr: convergenceThreshold,
             });
-            if (!res.ok) throw new Error(await res.text());
-            return res.json();
+            return res.data;
         },
         onSuccess: (data) => {
             setSessionId(data.session_id);
@@ -100,7 +114,7 @@ export function ClosedLoopTuningPanel({
         },
         onError: (error) => {
             toast.error('Failed to start tuning', {
-                description: error instanceof Error ? error.message : String(error),
+                description: handleApiError(error),
             });
         },
     });
@@ -109,20 +123,21 @@ export function ClosedLoopTuningPanel({
     const stopTuning = useMutation({
         mutationFn: async () => {
             if (!sessionId) return;
-            const res = await fetch(`${API_BASE}/stop/${sessionId}`, {
-                method: 'POST',
-            });
-            if (!res.ok) throw new Error(await res.text());
-            return res.json();
+            const res = await api.post(
+                `/api/virtual-tune/stop/${encodePathSegment(sessionId)}`
+            );
+            return res.data;
         },
         onSuccess: () => {
             toast.info('Tuning session stopped');
             refetch();
         },
+        onError: (error) => {
+            toast.error('Failed to stop tuning', { description: handleApiError(error) });
+        },
     });
 
     const handleStart = () => {
-        setIsStarting(true);
         startTuning.mutate();
     };
 
@@ -219,7 +234,7 @@ export function ClosedLoopTuningPanel({
                             </div>
                         </div>
 
-                        <Button onClick={handleStart} disabled={isStarting} className="w-full bg-cyan-600 hover:bg-cyan-700">
+                        <Button onClick={handleStart} disabled={startTuning.isPending} className="w-full bg-cyan-600 hover:bg-cyan-700">
                             <Play className="h-4 w-4 mr-2" />
                             Start Closed-Loop Tuning
                         </Button>
