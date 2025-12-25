@@ -314,6 +314,7 @@ def analyze_run():
             )
 
         import csv as csv_module
+
         from api.services.dyno_simulator import get_simulator
 
         sim = get_simulator()
