@@ -538,11 +538,13 @@ export default function JetDriveAutoTunePage() {
     const [afrTargets, setAfrTargets] = useState<Record<number, number>>(() => ({ ...DEFAULT_AFR_TARGETS }));
     const [rpmThreshold, setRpmThreshold] = useState(2000);
     const [showSettings, setShowSettings] = useState(false);
+    const [activeMainTab, setActiveMainTab] = useState('autotune');
 
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
+    const [textExportContent, setTextExportContent] = useState<string>('');
     const [isStartingMonitor, setIsStartingMonitor] = useState(false);
     const [useEnhancedTable, setUseEnhancedTable] = useState(true); // Toggle for enhanced table
 
@@ -877,7 +879,6 @@ export default function JetDriveAutoTunePage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRpm, audioFunMode]);
-
     // Trigger AI on AFR conditions during pulls
     const lastAfrTrigger = useRef<number>(0);
     const afrCooldown = 8000; // 8 seconds between AFR comments
@@ -1210,6 +1211,35 @@ export default function JetDriveAutoTunePage() {
                     </div>
                 </div>
 
+            {/* Main Tabs */}
+            <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg">
+                    <TabsTrigger value="hardware" className="flex items-center gap-2">
+                        <Radio className="h-4 w-4" />
+                        Hardware
+                    </TabsTrigger>
+                    <TabsTrigger value="live" className="flex items-center gap-2">
+                        <Activity className="h-4 w-4" />
+                        Live
+                    </TabsTrigger>
+                    <TabsTrigger value="autotune" className="flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Auto-Tune
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Hardware Tab */}
+                <TabsContent value="hardware" className="mt-6">
+                    <HardwareTab />
+                </TabsContent>
+
+                {/* Live Dashboard Tab */}
+                <TabsContent value="live" className="mt-6">
+                    <JetDriveLiveDashboard apiUrl={API_BASE} />
+                </TabsContent>
+
+                {/* Auto-Tune Tab */}
+                <TabsContent value="autotune" className="mt-6">
                 {/* Settings Panel (collapsible) */}
                 <AnimatePresence>
                     {showSettings && (
@@ -1956,6 +1986,8 @@ export default function JetDriveAutoTunePage() {
                         </div>
                     </div>
                 )}
+                </TabsContent>
+            </Tabs>
             </div>
         </div>
     );

@@ -1,0 +1,75 @@
+# =============================================================================
+# DynoAI - Dynoware RT-150 Configuration
+# =============================================================================
+# Copy these environment variables to your .env file in the project root.
+# These values are from the Dynoware RT Device Information dialog.
+#
+# To view your dyno specs in Dynoware RT:
+#   1. Open Dynoware RT software
+#   2. Go to Device > Device Information
+#   3. Check "Information" tab for device details
+#   4. Check "Drum Information" tab for drum specs
+
+# -----------------------------------------------------------------------------
+# Device Identification
+# -----------------------------------------------------------------------------
+# From: Device Information > Information tab
+DYNO_MODEL=Dynoware RT-150
+DYNO_SERIAL=RT00220413
+DYNO_LOCATION=Dawson Dynamics
+
+# -----------------------------------------------------------------------------
+# Network Configuration  
+# -----------------------------------------------------------------------------
+# IP address of your Dynoware RT on the network
+DYNO_IP=192.168.1.115
+
+# JetDrive UDP multicast port (default: 22344)
+DYNO_JETDRIVE_PORT=22344
+
+# -----------------------------------------------------------------------------
+# Drum 1 Configuration (Primary/Front Drum)
+# -----------------------------------------------------------------------------
+# From: Device Information > Drum Information tab > Drum 1
+DYNO_DRUM1_SERIAL=1000588
+DYNO_DRUM1_MASS_KG=14.121
+DYNO_DRUM1_RETARDER_MASS_KG=0.0
+DYNO_DRUM1_CIRCUMFERENCE_FT=4.673
+DYNO_DRUM1_TABS=1
+
+# -----------------------------------------------------------------------------
+# Drum 2 Configuration (Secondary/Rear Drum - if equipped)
+# -----------------------------------------------------------------------------
+# From: Device Information > Drum Information tab > Drum 2
+# Leave at defaults if not equipped (values will be 0)
+DYNO_DRUM2_SERIAL=
+DYNO_DRUM2_MASS_KG=0.0
+DYNO_DRUM2_RETARDER_MASS_KG=0.0
+DYNO_DRUM2_CIRCUMFERENCE_FT=0.0
+DYNO_DRUM2_TABS=0
+
+# -----------------------------------------------------------------------------
+# Firmware Versions (for reference)
+# -----------------------------------------------------------------------------
+# From: Device Information > Information tab > Modules
+DYNO_FIRMWARE=2.1.7034.17067
+DYNO_ATMO_VERSION=1.1
+DYNO_NUM_MODULES=4
+
+# =============================================================================
+# Power Calculation Reference
+# =============================================================================
+# These values are calculated from the drum specs above:
+#
+# Drum 1 Radius (ft) = Circumference / (2 × π)
+#                    = 4.673 / 6.2832
+#                    = 0.7437 ft
+#
+# HP = (Force × Circumference × RPM) / 33000
+# Torque = Force × Radius
+#
+# Example at 100 lbs force, 5000 RPM:
+#   HP = (100 × 4.673 × 5000) / 33000 = 70.8 HP
+#   Torque = 100 × 0.7437 = 74.4 ft-lb
+# =============================================================================
+

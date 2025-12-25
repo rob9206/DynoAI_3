@@ -26,17 +26,48 @@ Get-Process node* -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 
 Write-Host "  [*] Freeing up ports 5001 and 5173..." -ForegroundColor Gray
-# Kill processes on port 5001 (Flask)
-$port5001 = Get-NetTCPConnection -LocalPort 5001 -ErrorAction SilentlyContinue
-if ($port5001) {
-    $port5001 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+# Use netstat for faster, more reliable port checking
+function Kill-ProcessOnPort {
+    param([int]$Port)
+    try {
+        $connections = netstat -ano | Select-String ":$Port\s" | ForEach-Object {
+            if ($_ -match '\s+(\d+)\s*$') {
+                $matches[1]
+            }
+        }
+        $connections | ForEach-Object {
+            $pid = $_
+            if ($pid -and $pid -ne '0') {
+                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    catch {
+        # Fallback: try Get-NetTCPConnection with timeout
+        $job = Start-Job -ScriptBlock {
+            param($p)
+            Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue | 
+            Select-Object -ExpandProperty OwningProcess -Unique
+        } -ArgumentList $Port
+        
+        if (Wait-Job $job -Timeout 2) {
+            $pids = Receive-Job $job
+            Remove-Job $job -Force
+            $pids | ForEach-Object {
+                if ($_ -and $_ -ne 0) {
+                    Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        else {
+            Stop-Job $job -Force
+            Remove-Job $job -Force
+        }
+    }
 }
 
-# Kill processes on port 5173 (Vite)
-$port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue
-if ($port5173) {
-    $port5173 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-}
+Kill-ProcessOnPort -Port 5001
+Kill-ProcessOnPort -Port 5173
 
 Start-Sleep -Seconds 1
 Write-Host "  [+] All services stopped" -ForegroundColor Green
@@ -110,7 +141,8 @@ Write-Host ""
 
 # Start Flask backend in a new window
 Write-Host "[*] Starting Flask backend on http://localhost:5001" -ForegroundColor Yellow
-$backend = Start-Process powershell -ArgumentList "-NoExit", "-Command", "& { `$Host.UI.RawUI.WindowTitle='DynoAI Backend (Quick)'; python api\app.py }" -PassThru
+$projectRoot = (Get-Location).Path
+$backend = Start-Process powershell -ArgumentList "-NoExit", "-Command", "& { `$Host.UI.RawUI.WindowTitle='DynoAI Backend (Quick)'; Set-Location '$projectRoot'; python -m api.app }" -PassThru
 
 # Wait for backend to initialize
 Write-Host "[*] Waiting for backend to initialize..." -ForegroundColor Gray

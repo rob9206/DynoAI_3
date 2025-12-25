@@ -189,7 +189,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     // Connection state
-    const [isConnected, setIsConnected] = useState(false);
+    const [monitorConnected, setMonitorConnected] = useState(false);
+    const [liveConnected, setLiveConnected] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
     const [isSimulated, setIsSimulated] = useState(false);
     const [simState, setSimState] = useState<string | null>(null);
@@ -213,7 +214,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             if (!res.ok) throw new Error('Monitor endpoint unavailable');
 
             const data = await res.json();
-            setIsConnected(data.connected);
+            setMonitorConnected(!!data.connected);
 
             if (data.providers && data.providers.length > 0) {
                 setProviderName(data.providers[0].name);
@@ -222,7 +223,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
             setConnectionError(null);
         } catch (err) {
-            setIsConnected(false);
+            setMonitorConnected(false);
             setConnectionError(err instanceof Error ? err.message : 'Connection failed');
         }
     }, [opts.apiUrl]);
@@ -244,10 +245,12 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
             // If simulated, we're always "connected"
             if (data.simulated) {
-                setIsConnected(true);
+                setLiveConnected(true);
             }
 
             if (data.channels && Object.keys(data.channels).length > 0) {
+                setLiveConnected(true);
+                setConnectionError(null);
                 // Convert to LiveLink-compatible format
                 const newChannels: Record<string, JetDriveChannel> = {};
                 const newSnapshot: JetDriveSnapshot = {
@@ -299,6 +302,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
                     return newHistory;
                 });
+            } else {
+                // If capturing but no channels, surface backend diagnostics (if provided).
+                if (data.capturing && data.status?.message) {
+                    setConnectionError(data.status.message);
+                }
             }
         } catch {
             // Silent fail for polling
@@ -323,6 +331,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             const res = await fetch(`${opts.apiUrl}/hardware/live/stop`, { method: 'POST' });
             if (!res.ok) throw new Error('Failed to stop capture');
             setIsCapturing(false);
+            setLiveConnected(false);
         } catch (err) {
             setConnectionError(err instanceof Error ? err.message : 'Stop failed');
             throw err;
@@ -365,13 +374,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
     // Auto-connect
     useEffect(() => {
-        if (opts.autoConnect && isConnected && !isCapturing) {
+        if (opts.autoConnect && monitorConnected && !isCapturing) {
             startCapture().catch(() => { });
         }
-    }, [opts.autoConnect, isConnected, isCapturing, startCapture]);
+    }, [opts.autoConnect, monitorConnected, isCapturing, startCapture]);
 
     return {
-        isConnected,
+        isConnected: monitorConnected || liveConnected,
         isCapturing,
         isSimulated,
         simState,

@@ -139,12 +139,22 @@ export function ClosedLoopTuningPanel({
     const isComplete = status?.status === 'converged' || status?.status === 'max_iterations';
     const isFailed = status?.status === 'failed';
 
-    // Calculate progress - show partial progress during first iteration
-    const progressPct = status
-        ? status.current_iteration === 0 && status.status === 'running'
-            ? 5  // Show 5% to indicate activity
-            : (status.current_iteration / status.max_iterations) * 100
-        : 0;
+    // Helper function to calculate overall progress percentage
+    const calculateProgressPercentage = (status: SessionStatus | null | undefined): number => {
+        if (!status) return 0;
+        
+        // First iteration: use sub-iteration progress
+        if (status.current_iteration === 0 && status.status === 'running') {
+            return status.progress_pct || 5;  // Show 5% minimum to indicate activity
+        }
+        
+        // Subsequent iterations: combine iteration count with sub-progress
+        const completedProgress = status.current_iteration / status.max_iterations;
+        const currentProgress = (status.progress_pct || 0) / 100 / status.max_iterations;
+        return (completedProgress + currentProgress) * 100;
+    };
+
+    const progressPct = calculateProgressPercentage(status);
 
     // Get latest iteration data
     const latestIteration = status?.iterations?.[status.iterations.length - 1];

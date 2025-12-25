@@ -104,7 +104,7 @@ echo.
 
 REM Start Flask backend in a new window
 echo [*] Starting Flask backend on http://localhost:5001
-start "DynoAI Backend (Quick)" cmd /k "cd /d %~dp0 && color 0B && python api/app.py"
+start "DynoAI Backend (Quick)" cmd /k "cd /d %~dp0 && color 0B && python -m api.app"
 
 REM Wait for backend to initialize
 echo [*] Waiting for backend to initialize...

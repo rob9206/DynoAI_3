@@ -20,6 +20,7 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 from api.config import get_config
+from api.docs import init_swagger
 from api.errors import (
     AnalysisError,
     FileNotAllowedError,
@@ -32,6 +33,21 @@ from api.errors import (
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all API routes
+
+# Initialize Swagger UI for API documentation (available at /api/docs)
+try:
+    swagger = init_swagger(app)
+except Exception as e:
+    print(f"[!] Warning: Swagger UI disabled due to: {e}")
+
+# Register Admin UI blueprint (available at /admin)
+try:
+    from api.admin import admin_bp
+
+    app.register_blueprint(admin_bp)
+    print("[+] Admin UI registered at /admin")
+except Exception as e:
+    print(f"[!] Warning: Admin UI disabled: {e}")
 
 # Initialize rate limiter (optional - graceful degradation if not available)
 limiter = None
@@ -1140,6 +1156,8 @@ def print_startup_banner():
     rate_limit_status = "ENABLED" if limiter else "DISABLED"
     print(f"[>] Rate limiting: {rate_limit_status}")
     print("\n[*] Server running on http://localhost:5001")
+    print("[*] Admin Dashboard:   http://localhost:5001/admin")
+    print("[*] API Documentation: http://localhost:5001/api/docs")
     print("\n[*] Available endpoints:")
     print("  GET  /api/health              - Detailed health check")
     print("  GET  /api/health/live         - Liveness probe")
@@ -1185,4 +1203,8 @@ def print_startup_banner():
 register_error_handlers(app)
 
 if __name__ == "__main__":
+    print_startup_banner()
+elif __name__ == "api.app":
+    # Handle case when run as module: python -m api.app
+    # Start the server directly when run as a module
     print_startup_banner()
