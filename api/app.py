@@ -964,7 +964,13 @@ def apply_ve_corrections():
     # Get base VE path (from request or default)
     base_ve_path = data.get("base_ve_path")
     if base_ve_path:
-        base_ve_path = Path(base_ve_path)
+        # Prevent path traversal: only allow selecting a file from the project's `tables/` dir.
+        # (Clients may send a full path; we intentionally discard directories and keep only the filename.)
+        base_ve_name = secure_filename(Path(str(base_ve_path)).name)
+        if not base_ve_name:
+            raise ValidationError("Invalid base_ve_path")
+
+        base_ve_path = PROJECT_ROOT / "tables" / base_ve_name
         if not base_ve_path.exists():
             raise NotFoundError("Base VE file", str(base_ve_path))
     else:
