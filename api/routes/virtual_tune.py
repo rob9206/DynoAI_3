@@ -310,7 +310,9 @@ def get_session_results(session_id: str):
                 "convergence_rate": (
                     "fast"
                     if session.current_iteration <= 3
-                    else "normal" if session.current_iteration <= 6 else "slow"
+                    else "normal"
+                    if session.current_iteration <= 6
+                    else "slow"
                 ),
                 "time_to_convergence_sec": (
                     round((session.end_time or 0) - session.start_time, 1)

@@ -495,8 +495,9 @@ def analyze():
         )
 
     except Exception as e:
-        import traceback
         import logging
+        import traceback
+
         error_msg = str(e)
         error_traceback = traceback.format_exc()
         print(f"[!] Error in /api/analyze: {error_msg}")
@@ -504,11 +505,20 @@ def analyze():
         logger = logging.getLogger(__name__)
         logger.error(f"Error in analyze endpoint: {error_msg}", exc_info=True)
         try:
-            return jsonify({"error": error_msg, "details": error_traceback if app.debug else None}), 500
+            return (
+                jsonify(
+                    {
+                        "error": error_msg,
+                        "details": error_traceback if app.debug else None,
+                    }
+                ),
+                500,
+            )
         except Exception as json_error:
             # If jsonify itself fails, return plain text
             print(f"[!] Failed to create JSON response: {json_error}")
             from flask import Response
+
             return Response(f"Error: {error_msg}", status=500, mimetype="text/plain")
 
 
@@ -1170,7 +1180,6 @@ def print_startup_banner():
 # Register error handlers at app initialization
 # (done once here rather than in deprecated @before_first_request)
 register_error_handlers(app)
-
 
 if __name__ == "__main__":
     print_startup_banner()
