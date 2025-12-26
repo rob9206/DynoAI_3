@@ -91,8 +91,20 @@ def start_tuning_session():
         )
 
         # Create session
+        import sys
+
         orchestrator = get_orchestrator()
+        print(
+            f"[TUNING] Creating session with config: {config.base_ve_scenario}",
+            file=sys.stderr,
+            flush=True,
+        )
         session = orchestrator.create_session(config)
+        print(
+            f"[TUNING] Session created: {session.session_id}, status: {session.status}",
+            file=sys.stderr,
+            flush=True,
+        )
 
         # Start tuning in background (non-blocking for now)
         # In production, this would be a background task (Celery, etc.)
@@ -100,9 +112,31 @@ def start_tuning_session():
 
         def run_session_with_error_handling(session):
             """Wrapper to catch and log exceptions in the background thread."""
+            import sys
+
+            print(
+                f"[TUNING] Background thread started for {session.session_id}",
+                file=sys.stderr,
+                flush=True,
+            )
             try:
+                print(
+                    f"[TUNING] Calling orchestrator.run_session()...",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 orchestrator.run_session(session)
+                print(
+                    f"[TUNING] Session {session.session_id} completed with status: {session.status}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             except Exception as e:
+                print(
+                    f"[TUNING] ERROR in session {session.session_id}: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 logger.error(
                     f"Exception in tuning session {session.session_id}: {e}",
                     exc_info=True,
@@ -111,6 +145,9 @@ def start_tuning_session():
                 session.error_message = str(e)
                 session.end_time = time.time()
 
+        import sys
+
+        print(f"[TUNING] Creating background thread...", file=sys.stderr, flush=True)
         thread = threading.Thread(
             target=run_session_with_error_handling,
             args=(session,),
@@ -118,6 +155,11 @@ def start_tuning_session():
             name=f"tuning-{session.session_id}",
         )
         thread.start()
+        print(
+            f"[TUNING] Thread started with ID: {thread.ident}, is_alive: {thread.is_alive()}",
+            file=sys.stderr,
+            flush=True,
+        )
 
         logger.info(f"Started tuning session: {session.session_id}")
 
@@ -212,63 +254,6 @@ def stop_session(session_id: str):
     except Exception as e:
         logger.error(f"Error stopping session: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
-
-
-@virtual_tune_bp.route("/health", methods=["GET"])
-def health_check():
-    """
-    Health check endpoint to verify all components are operational.
-
-    Response:
-    {
-        "healthy": true,
-        "components": {
-            "orchestrator": "ok",
-            "dyno_simulator": "ok",
-            "virtual_ecu": "ok"
-        },
-        "timestamp": "2025-12-15T10:30:00Z"
-    }
-    """
-    from datetime import datetime
-
-    components = {}
-    healthy = True
-
-    # Check orchestrator
-    try:
-        orchestrator = get_orchestrator()
-        components["orchestrator"] = "ok"
-    except Exception as e:
-        components["orchestrator"] = f"error: {str(e)}"
-        healthy = False
-
-    # Check dyno simulator
-    try:
-        from api.services.dyno_simulator import EngineProfile
-
-        profile = EngineProfile.m8_114()
-        components["dyno_simulator"] = "ok"
-    except Exception as e:
-        components["dyno_simulator"] = f"error: {str(e)}"
-        healthy = False
-
-    # Check virtual ECU
-    try:
-        from api.services.virtual_ecu import VirtualECU
-
-        components["virtual_ecu"] = "ok"
-    except Exception as e:
-        components["virtual_ecu"] = f"error: {str(e)}"
-        healthy = False
-
-    return jsonify(
-        {
-            "healthy": healthy,
-            "components": components,
-            "timestamp": datetime.now().isoformat(),
-        }
-    ), (200 if healthy else 503)
 
 
 @virtual_tune_bp.route("/sessions", methods=["GET"])

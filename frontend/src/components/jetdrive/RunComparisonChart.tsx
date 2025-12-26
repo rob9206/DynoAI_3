@@ -37,36 +37,62 @@ export function RunComparisonChart({
     metric = 'hp',
     height = 300
 }: RunComparisonChartProps) {
-    // Combine all run data into a single dataset
-    const chartData = useMemo(() => {
-        if (runs.length === 0) return [];
+    const { chartData, series } = useMemo(() => {
+        if (runs.length === 0) return { chartData: [], series: [] as Array<{ key: string; label: string; color: string; width: number; dash?: string; opacity: number }> };
 
-        // Get all unique RPM points
-        const rpmSet = new Set<number>();
-        runs.forEach(run => {
-            run.power_curve?.forEach(point => rpmSet.add(point.rpm));
+        const wantHp = metric === 'hp' || metric === 'both';
+        const wantTq = metric === 'tq' || metric === 'both';
+
+        // Define series keys that are NOT dependent on run_id text (run_id may include underscores)
+        const nextSeries: Array<{ key: string; label: string; color: string; width: number; dash?: string; opacity: number }> = [];
+
+        runs.forEach((run, idx) => {
+            const color = RUN_COLORS[idx % RUN_COLORS.length];
+            const width = idx === 0 ? 3 : 2;
+            const opacity = idx === 0 ? 1 : 0.8;
+
+            if (wantHp) {
+                nextSeries.push({
+                    key: `s${idx}:hp`,
+                    label: `${run.run_id} (HP)`,
+                    color,
+                    width,
+                    dash: metric === 'both' ? undefined : undefined,
+                    opacity,
+                });
+            }
+            if (wantTq) {
+                nextSeries.push({
+                    key: `s${idx}:tq`,
+                    label: `${run.run_id} (TQ)`,
+                    color,
+                    width: idx === 0 ? 2 : 1.5,
+                    dash: metric === 'both' ? '5 5' : undefined,
+                    opacity: metric === 'both' ? 0.65 : opacity,
+                });
+            }
         });
 
-        const rpmPoints = Array.from(rpmSet).sort((a, b) => a - b);
+        // Merge curves by RPM
+        const rpmToPoint = new Map<number, Record<string, number>>();
 
-        // Build combined dataset
-        return rpmPoints.map(rpm => {
-            const point: Record<string, number> = { rpm };
-            
-            runs.forEach((run, idx) => {
-                const dataPoint = run.power_curve?.find(p => p.rpm === rpm);
-                if (dataPoint) {
-                    if (metric === 'hp' || metric === 'both') {
-                        point[`${run.run_id}_hp`] = dataPoint.hp;
-                    }
-                    if (metric === 'tq' || metric === 'both') {
-                        point[`${run.run_id}_tq`] = dataPoint.tq;
-                    }
-                }
+        runs.forEach((run, idx) => {
+            const curve = run.power_curve || [];
+            curve.forEach((p) => {
+                if (typeof p.rpm !== 'number') return;
+                const rpm = p.rpm;
+                const row = rpmToPoint.get(rpm) || { rpm };
+                if (wantHp && typeof p.hp === 'number') row[`s${idx}:hp`] = p.hp;
+                if (wantTq && typeof p.tq === 'number') row[`s${idx}:tq`] = p.tq;
+                rpmToPoint.set(rpm, row);
             });
-
-            return point;
         });
+
+        const nextData = Array.from(rpmToPoint.keys())
+            .sort((a, b) => a - b)
+            .map((rpm) => rpmToPoint.get(rpm)!);
+
+        return { chartData: nextData, series: nextSeries };
     }, [runs, metric]);
 
     // Calculate Y-axis domain
@@ -158,46 +184,27 @@ export function RunComparisonChart({
                             }}
                             labelFormatter={(label) => `${label} RPM`}
                             formatter={(value: number, name: string) => {
-                                const [runId, metricType] = name.split('_');
-                                return [
-                                    value.toFixed(1),
-                                    `${runId} (${metricType.toUpperCase()})`
-                                ];
+                                const meta = series.find((s) => s.key === name);
+                                return [value.toFixed(1), meta?.label ?? name];
                             }}
                         />
                         <Legend
                             wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
-                            formatter={(value) => {
-                                const [runId, metricType] = value.split('_');
-                                return `${runId} (${metricType?.toUpperCase() || ''})`;
-                            }}
+                            formatter={(value) => series.find((s) => s.key === value)?.label ?? String(value)}
                         />
                         
-                        {/* Render lines for each run */}
-                        {runs.map((run, idx) => (
+                        {/* Render series */}
+                        {series.map((s) => (
                             <Line
-                                key={`${run.run_id}_hp`}
+                                key={s.key}
                                 type="monotone"
-                                dataKey={`${run.run_id}_hp`}
-                                stroke={RUN_COLORS[idx % RUN_COLORS.length]}
-                                strokeWidth={idx === 0 ? 3 : 2}
+                                dataKey={s.key}
+                                stroke={s.color}
+                                strokeWidth={s.width}
                                 dot={false}
                                 isAnimationActive={false}
-                                opacity={idx === 0 ? 1 : 0.8}
-                                strokeDasharray={metric === 'both' ? '5 5' : undefined}
-                            />
-                        ))}
-                        
-                        {metric === 'both' && runs.map((run, idx) => (
-                            <Line
-                                key={`${run.run_id}_tq`}
-                                type="monotone"
-                                dataKey={`${run.run_id}_tq`}
-                                stroke={RUN_COLORS[idx % RUN_COLORS.length]}
-                                strokeWidth={idx === 0 ? 2 : 1.5}
-                                dot={false}
-                                isAnimationActive={false}
-                                opacity={0.6}
+                                opacity={s.opacity}
+                                strokeDasharray={s.dash}
                             />
                         ))}
                     </LineChart>

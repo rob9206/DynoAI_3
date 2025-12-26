@@ -42,13 +42,16 @@ class StorageConfig:
     """File storage configuration."""
 
     upload_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "uploads"))
+        default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "data/uploads"))
     )
     output_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_OUTPUT_DIR", "outputs"))
+        default_factory=lambda: Path(os.environ.get("DYNOAI_OUTPUT_DIR", "data/outputs"))
     )
     runs_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "runs"))
+        default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "data/runs"))
+    )
+    public_export_folder: Path = field(
+        default_factory=lambda: Path(os.environ.get("DYNOAI_PUBLIC_EXPORT_DIR", "data/public_export"))
     )
     max_content_length: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_MAX_UPLOAD_MB", 50) * 1024 * 1024
@@ -59,9 +62,10 @@ class StorageConfig:
 
     def __post_init__(self) -> None:
         """Ensure storage directories exist."""
-        self.upload_folder.mkdir(exist_ok=True)
-        self.output_folder.mkdir(exist_ok=True)
-        self.runs_folder.mkdir(exist_ok=True)
+        self.upload_folder.mkdir(parents=True, exist_ok=True)
+        self.output_folder.mkdir(parents=True, exist_ok=True)
+        self.runs_folder.mkdir(parents=True, exist_ok=True)
+        self.public_export_folder.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -503,6 +507,7 @@ class AppConfig:
                 "upload_folder": str(self.storage.upload_folder),
                 "output_folder": str(self.storage.output_folder),
                 "runs_folder": str(self.storage.runs_folder),
+                "public_export_folder": str(self.storage.public_export_folder),
                 "max_content_length": self.storage.max_content_length,
             },
             "jetstream": self.jetstream.to_dict(mask_key=not include_secrets),

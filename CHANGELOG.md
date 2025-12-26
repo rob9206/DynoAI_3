@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.3.1 - RT-150 Live Run Milestone (December 25, 2025)
+
+- Backend
+  - Added `/api/jetdrive/dyno/config` endpoint for frontend config panel.
+  - Added hardware endpoints: `/hardware/validate`, `/hardware/heartbeat`, `/hardware/connect`, `/hardware/start`, `/hardware/stop`, `/hardware/status`.
+  - Live telemetry now injects computed HP/Torque from Force + RPM when missing.
+  - Simulator fallback env flag `DYNOAI_SIMULATOR_FALLBACK` respected across hardware endpoints.
+- Frontend
+  - `DynoConfigPanel.tsx` wired with Connect/Start/Stop and live telemetry (RPM/HP/Torque/AFR).
+- Scripts
+  - New `scripts/smoke_rt150.py` for connect→start→stream→stop smoke test.
+- Tests
+  - Added E2E simulator test `tests/api/test_jetdrive_e2e.py`.
+  - Added unit test for HP/Torque math `tests/api/test_power_calc.py`.
+- Security
+  - Snyk scan run; added additional path validation in PowerCore WP8 route.
+
 ## [Unreleased] - Major Release: Complete Tuning Ecosystem (December 15, 2025)
 
 ### 🎉 Release Summary
@@ -390,9 +407,6 @@ This prompt library is now the **go-to resource** for debugging async operations
 **Documentation:**
 - `AFR_VOICE_FEEDBACK_SUMMARY.md`
 - `AFR_VOICE_FEEDBACK_TEST_GUIDE.md`
-- `AUDIO_TEST_INSTRUCTIONS.md`
-- `SOUND_EFFECTS_GUIDE.md`
-- `docs/AUDIO_ENGINE.md`
 - `docs/AI_VOICE_ASSISTANT.md`
 - `docs/AFR_VOICE_INTEGRATION_DIAGRAM.md`
 

@@ -74,7 +74,7 @@ export function JetstreamFeed({ refetchInterval = 30000 }: JetstreamFeedProps) {
       <div className="flex flex-wrap justify-between items-center gap-4 bg-gradient-to-r from-card/40 via-card/30 to-card/40 p-3 rounded-lg border border-border/30 backdrop-blur-sm relative overflow-hidden">
         {/* Subtle glow effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
-        
+
         <div className="flex items-center gap-2 relative z-10">
           <Filter className="h-4 w-4 text-cyan-400/60" />
           <Select value={statusFilter} onValueChange={handleFilterChange}>
@@ -112,7 +112,7 @@ export function JetstreamFeed({ refetchInterval = 30000 }: JetstreamFeedProps) {
           {/* Decorative grid pattern */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,transparent_49.5%,rgba(100,200,255,0.03)_49.5%,rgba(100,200,255,0.03)_50.5%,transparent_50.5%)] bg-[length:40px_40px] pointer-events-none" />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_49.5%,rgba(100,200,255,0.03)_49.5%,rgba(100,200,255,0.03)_50.5%,transparent_50.5%)] bg-[length:40px_40px] pointer-events-none" />
-          
+
           <Database className="h-12 w-12 text-cyan-400/30 mx-auto mb-4" />
           <p className="text-muted-foreground font-mono uppercase tracking-[0.2em] text-sm">No Data Packets Found</p>
           <p className="text-xs text-muted-foreground/50 mt-2 font-mono tracking-wider">

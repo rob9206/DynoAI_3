@@ -53,6 +53,10 @@ interface RunComparisonTableEnhancedProps {
     runs: RunData[];
     onRunClick?: (runId: string) => void;
     maxRuns?: number;
+    selectedRunIds?: string[];
+    onSelectedRunIdsChange?: (ids: string[]) => void;
+    baselineRunId?: string | null;
+    onBaselineRunIdChange?: (runId: string | null) => void;
 }
 
 type SortKey = 'timestamp' | 'peak_hp' | 'peak_tq' | 'status';
@@ -61,10 +65,20 @@ type SortDirection = 'asc' | 'desc';
 export function RunComparisonTableEnhanced({
     runs,
     onRunClick,
-    maxRuns = 10
+    maxRuns = 10,
+    selectedRunIds: selectedRunIdsProp,
+    onSelectedRunIdsChange,
+    baselineRunId: baselineRunIdProp,
+    onBaselineRunIdChange,
 }: RunComparisonTableEnhancedProps) {
-    const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
-    const [baselineRunId, setBaselineRunId] = useState<string | null>(null);
+    const [selectedRunIdsUncontrolled, setSelectedRunIdsUncontrolled] = useState<string[]>([]);
+    const [baselineRunIdUncontrolled, setBaselineRunIdUncontrolled] = useState<string | null>(null);
+
+    const selectedRunIds = selectedRunIdsProp ?? selectedRunIdsUncontrolled;
+    const setSelectedRunIds = onSelectedRunIdsChange ?? setSelectedRunIdsUncontrolled;
+
+    const baselineRunId = baselineRunIdProp ?? baselineRunIdUncontrolled;
+    const setBaselineRunId = onBaselineRunIdChange ?? setBaselineRunIdUncontrolled;
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [sortKey, setSortKey] = useState<SortKey>('timestamp');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -110,10 +124,16 @@ export function RunComparisonTableEnhanced({
     // Get selected or all runs for comparison
     const compareRuns = useMemo(() => {
         if (selectedRunIds.length > 0) {
-            return sortedRuns.filter(r => selectedRunIds.includes(r.run_id));
+            const selected = sortedRuns.filter(r => selectedRunIds.includes(r.run_id));
+            // Always include baseline if set, even if not checked
+            if (baselineRunId && !selected.some(r => r.run_id === baselineRunId)) {
+                const baseline = sortedRuns.find(r => r.run_id === baselineRunId);
+                if (baseline) return [baseline, ...selected];
+            }
+            return selected;
         }
         return sortedRuns.slice(0, 5);
-    }, [sortedRuns, selectedRunIds]);
+    }, [sortedRuns, selectedRunIds, baselineRunId]);
 
     // Determine baseline
     const baseline = useMemo(() => {

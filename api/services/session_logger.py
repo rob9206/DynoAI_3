@@ -8,6 +8,7 @@ No new math - pure orchestration, logging, and visualization.
 """
 
 import json
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -352,7 +353,17 @@ class SessionLogger:
 
     def get_snapshot_path(self, snapshot_id: str) -> Optional[Path]:
         """Get the file path for a snapshot."""
-        path = self.snapshots_dir / f"{snapshot_id}.csv"
+        # Validate snapshot ID format to prevent path traversal.
+        if not re.match(r"^snap_[a-f0-9]{8}$", snapshot_id):
+            return None
+
+        base = self.snapshots_dir.resolve()
+        path = (base / f"{snapshot_id}.csv").resolve()
+        try:
+            path.relative_to(base)
+        except ValueError:
+            return None
+
         if path.exists():
             return path
         return None

@@ -22,12 +22,12 @@ export function VEHeatmapLegend({
   if (orientation === 'vertical') {
     return (
       <div className="flex items-center gap-3">
-        <div className="flex flex-col items-end text-xs text-muted-foreground font-mono h-40 justify-between">
+        <div className="flex flex-col items-end text-xs text-zinc-500 font-mono h-40 justify-between">
           {labels.slice().reverse().map((label, index) => (
             <span key={index}>{label}</span>
           ))}
         </div>
-        <div className="relative w-4 h-40 rounded border border-border overflow-hidden">
+        <div className="relative w-4 h-40 rounded border border-zinc-800 overflow-hidden">
           <div 
             className="absolute inset-0" 
             style={{ background: gradientStyle }}
@@ -48,7 +48,7 @@ export function VEHeatmapLegend({
           )}
         </div>
         {showClampIndicator && (
-          <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-col gap-2 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 border-2 border-dashed border-yellow-500 rounded-sm" />
               <span>Clamped (±{clampLimit}%)</span>
@@ -62,8 +62,8 @@ export function VEHeatmapLegend({
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="flex items-center gap-4">
-        <span className="text-xs text-muted-foreground">Lean (−)</span>
-        <div className="relative w-64 h-4 rounded border border-border overflow-hidden">
+        <span className="text-xs text-zinc-500">Lean (−)</span>
+        <div className="relative w-64 h-4 rounded border border-zinc-800 overflow-hidden">
           <div 
             className="absolute inset-0" 
             style={{ background: gradientStyle }}
@@ -83,9 +83,9 @@ export function VEHeatmapLegend({
             </>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">Rich (+)</span>
+        <span className="text-xs text-zinc-500">Rich (+)</span>
       </div>
-      <div className="flex justify-between w-64 text-xs text-muted-foreground font-mono">
+      <div className="flex justify-between w-64 text-xs text-zinc-500 font-mono">
         {labels.map((label, index) => (
           <span key={index}>{label}</span>
         ))}
@@ -94,7 +94,7 @@ export function VEHeatmapLegend({
         <div className="flex items-center gap-4 mt-1">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 border-2 border-dashed border-yellow-500 rounded-sm" />
-            <span className="text-xs text-muted-foreground">Clamped (±{clampLimit}%)</span>
+            <span className="text-xs text-zinc-500">Clamped (±{clampLimit}%)</span>
           </div>
         </div>
       )}

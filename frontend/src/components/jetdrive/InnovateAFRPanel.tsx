@@ -288,15 +288,23 @@ export function InnovateAFRPanel({
                         </div>
                     </div>
                     {!isConnected && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full mt-2"
-                            onClick={handleConnect}
-                        >
-                            <Plug className="h-3 w-3 mr-1" />
-                            Connect DLG-1
-                        </Button>
+                        <>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full mt-2"
+                                onClick={handleConnect}
+                            >
+                                <Plug className="h-3 w-3 mr-1" />
+                                Connect DLG-1
+                            </Button>
+                            {error && (
+                                <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span className="truncate">{error}</span>
+                                </div>
+                            )}
+                        </>
                     )}
                 </CardContent>
             </Card>
@@ -470,6 +478,14 @@ export function InnovateAFRPanel({
                         <Plug className="h-4 w-4 mr-2" />
                         Connect DLG-1 ({selectedPort})
                     </Button>
+                )}
+
+                {/* Surface connection errors even when settings panel is closed */}
+                {error && !showSettings && (
+                    <div className="flex items-center gap-2 text-red-400 text-sm">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="break-words">{error}</span>
+                    </div>
                 )}
             </CardContent>
         </Card>

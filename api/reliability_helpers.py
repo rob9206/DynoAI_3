@@ -7,9 +7,9 @@ for common operations like JetDrive communication, API calls, etc.
 
 import asyncio
 import logging
+import socket
 from typing import Any, Callable, Optional, TypeVar
 from urllib.error import HTTPError, URLError
-import socket
 
 from api.reliability_agent import (
     CircuitBreakerConfig,
@@ -20,7 +20,7 @@ from api.reliability_agent import (
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # === Pre-configured retry policies ===
 
@@ -62,44 +62,44 @@ EXTERNAL_API_CIRCUIT = CircuitBreakerConfig(
     timeout=60.0,
 )
 
-
 # === Helper Functions ===
 
 
 def jetdrive_call(func: Callable[..., T], *args, **kwargs) -> T:
     """
     Execute JetDrive operation with retry and circuit breaker.
-    
+
     Example:
         result = jetdrive_call(discover_providers, timeout=2.0)
     """
     agent = get_reliability_agent()
     circuit = agent.get_circuit_breaker("jetdrive", JETDRIVE_CIRCUIT)
-    
+
     @with_retry(JETDRIVE_RETRY)
     def wrapped():
         return circuit.call(func, *args, **kwargs)
-    
+
     return wrapped()
 
 
 async def jetdrive_call_async(func: Callable[..., T], *args, **kwargs) -> T:
     """
     Execute async JetDrive operation with retry and circuit breaker.
-    
+
     Example:
         providers = await jetdrive_call_async(discover_providers, timeout=2.0)
     """
     agent = get_reliability_agent()
     circuit = agent.get_circuit_breaker("jetdrive", JETDRIVE_CIRCUIT)
-    
+
     @with_retry(JETDRIVE_RETRY)
     async def wrapped():
         # Circuit breaker call is synchronous, but the function is async
         if circuit.state.value == "open":
             from api.reliability_agent import CircuitBreakerOpenError
+
             raise CircuitBreakerOpenError(f"Circuit breaker 'jetdrive' is OPEN")
-        
+
         try:
             result = await func(*args, **kwargs)
             circuit._on_success()
@@ -107,24 +107,24 @@ async def jetdrive_call_async(func: Callable[..., T], *args, **kwargs) -> T:
         except Exception as e:
             circuit._on_failure()
             raise e
-    
+
     return await wrapped()
 
 
 def api_call(service_name: str, func: Callable[..., T], *args, **kwargs) -> T:
     """
     Execute external API call with retry and circuit breaker.
-    
+
     Example:
         result = api_call("jetstream", client.get_runs)
     """
     agent = get_reliability_agent()
     circuit = agent.get_circuit_breaker(f"api_{service_name}", EXTERNAL_API_CIRCUIT)
-    
+
     @with_retry(API_RETRY)
     def wrapped():
         return circuit.call(func, *args, **kwargs)
-    
+
     return wrapped()
 
 
@@ -137,7 +137,7 @@ def record_health(
 ):
     """
     Record health check result for a subsystem.
-    
+
     Args:
         subsystem: Name of subsystem (e.g., "jetdrive", "jetstream")
         status: "healthy", "degraded", or "unhealthy"
@@ -153,22 +153,22 @@ def record_health(
 async def health_check_jetdrive() -> dict[str, Any]:
     """
     Perform JetDrive health check.
-    
+
     Returns health status dict.
     """
     import time
-    from api.services.jetdrive_client import discover_providers, JetDriveConfig
-    
+
+    from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
     start = time.time()
     try:
         config = JetDriveConfig.from_env()
         providers = await asyncio.wait_for(
-            discover_providers(config, timeout=2.0),
-            timeout=3.0
+            discover_providers(config, timeout=2.0), timeout=3.0
         )
-        
+
         latency_ms = (time.time() - start) * 1000
-        
+
         if providers:
             record_health(
                 "jetdrive",
@@ -216,7 +216,7 @@ async def health_check_jetdrive() -> dict[str, Any]:
         )
         return {
             "status": "unhealthy",
-            "message": f"JetDrive error: {e}",
+            "message": "JetDrive error (details logged server-side)",
             "latency_ms": latency_ms,
         }
 
@@ -224,19 +224,19 @@ async def health_check_jetdrive() -> dict[str, Any]:
 def health_check_jetstream(client) -> dict[str, Any]:
     """
     Perform Jetstream API health check.
-    
+
     Args:
         client: JetstreamClient instance
-        
+
     Returns health status dict.
     """
     import time
-    
+
     start = time.time()
     try:
         success = client.test_connection()
         latency_ms = (time.time() - start) * 1000
-        
+
         if success:
             record_health(
                 "jetstream",
@@ -269,7 +269,7 @@ def health_check_jetstream(client) -> dict[str, Any]:
         )
         return {
             "status": "unhealthy",
-            "message": f"Jetstream error: {e}",
+            "message": "Jetstream error (details logged server-side)",
             "latency_ms": latency_ms,
         }
 
@@ -280,7 +280,7 @@ def health_check_jetstream(client) -> dict[str, Any]:
 def with_jetdrive_reliability(func):
     """Decorator for JetDrive route handlers."""
     from functools import wraps
-    
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -290,15 +290,16 @@ def with_jetdrive_reliability(func):
             # Record failure for monitoring
             record_health("jetdrive", "unhealthy", error=str(e))
             raise
-    
+
     return wrapper
 
 
 def with_api_reliability(service_name: str):
     """Decorator for external API route handlers."""
+
     def decorator(func):
         from functools import wraps
-        
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
@@ -307,8 +308,7 @@ def with_api_reliability(service_name: str):
                 logger.error(f"{service_name} operation failed: {e}")
                 record_health(service_name, "unhealthy", error=str(e))
                 raise
-        
-        return wrapper
-    
-    return decorator
 
+        return wrapper
+
+    return decorator

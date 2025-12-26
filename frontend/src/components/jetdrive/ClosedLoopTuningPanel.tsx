@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Play, Square, RefreshCw, CheckCircle2, AlertTriangle, TrendingDown, Zap, ChevronDown, Activity } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -92,21 +92,8 @@ export function ClosedLoopTuningPanel({
         }
     }, []);
 
-    // Save active session to localStorage
-    useEffect(() => {
-        if (sessionId && status?.status === 'running') {
-            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-                sessionId,
-                startTime: Date.now()
-            }));
-        } else if (sessionId && (status?.status === 'converged' || status?.status === 'failed' || status?.status === 'stopped' || status?.status === 'max_iterations')) {
-            // Clear localStorage when session completes
-            localStorage.removeItem(SESSION_STORAGE_KEY);
-        }
-    }, [sessionId, status?.status]);
-
     // Poll session status
-    const { data: status, refetch } = useQuery<SessionStatus>({
+    const { data: status, refetch } = useQuery<SessionStatus | null>({
         queryKey: ['closed-loop-status', sessionId],
         queryFn: async () => {
             if (!sessionId) return null;
@@ -121,6 +108,25 @@ export function ClosedLoopTuningPanel({
             return false; // Stop polling when complete
         },
     });
+
+    // Save active session to localStorage
+    useEffect(() => {
+        if (sessionId && status?.status === 'running') {
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+                sessionId,
+                startTime: Date.now()
+            }));
+        } else if (
+            sessionId
+            && (status?.status === 'converged'
+                || status?.status === 'failed'
+                || status?.status === 'stopped'
+                || status?.status === 'max_iterations')
+        ) {
+            // Clear localStorage when session completes
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+    }, [sessionId, status?.status]);
 
     // Start tuning mutation
     const startTuning = useMutation({

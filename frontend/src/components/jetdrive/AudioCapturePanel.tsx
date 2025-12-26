@@ -15,7 +15,7 @@ import {
     Mic, MicOff, Play, Square, Download, Trash2, Volume2, VolumeX,
     AlertTriangle, Bell, BellOff
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';

@@ -7,6 +7,23 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { playUiSound } from '@/lib/ui-sounds';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getString(value: unknown): string | null {
+    return typeof value === 'string' ? value : null;
+}
+
+function getNumber(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function getBoolean(value: unknown): boolean | null {
+    return typeof value === 'boolean' ? value : null;
+}
 
 // Same types as useLiveLink for compatibility
 export interface JetDriveChannel {
@@ -30,8 +47,12 @@ export interface UseJetDriveLiveOptions {
     autoConnect?: boolean;
     /** Poll interval in ms (default: 1000) */
     pollInterval?: number;
+    /** How often to publish chart history state (ms). History points are still collected every poll. */
+    historyPublishIntervalMs?: number;
     /** Max history points for charts (default: 300) */
     maxHistoryPoints?: number;
+    /** Enables verbose debug logging (default: false) */
+    debug?: boolean;
 }
 
 export interface UseJetDriveLiveReturn {
@@ -54,55 +75,6 @@ export interface UseJetDriveLiveReturn {
     stopCapture: () => Promise<void>;
     getChannelValue: (channel: string) => number | null;
     clearHistory: () => void;
-}
-
-// Get channel configuration with flexible matching
-export function getChannelConfig(channelName: string) {
-    // Try exact match first
-    if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
-        return JETDRIVE_CHANNEL_CONFIG[channelName];
-    }
-    
-    // Try case-insensitive match
-    const lowerName = channelName.toLowerCase();
-    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
-        if (key.toLowerCase() === lowerName) {
-            return config;
-        }
-    }
-    
-    // Try partial match for common patterns
-    if (lowerName.includes('rpm')) {
-        return JETDRIVE_CHANNEL_CONFIG['RPM'] || JETDRIVE_CHANNEL_CONFIG['Digital RPM 1'];
-    }
-    if (lowerName.includes('afr') || lowerName.includes('air/fuel')) {
-        return JETDRIVE_CHANNEL_CONFIG['AFR'] || JETDRIVE_CHANNEL_CONFIG['Air/Fuel Ratio 1'];
-    }
-    if (lowerName.includes('force') || lowerName.includes('load')) {
-        return JETDRIVE_CHANNEL_CONFIG['Force Drum 1'];
-    }
-    if (lowerName.includes('map') || lowerName.includes('manifold')) {
-        return JETDRIVE_CHANNEL_CONFIG['MAP'] || JETDRIVE_CHANNEL_CONFIG['MAP kPa'];
-    }
-    if (lowerName.includes('tps') || lowerName.includes('throttle')) {
-        return JETDRIVE_CHANNEL_CONFIG['TPS'];
-    }
-    if (lowerName.includes('horsepower') || lowerName.includes('hp')) {
-        return JETDRIVE_CHANNEL_CONFIG['HP'] || JETDRIVE_CHANNEL_CONFIG['Horsepower'];
-    }
-    if (lowerName.includes('torque') || lowerName.includes('tq')) {
-        return JETDRIVE_CHANNEL_CONFIG['TQ'] || JETDRIVE_CHANNEL_CONFIG['Torque'];
-    }
-    
-    // Default fallback
-    return {
-        label: channelName,
-        units: '',
-        min: 0,
-        max: 100,
-        decimals: 2,
-        color: '#888'
-    };
 }
 
 // Channel configuration for display
@@ -198,164 +170,42 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, {
 
 /**
  * Get channel configuration with flexible name matching.
- * Tries exact match, case-insensitive match, and partial match patterns.
+ * Tries exact match first, then case-insensitive, then partial match.
+ * Returns undefined if no match found.
  */
-// Cache for channel config lookups to avoid repeated string operations
-const channelConfigCache = new Map<string, {
-    label: string;
-    units: string;
-    min: number;
-    max: number;
-    decimals: number;
-    color: string;
-    warning?: number;
-    critical?: number;
-}>();
-
-// Debug logging throttle - log every N polls to avoid console spam
-const DEBUG_LOG_THROTTLE = 100;
-
-function getChannelConfig(channelName: string) {
-    // Check cache first
-    if (channelConfigCache.has(channelName)) {
-        return channelConfigCache.get(channelName);
-    }
-    
-    let config;
-    
+export function getChannelConfig(name: string): typeof JETDRIVE_CHANNEL_CONFIG[string] | undefined {
     // Try exact match first
-    if (JETDRIVE_CHANNEL_CONFIG[channelName]) {
-        config = JETDRIVE_CHANNEL_CONFIG[channelName];
-        channelConfigCache.set(channelName, config);
-        return config;
+    if (JETDRIVE_CHANNEL_CONFIG[name]) {
+        return JETDRIVE_CHANNEL_CONFIG[name];
     }
-    
+
     // Try case-insensitive match
-    const lowerName = channelName.toLowerCase();
-    for (const [key, cfg] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
-        if (key.toLowerCase() === lowerName) {
-            config = cfg;
-            channelConfigCache.set(channelName, config);
+    const nameLower = name.toLowerCase();
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        if (key.toLowerCase() === nameLower) {
             return config;
         }
     }
-    
-    // Try partial match for common patterns
-    if (lowerName.includes('rpm')) {
-        config = JETDRIVE_CHANNEL_CONFIG['RPM'] || {
-            label: channelName,
-            units: 'rpm',
-            min: 0,
-            max: 8000,
-            decimals: 0,
-            color: '#4ade80'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
+
+    // Try partial match (e.g., "RPM" matches "Digital RPM 1")
+    for (const [key, config] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+        const keyLower = key.toLowerCase();
+        if (keyLower.includes(nameLower) || nameLower.includes(keyLower)) {
+            return config;
+        }
     }
-    if (lowerName.includes('afr') || lowerName.includes('air/fuel') || lowerName.includes('air-fuel')) {
-        config = JETDRIVE_CHANNEL_CONFIG['AFR'] || {
-            label: channelName,
-            units: ':1',
-            min: 10,
-            max: 18,
-            decimals: 2,
-            color: '#f472b6'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('lambda')) {
-        config = {
-            label: channelName,
-            units: 'λ',
-            min: 0.7,
-            max: 1.3,
-            decimals: 3,
-            color: '#a78bfa'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('force') || lowerName.includes('load') || lowerName.includes('drum')) {
-        config = JETDRIVE_CHANNEL_CONFIG['Force Drum 1'] || {
-            label: channelName,
-            units: 'lbs',
-            min: 0,
-            max: 500,
-            decimals: 1,
-            color: '#4ade80'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('hp') || lowerName.includes('horsepower') || lowerName.includes('power')) {
-        config = {
-            label: channelName,
-            units: 'HP',
-            min: 0,
-            max: 200,
-            decimals: 1,
-            color: '#10b981'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('tq') || lowerName.includes('torque')) {
-        config = {
-            label: channelName,
-            units: 'ft-lb',
-            min: 0,
-            max: 150,
-            decimals: 1,
-            color: '#8b5cf6'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('map')) {
-        config = {
-            label: channelName,
-            units: 'kPa',
-            min: 0,
-            max: 105,
-            decimals: 1,
-            color: '#06b6d4'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    if (lowerName.includes('tps') || lowerName.includes('throttle')) {
-        config = {
-            label: channelName,
-            units: '%',
-            min: 0,
-            max: 100,
-            decimals: 1,
-            color: '#14b8a6'
-        };
-        channelConfigCache.set(channelName, config);
-        return config;
-    }
-    
-    // Default fallback
-    config = {
-        label: channelName,
-        units: '',
-        min: 0,
-        max: 100,
-        decimals: 2,
-        color: '#888888'
-    };
-    channelConfigCache.set(channelName, config);
-    return config;
+
+    // No match found - return undefined to allow fallback logic
+    return undefined;
 }
 
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
     pollInterval: 50,  // 50ms = 20 updates/sec for ultra-responsive gauges and VE table
+    historyPublishIntervalMs: 200, // publish chart history at ~5Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
+    debug: false,
 };
 
 export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDriveLiveReturn {
@@ -378,7 +228,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
     // Refs
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const pollCountRef = useRef(0);  // Track polls for throttled history updates
+    const historyRef = useRef<Record<string, { time: number; value: number }[]>>({});
+    const lastHistoryPublishAtRef = useRef<number>(0);
+
+    // UI sound state (debounced to avoid flapping/poll noise)
+    const prevConnectedRef = useRef<boolean | null>(null);
+    const lastStatusSoundAtRef = useRef<number>(0);
+    const STATUS_SOUND_DEBOUNCE_MS = 3000;
 
     // Check monitor status
     const checkConnection = useCallback(async () => {
@@ -386,12 +242,17 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             const res = await fetch(`${opts.apiUrl}/hardware/monitor/status`);
             if (!res.ok) throw new Error('Monitor endpoint unavailable');
 
-            const data = await res.json();
-            setMonitorConnected(!!data.connected);
+            const raw: unknown = await res.json();
+            const data = isRecord(raw) ? raw : {};
 
-            if (data.providers && data.providers.length > 0) {
-                setProviderName(data.providers[0].name);
-                setChannelCount(data.providers[0].channel_count || 0);
+            const connected = getBoolean(data.connected) ?? false;
+            setMonitorConnected(connected);
+
+            const providersRaw = data.providers;
+            if (Array.isArray(providersRaw) && providersRaw.length > 0 && isRecord(providersRaw[0])) {
+                const p0 = providersRaw[0];
+                setProviderName(getString(p0.name));
+                setChannelCount(getNumber(p0.channel_count) ?? 0);
             }
 
             setConnectionError(null);
@@ -407,21 +268,24 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             const res = await fetch(`${opts.apiUrl}/hardware/live/data`);
             if (!res.ok) throw new Error('Live data unavailable');
 
-            const data = await res.json();
+            const raw: unknown = await res.json();
+            const data = isRecord(raw) ? raw : {};
 
-            // Increment poll counter
-            pollCountRef.current++;
+            const capturing = getBoolean(data.capturing) ?? false;
+            const simulated = getBoolean(data.simulated) ?? false;
+            const simStateValue = getString(data.sim_state);
 
-            setIsCapturing(data.capturing);
-            setIsSimulated(data.simulated || false);
-            setSimState(data.sim_state || null);
+            setIsCapturing(capturing);
+            setIsSimulated(simulated);
+            setSimState(simStateValue);
 
             // If simulated, we're always "connected"
-            if (data.simulated) {
+            if (simulated) {
                 setLiveConnected(true);
             }
 
-            if (data.channels && Object.keys(data.channels).length > 0) {
+            const channelsRaw = isRecord(data.channels) ? data.channels : null;
+            if (channelsRaw && Object.keys(channelsRaw).length > 0) {
                 setLiveConnected(true);
                 setConnectionError(null);
                 // Convert to LiveLink-compatible format
@@ -432,74 +296,71 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
-                // Debug: Log raw channel names (every N polls to avoid spam)
-                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.log('[useJetDriveLive] Raw channels:', Object.keys(data.channels));
-                }
-
-                const unmappedChannels: string[] = [];
-
-                for (const [name, ch] of Object.entries(data.channels)) {
-                    const channel = ch as { id: number; name: string; value: number; timestamp: number };
+                for (const [name, chRaw] of Object.entries(channelsRaw)) {
+                    if (!isRecord(chRaw)) continue;
+                    const id = getNumber(chRaw.id) ?? undefined;
+                    const value = getNumber(chRaw.value);
+                    const timestamp = getNumber(chRaw.timestamp);
+                    if (value === null || timestamp === null) continue;
                     const config = getChannelConfig(name);
-
-                    // Track unmapped channels (those using default config)
-                    if (!JETDRIVE_CHANNEL_CONFIG[name] && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                        unmappedChannels.push(name);
-                    }
 
                     newChannels[name] = {
                         name,
-                        value: channel.value,
-                        units: config?.units || '',
-                        timestamp: channel.timestamp,
-                        id: channel.id,
+                        value,
+                        units: config?.units ?? '',
+                        timestamp,
+                        id,
                     };
 
-                    newSnapshot.channels[name] = channel.value;
-                    newSnapshot.units[name] = config?.units || '';
+                    newSnapshot.channels[name] = value;
+                    newSnapshot.units[name] = config?.units ?? '';
                 }
-
-                // Debug: Log unmapped channels
-                if (unmappedChannels.length > 0 && pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.warn('[useJetDriveLive] Unmapped channels (using fallback config):', unmappedChannels);
-                }
-
-                // Debug: Log mapped channel count
-                if (pollCountRef.current % DEBUG_LOG_THROTTLE === 0) {
-                    console.log('[useJetDriveLive] Mapped channels:', Object.keys(newChannels).length);
+                if (opts.debug) {
+                    // Keep any verbose logging behind a flag: logging inside a 20Hz polling loop
+                    // can severely degrade UI performance.
+                    console.debug('[useJetDriveLive] channels:', Object.keys(newChannels));
                 }
 
                 setChannels(newChannels);
                 setSnapshot(newSnapshot);
 
-                // Update history for charts (every poll for now)
-                setHistory(prev => {
-                    const newHistory = { ...prev };
-                    const now = Date.now();
+                // Collect chart history every poll into a ref (cheap), but publish to React state
+                // less frequently to reduce allocations and full-dashboard rerenders.
+                const now = Date.now();
+                const nextHistory = historyRef.current;
 
-                    for (const [name, ch] of Object.entries(newChannels)) {
-                        if (!newHistory[name]) {
-                            newHistory[name] = [];
-                        }
-                        newHistory[name] = [
-                            ...newHistory[name].slice(-(opts.maxHistoryPoints - 1)),
-                            { time: now, value: ch.value }
-                        ];
+                for (const [name, ch] of Object.entries(newChannels)) {
+                    const arr = nextHistory[name] ?? (nextHistory[name] = []);
+                    arr.push({ time: now, value: ch.value });
+                    if (arr.length > opts.maxHistoryPoints) {
+                        // Drop the oldest points without allocating a new array
+                        arr.splice(0, arr.length - opts.maxHistoryPoints);
                     }
-
-                    return newHistory;
-                });
+                }
+                const shouldPublish =
+                    opts.historyPublishIntervalMs <= opts.pollInterval ||
+                    now - lastHistoryPublishAtRef.current >= opts.historyPublishIntervalMs;
+                if (shouldPublish) {
+                    lastHistoryPublishAtRef.current = now;
+                    // Clone shallowly to keep React state immutable and avoid downstream mutation surprises.
+                    const published: Record<string, { time: number; value: number }[]> = {};
+                    for (const [k, v] of Object.entries(nextHistory)) {
+                        published[k] = v.slice();
+                    }
+                    setHistory(published);
+                }
             } else {
                 // If capturing but no channels, surface backend diagnostics (if provided).
-                if (data.capturing && data.status?.message) {
-                    setConnectionError(data.status.message);
+                const statusObj = isRecord(data.status) ? data.status : null;
+                const message = statusObj ? getString(statusObj.message) : null;
+                if (capturing && message) {
+                    setConnectionError(message);
                 }
             }
         } catch {
             // Silent fail for polling
         }
-    }, [opts.apiUrl, opts.maxHistoryPoints]);
+    }, [opts.apiUrl, opts.debug, opts.historyPublishIntervalMs, opts.maxHistoryPoints, opts.pollInterval]);
 
     // Start capture
     const startCapture = useCallback(async () => {
@@ -534,11 +395,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     // Clear history
     const clearHistory = useCallback(() => {
         setHistory({});
+        historyRef.current = {};
+        lastHistoryPublishAtRef.current = 0;
     }, []);
 
     // Initial connection check
     useEffect(() => {
-        checkConnection();
+        void checkConnection();
     }, [checkConnection]);
 
     // Polling effect
@@ -548,7 +411,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
         // Poll live data when capturing
         if (isCapturing) {
-            pollLiveData(); // Immediate poll
+            void pollLiveData(); // Immediate poll
             pollIntervalRef.current = setInterval(pollLiveData, opts.pollInterval);
         }
 
@@ -563,9 +426,30 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     // Auto-connect
     useEffect(() => {
         if (opts.autoConnect && monitorConnected && !isCapturing) {
-            startCapture().catch(() => { });
+            void startCapture().catch(() => undefined);
         }
     }, [opts.autoConnect, monitorConnected, isCapturing, startCapture]);
+
+    // Status sounds on connect/disconnect transitions
+    useEffect(() => {
+        const isConnectedNow = monitorConnected || liveConnected;
+        const prev = prevConnectedRef.current;
+
+        // Ignore first render (no initial chirp)
+        if (prev === null) {
+            prevConnectedRef.current = isConnectedNow;
+            return;
+        }
+
+        if (prev !== isConnectedNow) {
+            const now = Date.now();
+            if (now - lastStatusSoundAtRef.current > STATUS_SOUND_DEBOUNCE_MS) {
+                playUiSound(isConnectedNow ? 'connect' : 'disconnect');
+                lastStatusSoundAtRef.current = now;
+            }
+            prevConnectedRef.current = isConnectedNow;
+        }
+    }, [monitorConnected, liveConnected]);
 
     return {
         isConnected: monitorConnected || liveConnected,

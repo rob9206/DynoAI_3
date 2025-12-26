@@ -1,6 +1,8 @@
-import { ReactNode, memo } from 'react';
+import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { History, Home, Radio, Sparkles, Gauge, Volume2 } from 'lucide-react';
+import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX } from 'lucide-react';
+import { Button } from './ui/button';
+import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
 interface LayoutProps {
   children: ReactNode;
@@ -8,6 +10,21 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const [uiSoundsEnabled, setUiSoundsEnabled] = useState(() => getUiSoundsEnabled());
+
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const ce = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof ce.detail?.enabled === 'boolean') {
+        setUiSoundsEnabled(ce.detail.enabled);
+      } else {
+        setUiSoundsEnabled(getUiSoundsEnabled());
+      }
+    };
+
+    window.addEventListener('dynoai:ui-sounds', onChanged);
+    return () => window.removeEventListener('dynoai:ui-sounds', onChanged);
+  }, []);
 
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
@@ -103,17 +120,21 @@ export default function Layout({ children }: LayoutProps) {
 
               <div className="w-px h-6 bg-border mx-2" />
 
-              {/* Audio Demo - Special styling */}
-              <Link
-                to="/audio-demo"
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/audio-demo')
-                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-sm shadow-cyan-500/25'
-                  : 'text-muted-foreground hover:bg-cyan-500/10 hover:text-cyan-300'
-                  }`}
+              {/* UI Sounds Toggle */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
+                aria-label={uiSoundsEnabled ? 'Mute UI sounds' : 'Enable UI sounds'}
+                onClick={() => setUiSoundsEnabled(toggleUiSoundsEnabled())}
               >
-                <Volume2 className="h-4 w-4" />
-                <span>Audio Demo</span>
-              </Link>
+                {uiSoundsEnabled ? (
+                  <Volume2 className="h-4 w-4" />
+                ) : (
+                  <VolumeX className="h-4 w-4" />
+                )}
+              </Button>
             </nav>
           </div>
         </div>

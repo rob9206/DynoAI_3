@@ -52,9 +52,9 @@ export function getColorForValue(value: number, options?: ColorScaleOptions): st
   // Clamp value to range
   const clampedValue = Math.max(minValue, Math.min(maxValue, value));
   
-  // Neutral range
+  // Neutral range - use green for OK/on-target values
   if (Math.abs(clampedValue) <= neutralRange) {
-    return 'rgb(255, 255, 255)'; // White
+    return 'rgb(34, 197, 94)'; // Green-500 for OK values
   }
   
   // Define color stops

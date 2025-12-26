@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { encodePathSegment } from './sanitize';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
@@ -82,6 +83,30 @@ export interface CoverageData {
   };
 }
 
+// =============================================================================
+// Session Replay (tuning decisions)
+// =============================================================================
+
+export interface SessionReplayDecision {
+  timestamp: string;
+  action: string;
+  reason: string;
+  values: Record<string, unknown>;
+  cell?: {
+    rpm?: number;
+    kpa?: number;
+    cylinder?: string;
+  };
+}
+
+export interface SessionReplayData {
+  schema_version?: string;
+  run_id: string;
+  generated_at: string;
+  total_decisions: number;
+  decisions: SessionReplayDecision[];
+}
+
 export interface Anomaly {
   type: string;
   score: number;
@@ -151,7 +176,7 @@ export const getJobStatus = async (runId: string): Promise<JobStatus> => {
 };
 
 export const downloadFile = async (runId: string, filename: string): Promise<Blob> => {
-  const response = await api.get(`/api/download/${runId}/${filename}`, {
+  const response = await api.get(`/api/download/${encodePathSegment(runId)}/${encodePathSegment(filename)}`, {
     responseType: 'blob',
   });
   return response.data;
@@ -206,14 +231,152 @@ export const pollJobStatus = async (
 };
 
 // Session Replay API
-export const getSessionReplay = async (runId: string) => {
-  const response = await api.get(`/api/session-replay/${runId}`);
-  return response.data;
+export const getSessionReplay = async (runId: string): Promise<SessionReplayData> => {
+  // Canonical backend route
+  const response = await api.get(`/api/runs/${encodePathSegment(runId)}/session-replay`);
+  return response.data as SessionReplayData;
 };
 
 // Confidence Report API
 export const getConfidenceReport = async (runId: string) => {
   const response = await api.get(`/api/confidence-report/${runId}`);
+  return response.data;
+};
+
+// =============================================================================
+// PowerCore Integration API (file_id based - secure)
+// =============================================================================
+
+/** File information returned by discovery endpoints (no raw paths exposed) */
+export interface PowerCoreFile {
+  id: string;
+  name: string;
+  size_kb: number;
+  mtime: number;
+  type: 'log' | 'tune' | 'wp8';
+  extension?: string;  // Only for tune files
+}
+
+export interface PowerCoreDiscoveryResponse {
+  count: number;
+  files: PowerCoreFile[];
+}
+
+export interface PowerCoreStatusResponse {
+  powercore_running: boolean;
+  data_dirs: string[];
+}
+
+export interface ParseLogResponse {
+  success: boolean;
+  format?: string;
+  signals?: number;
+  rows?: number;
+  signal_list?: Array<{
+    index: number;
+    name: string;
+    units: string;
+    description: string;
+  }>;
+  dynoai_columns?: string[];
+  preview?: Record<string, unknown>[];
+  error?: string;
+}
+
+export interface ParseTuneResponse {
+  success: boolean;
+  tables?: number;
+  scalars?: number;
+  flags?: number;
+  table_list?: Array<{
+    name: string;
+    units: string;
+    rows: number;
+    cols: number;
+    row_units: string;
+    col_units: string;
+  }>;
+  scalar_list?: Record<string, number>;
+  flag_list?: Record<string, boolean>;
+  error?: string;
+}
+
+export interface ParseWP8Response {
+  success: boolean;
+  channels?: number;
+  metadata?: Record<string, string>;
+  channel_list?: Array<{
+    id: number;
+    name: string;
+    units: string;
+    device: string;
+    category: string;
+  }>;
+  error?: string;
+}
+
+/** Check Power Core integration status */
+export const getPowerCoreStatus = async (): Promise<PowerCoreStatusResponse> => {
+  const response = await api.get('/api/powercore/status');
+  return response.data;
+};
+
+/** Discover available Power Vision log files */
+export const discoverLogs = async (): Promise<PowerCoreDiscoveryResponse> => {
+  const response = await api.get('/api/powercore/discover/logs');
+  return response.data;
+};
+
+/** Discover available tune files (.pvv, .pvm) */
+export const discoverTunes = async (): Promise<PowerCoreDiscoveryResponse> => {
+  const response = await api.get('/api/powercore/discover/tunes');
+  return response.data;
+};
+
+/** Discover available WP8 dyno run files */
+export const discoverWP8 = async (): Promise<PowerCoreDiscoveryResponse> => {
+  const response = await api.get('/api/powercore/discover/wp8');
+  return response.data;
+};
+
+/** Parse a Power Vision log file using file_id */
+export const parseLog = async (fileId: string): Promise<ParseLogResponse> => {
+  const response = await api.post('/api/powercore/parse/log', { file_id: fileId });
+  return response.data;
+};
+
+/** Parse a tune file (.pvv, .pvm) using file_id */
+export const parseTune = async (fileId: string): Promise<ParseTuneResponse> => {
+  const response = await api.post('/api/powercore/parse/tune', { file_id: fileId });
+  return response.data;
+};
+
+/** Parse a WP8 dyno run file using file_id */
+export const parseWP8 = async (fileId: string): Promise<ParseWP8Response> => {
+  const response = await api.post('/api/powercore/parse/wp8', { file_id: fileId });
+  return response.data;
+};
+
+// =============================================================================
+// System Diagnostics API
+// =============================================================================
+
+export interface SystemDiagnostics {
+  status: string;
+  version: string;
+  timestamp: string;
+  uptime_seconds: number;
+  active_jobs: number;
+  virtual_tune_sessions: number;
+  file_index_entries: number;
+  database_status: string;
+  health_status: string;
+  components: Record<string, unknown>;
+}
+
+/** Get system diagnostics */
+export const getSystemDiagnostics = async (): Promise<SystemDiagnostics> => {
+  const response = await api.get('/api/health/diagnostics');
   return response.data;
 };
 

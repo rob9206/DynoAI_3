@@ -6,13 +6,21 @@ Provides REST endpoints for:
 - Parsing tune files
 - Running auto-tune workflow
 - Exporting corrections
+
+Security:
+- Discovery endpoints return server-issued file IDs (not raw paths)
+- Parse endpoints accept file_id (resolved server-side)
+- This prevents path traversal vulnerabilities
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import Blueprint, jsonify, request
 
 from api.services.autotune_workflow import AutoTuneWorkflow
+from api.services.file_index import FileType, get_file_index
 from api.services.livelink_client import LiveLinkClient
 from api.services.powercore_integration import (
     check_powercore_running,
@@ -70,57 +78,92 @@ def get_status():
 
 @powercore_bp.route("/discover/logs", methods=["GET"])
 def discover_logs():
-    """Discover available log files."""
+    """
+    Discover available log files.
+
+    Returns server-issued file IDs instead of raw paths.
+    Use the file_id with POST /api/powercore/parse/log to parse.
+    """
+    file_index = get_file_index()
     logs = find_log_files()
+
+    # Register each file and return IDs
+    files = []
+    for f in logs[:50]:  # Limit to 50
+        try:
+            file_id = file_index.register(f, FileType.LOG)
+            entry = file_index.get_entry(file_id)
+            if entry:
+                files.append(entry.to_api_response())
+        except (FileNotFoundError, ValueError):
+            # Skip files that can't be registered
+            continue
+
     return jsonify(
         {
-            "count": len(logs),
-            "files": [
-                {
-                    "path": str(f),
-                    "name": f.name,
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                }
-                for f in logs[:50]  # Limit to 50
-            ],
+            "count": len(files),
+            "files": files,
         }
     )
 
 
 @powercore_bp.route("/discover/tunes", methods=["GET"])
 def discover_tunes():
-    """Discover available tune files."""
+    """
+    Discover available tune files.
+
+    Returns server-issued file IDs instead of raw paths.
+    Use the file_id with POST /api/powercore/parse/tune to parse.
+    """
+    file_index = get_file_index()
     tunes = find_tune_files()
+
+    files = []
+    for f in tunes[:50]:
+        try:
+            file_id = file_index.register(f, FileType.TUNE)
+            entry = file_index.get_entry(file_id)
+            if entry:
+                api_response = entry.to_api_response()
+                # Add extension for tune files
+                api_response["extension"] = f.suffix
+                files.append(api_response)
+        except (FileNotFoundError, ValueError):
+            continue
+
     return jsonify(
         {
-            "count": len(tunes),
-            "files": [
-                {
-                    "path": str(f),
-                    "name": f.name,
-                    "extension": f.suffix,
-                }
-                for f in tunes[:50]
-            ],
+            "count": len(files),
+            "files": files,
         }
     )
 
 
 @powercore_bp.route("/discover/wp8", methods=["GET"])
 def discover_wp8():
-    """Discover available WP8 dyno run files."""
+    """
+    Discover available WP8 dyno run files.
+
+    Returns server-issued file IDs instead of raw paths.
+    Use the file_id with POST /api/powercore/parse/wp8 to parse.
+    """
+    file_index = get_file_index()
     wp8_files = find_wp8_files()
+
+    files = []
+    for f in wp8_files[:50]:
+        try:
+            file_id = file_index.register(f, FileType.WP8)
+            entry = file_index.get_entry(file_id)
+            if entry:
+                files.append(entry.to_api_response())
+        except (FileNotFoundError, ValueError):
+            continue
+
     return jsonify(
         {
-            "count": len(wp8_files),
-            "files": [
-                {
-                    "path": str(f),
-                    "name": f.name,
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                }
-                for f in wp8_files[:50]
-            ],
+            "count": len(files),
+            "files": files,
         }
     )
 
@@ -132,13 +175,45 @@ def discover_wp8():
 
 @powercore_bp.route("/parse/log", methods=["POST"])
 def parse_log():
-    """Parse a Power Vision log file."""
+    """
+    Parse a Power Vision log file.
+
+    Request body:
+        { "file_id": "..." }  # Server-issued file ID from discovery
+
+    Legacy support (deprecated):
+        { "path": "..." }  # Raw path (will be validated)
+    """
     data = request.get_json()
-    if not data or "path" not in data:
-        return jsonify({"error": "Missing 'path' in request body"}), 400
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    # Try file_id first (new secure method)
+    if "file_id" in data:
+        file_index = get_file_index()
+        try:
+            safe_path = file_index.resolve(data["file_id"], expected_type=FileType.LOG)
+        except KeyError:
+            return jsonify({"error": "Invalid or expired file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected log file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "File no longer exists"}), 404
+    elif "path" in data:
+        # Legacy support - validate path is within allowed directories
+        try:
+            safe_path = _resolve_powercore_file_legacy(
+                data["path"], allowed_suffixes={".csv"}
+            )
+        except FileNotFoundError:
+            return jsonify({"error": "File not found or inaccessible"}), 404
+        except ValueError:
+            return jsonify({"error": "Invalid file path or type"}), 400
+    else:
+        return jsonify({"error": "Missing 'file_id' in request body"}), 400
 
     try:
-        pv_log = parse_powervision_log(data["path"])
+        pv_log = parse_powervision_log(str(safe_path))
         dynoai_df = powervision_log_to_dynoai_format(pv_log)
 
         return jsonify(
@@ -160,19 +235,51 @@ def parse_log():
                 "preview": dynoai_df.head(10).to_dict(orient="records"),
             }
         )
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception:
+        return jsonify({"success": False, "error": "Failed to parse log file"}), 500
 
 
 @powercore_bp.route("/parse/tune", methods=["POST"])
 def parse_tune():
-    """Parse a PVV tune file."""
+    """
+    Parse a PVV tune file.
+
+    Request body:
+        { "file_id": "..." }  # Server-issued file ID from discovery
+
+    Legacy support (deprecated):
+        { "path": "..." }  # Raw path (will be validated)
+    """
     data = request.get_json()
-    if not data or "path" not in data:
-        return jsonify({"error": "Missing 'path' in request body"}), 400
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    # Try file_id first (new secure method)
+    if "file_id" in data:
+        file_index = get_file_index()
+        try:
+            safe_path = file_index.resolve(data["file_id"], expected_type=FileType.TUNE)
+        except KeyError:
+            return jsonify({"error": "Invalid or expired file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected tune file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "File no longer exists"}), 404
+    elif "path" in data:
+        # Legacy support
+        try:
+            safe_path = _resolve_powercore_file_legacy(
+                data["path"], allowed_suffixes={".pvv", ".pvm"}
+            )
+        except FileNotFoundError:
+            return jsonify({"error": "File not found or inaccessible"}), 404
+        except ValueError:
+            return jsonify({"error": "Invalid file path or type"}), 400
+    else:
+        return jsonify({"error": "Missing 'file_id' in request body"}), 400
 
     try:
-        tune = parse_pvv_tune(data["path"])
+        tune = parse_pvv_tune(str(safe_path))
 
         return jsonify(
             {
@@ -195,19 +302,75 @@ def parse_tune():
                 "flag_list": tune.flags,
             }
         )
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception:
+        return jsonify({"success": False, "error": "Failed to parse tune file"}), 500
 
 
 @powercore_bp.route("/parse/wp8", methods=["POST"])
 def parse_wp8():
-    """Parse a WP8 dyno run file."""
+    """
+    Parse a WP8 dyno run file.
+
+    Request body:
+        { "file_id": "..." }  # Server-issued file ID from discovery
+
+    Legacy support (deprecated):
+        { "path": "..." }  # Raw path (will be validated)
+    """
     data = request.get_json()
-    if not data or "path" not in data:
-        return jsonify({"error": "Missing 'path' in request body"}), 400
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    # Try file_id first (new secure method)
+    if "file_id" in data:
+        file_index = get_file_index()
+        try:
+            safe_path = file_index.resolve(data["file_id"], expected_type=FileType.WP8)
+        except KeyError:
+            return jsonify({"error": "Invalid or expired file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected WP8 file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "File no longer exists"}), 404
+    elif "path" in data:
+        # Legacy support
+        try:
+            safe_path = _resolve_powercore_file_legacy(
+                data["path"], allowed_suffixes={".wp8"}
+            )
+        except FileNotFoundError:
+            return jsonify({"error": "File not found or inaccessible"}), 404
+        except ValueError:
+            return jsonify({"error": "Invalid file path or type"}), 400
+    else:
+        return jsonify({"error": "Missing 'file_id' in request body"}), 400
 
     try:
-        run = parse_wp8_file(data["path"])
+        # Extra defense-in-depth: ensure resolved path is within allowed Power Core dirs
+        from pathlib import Path
+        try:
+            from api.services.powercore_integration import find_powercore_data_dirs
+
+            allowed_roots = [p.resolve() for p in find_powercore_data_dirs()]
+        except Exception:
+            allowed_roots = []
+
+        resolved = Path(str(safe_path)).resolve()
+
+        def _is_within(child: Path, root: Path) -> bool:
+            try:
+                child.relative_to(root)
+                return True
+            except ValueError:
+                return False
+
+        if allowed_roots and not any(_is_within(resolved, root) for root in allowed_roots):
+            return (
+                jsonify({"error": "WP8 path is outside allowed Power Core data directories"}),
+                400,
+            )
+
+        run = parse_wp8_file(str(resolved))
 
         return jsonify(
             {
@@ -226,8 +389,51 @@ def parse_wp8():
                 ],
             }
         )
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception:
+        return jsonify({"success": False, "error": "Failed to parse WP8 file"}), 500
+
+
+# =============================================================================
+# Legacy Path Resolution (for backwards compatibility)
+# =============================================================================
+
+
+def _resolve_powercore_file_legacy(path_str: str, allowed_suffixes: set[str]) -> Path:
+    """
+    Resolve a client-provided path to a real file, but ONLY if it lives under one
+    of the discovered Power Core data directories.
+
+    This prevents arbitrary file reads (path traversal / local file disclosure).
+
+    DEPRECATED: Use file_id from discovery endpoints instead.
+    """
+    if not isinstance(path_str, str) or not path_str.strip():
+        raise ValueError("Invalid path")
+
+    raw = Path(path_str).expanduser()
+    resolved = raw.resolve()
+
+    if not resolved.exists() or not resolved.is_file():
+        raise FileNotFoundError(f"File not found: {path_str}")
+
+    if resolved.suffix.lower() not in {s.lower() for s in allowed_suffixes}:
+        raise ValueError(f"Invalid file type: {resolved.suffix}")
+
+    allowed_roots = [p.resolve() for p in find_powercore_data_dirs()]
+    if not allowed_roots:
+        raise ValueError("No Power Core data directories found on this machine")
+
+    def _is_within(child: Path, root: Path) -> bool:
+        try:
+            child.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    if not any(_is_within(resolved, root) for root in allowed_roots):
+        raise ValueError("Path is outside allowed Power Core data directories")
+
+    return resolved
 
 
 # =============================================================================
@@ -245,20 +451,41 @@ def create_session():
 
 @powercore_bp.route("/autotune/import-log", methods=["POST"])
 def import_log():
-    """Import a log file into an auto-tune session."""
+    """
+    Import a log file into an auto-tune session.
+
+    Request body:
+        { "session_id": "...", "file_id": "..." }  # Preferred: use file_id
+        { "session_id": "...", "path": "..." }     # Legacy: raw path
+    """
     data = request.get_json()
-    if not data or "session_id" not in data or "path" not in data:
-        return (
-            jsonify({"error": "Missing 'session_id' or 'path' in request body"}),
-            400,
-        )
+    if not data or "session_id" not in data:
+        return jsonify({"error": "Missing 'session_id' in request body"}), 400
 
     workflow = get_workflow()
     session = workflow.sessions.get(data["session_id"])
     if not session:
         return jsonify({"error": "Session not found"}), 404
 
-    success = workflow.import_log(session, data["path"])
+    # Resolve the log file path
+    if "file_id" in data:
+        file_index = get_file_index()
+        try:
+            log_path = str(
+                file_index.resolve(data["file_id"], expected_type=FileType.LOG)
+            )
+        except KeyError:
+            return jsonify({"error": "Invalid or expired file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected log file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "File no longer exists"}), 404
+    elif "path" in data:
+        log_path = data["path"]
+    else:
+        return jsonify({"error": "Missing 'file_id' or 'path' in request body"}), 400
+
+    success = workflow.import_log(session, log_path)
     return jsonify(
         {
             "success": success,
@@ -367,17 +594,52 @@ def export_corrections():
 def full_workflow():
     """Run the complete auto-tune workflow."""
     data = request.get_json()
-    if not data or "log_path" not in data or "output_dir" not in data:
+    if not data or "output_dir" not in data:
+        return jsonify({"error": "Missing 'output_dir' in request body"}), 400
+
+    # Resolve log path
+    if "file_id" in data:
+        file_index = get_file_index()
+        try:
+            log_path = str(
+                file_index.resolve(data["file_id"], expected_type=FileType.LOG)
+            )
+        except KeyError:
+            return jsonify({"error": "Invalid or expired log file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected log file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "Log file no longer exists"}), 404
+    elif "log_path" in data:
+        log_path = data["log_path"]
+    else:
         return (
-            jsonify({"error": "Missing 'log_path' or 'output_dir' in request body"}),
+            jsonify({"error": "Missing 'file_id' or 'log_path' in request body"}),
             400,
         )
 
+    # Resolve tune path if provided
+    tune_path = None
+    if "tune_file_id" in data:
+        file_index = get_file_index()
+        try:
+            tune_path = str(
+                file_index.resolve(data["tune_file_id"], expected_type=FileType.TUNE)
+            )
+        except KeyError:
+            return jsonify({"error": "Invalid or expired tune file_id"}), 400
+        except ValueError:
+            return jsonify({"error": "File type mismatch: expected tune file"}), 400
+        except FileNotFoundError:
+            return jsonify({"error": "Tune file no longer exists"}), 404
+    elif "tune_path" in data:
+        tune_path = data["tune_path"]
+
     workflow = get_workflow()
     session = workflow.run_full_workflow(
-        log_path=data["log_path"],
+        log_path=log_path,
         output_dir=data["output_dir"],
-        tune_path=data.get("tune_path"),
+        tune_path=tune_path,
     )
 
     return jsonify(workflow.get_session_summary(session))

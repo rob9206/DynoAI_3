@@ -1,158 +1,149 @@
 """
-Database models for DynoAI runs.
+Database models for DynoAI analysis runs.
 
-These models provide persistent storage for run state, progress tracking,
-and output file metadata.
+Models:
+- Run: Analysis run record with status, results, metadata
+- RunFile: Output files associated with runs
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import declarative_base, relationship
 
-from api.models.base import Base
-
-
-def utc_now() -> datetime:
-    """Get current UTC time."""
-    return datetime.now(timezone.utc)
+Base = declarative_base()
 
 
 class Run(Base):
     """
     Analysis run record.
 
-    Stores the state and metadata for each analysis run, whether from
-    Jetstream integration or manual file upload.
-
-    Attributes:
-        id: Unique run identifier (e.g., 'run_abc123')
-        status: Current status (pending, processing, complete, error)
-        source: Origin of the run ('jetstream' or 'manual_upload')
-        created_at: When the run was created
-        updated_at: When the run was last modified
-        jetstream_id: External Jetstream run ID (if applicable)
-        current_stage: Current processing stage name
-        progress_percent: Progress percentage (0-100)
-        results_summary: JSON summary of analysis results
-        error_info: JSON error details if status is 'error'
-        input_filename: Original uploaded filename
-        config_snapshot: JSON snapshot of config at run time
+    Stores metadata, status, and results for each analysis run.
+    Replaces JSON file storage for better querying and concurrent access.
     """
 
     __tablename__ = "runs"
 
-    # Primary identifier
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Primary key
+    id = Column(
+        String(64),
+        primary_key=True,
+        comment="Run ID (e.g., run_20251225_120000_abc123)",
+    )
 
-    # Status tracking
-    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    source: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    # Status and source
+    status = Column(
+        String(20),
+        nullable=False,
+        index=True,
+        comment="Run status: pending, processing, complete, error",
+    )
+    source = Column(
+        String(20),
+        nullable=False,
+        index=True,
+        comment="Data source: upload, jetstream, simulator",
+    )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
-    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
 
     # Jetstream integration
-    jetstream_id: Mapped[Optional[str]] = mapped_column(
-        String(64), index=True, nullable=True
+    jetstream_id = Column(
+        String(64), index=True, nullable=True, comment="Jetstream run ID"
     )
+    jetstream_status = Column(String(20), nullable=True)
 
     # Progress tracking
-    current_stage: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    progress_percent: Mapped[int] = mapped_column(Integer, default=0)
+    current_stage = Column(String(50), comment="Current processing stage")
+    progress_percent = Column(Integer, default=0, comment="Progress percentage (0-100)")
+    progress_message = Column(Text, comment="Human-readable progress message")
 
-    # Results and errors (stored as JSON)
-    results_summary: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        SQLiteJSON, nullable=True
-    )
-    error_info: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        SQLiteJSON, nullable=True
+    # Results summary (JSON)
+    results_summary = Column(
+        JSON,
+        nullable=True,
+        comment="Analysis results: HP, torque, AFR stats, etc.",
     )
 
-    # Metadata
-    input_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    config_snapshot: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        SQLiteJSON, nullable=True
+    # Error tracking
+    error_info = Column(JSON, nullable=True, comment="Error details if status=error")
+    error_message = Column(Text, nullable=True)
+
+    # Input metadata
+    input_filename = Column(String(255), comment="Original uploaded filename")
+    input_size_bytes = Column(Integer, comment="File size in bytes")
+    input_rows = Column(Integer, comment="Number of data rows")
+
+    # Analysis configuration
+    config_snapshot = Column(
+        JSON,
+        nullable=True,
+        comment="Configuration used for this run",
+    )
+
+    # Performance metrics
+    peak_hp = Column(Float, nullable=True, comment="Peak horsepower")
+    peak_torque = Column(Float, nullable=True, comment="Peak torque")
+    afr_mean = Column(Float, nullable=True, comment="Mean AFR")
+    afr_std = Column(Float, nullable=True, comment="AFR standard deviation")
+
+    # VE corrections
+    ve_corrections_count = Column(
+        Integer, nullable=True, comment="Number of VE corrections suggested"
+    )
+    ve_max_correction_pct = Column(
+        Float, nullable=True, comment="Maximum correction magnitude (%)"
     )
 
     # Relationships
-    files: Mapped[List["RunFile"]] = relationship(
-        "RunFile", back_populates="run", cascade="all, delete-orphan"
-    )
+    files = relationship("RunFile", back_populates="run", cascade="all, delete-orphan")
 
-    # Indexes for common queries
-    __table_args__ = (
-        Index("ix_runs_status_created", "status", "created_at"),
-        Index("ix_runs_source_created", "source", "created_at"),
-    )
+    def __repr__(self):
+        return f"<Run(id='{self.id}', status='{self.status}', source='{self.source}')>"
 
-    def to_dict(self, include_files: bool = True) -> Dict[str, Any]:
-        """
-        Convert to dictionary for JSON serialization.
-
-        Args:
-            include_files: Whether to include file list
-
-        Returns:
-            Dictionary representation of the run
-        """
-        result = {
-            "run_id": self.id,
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "id": self.id,
             "status": self.status,
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "jetstream_id": self.jetstream_id,
             "current_stage": self.current_stage,
             "progress_percent": self.progress_percent,
+            "progress_message": self.progress_message,
+            "results_summary": self.results_summary,
+            "error_message": self.error_message,
             "input_filename": self.input_filename,
+            "peak_hp": self.peak_hp,
+            "peak_torque": self.peak_torque,
+            "afr_mean": self.afr_mean,
+            "ve_corrections_count": self.ve_corrections_count,
         }
-
-        if self.results_summary:
-            result["results_summary"] = self.results_summary
-
-        if self.error_info:
-            result["error"] = self.error_info
-
-        if include_files:
-            result["files"] = [f.filename for f in self.files]
-
-        return result
-
-    def __repr__(self) -> str:
-        return f"<Run(id={self.id!r}, status={self.status!r}, source={self.source!r})>"
 
 
 class RunFile(Base):
     """
-    Output file from a run.
+    Output file from an analysis run.
 
-    Tracks metadata about files produced during analysis.
-
-    Attributes:
-        id: Auto-incrementing primary key
-        run_id: Foreign key to parent run
-        filename: Name of the file
-        file_type: Type/extension (csv, json, txt)
-        size_bytes: File size in bytes
-        storage_path: Local filesystem path or cloud storage key
-        created_at: When the file was created
+    Tracks files generated during analysis (CSV exports, reports, plots, etc.)
     """
 
     __tablename__ = "run_files"
 
     # Primary key
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Foreign key to run
-    run_id: Mapped[str] = mapped_column(
+    run_id = Column(
         String(64),
         ForeignKey("runs.id", ondelete="CASCADE"),
         nullable=False,
@@ -160,23 +151,28 @@ class RunFile(Base):
     )
 
     # File metadata
-    filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    storage_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    filename = Column(
+        String(255), nullable=False, comment="Filename (e.g., corrections.csv)"
+    )
+    file_type = Column(String(50), comment="File type: csv, json, txt, png, pdf")
+    size_bytes = Column(Integer, comment="File size in bytes")
 
-    # Timestamp
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
+    # Storage
+    storage_path = Column(Text, comment="Local file path or cloud storage key")
+    storage_type = Column(
+        String(20), default="local", comment="Storage backend: local, s3, gcs"
     )
 
-    # Relationship back to run
-    run: Mapped["Run"] = relationship("Run", back_populates="files")
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Index for efficient lookups
-    __table_args__ = (Index("ix_run_files_run_filename", "run_id", "filename"),)
+    # Relationships
+    run = relationship("Run", back_populates="files")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def __repr__(self):
+        return f"<RunFile(id={self.id}, run_id='{self.run_id}', filename='{self.filename}')>"
+
+    def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
@@ -185,8 +181,6 @@ class RunFile(Base):
             "file_type": self.file_type,
             "size_bytes": self.size_bytes,
             "storage_path": self.storage_path,
+            "storage_type": self.storage_type,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-
-    def __repr__(self) -> str:
-        return f"<RunFile(id={self.id}, run_id={self.run_id!r}, filename={self.filename!r})>"

@@ -22,7 +22,8 @@ import {
 } from '../ui/select';
 import { DecisionCard } from './DecisionCard';
 import { getSessionReplay, type SessionReplayData } from '../../lib/api';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import type { AxiosError } from 'axios';
 
 interface SessionReplayViewerProps {
     runId: string;
@@ -141,6 +142,7 @@ export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
     }
 
     if (error) {
+        const status = (error as AxiosError | undefined)?.response?.status;
         return (
             <Card>
                 <CardContent className="flex items-center justify-center py-12">
@@ -149,7 +151,9 @@ export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
                         <div>
                             <p className="font-semibold">Session Replay Not Available</p>
                             <p className="text-sm text-muted-foreground mt-1">
-                                This run may not have session replay data, or it was created before this feature was added.
+                                {status === 404
+                                    ? 'This run may not have session replay data, or it was created before this feature was added.'
+                                    : 'Failed to load session replay. Please try again.'}
                             </p>
                         </div>
                     </div>

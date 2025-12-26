@@ -19,6 +19,7 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+from api.auth import require_api_key
 from api.config import get_config
 from api.docs import init_swagger
 from api.errors import (
@@ -29,6 +30,7 @@ from api.errors import (
     register_error_handlers,
     with_error_handling,
 )
+from api.metrics import init_metrics, record_analysis, record_file_upload
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
@@ -39,6 +41,24 @@ try:
     swagger = init_swagger(app)
 except Exception as e:
     print(f"[!] Warning: Swagger UI disabled due to: {e}")
+
+# Initialize Prometheus metrics (available at /metrics)
+try:
+    metrics = init_metrics(app)
+except Exception as e:
+    print(f"[!] Warning: Prometheus metrics disabled: {e}")
+
+# Initialize database
+try:
+    from api.services.database import init_database, test_connection
+
+    if test_connection():
+        init_database()
+        print("[+] Database initialized successfully")
+    else:
+        print("[!] Warning: Database connection test failed")
+except Exception as e:
+    print(f"[!] Warning: Database initialization skipped: {e}")
 
 # Register Admin UI blueprint (available at /admin)
 try:
@@ -73,6 +93,27 @@ load_dotenv()
 
 # Get application configuration
 config = get_config()
+
+@app.route("/", methods=["GET"])
+def root():
+    """
+    Friendly root endpoint.
+
+    Some environments (and humans) probe `/` by default. We return a small
+    pointer payload rather than a 404 to reduce confusion and help health checks.
+    """
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "service": "DynoAI API",
+                "health": "/api/health",
+                "docs": "/api/docs",
+                "admin": "/admin",
+            }
+        ),
+        200,
+    )
 
 
 def rate_limit(limit_string: str):
@@ -192,6 +233,15 @@ try:
     app.register_blueprint(virtual_tune_bp)
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Virtual Tuning: {e}")
+
+# Register Power Core Integration blueprint
+try:
+    from api.routes.powercore import powercore_bp
+
+    app.register_blueprint(powercore_bp)
+    print("[+] Power Core integration registered at /api/powercore")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Power Core integration: {e}")
 
 # Store active analysis jobs
 active_jobs = {}
@@ -511,7 +561,31 @@ def analyze():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import logging
+
+        # Record failed analysis
+        record_analysis(status="error", source="upload")
+
+        error_msg = str(e)
+        print(f"[!] Error in /api/analyze: {error_msg}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in analyze endpoint: {error_msg}", exc_info=True)
+        try:
+            return (
+                jsonify(
+                    {
+                        "error": error_msg,
+                        # Never return stack traces to clients (logged server-side via exc_info=True)
+                    }
+                ),
+                500,
+            )
+        except Exception as json_error:
+            # If jsonify itself fails, return plain text
+            print(f"[!] Failed to create JSON response: {json_error}")
+            from flask import Response
+
+            return Response(f"Error: {error_msg}", status=500, mimetype="text/plain")
 
 
 @app.route("/api/status/<run_id>", methods=["GET"])
@@ -778,6 +852,7 @@ def get_confidence_report(run_id):
 
 
 @app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
+@app.route("/api/session-replay/<run_id>", methods=["GET"])  # Backwards-compatible alias
 @rate_limit("120/minute")  # Read-only - permissive
 def get_session_replay(run_id):
     """
@@ -901,6 +976,7 @@ def get_coverage(run_id):
 
 
 @app.route("/api/apply", methods=["POST"])
+@require_api_key  # Protect state-changing VE operations
 @with_error_handling
 def apply_ve_corrections():
     """
@@ -959,7 +1035,13 @@ def apply_ve_corrections():
     # Get base VE path (from request or default)
     base_ve_path = data.get("base_ve_path")
     if base_ve_path:
-        base_ve_path = Path(base_ve_path)
+        # Prevent path traversal: only allow selecting a file from the project's `tables/` dir.
+        # (Clients may send a full path; we intentionally discard directories and keep only the filename.)
+        base_ve_name = secure_filename(Path(str(base_ve_path)).name)
+        if not base_ve_name:
+            raise ValidationError("Invalid base_ve_path")
+
+        base_ve_path = PROJECT_ROOT / "tables" / base_ve_name
         if not base_ve_path.exists():
             raise NotFoundError("Base VE file", str(base_ve_path))
     else:

@@ -38,10 +38,10 @@ export function JetstreamRunCard({ run }: JetstreamRunCardProps) {
     <Card className="border-border/30 bg-gradient-to-br from-card/50 to-card/20 backdrop-blur-sm hover:border-cyan-500/30 hover:from-card/60 hover:to-card/30 transition-all duration-300 overflow-hidden group relative">
       {/* Left accent bar */}
       <div className="absolute left-0 top-0 w-0.5 h-full bg-gradient-to-b from-cyan-500/0 via-cyan-500/0 to-cyan-500/0 group-hover:from-cyan-400/40 group-hover:via-cyan-500/30 group-hover:to-cyan-400/40 transition-all duration-500"></div>
-      
+
       {/* Subtle corner glow on hover */}
       <div className="absolute -top-8 -right-8 w-16 h-16 bg-cyan-400/0 group-hover:bg-cyan-400/5 rounded-full blur-xl transition-all duration-500 pointer-events-none"></div>
-      
+
       <CardHeader className="pb-2 pl-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -49,8 +49,8 @@ export function JetstreamRunCard({ run }: JetstreamRunCardProps) {
               {run.run_id.length > 20 ? `${run.run_id.substring(0, 20)}...` : run.run_id}
             </CardTitle>
             <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5 font-mono uppercase tracking-wider">
-                <Car className="h-3 w-3 text-cyan-400/50" />
-                {vehicle}
+              <Car className="h-3 w-3 text-cyan-400/50" />
+              {vehicle}
             </p>
           </div>
           <Badge variant={status.variant} className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] border-border/50">
@@ -106,7 +106,7 @@ export function JetstreamRunCard({ run }: JetstreamRunCardProps) {
           {/* Error message */}
           {run.error && (
             <p className="text-xs text-destructive/90 font-mono mt-2 border-l-2 border-destructive/50 pl-2 py-1 bg-destructive/5 rounded-r">
-                {run.error.message}
+              {run.error.message}
             </p>
           )}
 

@@ -14,19 +14,16 @@ services:
       target: production
     container_name: dynoai-api
     restart: unless-stopped
+    # Load environment from .env file
+    env_file:
+      - .env
     environment:
+      # Override specific settings for containerized deployment
       - DYNOAI_HOST=0.0.0.0
       - DYNOAI_PORT=5001
-      - DYNOAI_DEBUG=${DYNOAI_DEBUG:-false}
       - DYNOAI_UPLOAD_DIR=/app/uploads
       - DYNOAI_OUTPUT_DIR=/app/outputs
       - DYNOAI_RUNS_DIR=/app/runs
-      - JETSTREAM_ENABLED=${JETSTREAM_ENABLED:-false}
-      - JETSTREAM_API_URL=${JETSTREAM_API_URL:-}
-      - JETSTREAM_API_KEY=${JETSTREAM_API_KEY:-}
-      - JETSTREAM_STUB_MODE=${JETSTREAM_STUB_MODE:-false}
-      - XAI_ENABLED=${XAI_ENABLED:-false}
-      - XAI_API_KEY=${XAI_API_KEY:-}
     volumes:
       # Persist data directories
       - dynoai-uploads:/app/uploads
@@ -34,6 +31,8 @@ services:
       - dynoai-runs:/app/runs
       # Optional: mount local tables for customization
       - ./tables:/app/tables:ro
+      # Optional: mount API keys file for production
+      # - ./api_keys.txt:/etc/dynoai/api_keys.txt:ro
     ports:
       - "${API_PORT:-5001}:5001"
     healthcheck:
@@ -42,6 +41,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - dynoai-network
 
@@ -57,6 +59,8 @@ services:
         - VITE_API_URL=${VITE_API_URL:-}
     container_name: dynoai-frontend
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
@@ -70,6 +74,50 @@ services:
       start_period: 5s
     networks:
       - dynoai-network
+
+  # ==========================================================================
+  # Redis Service (for rate limiting and caching)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: dynoai-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - dynoai-redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dynoai-network
+
+  # ==========================================================================
+  # PostgreSQL Database (optional - for production persistence)
+  # ==========================================================================
+  # Uncomment to enable PostgreSQL instead of SQLite
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: dynoai-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_USER=dynoai
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+  #     - POSTGRES_DB=dynoai
+  #   volumes:
+  #     - dynoai-postgres:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U dynoai"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - dynoai-network
 
 # =============================================================================
 # Networks
@@ -89,4 +137,8 @@ volumes:
     name: dynoai-outputs
   dynoai-runs:
     name: dynoai-runs
+  dynoai-redis:
+    name: dynoai-redis
+  # dynoai-postgres:
+  #   name: dynoai-postgres
 

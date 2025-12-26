@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
     Flame,
     Gauge,
@@ -191,6 +191,10 @@ export function StageConfigPanel({
     const selectedStagePreset = config?.stages.find(s => s.level === selectedStage);
     const selectedCamPreset = config?.cams.find(c => c.family === selectedCam);
 
+    // Defensive: backend may return `notes: null` or omit it; avoid render-time crashes.
+    const stageNotes: string[] = Array.isArray(selectedStagePreset?.notes) ? selectedStagePreset!.notes : [];
+    const camNotes: string[] = Array.isArray(selectedCamPreset?.notes) ? selectedCamPreset!.notes : [];
+
     if (configLoading) {
         return (
             <div className="flex items-center gap-2 py-4 text-zinc-500">
@@ -279,9 +283,9 @@ export function StageConfigPanel({
                                 </div>
                             </div>
 
-                            {selectedStagePreset.notes.length > 0 && (
+                            {stageNotes.length > 0 && (
                                 <div className="pt-2 border-t border-zinc-800/50 space-y-1">
-                                    {selectedStagePreset.notes.slice(0, 2).map((note, i) => (
+                                    {stageNotes.slice(0, 2).map((note, i) => (
                                         <div key={i} className="flex items-start gap-1.5 text-[10px] text-zinc-500">
                                             <ChevronRight className="h-3 w-3 text-blue-400 mt-0.5 flex-shrink-0" />
                                             <span>{note}</span>
@@ -364,9 +368,9 @@ export function StageConfigPanel({
                                 </div>
                             </div>
 
-                            {selectedCamPreset.notes.length > 0 && (
+                            {camNotes.length > 0 && (
                                 <div className="pt-2 border-t border-zinc-800/50 space-y-1">
-                                    {selectedCamPreset.notes.slice(0, 2).map((note, i) => (
+                                    {camNotes.slice(0, 2).map((note, i) => (
                                         <div key={i} className="flex items-start gap-1.5 text-[10px] text-zinc-500">
                                             <ChevronRight className="h-3 w-3 text-purple-400 mt-0.5 flex-shrink-0" />
                                             <span>{note}</span>

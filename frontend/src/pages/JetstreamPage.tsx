@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { JetstreamStatus, JetstreamFeed, JetstreamConfig } from '../components/jetstream';
 import { useJetstreamSync } from '../hooks/useJetstream';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export default function JetstreamPage() {
   const [configOpen, setConfigOpen] = useState(false);
@@ -35,7 +35,7 @@ export default function JetstreamPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 pb-6 relative">
         {/* Subtle gradient accent line */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
-        
+
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight font-mono uppercase flex items-center gap-3 text-foreground/95">
             <div className="relative">

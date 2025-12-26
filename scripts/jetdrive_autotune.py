@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# pyright: reportGeneralTypeIssues=false
+# pyright: reportMissingTypeStubs=false
 """
 DynoAI JetDrive Auto-Tune Pipeline
 
@@ -23,21 +25,21 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import asyncio
 import csv
 import json
 import random
-import socket
-import struct
+import re
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
+
+from dynoai.core.io_contracts import safe_path
 
 # Import DynoAI VE math module for versioned calculations
 from dynoai.core.ve_math import (
@@ -55,6 +57,20 @@ RPM_BINS: list[int] = [1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 600
 
 # Standard MAP/kPa bins (5 bins: 35-95)
 KPA_BINS: list[int] = [35, 50, 65, 80, 95]
+
+
+def sanitize_run_id(run_id: str) -> str:
+    """
+    Sanitize run_id to prevent path traversal attacks.
+    Only allow alphanumeric, underscore, and hyphen characters.
+    """
+    if not run_id:
+        raise ValueError("run_id cannot be empty")
+    sanitized = re.sub(r"[^a-zA-Z0-9_\-]", "_", run_id)
+    sanitized = sanitized.lstrip(".-")
+    if not sanitized:
+        raise ValueError("Invalid run_id after sanitization")
+    return sanitized
 
 
 @dataclass
@@ -281,6 +297,64 @@ class AnalysisResult:
     no_data_cells: int
 
 
+def _build_power_curve(
+    df: Any,
+    rpm_col: str = "RPM",
+    hp_col: str = "Horsepower",
+    tq_col: str = "Torque",
+    rpm_bin_size: int = 100,
+) -> list[dict[str, float]]:
+    """
+    Build a compact power curve for UI overlay charts.
+
+    We bin by RPM (default: 100 RPM) and take max HP/TQ in each bin.
+    This keeps payload small and avoids over-plotting noisy raw samples.
+    """
+    try:
+        if df is None or df.empty:
+            return []
+        if (
+            rpm_col not in df.columns
+            or hp_col not in df.columns
+            or tq_col not in df.columns
+        ):
+            return []
+
+        work = df[[rpm_col, hp_col, tq_col]].copy()
+        work[rpm_col] = pd.to_numeric(work[rpm_col], errors="coerce")
+        work[hp_col] = pd.to_numeric(work[hp_col], errors="coerce")
+        work[tq_col] = pd.to_numeric(work[tq_col], errors="coerce")
+        work = work.dropna(subset=[rpm_col, hp_col, tq_col])
+        work = work[(work[rpm_col] > 0) & (work[rpm_col] < 20000)]
+
+        if work.empty:
+            return []
+
+        # Round to nearest RPM bin
+        work["_rpm_bin"] = (work[rpm_col] / float(rpm_bin_size)).round() * rpm_bin_size
+
+        grouped = (
+            work.groupby("_rpm_bin", as_index=False)
+            .agg({hp_col: "max", tq_col: "max"})
+            .sort_values(by="_rpm_bin")
+        )
+
+        curve: list[dict[str, float]] = []
+        for _, row in grouped.iterrows():
+            rpm = float(row["_rpm_bin"])
+            curve.append(
+                {
+                    "rpm": float(int(round(rpm))),
+                    "hp": round(float(row[hp_col]), 2),
+                    "tq": round(float(row[tq_col]), 2),
+                }
+            )
+        return curve
+    except Exception:
+        # Non-fatal: charting is optional
+        return []
+
+
 def nearest_bin(val: float, bins: list[int]) -> int:
     """Find nearest bin value."""
     return min(bins, key=lambda b: abs(b - val))
@@ -300,35 +374,37 @@ DEFAULT_AFR_TARGETS: dict[int, float] = {
 }
 
 
-def get_target_afr_for_map(map_kpa: float, afr_targets: dict[int, float] | None = None) -> float:
+def get_target_afr_for_map(
+    map_kpa: float, afr_targets: dict[int, float] | None = None
+) -> float:
     """Get target AFR based on MAP (load).
-    
+
     Args:
         map_kpa: Manifold absolute pressure in kPa
         afr_targets: Optional dict mapping MAP values to target AFR.
                      If None, uses DEFAULT_AFR_TARGETS.
-    
+
     Returns:
         Target AFR for the given MAP value (uses nearest bin)
     """
     targets = afr_targets or DEFAULT_AFR_TARGETS
     map_keys = sorted(targets.keys())
-    
+
     if not map_keys:
         return 14.0  # Fallback
-    
+
     # Find nearest MAP bin
     closest = min(map_keys, key=lambda k: abs(k - map_kpa))
     return targets[closest]
 
 
 def analyze_dyno_data(
-    df: pd.DataFrame,
-    config: TuneConfig = None,
+    df: Any,
+    config: TuneConfig | None = None,
     afr_targets: dict[int, float] | None = None,
 ) -> AnalysisResult:
     """Run full 2D grid analysis on dyno data.
-    
+
     Args:
         df: DataFrame with RPM, AFR, MAP_kPa columns
         config: Tuning configuration (optional)
@@ -403,18 +479,19 @@ def analyze_dyno_data(
     # v1.0.0 (legacy): Linear model - VE_correction = 1 + (AFR_error * 7%)
     ve_correction = np.ones((n_rpm, n_map))
     ve_delta_pct = np.zeros((n_rpm, n_map))
-    
+
     for i in range(n_rpm):
         for j in range(n_map):
             if valid_mask[i, j]:
                 measured = mean_afr[i, j]
                 target = target_afr[i, j]
-                
+
                 # Use the versioned VE math module
                 correction = calculate_ve_correction(
-                    measured, target,
+                    measured,
+                    target,
                     version=config.math_version,
-                    clamp=False  # We clamp below with our own limits
+                    clamp=False,  # We clamp below with our own limits
                 )
                 ve_correction[i, j] = correction
                 ve_delta_pct[i, j] = correction_to_percentage(correction)
@@ -712,6 +789,7 @@ def generate_outputs(
             "peak_hp_rpm": result.peak_hp_rpm,
             "peak_tq": result.peak_tq,
             "peak_tq_rpm": result.peak_tq_rpm,
+            "power_curve": _build_power_curve(df),
             "overall_status": result.overall_status,
             "lean_cells": result.lean_cells,
             "rich_cells": result.rich_cells,
@@ -771,7 +849,7 @@ def generate_outputs(
                 mult = grid.ve_correction[i, j]
                 delta = (mult - 1) * 100
                 if grid.hit_count[i, j] == 0:
-                    f.write(f" |   ---  ")
+                    f.write(" |   ---  ")
                 else:
                     f.write(f" | {delta:+5.1f}%  ")
             f.write("\n")
@@ -842,13 +920,13 @@ def print_results(result: AnalysisResult, outputs: dict[str, Path]):
     print("ANALYSIS COMPLETE (2D RPM × MAP Grid)")
     print("=" * 70)
 
-    print(f"\nPeak Performance:")
+    print("\nPeak Performance:")
     print(f"  HP: {result.peak_hp:.1f} @ {result.peak_hp_rpm:.0f} RPM")
     print(f"  TQ: {result.peak_tq:.1f} ft-lb @ {result.peak_tq_rpm:.0f} RPM")
 
     grid = result.grid
 
-    print(f"\nVE Correction Grid (% change):")
+    print("\nVE Correction Grid (% change):")
     print("-" * 70)
     # Header
     header = f"{'RPM':>6s}"
@@ -868,7 +946,7 @@ def print_results(result: AnalysisResult, outputs: dict[str, Path]):
             delta = (mult - 1) * 100
             hits = grid.hit_count[i, j]
             if hits == 0:
-                row += f" |   ---  "
+                row += " |   ---  "
             else:
                 row += f" | {delta:+5.1f}%  "
         print(row)
@@ -876,14 +954,15 @@ def print_results(result: AnalysisResult, outputs: dict[str, Path]):
     if len(grid.rpm_bins) > 6:
         print(f"  ... ({len(grid.rpm_bins)} RPM bins total, showing every other)")
 
-    print(f"\nGrid Summary:")
+    print("\nGrid Summary:")
     print(f"  Total Cells: {len(grid.rpm_bins) * len(grid.map_bins)}")
     print(
-        f"  Lean: {result.lean_cells}  Rich: {result.rich_cells}  OK: {result.ok_cells}  No Data: {result.no_data_cells}"
+        "  Lean: "
+        f"{result.lean_cells}  Rich: {result.rich_cells}  OK: {result.ok_cells}  No Data: {result.no_data_cells}"
     )
     print(f"  Overall: {result.overall_status}")
 
-    print(f"\nGenerated Files:")
+    print("\nGenerated Files:")
     key_files = ["pvv_file", "ve_corrections_2d", "paste_ready", "report"]
     for name in key_files:
         if name in outputs:
@@ -901,7 +980,7 @@ def main():
 Examples:
   # Simulate a dyno run and analyze:
   python scripts/jetdrive_autotune.py --simulate --run-id test_run
-  
+
   # Analyze existing CSV file:
   python scripts/jetdrive_autotune.py --csv runs/my_run/run.csv --run-id my_run
         """,
@@ -917,21 +996,29 @@ Examples:
     )
     parser.add_argument(
         "--afr-targets",
-        help='AFR targets as JSON dict, e.g. \'{"20":14.7,"100":12.2}\''
+        help='AFR targets as JSON dict, e.g. \'{"20":14.7,"100":12.2}\'',
     )
     parser.add_argument(
         "--math-version",
         choices=["1.0.0", "2.0.0"],
         default="2.0.0",
-        help="VE calculation math version: 1.0.0 (legacy 7%% per AFR), 2.0.0 (ratio model, default)"
+        help="VE calculation math version: 1.0.0 (legacy 7%% per AFR), 2.0.0 (ratio model, default)",
     )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
 
     args = parser.parse_args()
-    
+
+    try:
+        safe_run_id = sanitize_run_id(args.run_id)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 1
+
     # Parse math version
-    math_version = MathVersion.V2_0_0 if args.math_version == "2.0.0" else MathVersion.V1_0_0
-    
+    math_version = (
+        MathVersion.V2_0_0 if args.math_version == "2.0.0" else MathVersion.V1_0_0
+    )
+
     # Parse AFR targets if provided
     afr_targets: dict[int, float] | None = None
     if args.afr_targets:
@@ -949,9 +1036,13 @@ Examples:
         print_banner()
 
     # Determine output directory
-    output_dir = (
-        Path(args.output_dir) if args.output_dir else Path("runs") / args.run_id
-    )
+    try:
+        # NOTE: we always derive output under runs/<run-id> to keep paths constrained.
+        # If you need custom output locations, copy the run folder after generation.
+        output_dir = safe_path(str(Path("runs") / safe_run_id))
+    except ValueError as e:
+        print(f"Error: Invalid output directory: {e}")
+        return 1
 
     # Get data
     if args.csv:
@@ -978,7 +1069,7 @@ Examples:
     # Create config with selected math version
     config = TuneConfig(math_version=math_version)
     result = analyze_dyno_data(df, config=config, afr_targets=afr_targets)
-    result.run_id = args.run_id
+    result.run_id = safe_run_id
     result.source_file = source_file
 
     # Generate outputs

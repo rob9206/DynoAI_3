@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Layers, GitCompare, RefreshCw, Download, Keyboard } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,9 +16,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Timeline } from '@/components/timeline';
 import { DiffView } from '@/components/timeline/DiffView';
 import TimelineErrorBoundary from '@/components/timeline/TimelineErrorBoundary';
-import VEHeatmap from '@/components/VEHeatmap';
+import { VEHeatmap as VEGrid } from '@/components/results/VEHeatmap';
+import { VEHeatmapLegend } from '@/components/results/VEHeatmapLegend';
 import { useTimeline } from '@/hooks/useTimeline';
 import { downloadSnapshot, getEventTypeLabel, exportTimelineAsJSON } from '@/api/timeline';
+import { sanitizeDownloadName } from '@/lib/sanitize';
 
 export default function TimeMachinePage() {
   const { runId } = useParams<{ runId: string }>();
@@ -35,6 +37,9 @@ export default function TimeMachinePage() {
     isLoading,
     isLoadingReplay,
     isLoadingDiff,
+    timelineHasMore,
+    timelineLoadedEvents,
+    isLoadingMoreTimeline,
     error,
     goToStep,
     nextStep,
@@ -46,6 +51,7 @@ export default function TimeMachinePage() {
     compareSteps,
     clearDiff,
     refresh,
+    loadMoreTimeline,
   } = useTimeline({
     runId: runId ?? '',
     autoPlayInterval: 1500,
@@ -135,11 +141,12 @@ export default function TimeMachinePage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `VE_Snapshot_Step${currentStep}_${snapshotId}.csv`;
-      document.body.appendChild(a);
+      a.download = sanitizeDownloadName(
+        `VE_Snapshot_Step${currentStep}_${snapshotId}.csv`,
+        've_snapshot.csv'
+      );
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       toast.success('Snapshot downloaded');
     } catch (err) {
       toast.error('Failed to download snapshot');
@@ -205,7 +212,7 @@ export default function TimeMachinePage() {
     );
   }
 
-  const currentEvent = timeline.events[currentStep - 1];
+  const currentEvent = currentReplay?.event ?? timeline.events[currentStep - 1];
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -342,6 +349,10 @@ export default function TimeMachinePage() {
               onStepChange={goToStep}
               isPlaying={isPlaying}
               onPlayPause={togglePlayback}
+              totalSteps={totalSteps}
+              hasMore={timelineHasMore}
+              isLoadingMore={isLoadingMoreTimeline}
+              onLoadMore={() => void loadMoreTimeline()}
             />
           </TimelineErrorBoundary>
         </div>
@@ -402,12 +413,23 @@ export default function TimeMachinePage() {
                   </CardContent>
                 </Card>
               ) : currentReplay?.snapshot ? (
-                <VEHeatmap
-                  data={currentReplay.snapshot.data}
-                  rpm={currentReplay.snapshot.rpm}
-                  load={currentReplay.snapshot.load}
-                  title={`VE Table at Step ${currentStep}`}
-                />
+                <div className="space-y-4">
+                  <VEHeatmapLegend clampLimit={7} />
+                  <VEGrid
+                    data={currentReplay.snapshot.data}
+                    rowLabels={currentReplay.snapshot.rpm.map(String)}
+                    colLabels={currentReplay.snapshot.load.map(String)}
+                    title={`VE Table at Step ${currentStep}`}
+                    clampLimit={7}
+                    showClampIndicators={true}
+                    showValues={true}
+                    // Snapshots are usually absolute VE values; sequential is safer than a diverging correction scale.
+                    colorMode="sequential"
+                    valueDecimals={1}
+                    valueLabel="VE"
+                    tooltipLoadUnit="kPa"
+                  />
+                </div>
               ) : (
                 <Card className="py-12">
                   <CardContent className="text-center">

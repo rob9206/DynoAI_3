@@ -19,7 +19,7 @@ import {
     TrendingUp, TrendingDown, Gauge, Settings2, Info,
     ChevronRight, Loader2, BarChart3, Flame
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';

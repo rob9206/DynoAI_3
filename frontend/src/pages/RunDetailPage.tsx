@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   ArrowLeft,
   Clock,
@@ -31,6 +31,7 @@ import { useJetstreamRun } from '../hooks/useJetstream';
 import { useJetstreamProgress } from '../hooks/useJetstreamProgress';
 import { downloadRunFile } from '../api/jetstream';
 import type { RunStatus, OutputFile } from '../api/jetstream';
+import { sanitizeDownloadName } from '../lib/sanitize';
 import { VEHeatmap } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { useVEData } from '../hooks/useVEData';
@@ -76,11 +77,9 @@ export default function RunDetailPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
+      a.download = sanitizeDownloadName(filename, 'download');
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       toast.success(`Downloaded ${filename}`);
     } catch (err) {
       console.error('Download failed:', err);

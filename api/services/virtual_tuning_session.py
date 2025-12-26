@@ -14,11 +14,11 @@ This is the complete closed-loop tuning simulation!
 
 from __future__ import annotations
 
-import concurrent.futures
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -230,9 +230,27 @@ class VirtualTuningOrchestrator:
             print(f"Converged in {session.current_iteration} iterations!")
     """
 
-    def __init__(self):
-        """Initialize the orchestrator."""
+    def __init__(self, max_age_minutes: int = 60, max_sessions: int = 100):
+        """
+        Initialize the orchestrator.
+
+        Args:
+            max_age_minutes: Maximum age in minutes before sessions are cleaned up (default: 60)
+            max_sessions: Maximum number of sessions to keep in memory (default: 100)
+        """
         self.sessions: dict[str, TuningSession] = {}
+        self._lock = threading.Lock()
+        self._max_age = timedelta(minutes=max_age_minutes)
+        self._max_sessions = max_sessions
+
+        # Start cleanup thread
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop, daemon=True, name="tuning-session-cleanup"
+        )
+        self._cleanup_thread.start()
+        logger.info(
+            f"VirtualTuningOrchestrator initialized (max_age={max_age_minutes}m, max_sessions={max_sessions})"
+        )
 
     def create_session(self, config: TuningSessionConfig) -> TuningSession:
         """
@@ -289,7 +307,8 @@ class VirtualTuningOrchestrator:
         else:
             raise ValueError(f"Unknown scenario: {config.base_ve_scenario}")
 
-        self.sessions[session_id] = session
+        with self._lock:
+            self.sessions[session_id] = session
         logger.info(f"Created tuning session: {session_id}")
 
         return session
@@ -321,26 +340,12 @@ class VirtualTuningOrchestrator:
                 logger.info(f"Iteration {iteration}/{session.config.max_iterations}")
                 logger.info("=" * 60)
 
-                # Run one iteration with timeout protection
+                # Run one iteration
+                # Note: Removed ThreadPoolExecutor timeout protection to avoid issues
+                # with Flask's debug mode reloader. Iterations are bounded by internal
+                # timeouts in the simulator (~30s max per pull).
                 try:
-                    with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=1
-                    ) as executor:
-                        future = executor.submit(
-                            self._run_iteration, session, iteration
-                        )
-                        try:
-                            iteration_result = future.result(
-                                timeout=session.config.iteration_timeout_sec
-                            )
-                        except concurrent.futures.TimeoutError:
-                            logger.error(
-                                f"⚠️ Iteration {iteration} exceeded timeout ({session.config.iteration_timeout_sec}s)"
-                            )
-                            session.status = TuningStatus.FAILED
-                            session.error_message = f"Iteration {iteration} timeout after {session.config.iteration_timeout_sec}s"
-                            session.end_time = time.time()
-                            break
+                    iteration_result = self._run_iteration(session, iteration)
                 except Exception as iter_error:
                     logger.error(
                         f"Iteration {iteration} failed: {iter_error}", exc_info=True
@@ -440,6 +445,7 @@ class VirtualTuningOrchestrator:
 
         # Create simulator with Virtual ECU
         logger.info("  🏍️ Creating dyno simulator...")
+        print(f"[TUNING] Creating dyno simulator for iteration {iteration}")
         sim_config = SimulatorConfig(
             profile=session.config.engine_profile,
             enable_thermal_effects=True,
@@ -448,17 +454,20 @@ class VirtualTuningOrchestrator:
 
         simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
         logger.info("  ✓ Simulator created, starting...")
+        print(f"[TUNING] Simulator created, starting...")
         simulator.start()
 
         # Wait for idle
         time.sleep(0.5)
 
         logger.info(f"  ✓ Simulator started (state: {simulator.get_state().value})")
+        print(f"[TUNING] Simulator started, state: {simulator.get_state().value}")
 
         # Trigger pull
         # Progress: 40% - Dyno pull started
         session.update_progress(40.0, "Running dyno pull...")
         logger.info("  🚀 Starting dyno pull simulation...")
+        pull_start = time.time()  # Record start time for duration calculation
         simulator.trigger_pull()
 
         # Verify pull started
@@ -705,7 +714,8 @@ class VirtualTuningOrchestrator:
 
     def get_session(self, session_id: str) -> TuningSession | None:
         """Get a session by ID."""
-        return self.sessions.get(session_id)
+        with self._lock:
+            return self.sessions.get(session_id)
 
     def stop_session(self, session_id: str) -> bool:
         """
@@ -717,22 +727,136 @@ class VirtualTuningOrchestrator:
         Returns:
             True if stopped successfully
         """
-        session = self.sessions.get(session_id)
-        if session and session.status == TuningStatus.RUNNING:
-            session.status = TuningStatus.STOPPED
-            session.end_time = time.time()
-            logger.info(f"Stopped session: {session_id}")
-            return True
+        with self._lock:
+            session = self.sessions.get(session_id)
+            if session and session.status == TuningStatus.RUNNING:
+                session.status = TuningStatus.STOPPED
+                session.end_time = time.time()
+                logger.info(f"Stopped session: {session_id}")
+                return True
         return False
+
+    def _cleanup_loop(self):
+        """Periodically clean up old sessions."""
+        while True:
+            try:
+                time.sleep(300)  # Run every 5 minutes
+                self._cleanup_old_sessions()
+            except Exception as e:
+                logger.error(f"Error in cleanup loop: {e}", exc_info=True)
+
+    def _cleanup_old_sessions(self):
+        """Remove sessions older than max_age or exceeding max_sessions limit."""
+        with self._lock:
+            now = datetime.now()
+            expired = []
+
+            # Find expired sessions
+            for session_id, session in self.sessions.items():
+                if session.end_time:
+                    # Convert end_time (float timestamp) to datetime
+                    end_dt = datetime.fromtimestamp(session.end_time)
+                    if (now - end_dt) > self._max_age:
+                        expired.append(session_id)
+
+            # Remove expired sessions
+            for session_id in expired:
+                logger.info(f"Cleaning up expired session: {session_id}")
+                self._cleanup_session_resources(session_id)
+                del self.sessions[session_id]
+
+            # Enforce max sessions limit
+            if len(self.sessions) > self._max_sessions:
+                # Remove oldest completed sessions
+                completed = [
+                    (session_id, session)
+                    for session_id, session in self.sessions.items()
+                    if session.status
+                    in [
+                        TuningStatus.CONVERGED,
+                        TuningStatus.FAILED,
+                        TuningStatus.STOPPED,
+                        TuningStatus.MAX_ITERATIONS,
+                    ]
+                ]
+                completed.sort(key=lambda x: x[1].end_time or 0)
+
+                to_remove = len(self.sessions) - self._max_sessions
+                for session_id, _ in completed[:to_remove]:
+                    logger.info(f"Removing old session (limit): {session_id}")
+                    self._cleanup_session_resources(session_id)
+                    del self.sessions[session_id]
+
+    def _cleanup_session_resources(self, session_id: str):
+        """Clean up resources associated with a session."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return
+
+        # Clear large data structures to free memory
+        session.baseline_ve = None
+        session.current_ve_front = None
+        session.current_ve_rear = None
+
+        # Clear iteration data (keep summary but clear large arrays)
+        if session.iterations:
+            for iteration in session.iterations:
+                if hasattr(iteration, "ve_table_front"):
+                    iteration.ve_table_front = None
+                if hasattr(iteration, "ve_table_rear"):
+                    iteration.ve_table_rear = None
+                # Clear any large data structures if they exist
+                # (IterationResult doesn't store dyno_data, but check for safety)
+
+    def cleanup_completed_sessions(self) -> list[str]:
+        """
+        Manually trigger cleanup of all completed sessions.
+
+        Returns:
+            List of session IDs that were removed
+        """
+        with self._lock:
+            completed = [
+                session_id
+                for session_id, session in self.sessions.items()
+                if session.status
+                in [
+                    TuningStatus.CONVERGED,
+                    TuningStatus.FAILED,
+                    TuningStatus.STOPPED,
+                    TuningStatus.MAX_ITERATIONS,
+                ]
+            ]
+
+            for session_id in completed:
+                logger.info(f"Manually cleaning up completed session: {session_id}")
+                self._cleanup_session_resources(session_id)
+                del self.sessions[session_id]
+
+            return completed
 
 
 # Global orchestrator instance
 _orchestrator: VirtualTuningOrchestrator | None = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> VirtualTuningOrchestrator:
-    """Get or create the global orchestrator instance."""
+    """
+    Get or create the global orchestrator instance.
+
+    Uses double-checked locking to ensure thread-safe singleton initialization.
+    This prevents race conditions where multiple threads could create separate
+    orchestrator instances with independent session dictionaries and cleanup threads.
+    """
     global _orchestrator
+
+    # First check (without lock) - fast path for already initialized
     if _orchestrator is None:
-        _orchestrator = VirtualTuningOrchestrator()
+        # Acquire lock for initialization
+        with _orchestrator_lock:
+            # Second check (with lock) - another thread may have initialized it
+            if _orchestrator is None:
+                _orchestrator = VirtualTuningOrchestrator()
+
     return _orchestrator

@@ -14,6 +14,7 @@ Uses the unified AutoTuneWorkflow engine for all analysis.
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import logging
 import os
@@ -25,13 +26,13 @@ import sys
 import threading
 import time
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
-from api.rate_limit import get_limiter
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,45 @@ def get_workflow() -> AutoTuneWorkflow:
 
 def get_project_root() -> Path:
     """Get project root directory."""
-    return Path(__file__).parent.parent.parent
+    # 1) Explicit env override (useful for tests and deployments)
+    env_root = os.getenv("DYNOAI_PROJECT_ROOT") or os.getenv("DYNOAI_ROOT")
+    if env_root:
+        try:
+            p = Path(env_root).expanduser().resolve()
+            if p.exists() and p.is_dir():
+                return p
+        except Exception:
+            # Fall through to auto-detection
+            pass
+
+    # 2) If the process was started from the project root, prefer CWD
+    try:
+        cwd = Path.cwd().resolve()
+        # Heuristic: repo root contains the `api/` directory.
+        if (cwd / "api").is_dir():
+            return cwd
+    except Exception:
+        pass
+
+    # 3) Fallback: derive from this file location (`api/routes/jetdrive.py`)
+    return Path(__file__).resolve().parent.parent.parent
+
+
+# =============================================================================
+# Configuration endpoints
+# =============================================================================
+
+
+@jetdrive_bp.route("/dyno/config", methods=["GET"])
+def get_dyno_config():
+    """Return Dyno configuration used for calculations and display."""
+    try:
+        from api.config import get_config
+
+        cfg = get_config().dyno
+        return jsonify({"success": True, "config": cfg.to_dict()})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 
 def sanitize_run_id(run_id: str) -> str:
@@ -121,6 +160,104 @@ def validate_csv_path(csv_path: str) -> Path:
     raise ValueError("CSV path must be under uploads/ or runs/")
 
 
+def _compute_power_curve_from_run_csv(
+    run_id: str, rpm_bin_size: int = 100
+) -> list[dict[str, float]] | None:
+    """
+    Best-effort power curve extraction for UI overlay charts.
+
+    Compatibility fallback for older runs whose manifest.json doesn't yet include
+    analysis.power_curve. This does NOT write back to disk.
+    """
+    try:
+        csv_path = safe_path_in_runs(run_id, "run.csv")
+        if not csv_path.exists():
+            return None
+
+        buckets: dict[int, dict[str, float]] = {}
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rpm_raw = row.get("RPM") or row.get("Engine RPM") or row.get("rpm")
+                hp_raw = row.get("Horsepower") or row.get("HP") or row.get("hp")
+                tq_raw = row.get("Torque") or row.get("TQ") or row.get("tq")
+                if rpm_raw is None or hp_raw is None or tq_raw is None:
+                    continue
+
+                try:
+                    rpm = float(rpm_raw)
+                    hp = float(hp_raw)
+                    tq = float(tq_raw)
+                except (TypeError, ValueError):
+                    continue
+
+                if not (isfinite(rpm) and isfinite(hp) and isfinite(tq)):
+                    continue
+                if rpm <= 0 or rpm >= 20000:
+                    continue
+
+                rpm_bin = int(round(rpm / float(rpm_bin_size)) * rpm_bin_size)
+                b = buckets.get(rpm_bin)
+                if b is None:
+                    buckets[rpm_bin] = {"hp": hp, "tq": tq}
+                else:
+                    if hp > b["hp"]:
+                        b["hp"] = hp
+                    if tq > b["tq"]:
+                        b["tq"] = tq
+
+        if not buckets:
+            return None
+
+        return [
+            {
+                "rpm": float(rpm_bin),
+                "hp": round(vals["hp"], 2),
+                "tq": round(vals["tq"], 2),
+            }
+            for rpm_bin, vals in sorted(buckets.items(), key=lambda kv: kv[0])
+        ]
+    except Exception:
+        return None
+
+
+def _infer_run_source_from_manifest(manifest: dict[str, Any]) -> str:
+    """
+    Infer the run source for UI comparison/filtering.
+
+    Returns one of:
+    - simulator_pull: captured pull from built-in simulator (analyzed from CSV but origin is simulator)
+    - simulate: fully synthetic simulated data (--simulate)
+    - real: non-synthetic file-backed runs (hardware capture or imported logs)
+    - unknown: cannot determine
+    """
+    try:
+        inputs = (
+            manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
+        )
+        mode = inputs.get("mode")
+        if isinstance(mode, str):
+            mode_norm = mode.strip().lower()
+            if mode_norm in {"simulator_pull", "simulate"}:
+                return mode_norm
+
+        src = manifest.get("source_file", "")
+        if src == "simulated":
+            return "simulate"
+
+        if isinstance(src, str):
+            src_norm = src.replace("\\", "/").lower()
+            if src_norm.endswith("_pull.csv"):
+                return "simulator_pull"
+            # Any other file-backed source is treated as "real" for UI purposes.
+            if src_norm.endswith(".csv") or src_norm.endswith(".wp8"):
+                return "real"
+
+        return "unknown"
+    except Exception:
+        return "unknown"
+
+
 # =============================================================================
 # Status Routes
 # =============================================================================
@@ -148,6 +285,12 @@ def get_status():
     project_root = get_project_root()
     runs_dir = project_root / "runs"
 
+    source_filter = request.args.get("source")
+    if source_filter is not None:
+        source_filter = str(source_filter).strip().lower()
+        if source_filter not in {"simulator_pull", "real", "simulate", "unknown"}:
+            return jsonify({"error": "Invalid source filter"}), 400
+
     runs = []
     if runs_dir.exists():
         for run_dir in sorted(runs_dir.iterdir(), reverse=True):
@@ -157,19 +300,40 @@ def get_status():
                     try:
                         with open(manifest_path) as f:
                             manifest = json.load(f)
+                        analysis = manifest.get("analysis", {}) or {}
+                        peak_perf = manifest.get("peak_performance", {}) or {}
+
+                        # Support multiple historical key conventions
+                        peak_hp = (
+                            analysis.get("peak_hp")
+                            or peak_perf.get("peak_hp")
+                            or manifest.get("peak_hp")
+                            or 0
+                        )
+                        peak_tq = (
+                            analysis.get("peak_tq")
+                            or analysis.get("peak_torque")
+                            or peak_perf.get("peak_tq")
+                            or peak_perf.get("peak_torque")
+                            or manifest.get("peak_tq")
+                            or manifest.get("peak_torque")
+                            or 0
+                        )
+                        source = (
+                            _infer_run_source_from_manifest(manifest)
+                            if isinstance(manifest, dict)
+                            else "unknown"
+                        )
+                        if source_filter and source != source_filter:
+                            continue
                         runs.append(
                             {
                                 "run_id": run_dir.name,
                                 "timestamp": manifest.get("timestamp", ""),
-                                "peak_hp": manifest.get("analysis", {}).get(
-                                    "peak_hp", 0
-                                ),
-                                "peak_tq": manifest.get("analysis", {}).get(
-                                    "peak_tq", 0
-                                ),
-                                "status": manifest.get("analysis", {}).get(
-                                    "overall_status", ""
-                                ),
+                                "peak_hp": peak_hp or 0,
+                                "peak_tq": peak_tq or 0,
+                                "status": analysis.get("overall_status", ""),
+                                "source": source,
                             }
                         )
                     except Exception:
@@ -178,6 +342,7 @@ def get_status():
                                 "run_id": run_dir.name,
                                 "timestamp": "",
                                 "status": "unknown",
+                                "source": "unknown",
                             }
                         )
 
@@ -315,9 +480,8 @@ def analyze_run():
             )
 
         import csv as csv_module
-        from datetime import datetime
 
-        from api.services.dyno_simulator import SimState, get_simulator
+        from api.services.dyno_simulator import get_simulator
 
         sim = get_simulator()
         sim_state = sim.get_state()
@@ -332,7 +496,10 @@ def analyze_run():
                 jsonify(
                     {
                         "success": False,
-                        "error": "No simulator pull data available. Please run a pull first by clicking 'Trigger Pull' in the simulator controls.",
+                        "error": (
+                            "No simulator pull data available. Please run a pull first by clicking "
+                            "'Trigger Pull' in the simulator controls."
+                        ),
                     }
                 ),
                 400,
@@ -481,6 +648,23 @@ def analyze_run():
         with open(manifest_path) as f:
             manifest = json.load(f)
 
+        # Persist the requested mode into the manifest so the UI can filter runs by source.
+        # (Important for simulator_pull: it analyzes a CSV, but origin is simulator.)
+        try:
+            if isinstance(manifest, dict):
+                inputs = manifest.get("inputs")
+                if not isinstance(inputs, dict):
+                    inputs = {}
+                    manifest["inputs"] = inputs
+                inputs["mode"] = mode
+                inputs["mode_recorded_at"] = datetime.utcnow().isoformat() + "Z"
+                with open(manifest_path, "w", encoding="utf-8") as wf:
+                    json.dump(manifest, wf, indent=2)
+        except Exception:
+            logger.warning(
+                "Failed to persist inputs.mode into manifest.json", exc_info=True
+            )
+
         # Read VE correction grid
         ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
         ve_grid = []
@@ -501,18 +685,17 @@ def analyze_run():
         if was_simulator_active:
             _set_simulator_active(True)
 
-        return jsonify(
-            {
-                "success": True,
-                "run_id": run_id,
-                "mode": mode,  # Include mode so frontend knows what was analyzed
-                "output_dir": str(output_dir),
-                "analysis": manifest.get("analysis", {}),
-                "grid": manifest.get("grid", {}),
-                "ve_grid": ve_grid,
-                "outputs": manifest.get("outputs", {}),
-            }
-        )
+        response_data = {
+            "success": True,
+            "run_id": run_id,
+            "mode": mode,  # Include mode so frontend knows what was analyzed
+            "output_dir": str(output_dir),
+            "analysis": manifest.get("analysis", {}),
+            "grid": manifest.get("grid", {}),
+            "ve_grid": ve_grid,
+            "outputs": manifest.get("outputs", {}),
+        }
+        return jsonify(response_data)
 
     except subprocess.TimeoutExpired:
         # Restore simulator active state if it was active before
@@ -635,6 +818,16 @@ def get_run(run_id: str):
     with open(manifest_path) as f:
         manifest = json.load(f)
 
+    # Backfill power curve for older runs (do not write back to disk)
+    try:
+        analysis = manifest.get("analysis")
+        if isinstance(analysis, dict) and not analysis.get("power_curve"):
+            curve = _compute_power_curve_from_run_csv(run_id)
+            if curve:
+                analysis["power_curve"] = curve
+    except Exception:
+        pass
+
     # Read VE correction grid
     ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
     ve_grid = []
@@ -675,7 +868,8 @@ def get_run(run_id: str):
                         try:
                             values.append(float(v))
                         except ValueError:
-                            values.append(None)
+                            # Keep shape stable; treat invalid entries as 0.0
+                            values.append(0.0)
                     afr_grid.append({"rpm": int(parts[0]), "values": values})
 
     # Read confidence report if available
@@ -795,12 +989,15 @@ def export_text(run_id: str):
     if analysis:
         lines.append("PERFORMANCE SUMMARY")
         lines.append("-" * 80)
-        lines.append(
-            f"Peak Horsepower: {analysis.get('peak_hp', 0):.2f} HP @ {analysis.get('peak_hp_rpm', 0):.0f} RPM"
+        peak_hp = analysis.get("peak_hp", 0)
+        peak_hp_rpm = analysis.get("peak_hp_rpm", analysis.get("hp_peak_rpm", 0))
+        peak_tq = analysis.get("peak_tq", analysis.get("peak_torque", 0))
+        peak_tq_rpm = analysis.get(
+            "peak_tq_rpm",
+            analysis.get("tq_peak_rpm", analysis.get("torque_peak_rpm", 0)),
         )
-        lines.append(
-            f"Peak Torque: {analysis.get('peak_tq', 0):.2f} lb-ft @ {analysis.get('peak_tq_rpm', 0):.0f} RPM"
-        )
+        lines.append(f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM")
+        lines.append(f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM")
         lines.append(f"Total Samples: {analysis.get('total_samples', 0)}")
         lines.append(f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
         lines.append("")
@@ -1409,12 +1606,18 @@ def _live_capture_loop():
                 # Update live data with latest values
                 channel_values = {}
                 for s in samples:
-                    channel_values[s.channel_name] = {
+                    entry = {
                         "id": s.channel_id,
                         "name": s.channel_name,
                         "value": s.value,
                         "timestamp": s.timestamp_ms,
                     }
+                    channel_values[s.channel_name] = entry
+                    # Also add a stable chan_<id> alias so the frontend can fall back
+                    # even if the provider's channel_name differs from expected.
+                    chan_key = f"chan_{s.channel_id}"
+                    if s.channel_name != chan_key and chan_key not in channel_values:
+                        channel_values[chan_key] = entry
 
                 with _live_data_lock:
                     _live_data["channels"] = channel_values
@@ -1509,16 +1712,552 @@ def get_live_data():
             }
         )
 
+    def _get_value(channels_dict: dict[str, Any], keys: list[str]) -> float | None:
+        for k in keys:
+            v = channels_dict.get(k)
+            if isinstance(v, dict) and "value" in v:
+                try:
+                    return float(v.get("value"))
+                except Exception:
+                    continue
+        return None
+
     with _live_data_lock:
+        # Copy so we can safely augment without racing the capture thread
+        channels: dict[str, Any] = dict(_live_data.get("channels", {}) or {})
+
+    # If the hardware stream doesn't broadcast Horsepower/Torque, compute them from Force + RPM
+    try:
+        from api.config import get_config
+
+        rpm = _get_value(channels, ["Digital RPM 1", "RPM", "chan_42", "chan_10"])
+        force = _get_value(channels, ["Force Drum 1", "Force", "chan_39", "chan_12"])
+
+        if rpm is not None and force is not None and rpm > 0:
+            cfg = get_config().dyno
+            # During throttle lift / coastdown, Force Drum can go negative (engine braking),
+            # which would otherwise produce 0 HP due to guardrails in calculate_hp_from_force.
+            # For live display, use magnitude so the trace doesn't instantly flatline.
+            force_mag = abs(float(force))
+            hp = cfg.calculate_hp_from_force(force_mag, rpm)
+            tq = cfg.calculate_torque_from_force(force_mag)
+            # Only add if not already provided by hardware
+            channels.setdefault("Horsepower", {"value": hp})
+            channels.setdefault("Torque", {"value": tq})
+    except Exception:
+        pass
+
+    return jsonify(
+        {
+            "capturing": True,
+            "simulated": False,
+            "last_update": _live_data.get("last_update"),
+            "channels": channels,
+            "channel_count": len(channels),
+        }
+    )
+
+
+# =============================================================================
+# Innovate Wideband AFR (DLG-1 / LC-2)
+# =============================================================================
+
+# Note: This is intentionally kept separate from the JetDrive UDP capture loop.
+# The Innovate devices connect via local serial/USB and are polled/streamed via
+# dedicated endpoints used by the Wideband tab in the frontend.
+
+_innovate_lock = threading.Lock()
+_innovate_client: Any | None = None
+_innovate_port: str | None = None
+_innovate_device_type: str | None = None
+_innovate_last_error: str | None = None
+_innovate_last_samples: dict[int, Any] = {}
+_innovate_last_sample_at: float | None = None  # wall clock (time.time()) of last sample received
+
+
+def _innovate_parse_device_type(device_type: Any) -> str:
+    """Normalize device_type input to one of: 'DLG-1', 'LC-2', 'AUTO'."""
+    if not isinstance(device_type, str):
+        return "AUTO"
+    s = device_type.strip().upper().replace("_", "-")
+    if s in {"DLG-1", "DLG1"}:
+        return "DLG-1"
+    if s in {"LC-2", "LC2"}:
+        return "LC-2"
+    return "AUTO"
+
+
+def _innovate_on_sample(sample: Any) -> None:
+    """Streaming callback from InnovateClient; caches latest samples for status endpoint."""
+    global _innovate_last_samples, _innovate_last_sample_at
+    try:
+        ch = int(getattr(sample, "channel", 1))
+    except Exception:
+        ch = 1
+    with _innovate_lock:
+        _innovate_last_samples[ch] = sample
+        _innovate_last_sample_at = time.time()
+
+
+@jetdrive_bp.route("/innovate/ports", methods=["GET"])
+def innovate_list_ports():
+    """List available serial ports for Innovate devices."""
+    try:
+        from api.services.innovate_client import list_available_ports
+
+        ports = list_available_ports() or []
+        simplified = []
+        for p in ports:
+            if not isinstance(p, dict):
+                continue
+            port = p.get("port")
+            if not isinstance(port, str) or not port:
+                continue
+            desc = p.get("description") if isinstance(p.get("description"), str) else ""
+            simplified.append({"port": port, "description": desc})
+
+        return jsonify({"success": True, "ports": simplified})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc), "ports": []}), 500
+
+
+@jetdrive_bp.route("/innovate/connect", methods=["POST"])
+def innovate_connect():
+    """Connect to an Innovate device (DLG-1/LC-2) and start background streaming."""
+    global _innovate_client, _innovate_port, _innovate_device_type, _innovate_last_error
+    global _innovate_last_samples, _innovate_last_sample_at
+
+    body = request.get_json(silent=True) or {}
+    port = body.get("port")
+    if not isinstance(port, str) or not port.strip():
+        return jsonify({"success": False, "connected": False, "error": "Missing 'port'"}), 400
+    port = port.strip()
+
+    dev_type_norm = _innovate_parse_device_type(body.get("device_type"))
+
+    # Always reset cached state on connect attempt
+    with _innovate_lock:
+        _innovate_last_samples = {}
+        _innovate_last_sample_at = None
+        _innovate_last_error = None
+
+    try:
+        from api.services.innovate_client import InnovateClient, InnovateDeviceType
+
+        dev_enum = InnovateDeviceType.AUTO
+        if dev_type_norm == "DLG-1":
+            dev_enum = InnovateDeviceType.DLG1
+        elif dev_type_norm == "LC-2":
+            dev_enum = InnovateDeviceType.LC2
+
+        # Replace any existing client
+        with _innovate_lock:
+            old = _innovate_client
+            _innovate_client = None
+            _innovate_port = None
+            _innovate_device_type = None
+        if old is not None:
+            try:
+                old.disconnect()
+            except Exception:
+                pass
+
+        client = InnovateClient(port=port, device_type=dev_enum)
+        ok = client.connect()
+        if not ok:
+            detail = getattr(client, "last_error", None)
+            msg = f"Failed to connect to {port}"
+            if isinstance(detail, str) and detail.strip():
+                msg = f"{msg}: {detail.strip()}"
+            with _innovate_lock:
+                _innovate_last_error = msg
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "connected": False,
+                        "error": msg,
+                    }
+                ),
+                200,
+            )
+
+        # Start streaming in the background to continuously update latest samples
+        started = False
+        try:
+            started = bool(client.start_streaming(_innovate_on_sample))
+        except Exception as exc:
+            # Connection can still be valid even if streaming didn't start.
+            logger.warning("Innovate streaming start failed: %s", exc)
+
+        with _innovate_lock:
+            _innovate_client = client
+            _innovate_port = port
+            _innovate_device_type = dev_enum.value
+            _innovate_last_error = None
+
         return jsonify(
             {
-                "capturing": _live_data["capturing"],
-                "simulated": False,
-                "last_update": _live_data["last_update"],
-                "channels": _live_data["channels"],
-                "channel_count": len(_live_data["channels"]),
+                "success": True,
+                "connected": True,
+                "port": port,
+                "device_type": dev_enum.value,
+                "streaming": started,
             }
         )
+
+    except ImportError as exc:
+        # Most commonly: pyserial missing
+        with _innovate_lock:
+            _innovate_last_error = str(exc)
+        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+    except Exception as exc:
+        with _innovate_lock:
+            _innovate_last_error = str(exc)
+        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/innovate/disconnect", methods=["POST"])
+def innovate_disconnect():
+    """Disconnect the active Innovate device (if any)."""
+    global _innovate_client, _innovate_port, _innovate_device_type, _innovate_last_error
+    global _innovate_last_samples, _innovate_last_sample_at
+
+    with _innovate_lock:
+        client = _innovate_client
+        _innovate_client = None
+        _innovate_port = None
+        _innovate_device_type = None
+        _innovate_last_samples = {}
+        _innovate_last_sample_at = None
+        _innovate_last_error = None
+
+    if client is not None:
+        try:
+            client.disconnect()
+        except Exception:
+            pass
+
+    return jsonify({"success": True})
+
+
+@jetdrive_bp.route("/innovate/status", methods=["GET"])
+def innovate_status():
+    """Return connection + latest sample status for the Innovate device."""
+    with _innovate_lock:
+        client = _innovate_client
+        port = _innovate_port
+        device_type = _innovate_device_type
+        last_error = _innovate_last_error
+        samples = dict(_innovate_last_samples)
+        last_sample_at = _innovate_last_sample_at
+
+    connected = bool(client is not None and getattr(client, "connected", False))
+    # "running" means the stream loop is active; "streaming" means we saw data recently.
+    running = bool(client is not None and getattr(client, "running", False))
+
+    now = time.time()
+    streaming = bool(
+        connected
+        and running
+        and last_sample_at is not None
+        and (now - float(last_sample_at)) < 2.0
+    )
+
+    samples_out: dict[str, Any] = {}
+    for ch, s in samples.items():
+        try:
+            afr = float(getattr(s, "afr", 0.0))
+        except Exception:
+            afr = 0.0
+        try:
+            lam = getattr(s, "lambda_value", None)
+            lam = float(lam) if lam is not None else None
+        except Exception:
+            lam = None
+        try:
+            ts = float(getattr(s, "timestamp", 0.0))
+        except Exception:
+            ts = 0.0
+        samples_out[f"channel_{ch}"] = {"afr": afr, "lambda": lam, "timestamp": ts}
+
+    return jsonify(
+        {
+            "success": True,
+            "connected": connected,
+            "streaming": streaming,
+            "has_samples": len(samples_out) > 0,
+            "port": port,
+            "device_type": device_type,
+            "error": last_error,
+            "samples": samples_out,
+        }
+    )
+
+
+# =============================================================================
+# Hardware validation (RT-150 network + config parameters)
+# =============================================================================
+
+
+def _load_rt150_config() -> dict[str, Any]:
+    """Load RT-150 reference configuration JSON from config folder."""
+    cfg_path = get_project_root() / "config" / "dynoware_rt150.json"
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load RT-150 config at {cfg_path}: {exc}") from exc
+
+
+@jetdrive_bp.route("/hardware/validate", methods=["GET"])
+def validate_hardware():
+    """Validate RT-150 network reachability and config parameters.
+
+    Returns basic checks of the JSON reference config vs environment, and attempts a
+    brief JetDrive provider discovery to verify multicast reachability on the expected port.
+    """
+    warnings: list[str] = []
+
+    # Load reference JSON
+    try:
+        rt150 = _load_rt150_config()
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # Pull current env-derived config
+    try:
+        from api.config import get_config
+
+        env_cfg = get_config().dyno
+    except Exception as exc:
+        logger.error("Failed to read env config in /hardware/validate", exc_info=True)
+        return jsonify({"ok": False, "error": "Failed to read environment config"}), 500
+
+    # Compare key parameters
+    ref_ip = (rt150.get("network") or {}).get("ip_address")
+    ref_port = (rt150.get("network") or {}).get("jetdrive_port")
+
+    if ref_ip and env_cfg.ip_address and str(ref_ip) != str(env_cfg.ip_address):
+        warnings.append(
+            f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}"
+        )
+    if ref_port and env_cfg.jetdrive_port and int(ref_port) != int(env_cfg.jetdrive_port):
+        warnings.append(
+            f"Port mismatch: reference {ref_port} vs env {env_cfg.jetdrive_port}"
+        )
+
+    # Attempt rapid multicast discovery on the configured port
+    providers_info: list[dict[str, Any]] = []
+    matched_provider = False
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        # Prefer reference port if set
+        if isinstance(ref_port, int):
+            cfg.port = ref_port
+
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.5))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        for p in providers:
+            hostsame = bool(ref_ip) and str(p.host) == str(ref_ip)
+            if hostsame:
+                matched_provider = True
+            providers_info.append(
+                {
+                    "provider_id": p.provider_id,
+                    "name": p.name,
+                    "host": p.host,
+                    "port": p.port,
+                    "channels": len(p.channels or {}),
+                    "matches_expected_ip": hostsame,
+                }
+            )
+    except Exception as exc:
+        logger.warning("Discovery error in /hardware/validate", exc_info=True)
+        warnings.append("Discovery error")
+
+    result = {
+        "ok": True,
+        "reference": {
+            "ip_address": ref_ip,
+            "jetdrive_port": ref_port,
+            "drum1": (rt150.get("drums") or {}).get("drum1"),
+        },
+        "environment": {
+            "ip_address": env_cfg.ip_address,
+            "jetdrive_port": env_cfg.jetdrive_port,
+            "drum1": {
+                "serial": env_cfg.drum1_serial,
+                "mass_kg": env_cfg.drum1_mass_kg,
+                "circumference_ft": env_cfg.drum1_circumference_ft,
+                "tabs": env_cfg.drum1_tabs,
+            },
+        },
+        "network": {
+            "providers_found": len(providers_info),
+            "matched_expected_ip": matched_provider,
+            "providers": providers_info,
+        },
+        "warnings": warnings,
+    }
+    return jsonify(result)
+
+
+@jetdrive_bp.route("/hardware/heartbeat", methods=["GET"])
+def hardware_heartbeat():
+    """Lightweight discovery-based heartbeat to confirm UDP responsiveness.
+
+    Uses JetDrive provider discovery as a proxy for a ping, returning
+    the number of providers and their hosts. This validates that:
+      - UDP 22344 is bindable
+      - Multicast join succeeds
+      - Providers are actively broadcasting
+    """
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        return jsonify(
+            {
+                "ok": True,
+                "providers": [
+                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    for p in providers
+                ],
+                "count": len(providers),
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/connect", methods=["POST"])
+def connect_hardware():
+    """Attempt to discover JetDrive providers and mark connection state."""
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=2.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        return jsonify(
+            {
+                "success": True,
+                "connected": len(providers) > 0,
+                "providers": [
+                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    for p in providers
+                ],
+                "count": len(providers),
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/start", methods=["POST"])
+def start_hardware_stream():
+    """Alias for /hardware/live/start to simplify clients."""
+    try:
+        return start_live_capture()
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/stop", methods=["POST"])
+def stop_hardware_stream():
+    """Alias for /hardware/live/stop to simplify clients."""
+    try:
+        return stop_live_capture()
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/status", methods=["GET"])
+def hardware_status():
+    """Composite status of live capture and a quick discovery snapshot."""
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+    except Exception:
+        providers = []
+
+    with _live_data_lock:
+        capturing = bool(_live_data.get("capturing"))
+        last_update = _live_data.get("last_update")
+        channel_count = len(_live_data.get("channels", {}))
+
+    return jsonify(
+        {
+            "connected": len(providers) > 0,
+            "providers": [
+                {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                for p in providers
+            ],
+            "live": {
+                "capturing": capturing,
+                "last_update": last_update,
+                "channel_count": channel_count,
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
 
 @jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
@@ -1526,6 +2265,23 @@ def discover_channels():
     """
     Discover all available channels with their current values.
     Useful for debugging channel name mismatches.
+
+    Response:
+    {
+        "success": true,
+        "channel_count": 25,
+        "channels": [
+            {
+                "id": 42,
+                "name": "Digital RPM 1",
+                "value": 3500.0,
+                "sample_values": [3500, 3501, 3499, ...],
+                "value_range": {"min": 0, "max": 8000},
+                "suggested_config": {...}
+            },
+            ...
+        ]
+    }
     """
     try:
         # Check if simulator is active first
@@ -1537,82 +2293,231 @@ def discover_channels():
         else:
             global _live_data
             with _live_data_lock:
-                channels_data = _live_data["channels"]
+                channels_data = _live_data.get("channels", {})
 
+        if not channels_data:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No channel data available. Start live capture first.",
+                        "channel_count": 0,
+                        "channels": [],
+                    }
+                ),
+                404,
+            )
+
+        # Build channel discovery info
         channels = []
         for name, ch in channels_data.items():
-            channel_info = {
-                "id": ch.get("id"),
-                "name": name,
-                "value": ch.get("value"),
+            channel = (
+                ch if isinstance(ch, dict) else {"value": ch, "id": 0, "name": name}
+            )
+
+            # Get recent values (if available in history)
+            sample_values = []
+            value_range = {"min": None, "max": None}
+
+            # Suggest config based on channel name patterns and value ranges
+            name_lower = name.lower()
+            value = channel.get("value", 0)
+
+            suggested_config = {
+                "label": name.replace("chan_", "Channel ").replace("_", " "),
                 "units": "",
-                "suggested_label": name.replace("chan_", "Channel ").replace("_", " "),
+                "min": 0,
+                "max": 100,
+                "decimals": 2,
+                "color": "#888",
             }
 
-            # Suggest configuration based on value range and name
-            value = ch.get("value", 0)
-            name_lower = name.lower()
+            # Suggest units based on name patterns FIRST, then fall back to value ranges
+            # Priority 1: Keyword-based detection (most reliable)
+            keyword_matched = False
 
-            # Suggest units based on value range and name patterns
-            if "rpm" in name_lower or (value > 500 and value < 15000):
-                channel_info["suggested_units"] = "rpm"
-                channel_info["suggested_type"] = "Engine Speed"
-            elif (
-                "afr" in name_lower
-                or "air/fuel" in name_lower
-                or (value > 9 and value < 20)
-            ):
-                channel_info["suggested_units"] = ":1"
-                channel_info["suggested_type"] = "Air/Fuel Ratio"
-            elif "lambda" in name_lower or (value > 0.5 and value < 2.0):
-                channel_info["suggested_units"] = "λ"
-                channel_info["suggested_type"] = "Lambda"
-            elif "temp" in name_lower or (value > 10 and value < 150):
-                channel_info["suggested_units"] = "°C or °F"
-                channel_info["suggested_type"] = "Temperature"
-            elif (
-                "press" in name_lower
-                or "kpa" in name_lower
-                or (value > 85 and value < 115)
-            ):
-                channel_info["suggested_units"] = "kPa"
-                channel_info["suggested_type"] = "Pressure"
-            elif "humid" in name_lower or (
-                value >= 0 and value <= 100 and value != int(value)
-            ):
-                channel_info["suggested_units"] = "%"
-                channel_info["suggested_type"] = "Humidity"
+            if "rpm" in name_lower or "speed" in name_lower:
+                suggested_config = {
+                    "label": "RPM",
+                    "units": "rpm",
+                    "min": 0,
+                    "max": 8000,
+                    "decimals": 0,
+                    "color": "#4ade80",
+                }
+                keyword_matched = True
+            elif "afr" in name_lower or "air/fuel" in name_lower or "a/f" in name_lower:
+                suggested_config = {
+                    "label": "AFR",
+                    "units": ":1",
+                    "min": 10,
+                    "max": 18,
+                    "decimals": 2,
+                    "color": "#f472b6",
+                }
+                keyword_matched = True
+            elif "lambda" in name_lower:
+                suggested_config = {
+                    "label": "Lambda",
+                    "units": "λ",
+                    "min": 0.5,
+                    "max": 2.0,
+                    "decimals": 2,
+                    "color": "#f472b6",
+                }
+                keyword_matched = True
             elif "force" in name_lower or "load" in name_lower:
-                channel_info["suggested_units"] = "lbs"
-                channel_info["suggested_type"] = "Force"
-            elif "hp" in name_lower or "horsepower" in name_lower:
-                channel_info["suggested_units"] = "HP"
-                channel_info["suggested_type"] = "Horsepower"
-            elif "torque" in name_lower or "tq" in name_lower:
-                channel_info["suggested_units"] = "ft-lb"
-                channel_info["suggested_type"] = "Torque"
-            elif "map" in name_lower:
-                channel_info["suggested_units"] = "kPa"
-                channel_info["suggested_type"] = "Manifold Pressure"
+                suggested_config = {
+                    "label": "Force",
+                    "units": "lbs",
+                    "min": 0,
+                    "max": 500,
+                    "decimals": 1,
+                    "color": "#4ade80",
+                }
+                keyword_matched = True
+            elif "map" in name_lower or "manifold" in name_lower:
+                suggested_config = {
+                    "label": "MAP",
+                    "units": "kPa",
+                    "min": 0,
+                    "max": 105,
+                    "decimals": 1,
+                    "color": "#06b6d4",
+                }
+                keyword_matched = True
+            elif (
+                "temp" in name_lower
+                or "iat" in name_lower
+                or "ect" in name_lower
+                or "coolant" in name_lower
+            ):
+                suggested_config = {
+                    "label": "Temperature",
+                    "units": "°C",
+                    "min": 0,
+                    "max": 150,
+                    "decimals": 1,
+                    "color": "#f59e0b",
+                }
+                keyword_matched = True
             elif "tps" in name_lower or "throttle" in name_lower:
-                channel_info["suggested_units"] = "%"
-                channel_info["suggested_type"] = "Throttle Position"
-            elif "volt" in name_lower or "vbat" in name_lower:
-                channel_info["suggested_units"] = "V"
-                channel_info["suggested_type"] = "Voltage"
-            else:
-                channel_info["suggested_units"] = ""
-                channel_info["suggested_type"] = "Unknown"
+                suggested_config = {
+                    "label": "Throttle",
+                    "units": "%",
+                    "min": 0,
+                    "max": 100,
+                    "decimals": 1,
+                    "color": "#8b5cf6",
+                }
+                keyword_matched = True
+            elif "volt" in name_lower or "battery" in name_lower:
+                suggested_config = {
+                    "label": "Voltage",
+                    "units": "V",
+                    "min": 0,
+                    "max": 16,
+                    "decimals": 2,
+                    "color": "#eab308",
+                }
+                keyword_matched = True
+            elif (
+                "hp" in name_lower
+                or "horsepower" in name_lower
+                or "power" in name_lower
+            ):
+                suggested_config = {
+                    "label": "Horsepower",
+                    "units": "HP",
+                    "min": 0,
+                    "max": 500,
+                    "decimals": 1,
+                    "color": "#ef4444",
+                }
+                keyword_matched = True
+            elif "torque" in name_lower:
+                suggested_config = {
+                    "label": "Torque",
+                    "units": "ft-lb",
+                    "min": 0,
+                    "max": 200,
+                    "decimals": 1,
+                    "color": "#22c55e",
+                }
+                keyword_matched = True
 
-            channels.append(channel_info)
+            # Priority 2: Value-range based detection (fallback for unknown channels)
+            # Use NON-OVERLAPPING ranges to avoid ambiguity
+            if not keyword_matched:
+                if value > 500 and value < 15000:
+                    # High values likely RPM
+                    suggested_config = {
+                        "label": "RPM",
+                        "units": "rpm",
+                        "min": 0,
+                        "max": 8000,
+                        "decimals": 0,
+                        "color": "#4ade80",
+                    }
+                elif value >= 9 and value <= 20:
+                    # AFR range (narrower, more specific)
+                    suggested_config = {
+                        "label": "AFR",
+                        "units": ":1",
+                        "min": 10,
+                        "max": 18,
+                        "decimals": 2,
+                        "color": "#f472b6",
+                    }
+                elif value > 0.5 and value < 2.0:
+                    # Lambda range (distinct from others)
+                    suggested_config = {
+                        "label": "Lambda",
+                        "units": "λ",
+                        "min": 0.5,
+                        "max": 2.0,
+                        "decimals": 2,
+                        "color": "#f472b6",
+                    }
+                elif value > 50 and value < 250:
+                    # Temperature range (above AFR range to avoid overlap)
+                    suggested_config = {
+                        "label": "Temperature",
+                        "units": "°C",
+                        "min": 0,
+                        "max": 150,
+                        "decimals": 1,
+                        "color": "#f59e0b",
+                    }
+
+            channels.append(
+                {
+                    "id": channel.get("id", 0),
+                    "name": name,
+                    "value": channel.get("value", 0),
+                    "sample_values": sample_values,
+                    "value_range": value_range,
+                    "suggested_config": suggested_config,
+                }
+            )
 
         return jsonify(
-            {"success": True, "channel_count": len(channels), "channels": channels}
+            {
+                "success": True,
+                "channel_count": len(channels),
+                "channels": channels,
+                "timestamp": datetime.now().isoformat(),
+            }
         )
 
     except Exception as e:
-        logger.exception("Failed to discover channels")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Error discovering channels: {e}", exc_info=True)
+        return (
+            jsonify(
+                {"success": False, "error": str(e), "channel_count": 0, "channels": []}
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/hardware/health", methods=["GET"])
@@ -1675,6 +2580,14 @@ _sim_lock = threading.Lock()
 
 def _is_simulator_active() -> bool:
     """Thread-safe check for simulator activity."""
+    # Environment override to force simulator fallback (useful for demos/CI)
+    try:
+        env_override = os.getenv("DYNOAI_SIMULATOR_FALLBACK", "").strip().lower()
+        if env_override in {"1", "true", "yes", "on"}:
+            return True
+    except Exception:
+        pass
+
     with _sim_lock:
         return _sim_active
 
@@ -1826,25 +2739,15 @@ def start_simulator():
             }
         )
     except Exception as e:
-        import traceback
-
         error_msg = str(e)
-        traceback_str = traceback.format_exc()
         logger.error(f"Failed to start simulator: {error_msg}", exc_info=True)
-
-        # Try to get debug mode, but don't fail if current_app is not available
-        try:
-            is_debug = current_app.debug
-        except RuntimeError:
-            # Not in request context, default to False
-            is_debug = False
 
         return (
             jsonify(
                 {
                     "success": False,
                     "error": f"Failed to start simulator: {error_msg}",
-                    "details": traceback_str if is_debug else None,
+                    # Never return stack traces to clients (logged server-side via exc_info=True)
                 }
             ),
             500,
@@ -1896,6 +2799,7 @@ def get_simulator_status():
     hp = channels.get("Horsepower", {}).get("value", 0)
     tq = channels.get("Torque", {}).get("value", 0)
     afr = channels.get("Air/Fuel Ratio 1", {}).get("value", 0)
+    tps = channels.get("TPS", {}).get("value", 0)
 
     return jsonify(
         {
@@ -1907,6 +2811,7 @@ def get_simulator_status():
                 "horsepower": round(hp, 1),
                 "torque": round(tq, 1),
                 "afr": round(afr, 2),
+                "tps": round(tps, 1),
             },
         }
     )
@@ -1945,13 +2850,42 @@ def trigger_pull():
     )
 
 
+@jetdrive_bp.route("/simulator/throttle", methods=["POST"])
+def set_simulator_throttle():
+    """
+    Set simulator throttle target (TPS %) for manual operator control.
+
+    Body:
+      { "tps": 0-100 }
+    """
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    data = request.get_json() or {}
+    try:
+        tps = float(data.get("tps"))
+    except Exception:
+        return jsonify({"error": "Missing or invalid 'tps' (0-100)"}), 400
+
+    if not (0.0 <= tps <= 100.0):
+        return jsonify({"error": "'tps' must be between 0 and 100"}), 400
+
+    from api.services.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    # Only allow manual throttle while simulator is running.
+    sim.physics.tps_target = tps
+
+    return jsonify({"success": True, "tps_target": tps})
+
+
 @jetdrive_bp.route("/simulator/pull-data", methods=["GET"])
 def get_pull_data():
     """Get data from the last completed pull."""
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import SimState, get_simulator
+    from api.services.dyno_simulator import get_simulator
 
     sim = get_simulator()
     sim_state = sim.get_state()
@@ -2130,261 +3064,3 @@ def get_profiles():
         )
 
     return jsonify({"profiles": result})
-
-
-# =============================================================================
-# Debug and Diagnostics Routes
-# =============================================================================
-
-
-def suggest_channel_config(channel_name: str, channel_data: dict) -> dict:
-    """
-    Suggest configuration for a channel based on its name and value characteristics.
-    Used by channel discovery endpoint.
-    """
-    name_lower = channel_name.lower()
-    value = channel_data.get("value", 0)
-
-    # Common channel patterns
-    if "rpm" in name_lower:
-        return {
-            "label": "RPM",
-            "units": "rpm",
-            "min": 0,
-            "max": 10000,
-            "decimals": 0,
-            "color": "#4ade80",
-        }
-    elif "afr" in name_lower or "air/fuel" in name_lower or "air-fuel" in name_lower:
-        return {
-            "label": "AFR",
-            "units": ":1",
-            "min": 10,
-            "max": 18,
-            "decimals": 2,
-            "color": "#f472b6",
-        }
-    elif "lambda" in name_lower:
-        return {
-            "label": "Lambda",
-            "units": "λ",
-            "min": 0.7,
-            "max": 1.3,
-            "decimals": 3,
-            "color": "#a78bfa",
-        }
-    elif "force" in name_lower or "load" in name_lower or "drum" in name_lower:
-        return {
-            "label": "Force",
-            "units": "lbs",
-            "min": 0,
-            "max": 500,
-            "decimals": 1,
-            "color": "#4ade80",
-        }
-    elif "hp" in name_lower or "horsepower" in name_lower or "power" in name_lower:
-        return {
-            "label": "Horsepower",
-            "units": "HP",
-            "min": 0,
-            "max": 200,
-            "decimals": 1,
-            "color": "#10b981",
-        }
-    elif "tq" in name_lower or "torque" in name_lower:
-        return {
-            "label": "Torque",
-            "units": "ft-lb",
-            "min": 0,
-            "max": 150,
-            "decimals": 1,
-            "color": "#8b5cf6",
-        }
-    elif "map" in name_lower and "kpa" not in name_lower:
-        return {
-            "label": "MAP",
-            "units": "kPa",
-            "min": 0,
-            "max": 105,
-            "decimals": 1,
-            "color": "#06b6d4",
-        }
-    elif "tps" in name_lower or "throttle" in name_lower:
-        return {
-            "label": "TPS",
-            "units": "%",
-            "min": 0,
-            "max": 100,
-            "decimals": 1,
-            "color": "#14b8a6",
-        }
-    elif "temp" in name_lower or "iat" in name_lower or "ect" in name_lower:
-        # Guess based on value range
-        if value > 100:  # Likely Fahrenheit
-            return {
-                "label": "Temperature",
-                "units": "°F",
-                "min": 0,
-                "max": 250,
-                "decimals": 0,
-                "color": "#f97316",
-            }
-        else:  # Likely Celsius
-            return {
-                "label": "Temperature",
-                "units": "°C",
-                "min": 0,
-                "max": 120,
-                "decimals": 1,
-                "color": "#f97316",
-            }
-    elif "humid" in name_lower:
-        return {
-            "label": "Humidity",
-            "units": "%",
-            "min": 0,
-            "max": 100,
-            "decimals": 1,
-            "color": "#60a5fa",
-        }
-    elif "pressure" in name_lower or "baro" in name_lower:
-        return {
-            "label": "Pressure",
-            "units": "kPa",
-            "min": 90,
-            "max": 110,
-            "decimals": 2,
-            "color": "#a78bfa",
-        }
-    elif "volt" in name_lower or "vbatt" in name_lower or "battery" in name_lower:
-        return {
-            "label": "Voltage",
-            "units": "V",
-            "min": 0,
-            "max": 15,
-            "decimals": 2,
-            "color": "#eab308",
-        }
-    else:
-        # Generic fallback
-        return {
-            "label": channel_name,
-            "units": "",
-            "min": 0,
-            "max": 100,
-            "decimals": 2,
-            "color": "#888888",
-        }
-
-
-@jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
-def discover_channels():
-    """
-    Discover all available channels with their current values.
-    Useful for debugging channel name mismatches.
-    """
-    try:
-        # Get live data (works with both real hardware and simulator)
-        if _is_simulator_active():
-            from api.services.dyno_simulator import get_simulator
-
-            sim = get_simulator()
-            channels_data = sim.get_channels()
-        else:
-            with _live_data_lock:
-                channels_data = _live_data.get("channels", {})
-
-        channels = []
-        for name, ch in channels_data.items():
-            # Build channel info
-            channel_info = {
-                "id": ch.get("id", 0),
-                "name": name,
-                "value": ch.get("value", 0),
-                "timestamp": ch.get("timestamp", 0),
-                "suggested_config": suggest_channel_config(name, ch),
-            }
-
-            channels.append(channel_info)
-
-        # Sort by ID for consistency
-        channels.sort(key=lambda x: x["id"])
-
-        return jsonify(
-            {
-                "success": True,
-                "channel_count": len(channels),
-                "channels": channels,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error discovering channels: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@jetdrive_bp.route("/hardware/health", methods=["GET"])
-def check_hardware_health():
-    """
-    Check hardware connection health with latency measurement.
-    """
-    try:
-        start_time = time.time()
-
-        # Check if we're using simulator
-        if _is_simulator_active():
-            latency_ms = (time.time() - start_time) * 1000
-            from api.services.dyno_simulator import get_simulator
-
-            sim = get_simulator()
-            state = sim.get_state().value
-
-            return jsonify(
-                {
-                    "healthy": True,
-                    "connected": True,
-                    "simulated": True,
-                    "sim_state": state,
-                    "latency_ms": latency_ms,
-                    "mode": "simulator",
-                }
-            )
-
-        # Check real hardware connection
-        with _live_data_lock:
-            capturing = _live_data.get("capturing", False)
-            channel_count = len(_live_data.get("channels", {}))
-            last_update = _live_data.get("last_update")
-
-        latency_ms = (time.time() - start_time) * 1000
-
-        # Consider healthy if we have channels and recent updates
-        is_healthy = capturing and channel_count > 0
-
-        if last_update:
-            try:
-                last_update_dt = datetime.fromisoformat(last_update)
-                age_seconds = (datetime.now() - last_update_dt).total_seconds()
-
-                # Stale if no update in last 5 seconds
-                if age_seconds > 5:
-                    is_healthy = False
-            except:
-                pass
-
-        return jsonify(
-            {
-                "healthy": is_healthy,
-                "connected": capturing,
-                "simulated": False,
-                "latency_ms": latency_ms,
-                "channel_count": channel_count,
-                "last_update": last_update,
-                "mode": "hardware",
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error checking hardware health: {e}", exc_info=True)
-        return jsonify({"healthy": False, "connected": False, "error": str(e)}), 503

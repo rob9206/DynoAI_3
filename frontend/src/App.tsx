@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from 'next-themes';
 import { lazy, Suspense } from 'react';
 import Layout from './components/Layout';
@@ -16,7 +16,6 @@ const RunDetailPage = lazy(() => import('./pages/RunDetailPage'));
 const TimeMachinePage = lazy(() => import('./pages/TimeMachinePage'));
 const TuningWizardsPage = lazy(() => import('./pages/TuningWizardsPage'));
 const JetDriveAutoTunePage = lazy(() => import('./pages/JetDriveAutoTunePage'));
-const AudioEngineDemoPage = lazy(() => import('./pages/AudioEngineDemoPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,7 +44,6 @@ function App() {
                 <Route path="/history" element={<History />} />
                 <Route path="/wizards" element={<TuningWizardsPage />} />
                 <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
-                <Route path="/audio-demo" element={<AudioEngineDemoPage />} />
                 <Route path="*" element={<Navigate to="/jetdrive" replace />} />
               </Routes>
             </Suspense>

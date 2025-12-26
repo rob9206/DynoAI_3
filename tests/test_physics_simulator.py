@@ -5,13 +5,15 @@ Validates that physics improvements work correctly.
 """
 
 import time
-import pytest
+
 import numpy as np
+import pytest
+
 from api.services.dyno_simulator import (
     DynoSimulator,
-    SimulatorConfig,
     EngineProfile,
     SimState,
+    SimulatorConfig,
 )
 
 
@@ -80,9 +82,9 @@ class TestPhysicsBasics:
         # At optimal temp, correction should be 1.0
         sim.physics.engine_temp_f = profile.optimal_temp_f
         correction_optimal = sim._get_thermal_correction()
-        assert (
-            abs(correction_optimal - 1.0) < 0.01
-        ), "Optimal temp should give 1.0 correction"
+        assert abs(correction_optimal - 1.0) < 0.01, (
+            "Optimal temp should give 1.0 correction"
+        )
 
         # Cold engine should reduce power
         sim.physics.engine_temp_f = profile.optimal_temp_f - 50
@@ -93,9 +95,9 @@ class TestPhysicsBasics:
         # Hot engine should reduce power more
         sim.physics.engine_temp_f = profile.optimal_temp_f + 50
         correction_hot = sim._get_thermal_correction()
-        assert (
-            correction_hot < correction_cold
-        ), "Hot engine should lose more power than cold"
+        assert correction_hot < correction_cold, (
+            "Hot engine should lose more power than cold"
+        )
         assert correction_hot > 0.85, "Hot penalty should be reasonable"
 
     def test_air_density_correction(self):
@@ -115,9 +117,9 @@ class TestPhysicsBasics:
         # High altitude (5000ft = ~24.9 inHg)
         sim.config.barometric_pressure_inhg = 24.9
         correction_altitude = sim._get_air_density_correction()
-        assert (
-            correction_altitude < 0.85
-        ), "High altitude should reduce power significantly"
+        assert correction_altitude < 0.85, (
+            "High altitude should reduce power significantly"
+        )
         assert correction_altitude > 0.80, "Power loss should be realistic"
 
         # Hot day
@@ -145,20 +147,20 @@ class TestPhysicsIntegration:
         )
 
         # Effective should be less than base (due to efficiency losses)
-        assert (
-            effective_torque < base_torque
-        ), "Effective torque should account for losses"
-        assert (
-            effective_torque > base_torque * 0.65
-        ), "Losses should be reasonable (VE, pumping, thermal, air, mech eff)"
+        assert effective_torque < base_torque, (
+            "Effective torque should account for losses"
+        )
+        assert effective_torque > base_torque * 0.65, (
+            "Losses should be reasonable (VE, pumping, thermal, air, mech eff)"
+        )
 
         # Part throttle should be significantly less
         effective_part, factors_part = sim._calculate_effective_torque(
             profile.tq_peak_rpm, 50.0
         )
-        assert (
-            effective_part < effective_torque * 0.7
-        ), "Part throttle should reduce torque"
+        assert effective_part < effective_torque * 0.7, (
+            "Part throttle should reduce torque"
+        )
 
     def test_throttle_lag(self):
         """Test realistic throttle response."""
@@ -176,18 +178,18 @@ class TestPhysicsIntegration:
 
         # Should be around 5% (10% per second × 0.5 seconds)
         expected = 10.0 * 0.5  # 5%
-        assert (
-            abs(sim.physics.tps_actual - expected) < 1.0
-        ), f"Throttle should be ~{expected}%, got {sim.physics.tps_actual}"
+        assert abs(sim.physics.tps_actual - expected) < 1.0, (
+            f"Throttle should be ~{expected}%, got {sim.physics.tps_actual}"
+        )
 
         # Continue to 10.0 seconds (should definitely reach 100%)
         for _ in range(475):  # 9.5 more seconds
             sim._update_throttle(dt)
 
         # Should be at 100%
-        assert (
-            sim.physics.tps_actual == 100.0
-        ), f"Throttle should reach target, got {sim.physics.tps_actual}"
+        assert sim.physics.tps_actual == 100.0, (
+            f"Throttle should reach target, got {sim.physics.tps_actual}"
+        )
 
     def test_physics_update_increases_rpm(self):
         """Test that physics update increases RPM under power."""
@@ -208,9 +210,9 @@ class TestPhysicsIntegration:
 
         # RPM should have increased
         assert sim.physics.rpm > initial_rpm, "RPM should increase under power"
-        assert (
-            sim.physics.rpm < profile.redline_rpm
-        ), "RPM should not exceed redline yet"
+        assert sim.physics.rpm < profile.redline_rpm, (
+            "RPM should not exceed redline yet"
+        )
 
 
 class TestSimulatorBehavior:
@@ -321,35 +323,60 @@ class TestSimulatorBehavior:
 
         # RPM should increase monotonically (mostly)
         rpm_increasing = sum(1 for i in range(1, len(rpms)) if rpms[i] > rpms[i - 1])
-        assert (
-            rpm_increasing > len(rpms) * 0.90
-        ), "RPM should increase throughout pull (90%+ of samples)"
+        assert rpm_increasing > len(rpms) * 0.90, (
+            "RPM should increase throughout pull (90%+ of samples)"
+        )
 
         # Should reach near redline
         max_rpm = max(rpms)
-        assert (
-            max_rpm > profile.redline_rpm * 0.90
-        ), f"Should reach near redline (90%), got {max_rpm}"
+        assert max_rpm > profile.redline_rpm * 0.90, (
+            f"Should reach near redline (90%), got {max_rpm}"
+        )
 
         # Torque should be positive and reasonable
         assert all(t > 0 for t in torques), "Torque should be positive"
         max_torque = max(torques)
         # With all the loss factors (VE, pumping, thermal, air, mechanical, knock, humidity)
         # we may only reach 50-70% of peak torque (realistic with all corrections)
-        assert (
-            max_torque > profile.max_tq * 0.50
-        ), "Should reach reasonable torque (50% with all losses)"
-        assert (
-            max_torque < profile.max_tq * 1.3
-        ), "Torque should not exceed profile significantly"
+        assert max_torque > profile.max_tq * 0.50, (
+            "Should reach reasonable torque (50% with all losses)"
+        )
+        assert max_torque < profile.max_tq * 1.3, (
+            "Torque should not exceed profile significantly"
+        )
 
         # HP should increase with RPM (generally)
         # With humidity, knock detection, and all other losses, 50%+ is realistic
-        assert (
-            max(hps) > profile.max_hp * 0.50
-        ), "Should reach reasonable HP (50% with all corrections)"
+        assert max(hps) > profile.max_hp * 0.50, (
+            "Should reach reasonable HP (50% with all corrections)"
+        )
 
         sim.stop()
+
+    def test_decel_reports_inertial_loss_power_not_instant_zero(self):
+        """
+        Regression: after a pull transitions to DECEL, the live channels should not
+        instantly flatline Horsepower/Torque to zero. We report positive magnitude
+        of inertial (loss) power during coastdown.
+        """
+        sim = DynoSimulator()
+        profile = sim.config.profile
+        dt = 1.0 / sim.config.update_rate_hz
+
+        # Seed state as if we're at the beginning of decel from a high RPM
+        sim.state = SimState.DECEL
+        sim.physics.rpm = profile.redline_rpm * 0.95
+        sim.physics.angular_velocity = sim._rpm_to_rad_s(sim.physics.rpm)
+        sim.physics.tps_actual = 0.0
+        sim.physics.tps_target = 0.0
+
+        # Run a few decel steps and ensure horsepower is non-zero at least once.
+        hps = []
+        for _ in range(10):
+            sim._handle_decel_state(dt, profile)
+            hps.append(sim.channels.horsepower)
+
+        assert max(hps) > 0.5, f"Expected decel loss HP > 0, got max={max(hps)}"
 
 
 class TestDifferentProfiles:
@@ -422,9 +449,9 @@ class TestEnvironmentalEffects:
 
         # Should be roughly 15-20% loss
         loss_pct = (1 - torque_altitude / torque_sea) * 100
-        assert (
-            10 < loss_pct < 25
-        ), f"Altitude loss should be 10-25%, got {loss_pct:.1f}%"
+        assert 10 < loss_pct < 25, (
+            f"Altitude loss should be 10-25%, got {loss_pct:.1f}%"
+        )
 
     def test_temperature_effect(self):
         """Test that temperature affects power."""
@@ -487,9 +514,9 @@ class TestEnhancements:
         # Difference should be modest (typically 0.3-1.5% at normal temps)
         # At higher temperatures, effect is more pronounced
         diff_pct = (1 - correction_humid / correction_dry) * 100
-        assert (
-            0.2 < diff_pct < 2.0
-        ), f"Humidity effect should be 0.2-2%, got {diff_pct:.1f}%"
+        assert 0.2 < diff_pct < 2.0, (
+            f"Humidity effect should be 0.2-2%, got {diff_pct:.1f}%"
+        )
 
     def test_knock_detection_lean_condition(self):
         """Test knock detection with lean AFR at high load."""
@@ -498,14 +525,18 @@ class TestEnhancements:
 
         # High load, safe AFR
         knock_safe, risk_safe = sim._check_knock_conditions(
-            rpm=4000, tps=90.0, afr=12.5  # Target WOT AFR
+            rpm=4000,
+            tps=90.0,
+            afr=12.5,  # Target WOT AFR
         )
         assert not knock_safe, "Safe AFR should not trigger knock"
         assert risk_safe < 0.3, "Risk should be low with safe AFR"
 
         # High load, lean AFR (dangerous)
         knock_lean, risk_lean = sim._check_knock_conditions(
-            rpm=4000, tps=90.0, afr=14.5  # 2.0 leaner than target
+            rpm=4000,
+            tps=90.0,
+            afr=14.5,  # 2.0 leaner than target
         )
         # Should have elevated risk (but may not trigger knock at just 2.0 lean)
         assert risk_lean > risk_safe, "Risk should be elevated with lean AFR"
@@ -513,7 +544,9 @@ class TestEnhancements:
 
         # Very lean should definitely trigger knock
         knock_very_lean, risk_very_lean = sim._check_knock_conditions(
-            rpm=4000, tps=90.0, afr=15.5  # 3.0 leaner than target
+            rpm=4000,
+            tps=90.0,
+            afr=15.5,  # 3.0 leaner than target
         )
         assert knock_very_lean, "Very lean AFR at high load should trigger knock"
         assert risk_very_lean > 0.3, "Risk should be high with very lean AFR"
@@ -584,7 +617,9 @@ class TestEnhancements:
         sim.physics.iat_f = 85.0  # Reset temp
         sim.physics.knock_count = 0  # Reset knock count
         torque_knock, factors_knock = sim._calculate_effective_torque(
-            rpm=4000, tps=90.0, afr=15.5  # Very lean (more than 3.0 above target)
+            rpm=4000,
+            tps=90.0,
+            afr=15.5,  # Very lean (more than 3.0 above target)
         )
 
         # Knock should reduce torque (timing retard)
@@ -592,19 +627,19 @@ class TestEnhancements:
 
         # Reduction should be modest (4% typical for 4deg retard)
         reduction_pct = (1 - torque_knock / torque_safe) * 100
-        assert (
-            3 < reduction_pct < 6
-        ), f"Knock penalty should be 3-6%, got {reduction_pct:.1f}%"
+        assert 3 < reduction_pct < 6, (
+            f"Knock penalty should be 3-6%, got {reduction_pct:.1f}%"
+        )
 
     def test_constants_defined(self):
         """Test that physics constants are defined."""
         from api.services.dyno_simulator import (
-            TORQUE_TO_ANGULAR_ACCEL_SCALE,
             DRAG_COEFFICIENT,
             ENGINE_BRAKE_COEFFICIENT,
             KNOCK_AFR_LEAN_THRESHOLD,
             KNOCK_IAT_THRESHOLD_F,
             KNOCK_TIMING_RETARD_DEG,
+            TORQUE_TO_ANGULAR_ACCEL_SCALE,
         )
 
         # Verify constants are reasonable
