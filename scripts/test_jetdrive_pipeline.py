@@ -8,23 +8,22 @@ Full JetDrive Pipeline Test
 import asyncio
 import csv
 import random
-import struct
 import socket
+import struct
 from pathlib import Path
 
 from api.services.jetdrive_client import (
-    JetDriveProviderInfo,
+    ALL_HOSTS,
+    CHANNEL_NAME_LEN,
+    KEY_CHANNEL_INFO,
+    KEY_CHANNEL_VALUES,
+    PROVIDER_NAME_LEN,
     ChannelInfo,
     JDUnit,
     JetDriveConfig,
-    KEY_CHANNEL_INFO,
-    KEY_CHANNEL_VALUES,
+    JetDriveProviderInfo,
     _Wire,
-    ALL_HOSTS,
-    PROVIDER_NAME_LEN,
-    CHANNEL_NAME_LEN,
 )
-
 
 provider = JetDriveProviderInfo(
     provider_id=0xDA10,
@@ -155,7 +154,7 @@ async def run_test():
                     for j in range(n_samples):
                         offset = j * 10
                         cid, tstamp, val = struct.unpack(
-                            "<HIf", value[offset : offset + 10]
+                            "<HIf", value[offset: offset + 10]
                         )
                         received.append({"ts": tstamp, "chan": cid, "value": val})
         except BlockingIOError:

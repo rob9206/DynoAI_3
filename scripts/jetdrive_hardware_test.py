@@ -35,19 +35,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from api.services.jetdrive_client import (
+    DEFAULT_MCAST_GROUP,
+    DEFAULT_PORT,
     JetDriveConfig,
     JetDriveProviderInfo,
     JetDriveSample,
     discover_providers,
     subscribe,
-    DEFAULT_MCAST_GROUP,
-    DEFAULT_PORT,
 )
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # =============================================================================
 # Console Output Helpers
@@ -480,7 +479,7 @@ async def run_capture(duration: float, output_dir: str = "runs") -> int:
     for ch in sorted(channel_counts.keys()):
         values = channel_values[ch]
         print(
-            f"{ch:<20} {channel_counts[ch]:>10} {min(values):>12.2f} {max(values):>12.2f} {sum(values)/len(values):>12.2f}"
+            f"{ch:<20} {channel_counts[ch]:>10} {min(values):>12.2f} {max(values):>12.2f} {sum(values) / len(values):>12.2f}"
         )
 
     print()
