@@ -539,7 +539,9 @@ class DynoSimulator:
                 float(profile.redline_rpm),
             ]
         )
-        anchor_tq = np.array([tq_idle, float(profile.max_tq), tq_at_hp_peak, tq_redline])
+        anchor_tq = np.array(
+            [tq_idle, float(profile.max_tq), tq_at_hp_peak, tq_redline]
+        )
 
         # Ensure anchors are strictly increasing in RPM (guard against bad profile inputs).
         order = np.argsort(anchor_rpm)
@@ -555,7 +557,9 @@ class DynoSimulator:
         torque = np.convolve(torque, kernel, mode="same")
 
         # Enforce exact peak torque at tq_peak_rpm via global scaling (smoothing can reduce the peak slightly).
-        tq_at_tq_peak_now = float(np.interp(float(profile.tq_peak_rpm), rpm_points, torque))
+        tq_at_tq_peak_now = float(
+            np.interp(float(profile.tq_peak_rpm), rpm_points, torque)
+        )
         if tq_at_tq_peak_now > 1e-6:
             torque *= float(profile.max_tq) / tq_at_tq_peak_now
 
@@ -565,7 +569,11 @@ class DynoSimulator:
             f = tq_at_hp_peak / tq_at_hp_now
             # Smoothstep from tq_peak_rpm -> hp_peak_rpm
             start = float(profile.tq_peak_rpm)
-            end = float(profile.hp_peak_rpm) if float(profile.hp_peak_rpm) > start else start + 1.0
+            end = (
+                float(profile.hp_peak_rpm)
+                if float(profile.hp_peak_rpm) > start
+                else start + 1.0
+            )
             x = np.clip((rpm_points - start) / (end - start), 0.0, 1.0)
             w = x * x * (3.0 - 2.0 * x)  # smoothstep
             torque *= 1.0 + (f - 1.0) * w
@@ -617,7 +625,9 @@ class DynoSimulator:
             if profile.hp_peak_rpm > 0
             else max(tq_peak + 500.0, idle * 4.0)
         )
-        redline = float(profile.redline_rpm) if profile.redline_rpm > 0 else hp_peak + 500.0
+        redline = (
+            float(profile.redline_rpm) if profile.redline_rpm > 0 else hp_peak + 500.0
+        )
 
         rpm_f = float(rpm)
         rpm_f = max(idle * 0.5, min(redline * 1.05, rpm_f))
@@ -1364,9 +1374,11 @@ class DynoSimulator:
             1.0, (profile.redline_rpm - profile.idle_rpm)
         )
         high_rpm_drop = 1.0 - 0.03 * max(0.0, min(1.0, rpm_norm))  # up to ~3% drop
-        map_target = (30.0 + (self.physics.tps_actual / 100.0) * 70.0) * (
-            0.92 + 0.08 * max(0.0, min(1.0, ve_now))
-        ) * high_rpm_drop
+        map_target = (
+            (30.0 + (self.physics.tps_actual / 100.0) * 70.0)
+            * (0.92 + 0.08 * max(0.0, min(1.0, ve_now)))
+            * high_rpm_drop
+        )
         self.channels.map_kpa = self._add_noise(map_target, 2)
 
         # Acceleration (from angular acceleration)
@@ -1500,8 +1512,12 @@ class DynoSimulator:
         self.channels.rpm = self._add_noise(self.physics.rpm, self.config.rpm_noise_pct)
         self.channels.tps_pct = self.physics.tps_actual
         self.channels.map_kpa = 30 + (self.physics.tps_actual / 100.0) * 70
-        self.channels.torque_ftlb = self._add_noise(loss_torque, self.config.torque_noise_pct)
-        self.channels.horsepower = self._add_noise(loss_hp, self.config.torque_noise_pct)
+        self.channels.torque_ftlb = self._add_noise(
+            loss_torque, self.config.torque_noise_pct
+        )
+        self.channels.horsepower = self._add_noise(
+            loss_hp, self.config.torque_noise_pct
+        )
 
         dyno_config = get_config().dyno
         drum_radius_ft = dyno_config.drum1.radius_ft

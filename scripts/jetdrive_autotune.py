@@ -34,11 +34,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-
 from typing import Any
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+
+from dynoai.core.io_contracts import safe_path
 
 # Import DynoAI VE math module for versioned calculations
 from dynoai.core.ve_math import (
@@ -46,7 +47,6 @@ from dynoai.core.ve_math import (
     calculate_ve_correction,
     correction_to_percentage,
 )
-from dynoai.core.io_contracts import safe_path
 
 # =============================================================================
 # Standard DynoAI Grid Configuration (matches dynoai/constants.py)
@@ -906,14 +906,12 @@ def generate_outputs(
 
 
 def print_banner():
-    print(
-        """
+    print("""
 +==============================================================+
 |                    DYNOAI AUTO-TUNE                          |
 |          JetDrive -> Analysis -> Tuning Corrections          |
 +==============================================================+
-"""
-    )
+""")
 
 
 def print_results(result: AnalysisResult, outputs: dict[str, Path]):

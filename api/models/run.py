@@ -9,7 +9,7 @@ Models:
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, Integer, DateTime, JSON, Text, Float, ForeignKey
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -26,7 +26,11 @@ class Run(Base):
     __tablename__ = "runs"
 
     # Primary key
-    id = Column(String(64), primary_key=True, comment="Run ID (e.g., run_20251225_120000_abc123)")
+    id = Column(
+        String(64),
+        primary_key=True,
+        comment="Run ID (e.g., run_20251225_120000_abc123)",
+    )
 
     # Status and source
     status = Column(
@@ -48,7 +52,9 @@ class Run(Base):
     completed_at = Column(DateTime, nullable=True)
 
     # Jetstream integration
-    jetstream_id = Column(String(64), index=True, nullable=True, comment="Jetstream run ID")
+    jetstream_id = Column(
+        String(64), index=True, nullable=True, comment="Jetstream run ID"
+    )
     jetstream_status = Column(String(20), nullable=True)
 
     # Progress tracking
@@ -86,8 +92,12 @@ class Run(Base):
     afr_std = Column(Float, nullable=True, comment="AFR standard deviation")
 
     # VE corrections
-    ve_corrections_count = Column(Integer, nullable=True, comment="Number of VE corrections suggested")
-    ve_max_correction_pct = Column(Float, nullable=True, comment="Maximum correction magnitude (%)")
+    ve_corrections_count = Column(
+        Integer, nullable=True, comment="Number of VE corrections suggested"
+    )
+    ve_max_correction_pct = Column(
+        Float, nullable=True, comment="Maximum correction magnitude (%)"
+    )
 
     # Relationships
     files = relationship("RunFile", back_populates="run", cascade="all, delete-orphan")
@@ -103,7 +113,9 @@ class Run(Base):
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "jetstream_id": self.jetstream_id,
             "current_stage": self.current_stage,
             "progress_percent": self.progress_percent,
@@ -139,13 +151,17 @@ class RunFile(Base):
     )
 
     # File metadata
-    filename = Column(String(255), nullable=False, comment="Filename (e.g., corrections.csv)")
+    filename = Column(
+        String(255), nullable=False, comment="Filename (e.g., corrections.csv)"
+    )
     file_type = Column(String(50), comment="File type: csv, json, txt, png, pdf")
     size_bytes = Column(Integer, comment="File size in bytes")
 
     # Storage
     storage_path = Column(Text, comment="Local file path or cloud storage key")
-    storage_type = Column(String(20), default="local", comment="Storage backend: local, s3, gcs")
+    storage_type = Column(
+        String(20), default="local", comment="Storage backend: local, s3, gcs"
+    )
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -5,10 +5,7 @@ from pathlib import Path
 def _write_simple_ve_csv(path: Path) -> None:
     # Minimal VE-like CSV that the snapshot parser can handle (RPM header + numeric cells)
     path.write_text(
-        "RPM,20,40,60\n"
-        "1000,50,55,60\n"
-        "2000,52,56,61\n"
-        "3000,53,57,62\n",
+        "RPM,20,40,60\n1000,50,55,60\n2000,52,56,61\n3000,53,57,62\n",
         encoding="utf-8",
     )
 
@@ -34,7 +31,7 @@ def test_timeline_pagination_default_limit(client, mock_output_folder):
         logger.record_analysis(
             correction_path=ve_source,
             manifest={"stats": {"rows_read": i + 1}, "config": {"args": {}}},
-            description=f"analysis #{i+1}",
+            description=f"analysis #{i + 1}",
         )
 
     r1 = client.get(f"/api/timeline/{run_id}")
@@ -57,5 +54,3 @@ def test_timeline_pagination_default_limit(client, mock_output_folder):
     assert data2["pagination"]["total"] == 60
     assert data2["pagination"]["has_more"] is False
     assert len(data2["events"]) == 10
-
-

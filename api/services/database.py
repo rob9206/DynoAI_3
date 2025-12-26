@@ -8,14 +8,14 @@ Provides:
 - SQLite and PostgreSQL support
 """
 
-import os
 import logging
+import os
 from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,9 @@ def create_db_engine() -> Engine:
             echo=False,
         )
 
-        logger.info(f"Database initialized: {url.split('@')[0]}...")  # Don't log credentials
+        logger.info(
+            f"Database initialized: {url.split('@')[0]}..."
+        )  # Don't log credentials
 
     return engine
 
@@ -92,7 +94,6 @@ def create_db_engine() -> Engine:
 # Create global engine and session factory
 engine = create_db_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 
 # =============================================================================
 # Initialization
@@ -213,6 +214,7 @@ def test_connection() -> bool:
     """
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True

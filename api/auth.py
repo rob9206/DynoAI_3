@@ -9,14 +9,14 @@ Supports:
 - API key generation utilities
 """
 
+import logging
 import os
 import secrets
-import logging
 from functools import wraps
-from typing import Optional, Set
 from pathlib import Path
+from typing import Optional, Set
 
-from flask import request, g, jsonify
+from flask import g, jsonify, request
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,9 @@ class APIKeyAuth:
         self._valid_keys = self._load_api_keys()
 
         if self.enabled:
-            logger.info(f"API authentication ENABLED with {len(self._valid_keys)} valid key(s)")
+            logger.info(
+                f"API authentication ENABLED with {len(self._valid_keys)} valid key(s)"
+            )
         else:
             logger.info("API authentication DISABLED (development mode)")
 
@@ -48,7 +50,9 @@ class APIKeyAuth:
         if env_keys:
             loaded = [k.strip() for k in env_keys.split(",") if k.strip()]
             keys.update(loaded)
-            logger.debug(f"Loaded {len(loaded)} key(s) from API_KEYS environment variable")
+            logger.debug(
+                f"Loaded {len(loaded)} key(s) from API_KEYS environment variable"
+            )
 
         # Load from file if exists
         keys_file = os.getenv("API_KEYS_FILE", "")
@@ -57,7 +61,11 @@ class APIKeyAuth:
             if keys_path.exists():
                 try:
                     with open(keys_path) as f:
-                        file_keys = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                        file_keys = [
+                            line.strip()
+                            for line in f
+                            if line.strip() and not line.startswith("#")
+                        ]
                         keys.update(file_keys)
                         logger.debug(f"Loaded {len(file_keys)} key(s) from {keys_file}")
                 except Exception as e:
@@ -195,7 +203,9 @@ def require_api_key(f):
         g.api_key = api_key
         g.authenticated = True
 
-        logger.debug(f"Authenticated request to {request.path} (Key: {api_key[:10]}...)")
+        logger.debug(
+            f"Authenticated request to {request.path} (Key: {api_key[:10]}...)"
+        )
 
         return f(*args, **kwargs)
 

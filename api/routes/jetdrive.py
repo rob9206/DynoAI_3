@@ -210,7 +210,11 @@ def _compute_power_curve_from_run_csv(
             return None
 
         return [
-            {"rpm": float(rpm_bin), "hp": round(vals["hp"], 2), "tq": round(vals["tq"], 2)}
+            {
+                "rpm": float(rpm_bin),
+                "hp": round(vals["hp"], 2),
+                "tq": round(vals["tq"], 2),
+            }
             for rpm_bin, vals in sorted(buckets.items(), key=lambda kv: kv[0])
         ]
     except Exception:
@@ -228,7 +232,9 @@ def _infer_run_source_from_manifest(manifest: dict[str, Any]) -> str:
     - unknown: cannot determine
     """
     try:
-        inputs = manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
+        inputs = (
+            manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
+        )
         mode = inputs.get("mode")
         if isinstance(mode, str):
             mode_norm = mode.strip().lower()
@@ -655,7 +661,9 @@ def analyze_run():
                 with open(manifest_path, "w", encoding="utf-8") as wf:
                     json.dump(manifest, wf, indent=2)
         except Exception:
-            logger.warning("Failed to persist inputs.mode into manifest.json", exc_info=True)
+            logger.warning(
+                "Failed to persist inputs.mode into manifest.json", exc_info=True
+            )
 
         # Read VE correction grid
         ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
@@ -988,12 +996,8 @@ def export_text(run_id: str):
             "peak_tq_rpm",
             analysis.get("tq_peak_rpm", analysis.get("torque_peak_rpm", 0)),
         )
-        lines.append(
-            f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM"
-        )
-        lines.append(
-            f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM"
-        )
+        lines.append(f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM")
+        lines.append(f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM")
         lines.append(f"Total Samples: {analysis.get('total_samples', 0)}")
         lines.append(f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
         lines.append("")

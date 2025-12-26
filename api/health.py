@@ -290,7 +290,8 @@ def system_diagnostics() -> Response:
     try:
         # Import here to avoid circular imports
         import api.app as app_module
-        if hasattr(app_module, 'active_jobs'):
+
+        if hasattr(app_module, "active_jobs"):
             diagnostics["active_jobs"] = len(app_module.active_jobs)
     except Exception:
         pass
@@ -298,6 +299,7 @@ def system_diagnostics() -> Response:
     # Count virtual tuning sessions
     try:
         from api.routes.virtual_tune import _orchestrator
+
         if _orchestrator:
             diagnostics["virtual_tune_sessions"] = len(_orchestrator._active_sessions)
     except Exception:
@@ -306,6 +308,7 @@ def system_diagnostics() -> Response:
     # File index statistics
     try:
         from api.services.file_index import get_file_index
+
         file_index = get_file_index()
         diagnostics["file_index_entries"] = len(file_index._index)
     except Exception:
@@ -314,18 +317,24 @@ def system_diagnostics() -> Response:
     # Database status
     try:
         from api.services.database import test_connection
-        diagnostics["database_status"] = "connected" if test_connection() else "disconnected"
+
+        diagnostics["database_status"] = (
+            "connected" if test_connection() else "disconnected"
+        )
     except Exception:
         diagnostics["database_status"] = "unavailable"
 
     # Jetstream poller status
     try:
         from api.jetstream.poller import get_poller
+
         poller = get_poller()
         if poller:
             diagnostics["components"]["jetstream"] = {
                 "running": poller.is_running,
-                "last_poll": poller.last_poll_time.isoformat() if poller.last_poll_time else None,
+                "last_poll": (
+                    poller.last_poll_time.isoformat() if poller.last_poll_time else None
+                ),
             }
     except Exception:
         pass
@@ -333,7 +342,9 @@ def system_diagnostics() -> Response:
     # Health component summary
     health = get_system_health()
     diagnostics["health_status"] = health.status
-    diagnostics["components"]["health"] = {c["name"]: c["status"] for c in health.components}
+    diagnostics["components"]["health"] = {
+        c["name"]: c["status"] for c in health.components
+    }
 
     return jsonify(diagnostics), 200
 

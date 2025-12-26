@@ -9,7 +9,10 @@ def test_virtual_tune_start_and_status_smoke(client, monkeypatch):
     the progress fields the frontend expects.
     """
 
-    from api.services.virtual_tuning_session import TuningStatus, VirtualTuningOrchestrator
+    from api.services.virtual_tuning_session import (
+        TuningStatus,
+        VirtualTuningOrchestrator,
+    )
 
     orchestrator = VirtualTuningOrchestrator(max_age_minutes=1, max_sessions=5)
 
@@ -23,7 +26,9 @@ def test_virtual_tune_start_and_status_smoke(client, monkeypatch):
 
     # Avoid long-running simulator work in tests: replace the orchestrator used by the route.
     monkeypatch.setattr(orchestrator, "run_session", _fast_run_session)
-    monkeypatch.setattr("api.routes.virtual_tune.get_orchestrator", lambda: orchestrator)
+    monkeypatch.setattr(
+        "api.routes.virtual_tune.get_orchestrator", lambda: orchestrator
+    )
 
     resp = client.post(
         "/api/virtual-tune/start",
@@ -49,5 +54,3 @@ def test_virtual_tune_start_and_status_smoke(client, monkeypatch):
     assert "max_iterations" in status
     assert "progress_pct" in status
     assert "progress_message" in status
-
-

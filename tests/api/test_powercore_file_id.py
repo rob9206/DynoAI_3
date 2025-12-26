@@ -9,8 +9,9 @@ Tests for:
 """
 
 import time
-import pytest
 from pathlib import Path
+
+import pytest
 
 from api.services.file_index import (
     FileIndex,
@@ -212,10 +213,18 @@ class TestPowerCoreFileIdEndpoints:
         on developer machines. For these tests we only care that responses return
         server-issued IDs (not raw paths), so it's safe to stub discovery to [].
         """
-        monkeypatch.setattr("api.routes.powercore.find_log_files", lambda *args, **kwargs: [])
-        monkeypatch.setattr("api.routes.powercore.find_tune_files", lambda *args, **kwargs: [])
-        monkeypatch.setattr("api.routes.powercore.find_wp8_files", lambda *args, **kwargs: [])
-        monkeypatch.setattr("api.routes.powercore.find_powercore_data_dirs", lambda *args, **kwargs: [])
+        monkeypatch.setattr(
+            "api.routes.powercore.find_log_files", lambda *args, **kwargs: []
+        )
+        monkeypatch.setattr(
+            "api.routes.powercore.find_tune_files", lambda *args, **kwargs: []
+        )
+        monkeypatch.setattr(
+            "api.routes.powercore.find_wp8_files", lambda *args, **kwargs: []
+        )
+        monkeypatch.setattr(
+            "api.routes.powercore.find_powercore_data_dirs", lambda *args, **kwargs: []
+        )
 
     def test_discover_logs_returns_file_ids(self, client):
         """Discovery endpoint returns file IDs, not paths."""

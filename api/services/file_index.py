@@ -26,6 +26,7 @@ from typing import Optional
 
 class FileType(str, Enum):
     """Supported file types for indexing."""
+
     LOG = "log"
     TUNE = "tune"
     WP8 = "wp8"
@@ -34,6 +35,7 @@ class FileType(str, Enum):
 @dataclass
 class IndexedFile:
     """An indexed file entry."""
+
     file_id: str
     path: Path
     file_type: FileType
@@ -61,13 +63,13 @@ class IndexedFile:
 class FileIndex:
     """
     Thread-safe file index mapping IDs to paths.
-    
+
     Usage:
         index = FileIndex()
-        
+
         # Register files during discovery
         file_id = index.register(path, FileType.LOG)
-        
+
         # Later, resolve file_id back to path (validates type)
         path = index.resolve(file_id, expected_type=FileType.LOG)
     """
@@ -85,22 +87,22 @@ class FileIndex:
     def register(self, path: Path, file_type: FileType) -> str:
         """
         Register a file and get its ID.
-        
+
         If the file is already registered and not expired, returns the existing ID.
-        
+
         Args:
             path: Absolute path to the file
             file_type: Type classification (log, tune, wp8)
-            
+
         Returns:
             Server-generated file ID
-            
+
         Raises:
             FileNotFoundError: If path doesn't exist
             ValueError: If path is not a file
         """
         path = path.resolve()
-        
+
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
         if not path.is_file():
@@ -124,10 +126,10 @@ class FileIndex:
 
             # Generate new ID
             file_id = self._generate_id(path)
-            
+
             # Get file metadata
             stat = path.stat()
-            
+
             entry = IndexedFile(
                 file_id=file_id,
                 path=path,
@@ -151,14 +153,14 @@ class FileIndex:
     ) -> Path:
         """
         Resolve a file ID back to its path.
-        
+
         Args:
             file_id: The server-issued file ID
             expected_type: If provided, validate the file type matches
-            
+
         Returns:
             The resolved file path
-            
+
         Raises:
             KeyError: If file_id not found or expired
             ValueError: If file type doesn't match expected_type
@@ -206,7 +208,8 @@ class FileIndex:
         with self._lock:
             self._maybe_cleanup()
             return [
-                entry for entry in self._index.values()
+                entry
+                for entry in self._index.values()
                 if entry.file_type == file_type and not entry.is_expired()
             ]
 
@@ -240,8 +243,7 @@ class FileIndex:
 
         self._last_cleanup = now
         expired = [
-            file_id for file_id, entry in self._index.items()
-            if entry.is_expired()
+            file_id for file_id, entry in self._index.items() if entry.is_expired()
         ]
         for file_id in expired:
             self._remove_entry(file_id)
@@ -284,4 +286,3 @@ __all__ = [
     "get_file_index",
     "reset_file_index",
 ]
-
