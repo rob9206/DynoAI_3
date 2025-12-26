@@ -16,7 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Timeline } from '@/components/timeline';
 import { DiffView } from '@/components/timeline/DiffView';
 import TimelineErrorBoundary from '@/components/timeline/TimelineErrorBoundary';
-import VEHeatmap from '@/components/VEHeatmap';
+import { VEHeatmap as VEGrid } from '@/components/results/VEHeatmap';
+import { VEHeatmapLegend } from '@/components/results/VEHeatmapLegend';
 import { useTimeline } from '@/hooks/useTimeline';
 import { downloadSnapshot, getEventTypeLabel, exportTimelineAsJSON } from '@/api/timeline';
 import { sanitizeDownloadName } from '@/lib/sanitize';
@@ -412,12 +413,23 @@ export default function TimeMachinePage() {
                   </CardContent>
                 </Card>
               ) : currentReplay?.snapshot ? (
-                <VEHeatmap
-                  data={currentReplay.snapshot.data}
-                  rpm={currentReplay.snapshot.rpm}
-                  load={currentReplay.snapshot.load}
-                  title={`VE Table at Step ${currentStep}`}
-                />
+                <div className="space-y-4">
+                  <VEHeatmapLegend clampLimit={7} />
+                  <VEGrid
+                    data={currentReplay.snapshot.data}
+                    rowLabels={currentReplay.snapshot.rpm.map(String)}
+                    colLabels={currentReplay.snapshot.load.map(String)}
+                    title={`VE Table at Step ${currentStep}`}
+                    clampLimit={7}
+                    showClampIndicators={true}
+                    showValues={true}
+                    // Snapshots are usually absolute VE values; sequential is safer than a diverging correction scale.
+                    colorMode="sequential"
+                    valueDecimals={1}
+                    valueLabel="VE"
+                    tooltipLoadUnit="kPa"
+                  />
+                </div>
               ) : (
                 <Card className="py-12">
                   <CardContent className="text-center">

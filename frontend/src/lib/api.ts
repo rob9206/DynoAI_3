@@ -83,6 +83,30 @@ export interface CoverageData {
   };
 }
 
+// =============================================================================
+// Session Replay (tuning decisions)
+// =============================================================================
+
+export interface SessionReplayDecision {
+  timestamp: string;
+  action: string;
+  reason: string;
+  values: Record<string, unknown>;
+  cell?: {
+    rpm?: number;
+    kpa?: number;
+    cylinder?: string;
+  };
+}
+
+export interface SessionReplayData {
+  schema_version?: string;
+  run_id: string;
+  generated_at: string;
+  total_decisions: number;
+  decisions: SessionReplayDecision[];
+}
+
 export interface Anomaly {
   type: string;
   score: number;
@@ -207,9 +231,10 @@ export const pollJobStatus = async (
 };
 
 // Session Replay API
-export const getSessionReplay = async (runId: string) => {
-  const response = await api.get(`/api/session-replay/${runId}`);
-  return response.data;
+export const getSessionReplay = async (runId: string): Promise<SessionReplayData> => {
+  // Canonical backend route
+  const response = await api.get(`/api/runs/${encodePathSegment(runId)}/session-replay`);
+  return response.data as SessionReplayData;
 };
 
 // Confidence Report API

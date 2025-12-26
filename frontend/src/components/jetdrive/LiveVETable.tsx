@@ -164,7 +164,7 @@ function getCellColor(veCorrection: number, hitCount: number): string {
 
     const delta = (veCorrection - 1) * 100;  // Convert to percentage
 
-    if (Math.abs(delta) < 0.5) return 'bg-green-500/30 text-green-300';
+    if (Math.abs(delta) < 0.5) return 'bg-green-500/60 text-green-100';
     if (delta > 5) return 'bg-red-500/50 text-red-200';
     if (delta > 2) return 'bg-orange-500/40 text-orange-200';
     if (delta < -5) return 'bg-blue-500/50 text-blue-200';
@@ -409,27 +409,45 @@ export function LiveVETable({
             )}
 
             {/* VE Table Grid */}
-            <div className="overflow-x-scroll rounded-lg border border-zinc-800">
-                <table className="border-collapse w-full">
+            <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900/50">
+                <table className="border-collapse w-full text-xs">
                     <thead>
                         <tr className="bg-zinc-900/80">
-                            <th className="min-w-[50px] h-8 text-right pr-2 text-zinc-500 font-medium sticky left-0 bg-zinc-900/80 z-10 text-xs border-r border-zinc-800">
-                                RPM
+                            <th className="sticky left-0 z-10 min-w-[75px] w-[75px] h-10 px-3 py-2 text-left font-medium text-zinc-400 bg-zinc-900/80 border-r border-zinc-800/80">
+                                <div className="flex flex-col items-start">
+                                    <span>RPM →</span>
+                                    <span className="text-[9px] text-zinc-500">MAP ↓</span>
+                                </div>
                             </th>
-                            {mapBins.map(map => (
-                                <th key={map} className="min-w-[50px] h-8 text-center text-zinc-400 font-medium text-xs">
-                                    {map}
+                            {rpmBins.map((rpm) => (
+                                <th
+                                    key={rpm}
+                                    className="min-w-[48px] w-[48px] h-10 px-1.5 py-2 text-center font-bold text-zinc-300 border-l border-zinc-800/50 whitespace-nowrap"
+                                >
+                                    {rpm >= 10000 ? `${(rpm / 1000).toFixed(0)}k` : rpm}
                                 </th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {rpmBins.map((rpm, rpmIdx) => (
-                            <tr key={rpm}>
-                                <td className="min-w-[50px] h-10 font-medium text-zinc-300 sticky left-0 bg-zinc-900/80 z-10 text-xs border-r border-zinc-800 text-right pr-2">
-                                    {rpm >= 10000 ? `${(rpm / 1000).toFixed(0)}k` : rpm}
+                        {mapBins.map((mapKpa, mapIdx) => (
+                            <tr
+                                key={mapKpa}
+                                className={`${mapIdx % 2 === 0 ? 'bg-zinc-900/30' : 'bg-zinc-900/10'} border-t border-zinc-800/50`}
+                            >
+                                <td
+                                    className={`
+                                        sticky left-0 z-10 min-w-[75px] w-[75px] px-3 py-2 font-mono font-bold text-zinc-300 border-r border-zinc-800/80
+                                        ${mapIdx % 2 === 0 ? 'bg-zinc-900/30' : 'bg-zinc-900/10'}
+                                    `}
+                                >
+                                    <div className="flex flex-col items-start">
+                                        <span>{mapKpa}</span>
+                                        <span className="text-[9px] text-zinc-500 font-normal">kPa</span>
+                                    </div>
                                 </td>
-                                {mapBins.map((_, mapIdx) => {
+
+                                {rpmBins.map((rpm, rpmIdx) => {
                                     const veCorr = displayCorrections[rpmIdx]?.[mapIdx] ?? 1.0;
                                     const hits = displayHitCounts[rpmIdx]?.[mapIdx] ?? 0;
                                     const activeWeight = isCellActive(rpmIdx, mapIdx);
@@ -437,22 +455,22 @@ export function LiveVETable({
 
                                     return (
                                         <td
-                                            key={mapIdx}
+                                            key={`${rpm}-${mapKpa}`}
                                             className={`
-                                                min-w-[50px] h-10 text-center font-mono transition-all duration-75 cursor-pointer
+                                                min-w-[48px] w-[48px] h-12 px-1 py-1.5 text-center font-mono transition-all duration-75 cursor-pointer border-l border-zinc-800/30 align-middle
                                                 ${getCellColor(veCorr, hits)}
-                                                ${isActive ? 'ring-2 ring-orange-500 ring-inset bg-orange-500/40 scale-105' : ''}
+                                                ${isActive ? 'ring-2 ring-orange-500 ring-inset bg-orange-500/40 scale-105 z-20 relative' : ''}
                                             `}
                                             onClick={() => onCellClick?.(rpmIdx, mapIdx)}
-                                            title={`${rpm} RPM @ ${mapBins[mapIdx]} kPa\n${hits} hits${hits > 0 ? `\nVE: ${((veCorr - 1) * 100).toFixed(1)}%` : ''}`}
+                                            title={`${rpm} RPM @ ${mapKpa} kPa\n${hits} hits${hits > 0 ? `\nVE: ${((veCorr - 1) * 100).toFixed(1)}%` : ''}`}
                                         >
                                             {hits > 0 || isActive ? (
-                                                <div className={`leading-tight ${isActive ? 'font-bold' : ''}`}>
-                                                    <div className="text-xs">{formatVE(veCorr, hits)}</div>
-                                                    <div className="text-[9px] text-zinc-500">{hits > 0 ? hits : '•'}</div>
+                                                <div className={`flex flex-col items-center justify-center leading-tight ${isActive ? 'font-bold' : ''}`}>
+                                                    <div className="text-xs whitespace-nowrap">{formatVE(veCorr, hits)}</div>
+                                                    <div className="text-[9px] text-zinc-500/80 mt-0.5">{hits > 0 ? hits : '•'}</div>
                                                 </div>
                                             ) : (
-                                                <div className="text-zinc-700/30 text-base">·</div>
+                                                <div className="flex items-center justify-center h-full text-zinc-700/30 text-base">·</div>
                                             )}
                                         </td>
                                     );

@@ -53,7 +53,45 @@ def get_workflow() -> AutoTuneWorkflow:
 
 def get_project_root() -> Path:
     """Get project root directory."""
-    return Path(__file__).parent.parent.parent
+    # 1) Explicit env override (useful for tests and deployments)
+    env_root = os.getenv("DYNOAI_PROJECT_ROOT") or os.getenv("DYNOAI_ROOT")
+    if env_root:
+        try:
+            p = Path(env_root).expanduser().resolve()
+            if p.exists() and p.is_dir():
+                return p
+        except Exception:
+            # Fall through to auto-detection
+            pass
+
+    # 2) If the process was started from the project root, prefer CWD
+    try:
+        cwd = Path.cwd().resolve()
+        # Heuristic: repo root contains the `api/` directory.
+        if (cwd / "api").is_dir():
+            return cwd
+    except Exception:
+        pass
+
+    # 3) Fallback: derive from this file location (`api/routes/jetdrive.py`)
+    return Path(__file__).resolve().parent.parent.parent
+
+
+# =============================================================================
+# Configuration endpoints
+# =============================================================================
+
+
+@jetdrive_bp.route("/dyno/config", methods=["GET"])
+def get_dyno_config():
+    """Return Dyno configuration used for calculations and display."""
+    try:
+        from api.config import get_config
+
+        cfg = get_config().dyno
+        return jsonify({"success": True, "config": cfg.to_dict()})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 
 def sanitize_run_id(run_id: str) -> str:
@@ -1697,36 +1735,523 @@ def get_live_data():
             # which would otherwise produce 0 HP due to guardrails in calculate_hp_from_force.
             # For live display, use magnitude so the trace doesn't instantly flatline.
             force_mag = abs(float(force))
-            hp_calc = float(cfg.calculate_hp_from_force(force_mag, rpm))
-            tq_calc = float(cfg.calculate_torque_from_force(force_mag))
-
-            now_ms = int(time.time() * 1000)
-            # Only inject if missing (or clearly not present)
-            if "Horsepower" not in channels and "HP" not in channels:
-                channels["Horsepower"] = {
-                    "id": 101,
-                    "name": "Horsepower",
-                    "value": hp_calc,
-                    "timestamp": now_ms,
-                }
-            if "Torque" not in channels and "TQ" not in channels:
-                channels["Torque"] = {
-                    "id": 100,
-                    "name": "Torque",
-                    "value": tq_calc,
-                    "timestamp": now_ms,
-                }
+            hp = cfg.calculate_hp_from_force(force_mag, rpm)
+            tq = cfg.calculate_torque_from_force(force_mag)
+            # Only add if not already provided by hardware
+            channels.setdefault("Horsepower", {"value": hp})
+            channels.setdefault("Torque", {"value": tq})
     except Exception:
-        # Never break live polling due to a calc error; UI will just show raw channels.
         pass
 
     return jsonify(
         {
-            "capturing": bool(_live_data.get("capturing")),
+            "capturing": True,
             "simulated": False,
             "last_update": _live_data.get("last_update"),
             "channels": channels,
             "channel_count": len(channels),
+        }
+    )
+
+
+# =============================================================================
+# Innovate Wideband AFR (DLG-1 / LC-2)
+# =============================================================================
+
+# Note: This is intentionally kept separate from the JetDrive UDP capture loop.
+# The Innovate devices connect via local serial/USB and are polled/streamed via
+# dedicated endpoints used by the Wideband tab in the frontend.
+
+_innovate_lock = threading.Lock()
+_innovate_client: Any | None = None
+_innovate_port: str | None = None
+_innovate_device_type: str | None = None
+_innovate_last_error: str | None = None
+_innovate_last_samples: dict[int, Any] = {}
+_innovate_last_sample_at: float | None = None  # wall clock (time.time()) of last sample received
+
+
+def _innovate_parse_device_type(device_type: Any) -> str:
+    """Normalize device_type input to one of: 'DLG-1', 'LC-2', 'AUTO'."""
+    if not isinstance(device_type, str):
+        return "AUTO"
+    s = device_type.strip().upper().replace("_", "-")
+    if s in {"DLG-1", "DLG1"}:
+        return "DLG-1"
+    if s in {"LC-2", "LC2"}:
+        return "LC-2"
+    return "AUTO"
+
+
+def _innovate_on_sample(sample: Any) -> None:
+    """Streaming callback from InnovateClient; caches latest samples for status endpoint."""
+    global _innovate_last_samples, _innovate_last_sample_at
+    try:
+        ch = int(getattr(sample, "channel", 1))
+    except Exception:
+        ch = 1
+    with _innovate_lock:
+        _innovate_last_samples[ch] = sample
+        _innovate_last_sample_at = time.time()
+
+
+@jetdrive_bp.route("/innovate/ports", methods=["GET"])
+def innovate_list_ports():
+    """List available serial ports for Innovate devices."""
+    try:
+        from api.services.innovate_client import list_available_ports
+
+        ports = list_available_ports() or []
+        simplified = []
+        for p in ports:
+            if not isinstance(p, dict):
+                continue
+            port = p.get("port")
+            if not isinstance(port, str) or not port:
+                continue
+            desc = p.get("description") if isinstance(p.get("description"), str) else ""
+            simplified.append({"port": port, "description": desc})
+
+        return jsonify({"success": True, "ports": simplified})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc), "ports": []}), 500
+
+
+@jetdrive_bp.route("/innovate/connect", methods=["POST"])
+def innovate_connect():
+    """Connect to an Innovate device (DLG-1/LC-2) and start background streaming."""
+    global _innovate_client, _innovate_port, _innovate_device_type, _innovate_last_error
+    global _innovate_last_samples, _innovate_last_sample_at
+
+    body = request.get_json(silent=True) or {}
+    port = body.get("port")
+    if not isinstance(port, str) or not port.strip():
+        return jsonify({"success": False, "connected": False, "error": "Missing 'port'"}), 400
+    port = port.strip()
+
+    dev_type_norm = _innovate_parse_device_type(body.get("device_type"))
+
+    # Always reset cached state on connect attempt
+    with _innovate_lock:
+        _innovate_last_samples = {}
+        _innovate_last_sample_at = None
+        _innovate_last_error = None
+
+    try:
+        from api.services.innovate_client import InnovateClient, InnovateDeviceType
+
+        dev_enum = InnovateDeviceType.AUTO
+        if dev_type_norm == "DLG-1":
+            dev_enum = InnovateDeviceType.DLG1
+        elif dev_type_norm == "LC-2":
+            dev_enum = InnovateDeviceType.LC2
+
+        # Replace any existing client
+        with _innovate_lock:
+            old = _innovate_client
+            _innovate_client = None
+            _innovate_port = None
+            _innovate_device_type = None
+        if old is not None:
+            try:
+                old.disconnect()
+            except Exception:
+                pass
+
+        client = InnovateClient(port=port, device_type=dev_enum)
+        ok = client.connect()
+        if not ok:
+            detail = getattr(client, "last_error", None)
+            msg = f"Failed to connect to {port}"
+            if isinstance(detail, str) and detail.strip():
+                msg = f"{msg}: {detail.strip()}"
+            with _innovate_lock:
+                _innovate_last_error = msg
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "connected": False,
+                        "error": msg,
+                    }
+                ),
+                200,
+            )
+
+        # Start streaming in the background to continuously update latest samples
+        started = False
+        try:
+            started = bool(client.start_streaming(_innovate_on_sample))
+        except Exception as exc:
+            # Connection can still be valid even if streaming didn't start.
+            logger.warning("Innovate streaming start failed: %s", exc)
+
+        with _innovate_lock:
+            _innovate_client = client
+            _innovate_port = port
+            _innovate_device_type = dev_enum.value
+            _innovate_last_error = None
+
+        return jsonify(
+            {
+                "success": True,
+                "connected": True,
+                "port": port,
+                "device_type": dev_enum.value,
+                "streaming": started,
+            }
+        )
+
+    except ImportError as exc:
+        # Most commonly: pyserial missing
+        with _innovate_lock:
+            _innovate_last_error = str(exc)
+        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+    except Exception as exc:
+        with _innovate_lock:
+            _innovate_last_error = str(exc)
+        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/innovate/disconnect", methods=["POST"])
+def innovate_disconnect():
+    """Disconnect the active Innovate device (if any)."""
+    global _innovate_client, _innovate_port, _innovate_device_type, _innovate_last_error
+    global _innovate_last_samples, _innovate_last_sample_at
+
+    with _innovate_lock:
+        client = _innovate_client
+        _innovate_client = None
+        _innovate_port = None
+        _innovate_device_type = None
+        _innovate_last_samples = {}
+        _innovate_last_sample_at = None
+        _innovate_last_error = None
+
+    if client is not None:
+        try:
+            client.disconnect()
+        except Exception:
+            pass
+
+    return jsonify({"success": True})
+
+
+@jetdrive_bp.route("/innovate/status", methods=["GET"])
+def innovate_status():
+    """Return connection + latest sample status for the Innovate device."""
+    with _innovate_lock:
+        client = _innovate_client
+        port = _innovate_port
+        device_type = _innovate_device_type
+        last_error = _innovate_last_error
+        samples = dict(_innovate_last_samples)
+        last_sample_at = _innovate_last_sample_at
+
+    connected = bool(client is not None and getattr(client, "connected", False))
+    # "running" means the stream loop is active; "streaming" means we saw data recently.
+    running = bool(client is not None and getattr(client, "running", False))
+
+    now = time.time()
+    streaming = bool(
+        connected
+        and running
+        and last_sample_at is not None
+        and (now - float(last_sample_at)) < 2.0
+    )
+
+    samples_out: dict[str, Any] = {}
+    for ch, s in samples.items():
+        try:
+            afr = float(getattr(s, "afr", 0.0))
+        except Exception:
+            afr = 0.0
+        try:
+            lam = getattr(s, "lambda_value", None)
+            lam = float(lam) if lam is not None else None
+        except Exception:
+            lam = None
+        try:
+            ts = float(getattr(s, "timestamp", 0.0))
+        except Exception:
+            ts = 0.0
+        samples_out[f"channel_{ch}"] = {"afr": afr, "lambda": lam, "timestamp": ts}
+
+    return jsonify(
+        {
+            "success": True,
+            "connected": connected,
+            "streaming": streaming,
+            "has_samples": len(samples_out) > 0,
+            "port": port,
+            "device_type": device_type,
+            "error": last_error,
+            "samples": samples_out,
+        }
+    )
+
+
+# =============================================================================
+# Hardware validation (RT-150 network + config parameters)
+# =============================================================================
+
+
+def _load_rt150_config() -> dict[str, Any]:
+    """Load RT-150 reference configuration JSON from config folder."""
+    cfg_path = get_project_root() / "config" / "dynoware_rt150.json"
+    try:
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load RT-150 config at {cfg_path}: {exc}") from exc
+
+
+@jetdrive_bp.route("/hardware/validate", methods=["GET"])
+def validate_hardware():
+    """Validate RT-150 network reachability and config parameters.
+
+    Returns basic checks of the JSON reference config vs environment, and attempts a
+    brief JetDrive provider discovery to verify multicast reachability on the expected port.
+    """
+    warnings: list[str] = []
+
+    # Load reference JSON
+    try:
+        rt150 = _load_rt150_config()
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # Pull current env-derived config
+    try:
+        from api.config import get_config
+
+        env_cfg = get_config().dyno
+    except Exception as exc:
+        logger.error("Failed to read env config in /hardware/validate", exc_info=True)
+        return jsonify({"ok": False, "error": "Failed to read environment config"}), 500
+
+    # Compare key parameters
+    ref_ip = (rt150.get("network") or {}).get("ip_address")
+    ref_port = (rt150.get("network") or {}).get("jetdrive_port")
+
+    if ref_ip and env_cfg.ip_address and str(ref_ip) != str(env_cfg.ip_address):
+        warnings.append(
+            f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}"
+        )
+    if ref_port and env_cfg.jetdrive_port and int(ref_port) != int(env_cfg.jetdrive_port):
+        warnings.append(
+            f"Port mismatch: reference {ref_port} vs env {env_cfg.jetdrive_port}"
+        )
+
+    # Attempt rapid multicast discovery on the configured port
+    providers_info: list[dict[str, Any]] = []
+    matched_provider = False
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        # Prefer reference port if set
+        if isinstance(ref_port, int):
+            cfg.port = ref_port
+
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.5))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        for p in providers:
+            hostsame = bool(ref_ip) and str(p.host) == str(ref_ip)
+            if hostsame:
+                matched_provider = True
+            providers_info.append(
+                {
+                    "provider_id": p.provider_id,
+                    "name": p.name,
+                    "host": p.host,
+                    "port": p.port,
+                    "channels": len(p.channels or {}),
+                    "matches_expected_ip": hostsame,
+                }
+            )
+    except Exception as exc:
+        logger.warning("Discovery error in /hardware/validate", exc_info=True)
+        warnings.append("Discovery error")
+
+    result = {
+        "ok": True,
+        "reference": {
+            "ip_address": ref_ip,
+            "jetdrive_port": ref_port,
+            "drum1": (rt150.get("drums") or {}).get("drum1"),
+        },
+        "environment": {
+            "ip_address": env_cfg.ip_address,
+            "jetdrive_port": env_cfg.jetdrive_port,
+            "drum1": {
+                "serial": env_cfg.drum1_serial,
+                "mass_kg": env_cfg.drum1_mass_kg,
+                "circumference_ft": env_cfg.drum1_circumference_ft,
+                "tabs": env_cfg.drum1_tabs,
+            },
+        },
+        "network": {
+            "providers_found": len(providers_info),
+            "matched_expected_ip": matched_provider,
+            "providers": providers_info,
+        },
+        "warnings": warnings,
+    }
+    return jsonify(result)
+
+
+@jetdrive_bp.route("/hardware/heartbeat", methods=["GET"])
+def hardware_heartbeat():
+    """Lightweight discovery-based heartbeat to confirm UDP responsiveness.
+
+    Uses JetDrive provider discovery as a proxy for a ping, returning
+    the number of providers and their hosts. This validates that:
+      - UDP 22344 is bindable
+      - Multicast join succeeds
+      - Providers are actively broadcasting
+    """
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        return jsonify(
+            {
+                "ok": True,
+                "providers": [
+                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    for p in providers
+                ],
+                "count": len(providers),
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/connect", methods=["POST"])
+def connect_hardware():
+    """Attempt to discover JetDrive providers and mark connection state."""
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=2.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+        return jsonify(
+            {
+                "success": True,
+                "connected": len(providers) > 0,
+                "providers": [
+                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    for p in providers
+                ],
+                "count": len(providers),
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/start", methods=["POST"])
+def start_hardware_stream():
+    """Alias for /hardware/live/start to simplify clients."""
+    try:
+        return start_live_capture()
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/stop", methods=["POST"])
+def stop_hardware_stream():
+    """Alias for /hardware/live/stop to simplify clients."""
+    try:
+        return stop_live_capture()
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@jetdrive_bp.route("/hardware/status", methods=["GET"])
+def hardware_status():
+    """Composite status of live capture and a quick discovery snapshot."""
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+
+        cfg = JetDriveConfig.from_env()
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+        finally:
+            try:
+                asyncio.set_event_loop(None)
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
+    except Exception:
+        providers = []
+
+    with _live_data_lock:
+        capturing = bool(_live_data.get("capturing"))
+        last_update = _live_data.get("last_update")
+        channel_count = len(_live_data.get("channels", {}))
+
+    return jsonify(
+        {
+            "connected": len(providers) > 0,
+            "providers": [
+                {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                for p in providers
+            ],
+            "live": {
+                "capturing": capturing,
+                "last_update": last_update,
+                "channel_count": channel_count,
+            },
+            "timestamp": datetime.now().isoformat(),
         }
     )
 
@@ -2051,6 +2576,14 @@ _sim_lock = threading.Lock()
 
 def _is_simulator_active() -> bool:
     """Thread-safe check for simulator activity."""
+    # Environment override to force simulator fallback (useful for demos/CI)
+    try:
+        env_override = os.getenv("DYNOAI_SIMULATOR_FALLBACK", "").strip().lower()
+        if env_override in {"1", "true", "yes", "on"}:
+            return True
+    except Exception:
+        pass
+
     with _sim_lock:
         return _sim_active
 

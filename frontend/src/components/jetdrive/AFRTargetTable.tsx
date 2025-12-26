@@ -336,7 +336,7 @@ export function AFRTargetTable({
                 </div>
 
                 {/* Simplified view: MAP kPa, Zone label, Average AFR */}
-                <div className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900/50">
+                <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900/50">
                     <table className="w-full text-xs border-collapse">
                         <thead>
                             <tr className="bg-zinc-800/80">
@@ -344,7 +344,7 @@ export function AFRTargetTable({
                                     <th
                                         key={mapKpa}
                                         className={cn(
-                                            "px-2 py-1.5 text-center font-bold text-zinc-300 border-b border-zinc-700",
+                                            "min-w-[60px] px-2 py-2 text-center font-bold text-zinc-300 border-b border-zinc-800/80",
                                             activeCell && MAP_BINS[activeCell.mapIdx] === mapKpa && "bg-orange-500/30 text-orange-300"
                                         )}
                                     >
@@ -354,12 +354,12 @@ export function AFRTargetTable({
                             </tr>
                         </thead>
                         <tbody>
-                            <tr className="bg-zinc-800/40">
+                            <tr className="bg-zinc-800/40 border-t border-zinc-800/50">
                                 {MAP_BINS.map((mapKpa) => (
                                     <td
                                         key={mapKpa}
                                         className={cn(
-                                            "px-1 py-1 text-center text-[10px] text-zinc-500 border-b border-zinc-800",
+                                            "min-w-[60px] px-1 py-1.5 text-center text-[10px] text-zinc-500 border-b border-zinc-800/50",
                                             activeCell && MAP_BINS[activeCell.mapIdx] === mapKpa && "bg-orange-500/20 text-orange-400"
                                         )}
                                     >
@@ -367,21 +367,23 @@ export function AFRTargetTable({
                                     </td>
                                 ))}
                             </tr>
-                            <tr>
+                            <tr className="border-t border-zinc-800/50">
                                 {avgTargets.map((afr, mapIdx) => {
                                     const isActive = activeCell && activeCell.mapIdx === mapIdx;
                                     return (
                                         <td
                                             key={mapIdx}
                                             className={cn(
-                                                "px-2 py-2.5 text-center transition-colors",
+                                                "min-w-[60px] h-12 px-2 py-2.5 text-center transition-colors align-middle",
                                                 getAfrBgColor(afr),
-                                                isActive && "ring-2 ring-inset ring-orange-500"
+                                                isActive && "ring-2 ring-inset ring-orange-500 z-20 relative"
                                             )}
                                         >
-                                            <span className={cn("font-mono font-bold text-base", getAfrColor(afr))}>
-                                                {afr.toFixed(1)}
-                                            </span>
+                                            <div className="flex items-center justify-center h-full">
+                                                <span className={cn("font-mono font-bold text-base", getAfrColor(afr))}>
+                                                    {afr.toFixed(1)}
+                                                </span>
+                                            </div>
                                         </td>
                                     );
                                 })}
@@ -441,14 +443,17 @@ export function AFRTargetTable({
                 <table className="w-full text-xs border-collapse">
                     <thead>
                         <tr className="bg-zinc-800/80">
-                            <th className="sticky left-0 z-10 px-3 py-2 text-left font-medium text-zinc-400 bg-zinc-800/80 border-r border-zinc-700">
-                                RPM →<br/>MAP ↓
+                            <th className="sticky left-0 z-10 min-w-[75px] w-[75px] px-3 py-2 text-left font-medium text-zinc-400 bg-zinc-800/80 border-r border-zinc-800/80">
+                                <div className="flex flex-col items-start">
+                                    <span>RPM →</span>
+                                    <span className="text-[9px] text-zinc-500">MAP ↓</span>
+                                </div>
                             </th>
                             {RPM_BINS.map((rpm) => (
                                 <th
                                     key={rpm}
                                     className={cn(
-                                        "px-2 py-2 text-center font-bold text-zinc-300 border-l border-zinc-700/50",
+                                        "min-w-[48px] w-[48px] px-1.5 py-2 text-center font-bold text-zinc-300 border-l border-zinc-800/50",
                                         activeCell && RPM_BINS[activeCell.rpmIdx] === rpm && "bg-orange-500/20 text-orange-300"
                                     )}
                                 >
@@ -464,11 +469,11 @@ export function AFRTargetTable({
                                 mapIdx % 2 === 0 ? "bg-zinc-900/30" : "bg-zinc-900/10"
                             )}>
                                 <td className={cn(
-                                    "sticky left-0 z-10 px-3 py-2 font-mono font-bold text-zinc-300 border-r border-zinc-700",
+                                    "sticky left-0 z-10 min-w-[75px] w-[75px] px-3 py-2 font-mono font-bold text-zinc-300 border-r border-zinc-800/80",
                                     mapIdx % 2 === 0 ? "bg-zinc-900/30" : "bg-zinc-900/10",
                                     activeCell && activeCell.mapIdx === mapIdx && "text-orange-400 bg-orange-500/10"
                                 )}>
-                                    <div className="flex flex-col">
+                                    <div className="flex flex-col items-start">
                                         <span>{mapKpa}</span>
                                         <span className="text-[9px] text-zinc-500 font-normal">
                                             {LOAD_ZONES[mapKpa]}
@@ -484,9 +489,9 @@ export function AFRTargetTable({
                                         <td
                                             key={`${rpm}-${mapKpa}`}
                                             className={cn(
-                                                "px-2 py-2 text-center cursor-pointer transition-colors border-l border-zinc-800/30",
+                                                "min-w-[48px] w-[48px] h-12 px-1 py-1.5 text-center cursor-pointer transition-colors border-l border-zinc-800/30 align-middle",
                                                 getAfrBgColor(afr),
-                                                isActive && "ring-2 ring-inset ring-orange-500",
+                                                isActive && "ring-2 ring-inset ring-orange-500 z-20 relative",
                                                 !isEditing && "hover:bg-zinc-700/50"
                                             )}
                                             onClick={() => !isEditing && handleCellClick(rpmIdx, mapIdx)}
@@ -505,9 +510,11 @@ export function AFRTargetTable({
                                                     max={16.0}
                                                 />
                                             ) : (
-                                                <span className={cn("font-mono font-bold text-sm", getAfrColor(afr))}>
-                                                    {afr.toFixed(1)}
-                                                </span>
+                                                <div className="flex items-center justify-center h-full">
+                                                    <span className={cn("font-mono font-bold text-sm", getAfrColor(afr))}>
+                                                        {afr.toFixed(1)}
+                                                    </span>
+                                                </div>
                                             )}
                                         </td>
                                     );

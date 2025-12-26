@@ -94,6 +94,27 @@ load_dotenv()
 # Get application configuration
 config = get_config()
 
+@app.route("/", methods=["GET"])
+def root():
+    """
+    Friendly root endpoint.
+
+    Some environments (and humans) probe `/` by default. We return a small
+    pointer payload rather than a 404 to reduce confusion and help health checks.
+    """
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "service": "DynoAI API",
+                "health": "/api/health",
+                "docs": "/api/docs",
+                "admin": "/admin",
+            }
+        ),
+        200,
+    )
+
 
 def rate_limit(limit_string: str):
     """Decorator that applies rate limiting if limiter is available."""
@@ -831,6 +852,7 @@ def get_confidence_report(run_id):
 
 
 @app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
+@app.route("/api/session-replay/<run_id>", methods=["GET"])  # Backwards-compatible alias
 @rate_limit("120/minute")  # Read-only - permissive
 def get_session_replay(run_id):
     """

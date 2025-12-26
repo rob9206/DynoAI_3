@@ -37,12 +37,45 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+serial = None
+_pyserial_import_error: Exception | None = None
+
 try:
-    import serial
-    import serial.tools.list_ports
-except ImportError:
+    import serial as _serial  # type: ignore
+    import serial.tools.list_ports  # type: ignore
+
+    serial = _serial
+    _pyserial_import_error = None
+except ImportError as exc:
     serial = None
+    _pyserial_import_error = exc
     logger.warning("pyserial not installed. Innovate client will not work.")
+
+
+def _ensure_pyserial() -> None:
+    """
+    Ensure pyserial is importable.
+
+    This is intentionally lazy/re-entrant so that:
+    - The module can be imported even when pyserial is not installed
+    - A running process can recover if pyserial is installed later (e.g. after
+      updating dependencies), without requiring a full restart
+    """
+    global serial, _pyserial_import_error
+    if serial is not None:
+        return
+    try:
+        import serial as _serial  # type: ignore
+        import serial.tools.list_ports  # type: ignore
+
+        serial = _serial
+        _pyserial_import_error = None
+    except ImportError as exc:
+        serial = None
+        _pyserial_import_error = exc
+        raise ImportError(
+            "pyserial is required for Innovate client. Install with: pip install pyserial"
+        ) from exc
 
 
 class InnovateDeviceType(Enum):
@@ -95,11 +128,8 @@ class InnovateClient:
             device_type: Device type for protocol selection
             calibration_file: Path to AFR calibration JSON file. If None, uses default config/afr_calibration.json
         """
-        if serial is None:
-            raise ImportError(
-                "pyserial is required for Innovate client. "
-                "Install with: pip install pyserial"
-            )
+        # Ensure pyserial is available (supports late install without restart)
+        _ensure_pyserial()
 
         self.port = port
         self.baudrate = baudrate
@@ -107,6 +137,7 @@ class InnovateClient:
         self.serial_conn: serial.Serial | None = None
         self.connected = False
         self.running = False
+        self.last_error: str | None = None
 
         # Streaming
         self._stream_thread: threading.Thread | None = None
@@ -237,12 +268,14 @@ class InnovateClient:
         """
         if self.connected:
             return True
+        self.last_error = None
 
         # Auto-detect port if not specified
         if self.port is None:
             self.port = self._auto_detect_port()
             if self.port is None:
                 logger.error("No Innovate device found. Please specify port manually.")
+                self.last_error = "No Innovate device found (auto-detect returned no ports)"
                 return False
 
         try:
@@ -289,11 +322,13 @@ class InnovateClient:
                     pass
 
             self.connected = True
+            self.last_error = None
             logger.info(f"Connected to Innovate device on {self.port}")
             return True
 
         except serial.SerialException as e:
             logger.error(f"Failed to connect to {self.port}: {e}")
+            self.last_error = str(e)
             self.connected = False
             return False
 
@@ -784,7 +819,9 @@ def list_available_ports() -> list[dict]:
     Returns:
         List of dicts with port info: [{"port": "COM3", "description": "..."}, ...]
     """
-    if serial is None:
+    try:
+        _ensure_pyserial()
+    except ImportError:
         return []
 
     try:

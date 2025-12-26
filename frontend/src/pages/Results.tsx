@@ -4,7 +4,8 @@ import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, C
 import { toast } from '@/lib/toast';
 import { getJobStatus, getVEData, getCoverageData, getDiagnostics, getConfidenceReport, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest, ConfidenceReport } from '../lib/api';
 import { sanitizeDownloadName } from '../lib/sanitize';
-import VEHeatmap from '../components/VEHeatmap';
+import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
+import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { VESurface } from '../components/VESurface';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import { SessionReplayViewer } from '../components/session-replay';
@@ -349,18 +350,19 @@ export default function Results() {
                   </div>
 
                   {viewMode === '2d' ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <VEHeatmap
-                        data={veData.before}
-                        rpm={veData.rpm}
-                        load={veData.load}
-                        title="VE Table - Before Corrections"
-                      />
-                      <VEHeatmap
-                        data={veData.after}
-                        rpm={veData.rpm}
-                        load={veData.load}
-                        title="VE Table - After Corrections"
+                    <div className="space-y-4">
+                      <VEHeatmapLegend clampLimit={7} />
+                      <VEGrid
+                        data={veData.after.map((row, i) => row.map((val, j) => val - veData.before[i][j]))}
+                        rowLabels={veData.rpm.map(String)}
+                        colLabels={veData.load.map(String)}
+                        clampLimit={7}
+                        showClampIndicators={true}
+                        showValues={true}
+                        valueDecimals={1}
+                        valueLabel="Correction"
+                        tooltipLoadUnit="kPa"
+                        title="VE Correction Delta"
                       />
                     </div>
                   ) : (
@@ -397,22 +399,30 @@ export default function Results() {
               )}
 
               {coverageData?.front && (
-                <VEHeatmap
+                <VEGrid
                   data={coverageData.front.data}
-                  rpm={coverageData.front.rpm}
-                  load={coverageData.front.load}
+                  rowLabels={coverageData.front.rpm.map(String)}
+                  colLabels={coverageData.front.load.map(String)}
                   title="Data Coverage - Front Cylinder"
                   colorMode="sequential"
+                  showClampIndicators={false}
+                  valueDecimals={0}
+                  valueLabel="Hits"
+                  tooltipLoadUnit="kPa"
                 />
               )}
 
               {coverageData?.rear && (
-                <VEHeatmap
+                <VEGrid
                   data={coverageData.rear.data}
-                  rpm={coverageData.rear.rpm}
-                  load={coverageData.rear.load}
+                  rowLabels={coverageData.rear.rpm.map(String)}
+                  colLabels={coverageData.rear.load.map(String)}
                   title="Data Coverage - Rear Cylinder"
                   colorMode="sequential"
+                  showClampIndicators={false}
+                  valueDecimals={0}
+                  valueLabel="Hits"
+                  tooltipLoadUnit="kPa"
                 />
               )}
             </div>

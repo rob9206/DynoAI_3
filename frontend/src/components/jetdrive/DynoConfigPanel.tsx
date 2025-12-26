@@ -55,6 +55,12 @@ export function DynoConfigPanel({
     const [config, setConfig] = useState<DynoConfigData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [connecting, setConnecting] = useState(false);
+    const [connected, setConnected] = useState<boolean | null>(null);
+    const [capturing, setCapturing] = useState(false);
+    const [liveError, setLiveError] = useState<string | null>(null);
+    const [channels, setChannels] = useState<Record<string, any>>({});
+    const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
     const fetchConfig = async () => {
         setLoading(true);
@@ -80,6 +86,66 @@ export function DynoConfigPanel({
     useEffect(() => {
         fetchConfig();
     }, [apiUrl]);
+
+    // Connection helpers
+    const handleConnect = async () => {
+        setConnecting(true);
+        setLiveError(null);
+        try {
+            const res = await fetch(`${apiUrl}/hardware/connect`, { method: 'POST' });
+            const data = await res.json();
+            setConnected(Boolean(data.connected));
+        } catch (e) {
+            setConnected(false);
+            setLiveError(e instanceof Error ? e.message : 'Connect failed');
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const handleStart = async () => {
+        setLiveError(null);
+        try {
+            const res = await fetch(`${apiUrl}/hardware/start`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to start live capture');
+            setCapturing(true);
+        } catch (e) {
+            setLiveError(e instanceof Error ? e.message : 'Start failed');
+        }
+    };
+
+    const handleStop = async () => {
+        setLiveError(null);
+        try {
+            const res = await fetch(`${apiUrl}/hardware/stop`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to stop live capture');
+            setCapturing(false);
+        } catch (e) {
+            setLiveError(e instanceof Error ? e.message : 'Stop failed');
+        }
+    };
+
+    // Poll live channels when capturing
+    useEffect(() => {
+        if (!capturing) return;
+        let cancelled = false;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`${apiUrl}/hardware/live/data`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (cancelled) return;
+                setChannels(data.channels || {});
+                setLastUpdate(data.last_update || null);
+            } catch {
+                // ignore transient poll errors
+            }
+        }, 1000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [apiUrl, capturing]);
 
     if (loading) {
         return (
@@ -153,13 +219,31 @@ export function DynoConfigPanel({
                         <Settings2 className="w-5 h-5 text-amber-500" />
                         <CardTitle className="text-lg">Dyno Configuration</CardTitle>
                     </div>
-                    <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={fetchConfig}
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={fetchConfig}
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                            variant={connected ? 'outline' : 'default'} 
+                            size="sm"
+                            onClick={handleConnect}
+                            disabled={connecting}
+                        >
+                            <Wifi className="w-4 h-4 mr-2" />
+                            {connecting ? 'Connecting…' : connected ? 'Reconnect' : 'Connect'}
+                        </Button>
+                        <Button 
+                            variant={capturing ? 'outline' : 'default'} 
+                            size="sm"
+                            onClick={capturing ? handleStop : handleStart}
+                        >
+                            {capturing ? 'Stop' : 'Start'}
+                        </Button>
+                    </div>
                 </div>
                 <CardDescription>
                     Connected dynamometer specifications for power calculations
@@ -327,6 +411,53 @@ export function DynoConfigPanel({
                         <p className="text-xs text-zinc-500 pl-4">
                             = Force × {config.drum1.radius_ft.toFixed(4)} ft
                         </p>
+                    </div>
+                </motion.div>
+
+                {/* Live Telemetry */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="bg-zinc-800/30 rounded-lg p-4"
+                >
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Info className="w-4 h-4" />
+                            <span className="text-xs uppercase tracking-wider">Live Telemetry</span>
+                        </div>
+                        {lastUpdate && (
+                            <span className="text-[10px] text-zinc-500">Last: {lastUpdate}</span>
+                        )}
+                    </div>
+                    {liveError && (
+                        <div className="text-xs text-red-400 mb-2">{liveError}</div>
+                    )}
+                    <div className="grid grid-cols-4 gap-3 text-center">
+                        <div className="bg-zinc-900/40 rounded-lg p-3">
+                            <p className="text-xs text-zinc-500">RPM</p>
+                            <p className="text-lg font-semibold text-emerald-400">
+                                {Number(channels?.['Digital RPM 1']?.value ?? channels?.['RPM']?.value ?? 0).toFixed(0)}
+                            </p>
+                        </div>
+                        <div className="bg-zinc-900/40 rounded-lg p-3">
+                            <p className="text-xs text-zinc-500">HP</p>
+                            <p className="text-lg font-semibold text-cyan-400">
+                                {Number(channels?.['Horsepower']?.value ?? 0).toFixed(1)}
+                            </p>
+                        </div>
+                        <div className="bg-zinc-900/40 rounded-lg p-3">
+                            <p className="text-xs text-zinc-500">Torque</p>
+                            <p className="text-lg font-semibold text-violet-400">
+                                {Number(channels?.['Torque']?.value ?? 0).toFixed(1)}
+                            </p>
+                        </div>
+                        <div className="bg-zinc-900/40 rounded-lg p-3">
+                            <p className="text-xs text-zinc-500">AFR</p>
+                            <p className="text-lg font-semibold text-pink-400">
+                                {Number(channels?.['Air/Fuel Ratio 1']?.value ?? channels?.['AFR']?.value ?? 0).toFixed(2)}
+                            </p>
+                        </div>
                     </div>
                 </motion.div>
             </CardContent>

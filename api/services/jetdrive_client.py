@@ -14,7 +14,8 @@ from typing import Callable
 # KLHDV transport defaults (overridable via env vars)
 DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
 DEFAULT_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
-DEFAULT_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
+# Security: Default to localhost. Set JETDRIVE_IFACE=0.0.0.0 to listen on all interfaces.
+DEFAULT_IFACE = os.getenv("JETDRIVE_IFACE", "127.0.0.1")
 ALL_HOSTS = 0xFFFF
 
 # Message keys

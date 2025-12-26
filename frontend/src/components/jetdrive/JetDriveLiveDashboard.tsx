@@ -27,6 +27,13 @@ import { toast } from '@/lib/toast';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 
+function quantizeToDecimals(value: number, decimals: number): number {
+    if (!Number.isFinite(value)) return value;
+    const safeDecimals = Math.max(0, decimals);
+    const factor = Math.pow(10, safeDecimals);
+    return Math.round(value * factor) / factor;
+}
+
 // Infer units from channel name or value
 function inferUnits(name: string, value: number): string {
     const nameLower = name.toLowerCase();
@@ -339,12 +346,13 @@ export function JetDriveLiveDashboard({
                                     // Use config label, or derive from channel name
                                     const displayLabel = config.label || name.replace('chan_', 'Ch ').replace(/_/g, ' ');
                                     const displayUnits = config.units || inferUnits(name, data.value);
+                                    const quantizedValue = quantizeToDecimals(data.value, config.decimals ?? 1);
 
                                     return (
                                         <LiveLinkGauge
                                             key={name}
                                             name={displayLabel}
-                                            value={data.value}
+                                            value={quantizedValue}
                                             units={displayUnits}
                                             min={config.min}
                                             max={config.max}

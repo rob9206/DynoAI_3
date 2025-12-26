@@ -42,21 +42,22 @@ import {
 import { useJetDriveLive } from '../hooks/useJetDriveLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
 import { LiveVETable } from '../components/jetdrive/LiveVETable';
-import { AFRTargetTable, DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
+import { DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
 import { AudioCapturePanel } from '../components/jetdrive/AudioCapturePanel';
 import { RunComparisonTable } from '../components/jetdrive/RunComparisonTable';
 import { RunComparisonTableEnhanced } from '../components/jetdrive/RunComparisonTableEnhanced';
 import { RunComparisonChart } from '../components/jetdrive/RunComparisonChart';
-import { TransientFuelPanel } from '../components/jetdrive/TransientFuelPanel';
-import { VirtualECUPanel, type VEScenario } from '../components/jetdrive/VirtualECUPanel';
-import { ClosedLoopTuningPanel } from '../components/jetdrive/ClosedLoopTuningPanel';
-import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
+import type { VEScenario } from '../components/jetdrive/VirtualECUPanel';
 import { JetDriveLiveDashboard } from '../components/jetdrive/JetDriveLiveDashboard';
 import { HardwareTab } from '../components/jetdrive/HardwareTab';
+import { SettingsSheet } from '../components/jetdrive/SettingsSheet';
+import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
 import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
 // import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
+import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
+import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { getConfidenceReport } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 
@@ -444,53 +445,99 @@ function WorkflowIndicator({ state, rpmThreshold }: { state: WorkflowState; rpmT
 }
 
 // VE Grid heatmap (compact)
-function VEHeatmap({ veGrid, grid }: { veGrid: any[]; grid: any }) {
-    if (!veGrid?.length || !grid) return null;
+interface VEGridRow { rpm: number; values: number[] }
+interface VEGridSpec { map_bins: number[] }
 
-    const getCellColor = (value: number): string => {
-        const delta = (value - 1) * 100;
-        if (Math.abs(delta) < 0.5) return 'bg-green-500/30 text-green-300';
-        if (delta > 5) return 'bg-red-500/50 text-red-200';
-        if (delta > 2) return 'bg-orange-500/40 text-orange-200';
-        if (delta < -5) return 'bg-blue-500/50 text-blue-200';
-        if (delta < -2) return 'bg-cyan-500/40 text-cyan-200';
-        return 'bg-yellow-500/30 text-yellow-200';
-    };
+// Standard bins matching LiveVETable (Harley M8 preset)
+const STANDARD_RPM_BINS = [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500];
+const STANDARD_MAP_BINS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110];
+
+// Find nearest value from source grid
+function findNearestValue(
+    sourceGrid: Map<string, number>,
+    sourceRpms: number[],
+    sourceMaps: number[],
+    targetRpm: number,
+    targetMap: number
+): number {
+    // Find closest RPM
+    let closestRpm = sourceRpms[0];
+    let minRpmDiff = Math.abs(sourceRpms[0] - targetRpm);
+    for (const rpm of sourceRpms) {
+        const diff = Math.abs(rpm - targetRpm);
+        if (diff < minRpmDiff) {
+            minRpmDiff = diff;
+            closestRpm = rpm;
+        }
+    }
+
+    // Find closest MAP
+    let closestMap = sourceMaps[0];
+    let minMapDiff = Math.abs(sourceMaps[0] - targetMap);
+    for (const map of sourceMaps) {
+        const diff = Math.abs(map - targetMap);
+        if (diff < minMapDiff) {
+            minMapDiff = diff;
+            closestMap = map;
+        }
+    }
+
+    // Return value from closest cell, or 1.0 (no correction) if not found
+    return sourceGrid.get(`${closestRpm},${closestMap}`) ?? 1.0;
+}
+
+function VEHeatmapCompact({ veGrid, grid }: { veGrid: VEGridRow[]; grid: VEGridSpec }) {
+    if (veGrid.length === 0 || grid.map_bins.length === 0) return null;
+
+    // Build source grid map for quick lookup
+    const sourceGrid = new Map<string, number>();
+    const sourceRpms: number[] = [];
+    const sourceMaps = [...grid.map_bins];
+
+    veGrid.forEach(row => {
+        sourceRpms.push(row.rpm);
+        grid.map_bins.forEach((map, idx) => {
+            if (row.values[idx] !== undefined && row.values[idx] !== null) {
+                sourceGrid.set(`${row.rpm},${map}`, row.values[idx]);
+            }
+        });
+    });
+
+    // Remove duplicates and sort
+    const uniqueSourceRpms = Array.from(new Set(sourceRpms)).sort((a, b) => a - b);
+
+    // Expand to standard bins matching LiveVETable
+    const expandedData: number[][] = STANDARD_RPM_BINS.map(rpm => {
+        return STANDARD_MAP_BINS.map(map => {
+            // Check if exact match exists
+            const exact = sourceGrid.get(`${rpm},${map}`);
+            if (exact !== undefined) {
+                return (exact - 1) * 100;
+            }
+            // Use nearest neighbor from source grid
+            const nearest = findNearestValue(sourceGrid, uniqueSourceRpms, sourceMaps, rpm, map);
+            return (nearest - 1) * 100;
+        });
+    });
+
+    const rowLabels = STANDARD_RPM_BINS.map((r) => String(r));
+    const colLabels = STANDARD_MAP_BINS.map((m) => String(m));
 
     return (
-        <div className="overflow-x-auto text-xs">
-            <table className="w-full">
-                <thead>
-                    <tr>
-                        <th className="p-1.5 text-left bg-zinc-900/50 sticky left-0 z-10 text-zinc-500">RPM</th>
-                        {grid?.map_bins?.map((m: number) => (
-                            <th key={m} className="p-1.5 text-center bg-zinc-900/50 min-w-[45px] text-zinc-500">
-                                {m}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {veGrid.map((row) => (
-                        <tr key={row.rpm}>
-                            <td className="p-1.5 font-medium bg-zinc-900/50 sticky left-0 z-10 text-zinc-400">
-                                {row.rpm}
-                            </td>
-                            {row.values.map((val: number, j: number) => {
-                                const delta = ((val - 1) * 100);
-                                return (
-                                    <td
-                                        key={j}
-                                        className={`p-1.5 text-center font-mono ${getCellColor(val)} transition-colors`}
-                                    >
-                                        {delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
-                                    </td>
-                                );
-                            })}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+        <div className="space-y-2">
+            <VEHeatmapLegend clampLimit={7} />
+            <VEGrid
+                data={expandedData}
+                rowLabels={rowLabels}
+                colLabels={colLabels}
+                clampLimit={7}
+                showClampIndicators={true}
+                showValues={true}
+                valueDecimals={1}
+                valueLabel="Correction"
+                tooltipLoadUnit="kPa"
+                className="text-xs"
+            />
         </div>
     );
 }
@@ -531,6 +578,7 @@ interface SimulatorStatus {
         horsepower: number;
         torque: number;
         afr: number;
+        tps?: number;
     };
 }
 
@@ -639,6 +687,16 @@ export default function JetDriveAutoTunePage() {
         const ch = channels['MAP kPa'] || channels['MAP'] || channels['chan_102'];
         return ch?.value || 0;
     }, [channels]);
+
+    const currentLoadPct = useMemo(() => {
+        // Approximate engine load from MAP.
+        // 30 kPa ~ idle/cruise vacuum baseline, 100 kPa ~ WOT (atmospheric).
+        const map = Number(currentMap) || 0;
+        const idleMap = 30;
+        const wotMap = 100;
+        const pct = ((map - idleMap) / (wotMap - idleMap)) * 100;
+        return Math.max(0, Math.min(100, pct));
+    }, [currentMap]);
 
     const currentHp = useMemo(() => {
         const ch = channels['Horsepower'] || channels['HP'] || channels['chan_101'];
@@ -1234,7 +1292,7 @@ export default function JetDriveAutoTunePage() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setShowSettings(!showSettings)}
+                            onClick={() => setShowSettings(true)}
                             className={showSettings ? 'bg-zinc-800' : ''}
                         >
                             <Settings2 className="w-4 h-4" />
@@ -1242,853 +1300,795 @@ export default function JetDriveAutoTunePage() {
                     </div>
                 </div>
 
-            {/* Main Tabs */}
-            <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 max-w-lg">
-                    <TabsTrigger value="hardware" className="flex items-center gap-2">
-                        <Radio className="h-4 w-4" />
-                        Hardware
-                    </TabsTrigger>
-                    <TabsTrigger value="live" className="flex items-center gap-2">
-                        <Activity className="h-4 w-4" />
-                        Live
-                    </TabsTrigger>
-                    <TabsTrigger value="autotune" className="flex items-center gap-2">
-                        <Zap className="h-4 w-4" />
-                        Auto-Tune
-                    </TabsTrigger>
-                </TabsList>
+                {/* Settings Sheet */}
+                <SettingsSheet
+                    open={showSettings}
+                    onOpenChange={setShowSettings}
+                    afrTargets={afrTargets}
+                    onAfrTargetsChange={setAfrTargets}
+                    rpmThreshold={rpmThreshold}
+                    onRpmThresholdChange={setRpmThreshold}
+                    runId={runId}
+                    onRunIdChange={setRunId}
+                    currentMap={currentMap}
+                    currentRpm={currentRpm}
+                    transientFuelEnabled={transientFuelEnabled}
+                    onTransientFuelEnabledChange={setTransientFuelEnabled}
+                    selectedRun={selectedRun}
+                    isCapturing={isCapturing || isSimulatorActive}
+                    currentTps={channels['TPS']?.value || channels['Throttle Position']?.value || 0}
+                    currentTargetAfr={currentTargetAfr}
+                    virtualECUEnabled={virtualECUEnabled}
+                    onVirtualECUEnabledChange={setVirtualECUEnabled}
+                    veScenario={veScenario}
+                    onVeScenarioChange={setVeScenario}
+                    veErrorPct={veErrorPct}
+                    onVeErrorPctChange={setVeErrorPct}
+                    veErrorStd={veErrorStd}
+                    onVeErrorStdChange={setVeErrorStd}
+                    selectedProfile={selectedProfile}
+                />
 
-                {/* Hardware Tab */}
-                <TabsContent value="hardware" className="mt-6">
-                    <HardwareTab apiUrl={API_BASE} />
-                </TabsContent>
+                {/* Main Tabs */}
+                <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 max-w-lg">
+                        <TabsTrigger value="hardware" className="flex items-center gap-2">
+                            <Radio className="h-4 w-4" />
+                            Hardware
+                        </TabsTrigger>
+                        <TabsTrigger value="live" className="flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            Live
+                        </TabsTrigger>
+                        <TabsTrigger value="autotune" className="flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            Auto-Tune
+                        </TabsTrigger>
+                    </TabsList>
 
-                {/* Live Dashboard Tab */}
-                <TabsContent value="live" className="mt-6">
-                    <JetDriveLiveDashboard apiUrl={API_BASE} />
-                </TabsContent>
+                    {/* Hardware Tab */}
+                    <TabsContent value="hardware" className="mt-6">
+                        <HardwareTab apiUrl={API_BASE} />
+                    </TabsContent>
 
-                {/* Auto-Tune Tab */}
-                <TabsContent value="autotune" className="mt-6">
-                {/* Settings Panel (collapsible) */}
-                <AnimatePresence>
-                    {showSettings && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                        >
-                            <Card className="bg-zinc-900/50 border-zinc-800">
-                                <CardContent className="p-4 space-y-4">
-                                    {/* AFR Target Table - Full width */}
-                                    <AFRTargetTable
-                                        targets={afrTargets}
-                                        onChange={setAfrTargets}
-                                        compact={false}
-                                        currentMap={currentMap}
-                                        currentRpm={currentRpm}
-                                    />
+                    {/* Live Dashboard Tab */}
+                    <TabsContent value="live" className="mt-6">
+                        <JetDriveLiveDashboard apiUrl={API_BASE} />
+                    </TabsContent>
 
-                                    {/* Other settings in row */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-t border-zinc-800">
-                                        <div>
-                                            <Label className="text-xs text-zinc-400">Run Detection RPM</Label>
-                                            <div className="flex items-center gap-3 mt-2">
-                                                <Slider
-                                                    value={[rpmThreshold]}
-                                                    onValueChange={([v]) => setRpmThreshold(v)}
-                                                    min={1000}
-                                                    max={4000}
-                                                    step={100}
-                                                    className="flex-1"
-                                                />
-                                                <span className="text-lg font-mono font-bold text-green-400 w-16 text-right">
-                                                    {rpmThreshold}
-                                                </span>
+                    {/* Auto-Tune Tab */}
+                    <TabsContent value="autotune" className="mt-6">
+                        {/* Main Content - State Aware */}
+                        {workflowState === 'disconnected' ? (
+                            /* DISCONNECTED STATE */
+                            <div className="space-y-6">
+                                {/* Primary: Hardware Connection */}
+                                <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border-cyan-500/15 relative overflow-hidden">
+                                    {/* Subtle decorative glow */}
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-20 bg-cyan-500/5 blur-2xl pointer-events-none" />
+
+                                    <CardContent className="py-14 text-center relative">
+                                        <div className="relative w-20 h-20 mx-auto mb-6">
+                                            <div className="absolute inset-0 rounded-2xl bg-cyan-400/10 blur-lg" />
+                                            <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 flex items-center justify-center">
+                                                <Wifi className="w-10 h-10 text-cyan-400" />
                                             </div>
-                                            <p className="text-[10px] text-zinc-500 mt-1">
-                                                RPM threshold to detect WOT pull
-                                            </p>
                                         </div>
-                                        <div>
-                                            <Label className="text-xs text-zinc-400">Run ID</Label>
-                                            <Input
-                                                value={runId}
-                                                onChange={(e) => setRunId(e.target.value)}
-                                                className="mt-2 bg-zinc-800/50 border-zinc-700 h-9"
-                                                placeholder="my_dyno_run"
-                                            />
+                                        <h2 className="text-2xl font-bold text-white mb-3 font-mono uppercase tracking-wide">Connect to Your Dyno</h2>
+                                        <p className="text-sm text-zinc-400 mb-8 max-w-md mx-auto leading-relaxed">
+                                            Connect to your Dynojet dyno via JetDrive protocol for real-time data capture,
+                                            VE table generation, and Power Vision export.
+                                        </p>
+                                        <Button
+                                            onClick={handleStartMonitor}
+                                            disabled={isStartingMonitor}
+                                            size="lg"
+                                            className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 px-10 py-6 text-lg font-mono uppercase tracking-wider shadow-md shadow-cyan-500/15 hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300"
+                                        >
+                                            {isStartingMonitor ? (
+                                                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                                            ) : (
+                                                <Power className="w-5 h-5 mr-2" />
+                                            )}
+                                            Connect to Dyno
+                                        </Button>
+                                        <p className="text-[10px] text-zinc-600 mt-5 font-mono uppercase tracking-wider">
+                                            Requires JetDrive-compatible Dynojet dynamometer
+                                        </p>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Secondary: Testing & Development Section */}
+                                <div className="border-t border-zinc-800 pt-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800/50 border border-zinc-700">
+                                            <Wrench className="w-3 h-3 text-zinc-500" />
+                                            <span className="text-xs text-zinc-500 font-medium">Testing & Development</span>
                                         </div>
-                                        {/* Audio engine removed */}
+                                        <div className="flex-1 h-px bg-zinc-800" />
                                     </div>
 
-                                    {/* Build Configuration - Stage & Cam Presets */}
-                                    <div className="pt-4 border-t border-zinc-800">
-                                        <StageConfigPanel
-                                            afrTargets={afrTargets}
-                                            onAfrTargetsChange={setAfrTargets}
-                                            runId={runId}
-                                            compact={false}
-                                        />
-                                    </div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {/* Simulator Subsection */}
+                                        <Card className="bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
+                                            <CardContent className="py-6">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+                                                        <Cpu className="w-6 h-6 text-orange-400" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h3 className="text-sm font-semibold text-zinc-200 mb-1">Live Simulator</h3>
+                                                        <p className="text-xs text-zinc-500 mb-3">
+                                                            Test the tuning workflow with synthetic dyno data
+                                                        </p>
 
-                                    {/* Transient Fuel Analysis Option */}
-                                    <div className="pt-4 border-t border-zinc-800">
-                                        <TransientFuelPanel
-                                            enabled={transientFuelEnabled}
-                                            onEnabledChange={setTransientFuelEnabled}
-                                            runId={selectedRun || runId}
-                                            isCapturing={isCapturing || isSimulatorActive}
-                                            currentRpm={currentRpm}
-                                            currentMap={currentMap}
-                                            currentTps={channels['TPS']?.value || channels['Throttle Position']?.value || 0}
-                                            targetAfr={currentTargetAfr}
-                                            compact={true}
-                                        />
-                                    </div>
-
-                                    {/* Virtual ECU Simulation */}
-                                    <div className="pt-4 border-t border-zinc-800">
-                                        <VirtualECUPanel
-                                            enabled={virtualECUEnabled}
-                                            onEnabledChange={setVirtualECUEnabled}
-                                            scenario={veScenario}
-                                            onScenarioChange={setVeScenario}
-                                            veErrorPct={veErrorPct}
-                                            onVeErrorChange={setVeErrorPct}
-                                            veErrorStd={veErrorStd}
-                                            onVeErrorStdChange={setVeErrorStd}
-                                        />
-                                    </div>
-
-                                    {/* Closed-Loop Tuning */}
-                                    <div className="pt-4 border-t border-zinc-800">
-                                        <ClosedLoopTuningPanel
-                                            engineProfile={selectedProfile}
-                                            baseScenario={veScenario}
-                                            maxIterations={10}
-                                            convergenceThreshold={0.3}
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Main Content - State Aware */}
-                {workflowState === 'disconnected' ? (
-                    /* DISCONNECTED STATE */
-                    <div className="space-y-6">
-                        {/* Primary: Hardware Connection */}
-                        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border-cyan-500/15 relative overflow-hidden">
-                            {/* Subtle decorative glow */}
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-20 bg-cyan-500/5 blur-2xl pointer-events-none" />
-
-                            <CardContent className="py-14 text-center relative">
-                                <div className="relative w-20 h-20 mx-auto mb-6">
-                                    <div className="absolute inset-0 rounded-2xl bg-cyan-400/10 blur-lg" />
-                                    <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 flex items-center justify-center">
-                                        <Wifi className="w-10 h-10 text-cyan-400" />
-                                    </div>
-                                </div>
-                                <h2 className="text-2xl font-bold text-white mb-3 font-mono uppercase tracking-wide">Connect to Your Dyno</h2>
-                                <p className="text-sm text-zinc-400 mb-8 max-w-md mx-auto leading-relaxed">
-                                    Connect to your Dynojet dyno via JetDrive protocol for real-time data capture,
-                                    VE table generation, and Power Vision export.
-                                </p>
-                                <Button
-                                    onClick={handleStartMonitor}
-                                    disabled={isStartingMonitor}
-                                    size="lg"
-                                    className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 px-10 py-6 text-lg font-mono uppercase tracking-wider shadow-md shadow-cyan-500/15 hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300"
-                                >
-                                    {isStartingMonitor ? (
-                                        <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                                    ) : (
-                                        <Power className="w-5 h-5 mr-2" />
-                                    )}
-                                    Connect to Dyno
-                                </Button>
-                                <p className="text-[10px] text-zinc-600 mt-5 font-mono uppercase tracking-wider">
-                                    Requires JetDrive-compatible Dynojet dynamometer
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        {/* Secondary: Testing & Development Section */}
-                        <div className="border-t border-zinc-800 pt-6">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800/50 border border-zinc-700">
-                                    <Wrench className="w-3 h-3 text-zinc-500" />
-                                    <span className="text-xs text-zinc-500 font-medium">Testing & Development</span>
-                                </div>
-                                <div className="flex-1 h-px bg-zinc-800" />
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {/* Simulator Subsection */}
-                                <Card className="bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
-                                    <CardContent className="py-6">
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
-                                                <Cpu className="w-6 h-6 text-orange-400" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-sm font-semibold text-zinc-200 mb-1">Live Simulator</h3>
-                                                <p className="text-xs text-zinc-500 mb-3">
-                                                    Test the tuning workflow with synthetic dyno data
-                                                </p>
-
-                                                {/* Compact Profile Selector */}
-                                                <div className="flex flex-wrap gap-1.5 mb-3">
-                                                    {(profilesData?.profiles || [
-                                                        { id: 'm8_114', name: 'M8-114', max_hp: 110, family: 'M8' },
-                                                        { id: 'm8_131', name: 'M8-131', max_hp: 145, family: 'M8' },
-                                                        { id: 'twin_cam_103', name: 'TC 103', max_hp: 85, family: 'TwinCam' },
-                                                        { id: 'sportbike_600', name: 'CBR600', max_hp: 118, family: 'Sportbike' },
-                                                    ] as SimulatorProfile[]).map((profile: SimulatorProfile) => (
-                                                        <button
-                                                            key={profile.id}
-                                                            onClick={() => setSelectedProfile(profile.id)}
-                                                            className={`
+                                                        {/* Compact Profile Selector */}
+                                                        <div className="flex flex-wrap gap-1.5 mb-3">
+                                                            {(profilesData?.profiles || [
+                                                                { id: 'm8_114', name: 'M8-114', max_hp: 110, family: 'M8' },
+                                                                { id: 'm8_131', name: 'M8-131', max_hp: 145, family: 'M8' },
+                                                                { id: 'twin_cam_103', name: 'TC 103', max_hp: 85, family: 'TwinCam' },
+                                                                { id: 'sportbike_600', name: 'CBR600', max_hp: 118, family: 'Sportbike' },
+                                                            ] as SimulatorProfile[]).map((profile: SimulatorProfile) => (
+                                                                <button
+                                                                    key={profile.id}
+                                                                    onClick={() => setSelectedProfile(profile.id)}
+                                                                    className={`
                                                                 px-2 py-1 rounded text-[10px] font-medium transition-all
                                                                 ${selectedProfile === profile.id
-                                                                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
-                                                                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
-                                                                }
+                                                                            ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                                                                            : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
+                                                                        }
                                                             `}
+                                                                >
+                                                                    {profile.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+
+                                                        <Button
+                                                            onClick={handleStartSimulator}
+                                                            disabled={isStartingSimulator}
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
                                                         >
-                                                            {profile.name}
-                                                        </button>
-                                                    ))}
+                                                            {isStartingSimulator ? (
+                                                                <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                            ) : (
+                                                                <Play className="w-3.5 h-3.5 mr-1.5" />
+                                                            )}
+                                                            Start Simulator
+                                                        </Button>
+
+                                                    </div>
                                                 </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Quick Analysis Subsection */}
+                                        <Card className="bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
+                                            <CardContent className="py-6">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+                                                        <Zap className="w-6 h-6 text-purple-400" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h3 className="text-sm font-semibold text-zinc-200 mb-1">Quick Analysis</h3>
+                                                        <p className="text-xs text-zinc-500 mb-3">
+                                                            Run instant VE analysis with pre-generated sample data
+                                                        </p>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                                            disabled={analyzeMutation.isPending}
+                                                            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                                                        >
+                                                            {analyzeMutation.isPending ? (
+                                                                <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                            ) : (
+                                                                <Zap className="w-3.5 h-3.5 mr-1.5" />
+                                                            )}
+                                                            Quick Simulate
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            /* CONNECTED STATES */
+                            <div className="grid grid-cols-12 gap-4">
+
+                                {/* Left Column - Live Data */}
+                                <div className="col-span-12 lg:col-span-8 space-y-4">
+
+                                    {/* Live Gauges Row */}
+                                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                                        <NeedleGauge
+                                            label="Engine"
+                                            value={currentRpm}
+                                            units="RPM"
+                                            color="#22d3ee"
+                                            min={0}
+                                            max={8000}
+                                            decimals={0}
+                                            warning={6000}
+                                            critical={7000}
+                                            segments={8}
+                                        />
+                                        <AFRIndicator
+                                            value={currentAfr}
+                                            target={currentTargetAfr}
+                                        />
+                                        <LiveGauge
+                                            label="Drum Force"
+                                            value={currentForce}
+                                            units="lbs"
+                                            color="#f97316"
+                                            min={0}
+                                            max={500}
+                                            decimals={0}
+                                        />
+                                        <LiveGauge
+                                            label="Load"
+                                            value={currentLoadPct}
+                                            units="%"
+                                            color="#06b6d4"
+                                            min={0}
+                                            max={100}
+                                            decimals={0}
+                                        />
+                                        <NeedleGauge
+                                            label={analysis ? "Peak" : "Live"}
+                                            value={isSimulatorActive || isCapturing ? currentHp : (analysis?.peak_hp || 0)}
+                                            units="HP"
+                                            color="#a78bfa"
+                                            min={0}
+                                            max={300}
+                                            decimals={0}
+                                            segments={6}
+                                        />
+                                    </div>
+
+                                    {/* Audio engine removed */}
+
+                                    {/* Capture Controls */}
+                                    <div className="flex items-center gap-3">
+                                        {isSimulatorActive ? (
+                                            /* Simulator Controls */
+                                            <>
+                                                <Button
+                                                    onClick={handleTriggerPull}
+                                                    disabled={simState !== 'idle'}
+                                                    uiSound="pull"
+                                                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
+                                                >
+                                                    <Play className="w-4 h-4 mr-2" />
+                                                    {simState === 'idle' ? 'Trigger Pull' :
+                                                        simState === 'pull' ? 'Pulling...' :
+                                                            simState === 'decel' ? 'Decelerating' : 'Cooling Down'}
+                                                </Button>
 
                                                 <Button
-                                                    onClick={handleStartSimulator}
-                                                    disabled={isStartingSimulator}
-                                                    size="sm"
+                                                    onClick={handleStopSimulator}
+                                                    variant="outline"
+                                                    className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                >
+                                                    <StopCircle className="w-4 h-4 mr-2" />
+                                                    Stop Simulator
+                                                </Button>
+
+                                                <Button
+                                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                                    disabled={analyzeMutation.isPending || (isSimulatorActive && !pullDataStatus?.has_data)}
+                                                    variant="outline"
+                                                    className="border-zinc-700"
+                                                    title={
+                                                        isSimulatorActive && !pullDataStatus?.has_data
+                                                            ? "No pull data available. Run a pull first."
+                                                            : isSimulatorActive && pullDataStatus?.has_data
+                                                                ? `Analyze simulator pull data (${pullDataStatus.points} points, ${pullDataStatus.peak_hp?.toFixed(1)} HP)`
+                                                                : "Analyze with simulated data"
+                                                    }
+                                                >
+                                                    {analyzeMutation.isPending ? (
+                                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                                    ) : (
+                                                        <Zap className="w-4 h-4 mr-2" />
+                                                    )}
+                                                    {isSimulatorActive && pullDataStatus?.has_data
+                                                        ? `Analyze Pull (${pullDataStatus.points} pts)`
+                                                        : "Analyze"}
+                                                </Button>
+
+                                                <div className="ml-auto flex items-center gap-2 text-xs">
+                                                    <Badge variant="outline" className="border-orange-500/30 bg-orange-500/10 text-orange-400">
+                                                        <Cpu className="w-3 h-3 mr-1" />
+                                                        Simulator
+                                                    </Badge>
+                                                    <span className="text-zinc-500">
+                                                        {simState === 'pull' && '🔥 WOT Pull'}
+                                                        {simState === 'idle' && '⏳ Waiting...'}
+                                                        {simState === 'decel' && '📉 Decel'}
+                                                        {simState === 'cooldown' && '❄️ Cooldown'}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            /* Hardware Controls */
+                                            <>
+                                                <Button
+                                                    onClick={isCapturing ? stopCapture : startCapture}
+                                                    variant={isCapturing ? "destructive" : "default"}
+                                                    className={!isCapturing ? "bg-green-600 hover:bg-green-500" : ""}
+                                                >
+                                                    {isCapturing ? (
+                                                        <>
+                                                            <Square className="w-4 h-4 mr-2" />
+                                                            Stop Capture
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Radio className="w-4 h-4 mr-2" />
+                                                            Start Capture
+                                                        </>
+                                                    )}
+                                                </Button>
+
+                                                <Button
+                                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                                    disabled={analyzeMutation.isPending}
                                                     variant="outline"
                                                     className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
                                                 >
-                                                    {isStartingSimulator ? (
-                                                        <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                                    ) : (
-                                                        <Play className="w-3.5 h-3.5 mr-1.5" />
-                                                    )}
-                                                    Start Simulator
-                                                </Button>
-
-                                        {/* Manual throttle control (simulator only) */}
-                                        {isSimulatorActive && (
-                                            <div className="mt-4 p-3 rounded-md bg-zinc-950/40 border border-zinc-800">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-xs text-zinc-400 font-medium">Throttle (TPS)</div>
-                                                    <div className="text-xs font-mono text-zinc-200 tabular-nums">
-                                                        {Math.round(simThrottle)}%
-                                                    </div>
-                                                </div>
-                                                <Slider
-                                                    value={[simThrottle]}
-                                                    onValueChange={(v) => onSimThrottleChange(v?.[0] ?? 0)}
-                                                    min={0}
-                                                    max={100}
-                                                    step={1}
-                                                />
-                                                <div className="mt-2 text-[10px] text-zinc-500">
-                                                    Drag to set throttle; use <span className="font-mono">Trigger Pull</span> for a WOT sweep.
-                                                </div>
-                                            </div>
-                                        )}
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Quick Analysis Subsection */}
-                                <Card className="bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
-                                    <CardContent className="py-6">
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
-                                                <Zap className="w-6 h-6 text-purple-400" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-sm font-semibold text-zinc-200 mb-1">Quick Analysis</h3>
-                                                <p className="text-xs text-zinc-500 mb-3">
-                                                    Run instant VE analysis with pre-generated sample data
-                                                </p>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                                    disabled={analyzeMutation.isPending}
-                                                    className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                                                >
                                                     {analyzeMutation.isPending ? (
-                                                        <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                                                     ) : (
-                                                        <Zap className="w-3.5 h-3.5 mr-1.5" />
+                                                        <Zap className="w-4 h-4 mr-2" />
                                                     )}
-                                                    Quick Simulate
+                                                    Simulate Run
                                                 </Button>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    /* CONNECTED STATES */
-                    <div className="grid grid-cols-12 gap-4">
 
-                        {/* Left Column - Live Data */}
-                        <div className="col-span-12 lg:col-span-8 space-y-4">
-
-                            {/* Live Gauges Row - Symmetrical: Needle | Card | Card | Needle */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                <NeedleGauge
-                                    label="Engine"
-                                    value={currentRpm}
-                                    units="RPM"
-                                    color="#22d3ee"
-                                    min={0}
-                                    max={8000}
-                                    decimals={0}
-                                    warning={6000}
-                                    critical={7000}
-                                    segments={8}
-                                />
-                                <AFRIndicator
-                                    value={currentAfr}
-                                    target={currentTargetAfr}
-                                />
-                                <LiveGauge
-                                    label="Drum Force"
-                                    value={currentForce}
-                                    units="lbs"
-                                    color="#f97316"
-                                    min={0}
-                                    max={500}
-                                    decimals={0}
-                                />
-                                <NeedleGauge
-                                    label={analysis ? "Peak" : "Live"}
-                                    value={isSimulatorActive || isCapturing ? currentHp : (analysis?.peak_hp || 0)}
-                                    units="HP"
-                                    color="#a78bfa"
-                                    min={0}
-                                    max={300}
-                                    decimals={0}
-                                    segments={6}
-                                />
-                            </div>
-
-                            {/* Audio engine removed */}
-
-                            {/* Capture Controls */}
-                            <div className="flex items-center gap-3">
-                                {isSimulatorActive ? (
-                                    /* Simulator Controls */
-                                    <>
-                                        <Button
-                                            onClick={handleTriggerPull}
-                                            disabled={simState !== 'idle'}
-                                            uiSound="pull"
-                                            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
-                                        >
-                                            <Play className="w-4 h-4 mr-2" />
-                                            {simState === 'idle' ? 'Trigger Pull' :
-                                                simState === 'pull' ? 'Pulling...' :
-                                                    simState === 'decel' ? 'Decelerating' : 'Cooling Down'}
-                                        </Button>
-
-                                        <Button
-                                            onClick={handleStopSimulator}
-                                            variant="outline"
-                                            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                                        >
-                                            <StopCircle className="w-4 h-4 mr-2" />
-                                            Stop Simulator
-                                        </Button>
-
-                                        <Button
-                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                            disabled={analyzeMutation.isPending || (isSimulatorActive && !pullDataStatus?.has_data)}
-                                            variant="outline"
-                                            className="border-zinc-700"
-                                            title={
-                                                isSimulatorActive && !pullDataStatus?.has_data
-                                                    ? "No pull data available. Run a pull first."
-                                                    : isSimulatorActive && pullDataStatus?.has_data
-                                                        ? `Analyze simulator pull data (${pullDataStatus.points} points, ${pullDataStatus.peak_hp?.toFixed(1)} HP)`
-                                                        : "Analyze with simulated data"
-                                            }
-                                        >
-                                            {analyzeMutation.isPending ? (
-                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                            ) : (
-                                                <Zap className="w-4 h-4 mr-2" />
-                                            )}
-                                            {isSimulatorActive && pullDataStatus?.has_data
-                                                ? `Analyze Pull (${pullDataStatus.points} pts)`
-                                                : "Analyze"}
-                                        </Button>
-
-                                        <div className="ml-auto flex items-center gap-2 text-xs">
-                                            <Badge variant="outline" className="border-orange-500/30 bg-orange-500/10 text-orange-400">
-                                                <Cpu className="w-3 h-3 mr-1" />
-                                                Simulator
-                                            </Badge>
-                                            <span className="text-zinc-500">
-                                                {simState === 'pull' && '🔥 WOT Pull'}
-                                                {simState === 'idle' && '⏳ Waiting...'}
-                                                {simState === 'decel' && '📉 Decel'}
-                                                {simState === 'cooldown' && '❄️ Cooldown'}
-                                            </span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    /* Hardware Controls */
-                                    <>
-                                        <Button
-                                            onClick={isCapturing ? stopCapture : startCapture}
-                                            variant={isCapturing ? "destructive" : "default"}
-                                            className={!isCapturing ? "bg-green-600 hover:bg-green-500" : ""}
-                                        >
-                                            {isCapturing ? (
-                                                <>
-                                                    <Square className="w-4 h-4 mr-2" />
-                                                    Stop Capture
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Radio className="w-4 h-4 mr-2" />
-                                                    Start Capture
-                                                </>
-                                            )}
-                                        </Button>
-
-                                        <Button
-                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                            disabled={analyzeMutation.isPending}
-                                            variant="outline"
-                                            className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
-                                        >
-                                            {analyzeMutation.isPending ? (
-                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                            ) : (
-                                                <Zap className="w-4 h-4 mr-2" />
-                                            )}
-                                            Simulate Run
-                                        </Button>
-
-                                        {analyzeMutation.isPending && (
-                                            <div className="flex-1 flex items-center gap-3">
-                                                <Progress value={66} className="h-2 flex-1 max-w-xs" />
-                                                <span className="text-xs text-zinc-500">Analyzing...</span>
-                                            </div>
-                                        )}
-
-                                        <div className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
-                                            <Wifi className="w-3 h-3 text-green-500" />
-                                            <span>{providerName || 'JetDrive'}</span>
-                                            <span className="text-zinc-600">•</span>
-                                            <span>{channelCount} ch</span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Live VE Table with Cell Tracing */}
-                            {(isConnected || isSimulatorActive) && (
-                                <Card className="bg-zinc-900/50 border-zinc-800">
-                                    <CardContent className="pt-4">
-                                        <LiveVETable
-                                            currentRpm={currentRpm}
-                                            currentMap={currentMap}
-                                            currentAfr={currentAfr}
-                                            afrTargets={afrTargets}
-                                            isLive={isCapturing || isSimulatorActive}
-                                        />
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Results Section */}
-                            {selectedRun && runData && (
-                                <Card className="bg-zinc-900/50 border-zinc-800">
-                                    <CardHeader className="pb-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <CardTitle className="text-base flex items-center gap-2">
-                                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                    {selectedRun}
-                                                </CardTitle>
-                                                <CardDescription className="text-xs">
-                                                    {analysis?.total_samples} samples • {(analysis?.duration_ms / 1000)?.toFixed(1)}s
-                                                </CardDescription>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {confidenceReport && (
-                                                    <ConfidenceBadge confidence={confidenceReport} compact />
-                                                )}
-                                                <AFRStatusBadge status={analysis?.overall_status || 'Unknown'} />
-                                                <Button
-                                                    onClick={downloadPvv}
-                                                    size="sm"
-                                                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
-                                                >
-                                                    <Download className="w-3 h-3 mr-1" />
-                                                    .PVV
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {/* Quick Stats */}
-                                        <div className="grid grid-cols-5 gap-3">
-                                            <div className="p-3 rounded-md bg-orange-500/10 border border-orange-500/20 text-center">
-                                                <div className="text-2xl font-bold text-orange-400">{analysis?.peak_hp?.toFixed(1)}</div>
-                                                <div className="text-[10px] text-zinc-500">HP @ {analysis?.peak_hp_rpm}</div>
-                                            </div>
-                                            <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20 text-center">
-                                                <div className="text-2xl font-bold text-blue-400">{analysis?.peak_tq?.toFixed(1)}</div>
-                                                <div className="text-[10px] text-zinc-500">TQ @ {analysis?.peak_tq_rpm}</div>
-                                            </div>
-                                            <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20 text-center">
-                                                <div className="text-2xl font-bold text-green-400">{analysis?.ok_cells}</div>
-                                                <div className="text-[10px] text-zinc-500">OK Cells</div>
-                                            </div>
-                                            <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-center">
-                                                <div className="text-2xl font-bold text-red-400">
-                                                    {(analysis?.lean_cells || 0) + (analysis?.rich_cells || 0)}
-                                                </div>
-                                                <div className="text-[10px] text-zinc-500">Needs Fix</div>
-                                            </div>
-                                            {confidenceReport && (
-                                                <div className={`p-3 rounded-md border text-center ${confidenceReport.letter_grade === 'A' ? 'bg-green-500/10 border-green-500/20' :
-                                                    confidenceReport.letter_grade === 'B' ? 'bg-blue-500/10 border-blue-500/20' :
-                                                        confidenceReport.letter_grade === 'C' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                                            'bg-red-500/10 border-red-500/20'
-                                                    }`}>
-                                                    <div className={`text-2xl font-bold ${confidenceReport.letter_grade === 'A' ? 'text-green-400' :
-                                                        confidenceReport.letter_grade === 'B' ? 'text-blue-400' :
-                                                            confidenceReport.letter_grade === 'C' ? 'text-yellow-400' :
-                                                                'text-red-400'
-                                                        }`}>
-                                                        {confidenceReport.letter_grade}
-                                                    </div>
-                                                    <div className="text-[10px] text-zinc-500">Confidence</div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* VE Heatmap */}
-                                        <div>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <h4 className="text-xs font-medium text-zinc-400 flex items-center gap-1">
-                                                    <Grid3X3 className="w-3 h-3" />
-                                                    VE Correction Grid
-                                                </h4>
-                                                <div className="flex items-center gap-3 text-[10px] text-zinc-400">
-                                                    <span className="flex items-center gap-1.5">
-                                                        <div className="w-3 h-3 bg-red-500/60 rounded border border-red-500/80" />
-                                                        <span className="font-medium">Lean</span>
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <div className="w-3 h-3 bg-green-500/40 rounded border border-green-500/60" />
-                                                        <span className="font-medium">OK</span>
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <div className="w-3 h-3 bg-blue-500/60 rounded border border-blue-500/80" />
-                                                        <span className="font-medium">Rich</span>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="rounded-lg border border-zinc-800 overflow-hidden">
-                                                <VEHeatmap veGrid={veGrid} grid={grid} />
-                                            </div>
-                                        </div>
-
-                                        {/* Confidence Score Details */}
-                                        {confidenceReport && (
-                                            <div className="pt-4 border-t border-zinc-800">
-                                                <h4 className="text-xs font-medium text-zinc-400 mb-3 flex items-center gap-1">
-                                                    <Award className="w-3 h-3" />
-                                                    Tune Quality Assessment
-                                                </h4>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    {/* Regions */}
-                                                    {confidenceReport.region_breakdown && Object.entries(confidenceReport.region_breakdown).map(([region, data]) => {
-                                                        const regionData = data as ConfidenceReport['region_breakdown'][string];
-                                                        return (
-                                                            <div key={region} className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
-                                                                <div className="text-[10px] text-zinc-500 uppercase font-medium mb-1">
-                                                                    {region}
-                                                                </div>
-                                                                <div className="text-xs text-zinc-300">
-                                                                    <span className="font-mono">{regionData.coverage_percentage.toFixed(0)}%</span>
-                                                                    <span className="text-zinc-600 mx-1">•</span>
-                                                                    <span className="text-zinc-500">MAD {regionData.average_mad.toFixed(2)}</span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-
-                                                {/* Recommendations */}
-                                                {confidenceReport.recommendations && Array.isArray(confidenceReport.recommendations) && confidenceReport.recommendations.length > 0 && (
-                                                    <div className="mt-3 space-y-1.5">
-                                                        {confidenceReport.recommendations.slice(0, 2).map((rec, idx) => (
-                                                            <div key={idx} className="text-[11px] text-zinc-400 flex items-start gap-2 p-2 rounded bg-zinc-800/30">
-                                                                <Info className="w-3 h-3 text-cyan-500 mt-0.5 flex-shrink-0" />
-                                                                <span className="leading-relaxed">{rec}</span>
-                                                            </div>
-                                                        ))}
+                                                {analyzeMutation.isPending && (
+                                                    <div className="flex-1 flex items-center gap-3">
+                                                        <Progress value={66} className="h-2 flex-1 max-w-xs" />
+                                                        <span className="text-xs text-zinc-500">Analyzing...</span>
                                                     </div>
                                                 )}
-                                            </div>
+
+                                                <div className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
+                                                    <Wifi className="w-3 h-3 text-green-500" />
+                                                    <span>{providerName || 'JetDrive'}</span>
+                                                    <span className="text-zinc-600">•</span>
+                                                    <span>{channelCount} ch</span>
+                                                </div>
+                                            </>
                                         )}
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Power Opportunities Panel */}
-                            {selectedRun && (powerOpportunities || powerOpportunitiesLoading) && (
-                                <PowerOpportunitiesPanel
-                                    data={powerOpportunities || null}
-                                    loading={powerOpportunitiesLoading}
-                                    onDownload={() => {
-                                        if (selectedRun) {
-                                            window.open(`${API_BASE}/download/${selectedRun}/PowerOpportunities.json`, '_blank');
-                                        }
-                                    }}
-                                />
-                            )}
-
-                            {/* Session Replay */}
-                            {selectedRun && (
-                                <Card className="bg-zinc-900/50 border-zinc-800">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Activity className="w-4 h-4 text-cyan-500" />
-                                            Session Replay
-                                        </CardTitle>
-                                        <CardDescription className="text-xs">
-                                            Timeline of all decisions made during tuning
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <SessionReplayViewer runId={selectedRun} />
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Run Comparison Table - Show when we have multiple runs */}
-                            {runs.length > 1 && allRunsData && allRunsData.length > 1 && (
-                                <>
-                                    {/* Chart + View Toggles */}
-                                    <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-zinc-500">Curve:</span>
-                                            <Button
-                                                variant={comparisonMetric === 'hp' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonMetric('hp')}
-                                                className="h-7 text-xs"
-                                            >
-                                                HP
-                                            </Button>
-                                            <Button
-                                                variant={comparisonMetric === 'tq' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonMetric('tq')}
-                                                className="h-7 text-xs"
-                                            >
-                                                TQ
-                                            </Button>
-                                            <Button
-                                                variant={comparisonMetric === 'both' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonMetric('both')}
-                                                className="h-7 text-xs border-cyan-500/30 text-cyan-400"
-                                            >
-                                                Both
-                                            </Button>
-                                        </div>
-
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-zinc-500">Comparison View:</span>
-                                            <Button
-                                                variant={useEnhancedTable ? "ghost" : "outline"}
-                                                size="sm"
-                                                onClick={() => setUseEnhancedTable(false)}
-                                                className="h-7 text-xs"
-                                            >
-                                                Standard
-                                            </Button>
-                                            <Button
-                                                variant={useEnhancedTable ? "outline" : "ghost"}
-                                                size="sm"
-                                                onClick={() => setUseEnhancedTable(true)}
-                                                className="h-7 text-xs border-cyan-500/30 text-cyan-400"
-                                            >
-                                                Enhanced
-                                            </Button>
-                                        </div>
-
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-zinc-500">Data:</span>
-                                            <Button
-                                                variant={comparisonSource === 'actual' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonSource('actual')}
-                                                className="h-7 text-xs"
-                                            >
-                                                Actual
-                                            </Button>
-                                            <Button
-                                                variant={comparisonSource === 'simulator' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonSource('simulator')}
-                                                className="h-7 text-xs"
-                                            >
-                                                Simulator
-                                            </Button>
-                                            <Button
-                                                variant={comparisonSource === 'real' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonSource('real')}
-                                                className="h-7 text-xs"
-                                            >
-                                                Real
-                                            </Button>
-                                            <Button
-                                                variant={comparisonSource === 'simulated' ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() => setComparisonSource('simulated')}
-                                                className="h-7 text-xs"
-                                            >
-                                                Synthetic
-                                            </Button>
-                                        </div>
                                     </div>
 
-                                    <RunComparisonChart
-                                        runs={comparisonRunsForChart}
-                                        metric={comparisonMetric}
-                                        height={280}
-                                    />
+                                    {/* Manual throttle control (visible in CONNECTED view while simulator is running) */}
+                                    {isSimulatorActive && (
+                                        <div className="mt-3 p-3 rounded-md bg-zinc-950/40 border border-zinc-800">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-xs text-zinc-400 font-medium">Throttle (TPS)</div>
+                                                <div className="text-xs font-mono text-zinc-200 tabular-nums">
+                                                    {Math.round(simThrottle)}%
+                                                </div>
+                                            </div>
+                                            <Slider
+                                                value={[simThrottle]}
+                                                onValueChange={(v) => onSimThrottleChange(v?.[0] ?? 0)}
+                                                min={0}
+                                                max={100}
+                                                step={1}
+                                            />
+                                            <div className="mt-2 text-[10px] text-zinc-500">
+                                                Drag to set throttle; you can still use <span className="font-mono">Trigger Pull</span> for a sweep.
+                                            </div>
+                                        </div>
+                                    )}
 
-                                    {useEnhancedTable ? (
-                                        <RunComparisonTableEnhanced
-                                            runs={allRunsData}
-                                            onRunClick={setSelectedRun}
-                                            maxRuns={10}
-                                            selectedRunIds={comparisonSelectedRunIds}
-                                            onSelectedRunIdsChange={setComparisonSelectedRunIds}
-                                            baselineRunId={comparisonBaselineRunId}
-                                            onBaselineRunIdChange={setComparisonBaselineRunId}
-                                        />
-                                    ) : (
-                                        <RunComparisonTable
-                                            runs={allRunsData}
-                                            selectedRuns={selectedRun ? [selectedRun] : []}
-                                            onRunClick={setSelectedRun}
-                                            maxRuns={5}
+                                    {/* Live VE Table with Cell Tracing */}
+                                    {(isConnected || isSimulatorActive) && (
+                                        <Card className="bg-zinc-900/50 border-zinc-800">
+                                            <CardContent className="pt-4">
+                                                <LiveVETable
+                                                    currentRpm={currentRpm}
+                                                    currentMap={currentMap}
+                                                    currentAfr={currentAfr}
+                                                    afrTargets={afrTargets}
+                                                    isLive={isCapturing || isSimulatorActive}
+                                                />
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {/* Results Section */}
+                                    {selectedRun && runData && (
+                                        <Card className="bg-zinc-900/50 border-zinc-800">
+                                            <CardHeader className="pb-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <CardTitle className="text-base flex items-center gap-2">
+                                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                            {selectedRun}
+                                                        </CardTitle>
+                                                        <CardDescription className="text-xs">
+                                                            {analysis?.total_samples} samples • {(analysis?.duration_ms / 1000)?.toFixed(1)}s
+                                                        </CardDescription>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {confidenceReport && (
+                                                            <ConfidenceBadge confidence={confidenceReport} compact />
+                                                        )}
+                                                        <AFRStatusBadge status={analysis?.overall_status || 'Unknown'} />
+                                                        <Button
+                                                            onClick={downloadPvv}
+                                                            size="sm"
+                                                            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
+                                                        >
+                                                            <Download className="w-3 h-3 mr-1" />
+                                                            .PVV
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                {/* Quick Stats */}
+                                                <div className="grid grid-cols-5 gap-3">
+                                                    <div className="p-3 rounded-md bg-orange-500/10 border border-orange-500/20 text-center">
+                                                        <div className="text-2xl font-bold text-orange-400">{analysis?.peak_hp?.toFixed(1)}</div>
+                                                        <div className="text-[10px] text-zinc-500">HP @ {analysis?.peak_hp_rpm}</div>
+                                                    </div>
+                                                    <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20 text-center">
+                                                        <div className="text-2xl font-bold text-blue-400">{analysis?.peak_tq?.toFixed(1)}</div>
+                                                        <div className="text-[10px] text-zinc-500">TQ @ {analysis?.peak_tq_rpm}</div>
+                                                    </div>
+                                                    <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20 text-center">
+                                                        <div className="text-2xl font-bold text-green-400">{analysis?.ok_cells}</div>
+                                                        <div className="text-[10px] text-zinc-500">OK Cells</div>
+                                                    </div>
+                                                    <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-center">
+                                                        <div className="text-2xl font-bold text-red-400">
+                                                            {(analysis?.lean_cells || 0) + (analysis?.rich_cells || 0)}
+                                                        </div>
+                                                        <div className="text-[10px] text-zinc-500">Needs Fix</div>
+                                                    </div>
+                                                    {confidenceReport && (
+                                                        <div className={`p-3 rounded-md border text-center ${confidenceReport.letter_grade === 'A' ? 'bg-green-500/10 border-green-500/20' :
+                                                            confidenceReport.letter_grade === 'B' ? 'bg-blue-500/10 border-blue-500/20' :
+                                                                confidenceReport.letter_grade === 'C' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                                                                    'bg-red-500/10 border-red-500/20'
+                                                            }`}>
+                                                            <div className={`text-2xl font-bold ${confidenceReport.letter_grade === 'A' ? 'text-green-400' :
+                                                                confidenceReport.letter_grade === 'B' ? 'text-blue-400' :
+                                                                    confidenceReport.letter_grade === 'C' ? 'text-yellow-400' :
+                                                                        'text-red-400'
+                                                                }`}>
+                                                                {confidenceReport.letter_grade}
+                                                            </div>
+                                                            <div className="text-[10px] text-zinc-500">Confidence</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* VE Heatmap */}
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <h4 className="text-xs font-medium text-zinc-400 flex items-center gap-1">
+                                                            <Grid3X3 className="w-3 h-3" />
+                                                            VE Correction Grid
+                                                        </h4>
+                                                        <div className="flex items-center gap-3 text-[10px] text-zinc-400">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <div className="w-3 h-3 bg-red-500/60 rounded border border-red-500/80" />
+                                                                <span className="font-medium">Lean</span>
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <div className="w-3 h-3 bg-green-500/40 rounded border border-green-500/60" />
+                                                                <span className="font-medium">OK</span>
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <div className="w-3 h-3 bg-blue-500/60 rounded border border-blue-500/80" />
+                                                                <span className="font-medium">Rich</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                                                        <VEHeatmapCompact veGrid={veGrid} grid={grid} />
+                                                    </div>
+                                                </div>
+
+                                                {/* Confidence Score Details */}
+                                                {confidenceReport && (
+                                                    <div className="pt-4 border-t border-zinc-800">
+                                                        <h4 className="text-xs font-medium text-zinc-400 mb-3 flex items-center gap-1">
+                                                            <Award className="w-3 h-3" />
+                                                            Tune Quality Assessment
+                                                        </h4>
+                                                        <div className="grid grid-cols-3 gap-3">
+                                                            {/* Regions */}
+                                                            {confidenceReport.region_breakdown && Object.entries(confidenceReport.region_breakdown).map(([region, data]) => {
+                                                                const regionData = data as ConfidenceReport['region_breakdown'][string];
+                                                                return (
+                                                                    <div key={region} className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+                                                                        <div className="text-[10px] text-zinc-500 uppercase font-medium mb-1">
+                                                                            {region}
+                                                                        </div>
+                                                                        <div className="text-xs text-zinc-300">
+                                                                            <span className="font-mono">{regionData.coverage_percentage.toFixed(0)}%</span>
+                                                                            <span className="text-zinc-600 mx-1">•</span>
+                                                                            <span className="text-zinc-500">MAD {regionData.average_mad.toFixed(2)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* Recommendations */}
+                                                        {confidenceReport.recommendations && Array.isArray(confidenceReport.recommendations) && confidenceReport.recommendations.length > 0 && (
+                                                            <div className="mt-3 space-y-1.5">
+                                                                {confidenceReport.recommendations.slice(0, 2).map((rec, idx) => (
+                                                                    <div key={idx} className="text-[11px] text-zinc-400 flex items-start gap-2 p-2 rounded bg-zinc-800/30">
+                                                                        <Info className="w-3 h-3 text-cyan-500 mt-0.5 flex-shrink-0" />
+                                                                        <span className="leading-relaxed">{rec}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {/* Power Opportunities Panel */}
+                                    {selectedRun && (powerOpportunities || powerOpportunitiesLoading) && (
+                                        <PowerOpportunitiesPanel
+                                            data={powerOpportunities || null}
+                                            loading={powerOpportunitiesLoading}
+                                            onDownload={() => {
+                                                if (selectedRun) {
+                                                    window.open(`${API_BASE}/download/${selectedRun}/PowerOpportunities.json`, '_blank');
+                                                }
+                                            }}
                                         />
                                     )}
-                                </>
-                            )}
-                        </div>
 
-                        {/* Right Column - Runs & Tips */}
-                        <div className="col-span-12 lg:col-span-4 space-y-4">
+                                    {/* Session Replay */}
+                                    {selectedRun && (
+                                        <Card className="bg-zinc-900/50 border-zinc-800">
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="text-base flex items-center gap-2">
+                                                    <Activity className="w-4 h-4 text-cyan-500" />
+                                                    Session Replay
+                                                </CardTitle>
+                                                <CardDescription className="text-xs">
+                                                    Timeline of all decisions made during tuning
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <SessionReplayViewer runId={selectedRun} />
+                                            </CardContent>
+                                        </Card>
+                                    )}
 
-                            {/* Recent Runs */}
-                            <Card className="bg-zinc-900/50 border-zinc-800">
-                                <CardHeader className="py-3">
-                                    <CardTitle className="text-sm flex items-center gap-2">
-                                        <Timer className="w-4 h-4" />
-                                        Recent Runs
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                    {runs.length === 0 ? (
-                                        <div className="text-center py-6 text-zinc-500">
-                                            <Gauge className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                                            <p className="text-xs">No runs yet</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                                            {runs.slice(0, 10).map((run) => (
-                                                <button
-                                                    key={run.run_id}
-                                                    onClick={() => setSelectedRun(run.run_id)}
-                                                    className={`
+                                    {/* Run Comparison Table - Show when we have multiple runs */}
+                                    {runs.length > 1 && allRunsData && allRunsData.length > 1 && (
+                                        <>
+                                            {/* Chart + View Toggles */}
+                                            <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-zinc-500">Curve:</span>
+                                                    <Button
+                                                        variant={comparisonMetric === 'hp' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonMetric('hp')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        HP
+                                                    </Button>
+                                                    <Button
+                                                        variant={comparisonMetric === 'tq' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonMetric('tq')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        TQ
+                                                    </Button>
+                                                    <Button
+                                                        variant={comparisonMetric === 'both' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonMetric('both')}
+                                                        className="h-7 text-xs border-cyan-500/30 text-cyan-400"
+                                                    >
+                                                        Both
+                                                    </Button>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-zinc-500">Comparison View:</span>
+                                                    <Button
+                                                        variant={useEnhancedTable ? "ghost" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => setUseEnhancedTable(false)}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        Standard
+                                                    </Button>
+                                                    <Button
+                                                        variant={useEnhancedTable ? "outline" : "ghost"}
+                                                        size="sm"
+                                                        onClick={() => setUseEnhancedTable(true)}
+                                                        className="h-7 text-xs border-cyan-500/30 text-cyan-400"
+                                                    >
+                                                        Enhanced
+                                                    </Button>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-zinc-500">Data:</span>
+                                                    <Button
+                                                        variant={comparisonSource === 'actual' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonSource('actual')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        Actual
+                                                    </Button>
+                                                    <Button
+                                                        variant={comparisonSource === 'simulator' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonSource('simulator')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        Simulator
+                                                    </Button>
+                                                    <Button
+                                                        variant={comparisonSource === 'real' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonSource('real')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        Real
+                                                    </Button>
+                                                    <Button
+                                                        variant={comparisonSource === 'simulated' ? 'outline' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setComparisonSource('simulated')}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        Synthetic
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <RunComparisonChart
+                                                runs={comparisonRunsForChart}
+                                                metric={comparisonMetric}
+                                                height={280}
+                                            />
+
+                                            {useEnhancedTable ? (
+                                                <RunComparisonTableEnhanced
+                                                    runs={allRunsData}
+                                                    onRunClick={setSelectedRun}
+                                                    maxRuns={10}
+                                                    selectedRunIds={comparisonSelectedRunIds}
+                                                    onSelectedRunIdsChange={setComparisonSelectedRunIds}
+                                                    baselineRunId={comparisonBaselineRunId}
+                                                    onBaselineRunIdChange={setComparisonBaselineRunId}
+                                                />
+                                            ) : (
+                                                <RunComparisonTable
+                                                    runs={allRunsData}
+                                                    selectedRuns={selectedRun ? [selectedRun] : []}
+                                                    onRunClick={setSelectedRun}
+                                                    maxRuns={5}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Right Column - Runs & Tips */}
+                                <div className="col-span-12 lg:col-span-4 space-y-4">
+
+                                    {/* Recent Runs */}
+                                    <Card className="bg-zinc-900/50 border-zinc-800">
+                                        <CardHeader className="py-3">
+                                            <CardTitle className="text-sm flex items-center gap-2">
+                                                <Timer className="w-4 h-4" />
+                                                Recent Runs
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="pt-0">
+                                            {runs.length === 0 ? (
+                                                <div className="text-center py-6 text-zinc-500">
+                                                    <Gauge className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                                    <p className="text-xs">No runs yet</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                                                    {runs.slice(0, 10).map((run) => (
+                                                        <button
+                                                            key={run.run_id}
+                                                            onClick={() => setSelectedRun(run.run_id)}
+                                                            className={`
                                                         w-full text-left p-2.5 rounded-lg border transition-all text-xs
                                                         ${selectedRun === run.run_id
-                                                            ? 'border-orange-500 bg-orange-500/10'
-                                                            : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50'
-                                                        }
+                                                                    ? 'border-orange-500 bg-orange-500/10'
+                                                                    : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50'
+                                                                }
                                                     `}
-                                                >
-                                                    <div className="flex items-center justify-between mb-0.5">
-                                                        <span className="font-medium text-zinc-200 truncate max-w-[120px]">
-                                                            {run.run_id}
-                                                        </span>
-                                                        <AFRStatusBadge status={run.status} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-zinc-500">
-                                                        <TrendingUp className="w-3 h-3" />
-                                                        <span>{run.peak_hp.toFixed(0)} HP</span>
-                                                        <span className="text-zinc-600">•</span>
-                                                        <span>{run.peak_tq.toFixed(0)} ft-lb</span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                                        >
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <span className="font-medium text-zinc-200 truncate max-w-[120px]">
+                                                                    {run.run_id}
+                                                                </span>
+                                                                {(['BALANCED', 'OK'].includes(run.status)) ? (
+                                                                    <span
+                                                                        className="inline-flex items-center"
+                                                                        aria-label={`AFR status ${run.status}`}
+                                                                        title={run.status}
+                                                                    >
+                                                                        <span className="w-2 h-2 rounded-full bg-green-500/60 border border-green-500/30" />
+                                                                    </span>
+                                                                ) : (
+                                                                    <AFRStatusBadge status={run.status} />
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-zinc-500">
+                                                                <TrendingUp className="w-3 h-3" />
+                                                                <span>{run.peak_hp.toFixed(0)} HP</span>
+                                                                <span className="text-zinc-600">•</span>
+                                                                <span>{run.peak_tq.toFixed(0)} ft-lb</span>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
 
-                            {/* Tuner Tips */}
-                            <Card className="bg-zinc-900/30 border-zinc-800/50">
-                                <CardHeader className="py-3">
-                                    <CardTitle className="text-xs flex items-center gap-2 text-zinc-400">
-                                        <Wrench className="w-3 h-3" />
-                                        Quick Reference
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                    <ul className="space-y-2 text-[11px] text-zinc-500">
-                                        <li className="flex items-start gap-2">
-                                            <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
-                                            <span><strong className="text-zinc-400">NA engines:</strong> 12.5-13.0 AFR for peak power</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
-                                            <span><strong className="text-zinc-400">Turbo:</strong> 11.5-12.0 AFR with proper fuel</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
-                                            <span><strong className="text-zinc-400">VE formula:</strong> 7% correction per AFR point</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
-                                            <span><strong className="text-zinc-400">Export:</strong> .PVV → Power Vision → Flash</span>
-                                        </li>
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </div>
-                )}
-                </TabsContent>
-            </Tabs>
+                                    {/* Tuner Tips */}
+                                    <Card className="bg-zinc-900/30 border-zinc-800/50">
+                                        <CardHeader className="py-3">
+                                            <CardTitle className="text-xs flex items-center gap-2 text-zinc-400">
+                                                <Wrench className="w-3 h-3" />
+                                                Quick Reference
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="pt-0">
+                                            <ul className="space-y-2 text-[11px] text-zinc-500">
+                                                <li className="flex items-start gap-2">
+                                                    <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
+                                                    <span><strong className="text-zinc-400">NA engines:</strong> 12.5-13.0 AFR for peak power</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
+                                                    <span><strong className="text-zinc-400">Turbo:</strong> 11.5-12.0 AFR with proper fuel</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
+                                                    <span><strong className="text-zinc-400">VE formula:</strong> 7% correction per AFR point</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <ChevronRight className="w-3 h-3 mt-0.5 text-orange-500 flex-shrink-0" />
+                                                    <span><strong className="text-zinc-400">Export:</strong> .PVV → Power Vision → Flash</span>
+                                                </li>
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     );

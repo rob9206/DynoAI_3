@@ -29,19 +29,28 @@ def validate_snapshot_id(snapshot_id: str) -> str:
     return snapshot_id
 
 
+def validate_run_id(run_id: str) -> str:
+    """
+    Validate run ID format to prevent path traversal.
+    Only allows alphanumeric characters, underscores, and dashes.
+    """
+    if not re.match(r"^[a-zA-Z0-9_-]+$", run_id):
+        raise APIError("Invalid run ID format", status_code=400)
+    return run_id
+
+
 def get_run_dir(run_id: str) -> Path:
     """Get run directory path, validating it exists."""
-    safe_run_id = secure_filename(run_id)
-    if not safe_run_id or safe_run_id != run_id:
-        raise APIError("Invalid run ID", status_code=400)
-
+    # Strict validation first
+    safe_run_id = validate_run_id(run_id)
+    
     # Check runs folder first (for Jetstream runs)
     runs_root = Path(RUNS_DIR).resolve()
-    run_dir = (runs_root / run_id).resolve()
+    run_dir = (runs_root / safe_run_id).resolve()
     try:
         run_dir.relative_to(runs_root)
     except ValueError:
-        raise APIError("Invalid run ID", status_code=400)
+        raise APIError("Invalid run ID path", status_code=400)
 
     if run_dir.exists():
         return run_dir
@@ -51,11 +60,11 @@ def get_run_dir(run_id: str) -> Path:
 
     config = get_config()
     outputs_root = Path(config.storage.output_folder).resolve()
-    output_dir = (outputs_root / run_id).resolve()
+    output_dir = (outputs_root / safe_run_id).resolve()
     try:
         output_dir.relative_to(outputs_root)
     except ValueError:
-        raise APIError("Invalid run ID", status_code=400)
+        raise APIError("Invalid run ID path", status_code=400)
 
     if output_dir.exists():
         return output_dir

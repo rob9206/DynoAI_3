@@ -8,6 +8,7 @@ pillow==10.4.0
 pytesseract==0.3.10
 pyyaml==6.0.2
 jsonschema==4.23.0
+pyserial==3.5
 ruff==0.6.2
 black==24.8.0
 mypy==1.11.2

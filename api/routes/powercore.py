@@ -334,7 +334,31 @@ def parse_wp8():
         return jsonify({"error": "Missing 'file_id' in request body"}), 400
 
     try:
-        run = parse_wp8_file(str(safe_path))
+        # Extra defense-in-depth: ensure resolved path is within allowed Power Core dirs
+        from pathlib import Path
+        try:
+            from api.services.powercore_integration import find_powercore_data_dirs
+
+            allowed_roots = [p.resolve() for p in find_powercore_data_dirs()]
+        except Exception:
+            allowed_roots = []
+
+        resolved = Path(str(safe_path)).resolve()
+
+        def _is_within(child: Path, root: Path) -> bool:
+            try:
+                child.relative_to(root)
+                return True
+            except ValueError:
+                return False
+
+        if allowed_roots and not any(_is_within(resolved, root) for root in allowed_roots):
+            return (
+                jsonify({"error": "WP8 path is outside allowed Power Core data directories"}),
+                400,
+            )
+
+        run = parse_wp8_file(str(resolved))
 
         return jsonify(
             {
