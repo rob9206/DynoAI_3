@@ -466,7 +466,7 @@ class VirtualTuningOrchestrator:
         logger.info(f"  ⏳ Pull triggered (state: {simulator.get_state().value})")
 
         # Wait for completion (with timeout)
-        max_wait = 30  # 30 second timeout
+        max_wait = 340  # 340 second timeout
         wait_count = 0
         last_log = 0
         while simulator.get_state().value != "idle":
@@ -486,7 +486,7 @@ class VirtualTuningOrchestrator:
                     f"  ❌ Timeout waiting for pull to complete (state: {simulator.get_state().value})"
                 )
                 simulator.stop()
-                raise TimeoutError("Pull did not complete within 30 seconds")
+                raise TimeoutError("Pull did not complete within 340 seconds")
 
         pull_duration = time.time() - pull_start
         logger.info(f"  ✓ Pull completed in {pull_duration:.1f}s")

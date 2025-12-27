@@ -24,7 +24,7 @@ import {
     Activity, ChevronRight, TrendingUp,
     Wrench, Timer, Power, Settings2,
     AlertTriangle, Crosshair, Cpu, StopCircle, Mic,
-    Award, Info, Flame
+    Award, Info, Flame, FileDown, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,6 +39,7 @@ import { Slider } from '../components/ui/slider';
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger
 } from '../components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useJetDriveLive } from '../hooks/useJetDriveLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
 import { LiveVETable } from '../components/jetdrive/LiveVETable';
@@ -2262,6 +2263,7 @@ export default function JetDriveAutoTunePage() {
                                 </CardContent>
                             </Card>
                         </div>
+                    </div>
                     </div>
                 )}
                 </TabsContent>

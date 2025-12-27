@@ -530,7 +530,7 @@ def create_high_reliability_config() -> IngestionConfig:
         ),
         default_circuit_breaker=CircuitBreakerSettings(
             failure_threshold=10,
-            timeout_sec=120.0,
+            timeout_sec=340.0,
         ),
         default_validation=ValidationSettings(
             strict_mode=True,
