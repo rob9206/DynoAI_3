@@ -388,39 +388,6 @@ export function LiveVETable({
         [displayHitCounts]
     );
 
-    // Performance monitoring
-    const [updateStats, setUpdateStats] = useState({
-        updatesPerSec: 0,
-        lastUpdate: Date.now(),
-        updateCount: 0
-    });
-
-    useEffect(() => {
-        if (!isLive) return;
-        
-        // Track update count
-        setUpdateStats(prev => ({
-            ...prev,
-            updateCount: prev.updateCount + 1
-        }));
-
-        // Calculate updates per second every second
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const elapsed = (now - updateStats.lastUpdate) / 1000;
-            
-            if (elapsed >= 1) {
-                setUpdateStats(prev => ({
-                    updatesPerSec: prev.updateCount / elapsed,
-                    lastUpdate: now,
-                    updateCount: 0
-                }));
-            }
-        }, 1000);
-        
-        return () => clearInterval(interval);
-    }, [isLive, updateStats.lastUpdate, updateStats.updateCount]);
-
     return (
         <div className="space-y-3">
             {/* Header */}

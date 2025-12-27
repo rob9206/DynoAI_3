@@ -2000,8 +2000,7 @@ export default function JetDriveAutoTunePage() {
                                 </CardContent>
                             </Card>
 
-                        {/* Right Column - Results */}
-                        <div className="lg:col-span-2 space-y-4">
+                            {/* Right Column - Results */}
                             {selectedRun && runData ? (
                                 <>
                                     {/* Analysis Summary */}
