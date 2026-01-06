@@ -96,6 +96,7 @@ config = get_config()
 
 # Only register root route if not in standalone mode (standalone serves React frontend at /)
 if not os.environ.get("DYNOAI_STANDALONE"):
+
     @app.route("/", methods=["GET"])
     def root():
         """
@@ -854,7 +855,9 @@ def get_confidence_report(run_id):
 
 
 @app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
-@app.route("/api/session-replay/<run_id>", methods=["GET"])  # Backwards-compatible alias
+@app.route(
+    "/api/session-replay/<run_id>", methods=["GET"]
+)  # Backwards-compatible alias
 @rate_limit("120/minute")  # Read-only - permissive
 def get_session_replay(run_id):
     """
