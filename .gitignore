@@ -71,3 +71,9 @@ jetdrive_log_*.csv
 
 # Public repo export output (generated)
 public_export/
+
+# PyInstaller build artifacts
+build/
+dist/
+installer_output/
+*.spec.bak

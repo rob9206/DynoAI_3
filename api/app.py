@@ -94,26 +94,28 @@ load_dotenv()
 # Get application configuration
 config = get_config()
 
-@app.route("/", methods=["GET"])
-def root():
-    """
-    Friendly root endpoint.
+# Only register root route if not in standalone mode (standalone serves React frontend at /)
+if not os.environ.get("DYNOAI_STANDALONE"):
+    @app.route("/", methods=["GET"])
+    def root():
+        """
+        Friendly root endpoint.
 
-    Some environments (and humans) probe `/` by default. We return a small
-    pointer payload rather than a 404 to reduce confusion and help health checks.
-    """
-    return (
-        jsonify(
-            {
-                "status": "ok",
-                "service": "DynoAI API",
-                "health": "/api/health",
-                "docs": "/api/docs",
-                "admin": "/admin",
-            }
-        ),
-        200,
-    )
+        Some environments (and humans) probe `/` by default. We return a small
+        pointer payload rather than a 404 to reduce confusion and help health checks.
+        """
+        return (
+            jsonify(
+                {
+                    "status": "ok",
+                    "service": "DynoAI API",
+                    "health": "/api/health",
+                    "docs": "/api/docs",
+                    "admin": "/admin",
+                }
+            ),
+            200,
+        )
 
 
 def rate_limit(limit_string: str):
@@ -1259,7 +1261,8 @@ register_error_handlers(app)
 
 if __name__ == "__main__":
     print_startup_banner()
-elif __name__ == "api.app":
+elif __name__ == "api.app" and not os.environ.get("DYNOAI_STANDALONE"):
     # Handle case when run as module: python -m api.app
     # Start the server directly when run as a module
+    # Skip auto-start in standalone mode (standalone.py handles startup)
     print_startup_banner()
