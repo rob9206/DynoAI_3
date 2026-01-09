@@ -39,13 +39,6 @@ from api.services.powercore_integration import (
     powervision_log_to_dynoai_format,
 )
 
-# Import versioned VE math module
-from dynoai.core.ve_math import (
-    MathVersion,
-    calculate_ve_correction,
-    correction_to_percentage,
-)
-
 # Import TuneLab-inspired filtering and binning modules
 from dynoai.core.signal_filters import (
     CompositeFilter,
@@ -60,6 +53,13 @@ from dynoai.core.signal_filters import (
     filter_afr_samples,
     samples_from_arrays,
     samples_to_arrays,
+)
+
+# Import versioned VE math module
+from dynoai.core.ve_math import (
+    MathVersion,
+    calculate_ve_correction,
+    correction_to_percentage,
 )
 from dynoai.core.weighted_binning import (
     LogarithmicWeighting,
@@ -243,14 +243,14 @@ class AutoTuneWorkflow:
     ) -> None:
         """
         Initialize AutoTuneWorkflow.
-        
+
         Args:
             rpm_axis: Custom RPM bin values
             map_axis: Custom MAP bin values (kPa)
             max_correction_pct: Maximum correction percentage (±)
             afr_targets: Custom AFR targets by MAP (kPa -> AFR)
             math_version: VE calculation math version
-            
+
             # TuneLab-inspired filtering (NEW)
             enable_filtering: Enable AFR signal filtering before analysis
             lowpass_rc_ms: RC time constant for lowpass filter (higher = more smoothing)
@@ -259,7 +259,7 @@ class AutoTuneWorkflow:
             exclude_time_ms: Time to exclude around outliers
             enable_statistical_filter: Enable 2σ statistical outlier rejection
             sigma_threshold: Standard deviations for outlier rejection
-            
+
             # TuneLab-inspired weighting (NEW)
             use_weighted_binning: Use distance-weighted cell accumulation
             weighting_strategy: Custom weighting strategy (default: LogarithmicWeighting)
@@ -268,13 +268,13 @@ class AutoTuneWorkflow:
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
         self.max_correction_pct = max_correction_pct
         self.math_version = math_version or self.DEFAULT_MATH_VERSION
-        
+
         # Allow custom AFR targets (keyed by MAP in kPa)
         if afr_targets:
             self.afr_targets_by_map = {int(k): float(v) for k, v in afr_targets.items()}
         else:
             self.afr_targets_by_map = dict(self.AFR_TARGETS_BY_MAP)
-        
+
         # TuneLab-inspired filtering configuration
         self.enable_filtering = enable_filtering
         self.lowpass_rc_ms = lowpass_rc_ms
@@ -283,13 +283,13 @@ class AutoTuneWorkflow:
         self.exclude_time_ms = exclude_time_ms
         self.enable_statistical_filter = enable_statistical_filter
         self.sigma_threshold = sigma_threshold
-        
+
         # TuneLab-inspired weighting configuration
         self.use_weighted_binning = use_weighted_binning
         self.weighting_strategy = weighting_strategy or LogarithmicWeighting()
-        
+
         self.sessions: dict[str, AutoTuneSession] = {}
-        
+
         # Build filter chain if filtering is enabled
         self._filter_chain: Optional[CompositeFilter] = None
         if self.enable_filtering:
@@ -298,27 +298,31 @@ class AutoTuneWorkflow:
     def _build_filter_chain(self) -> None:
         """Build the AFR filter chain based on configuration."""
         filters: list[SignalFilter] = []
-        
+
         # 1. Lowpass filter for noise reduction
         filters.append(LowpassFilter(rc_ms=self.lowpass_rc_ms))
-        
+
         # 2. Time-aware range filter
-        filters.append(TimeAwareMinMaxFilter(
-            min_val=self.afr_min,
-            max_val=self.afr_max,
-            exclude_leading_ms=self.exclude_time_ms,
-            exclude_trailing_ms=self.exclude_time_ms,
-        ))
-        
+        filters.append(
+            TimeAwareMinMaxFilter(
+                min_val=self.afr_min,
+                max_val=self.afr_max,
+                exclude_leading_ms=self.exclude_time_ms,
+                exclude_trailing_ms=self.exclude_time_ms,
+            )
+        )
+
         # 3. Statistical outlier rejection (optional)
         if self.enable_statistical_filter:
-            filters.append(StatisticalOutlierFilter(
-                sigma_threshold=self.sigma_threshold,
-            ))
-        
+            filters.append(
+                StatisticalOutlierFilter(
+                    sigma_threshold=self.sigma_threshold,
+                )
+            )
+
         self._filter_chain = CompositeFilter(filters)
         logger.info(f"Built filter chain: {self._filter_chain.name}")
-    
+
     def _filter_afr_data(
         self,
         times_ms: list[float],
@@ -326,34 +330,36 @@ class AutoTuneWorkflow:
     ) -> tuple[list[float], list[float], FilterStatistics]:
         """
         Apply configured filters to AFR data.
-        
+
         Args:
             times_ms: Timestamps in milliseconds
             afr_values: AFR readings
-            
+
         Returns:
             Tuple of (filtered_times, filtered_values, statistics)
         """
         if self._filter_chain is None or not self.enable_filtering:
             # No filtering - return as-is
             return list(times_ms), list(afr_values), FilterStatistics()
-        
+
         # Create samples
         samples = samples_from_arrays(times_ms, afr_values)
-        
+
         # Apply filter chain
         filtered = self._filter_chain.filter(samples)
-        
+
         # Extract valid samples
-        filtered_times, filtered_values = samples_to_arrays(filtered, include_invalid=False)
-        
+        filtered_times, filtered_values = samples_to_arrays(
+            filtered, include_invalid=False
+        )
+
         logger.info(
             f"AFR filtering: {len(times_ms)} -> {len(filtered_times)} samples "
             f"({self._filter_chain.statistics.rejection_rate:.1f}% rejected)"
         )
-        
+
         return filtered_times, filtered_values, self._filter_chain.statistics
-    
+
     def create_session(
         self, run_id: Optional[str] = None, data_source: DataSource = DataSource.CSV
     ) -> AutoTuneSession:
@@ -576,7 +582,7 @@ class AutoTuneWorkflow:
         - Lowpass smoothing for noise reduction
         - Time-aware range filtering with neighbor exclusion
         - Statistical outlier rejection (2σ)
-        
+
         When use_weighted_binning=True, uses TuneLab-style weighting:
         - Distance-weighted cell accumulation (logarithmic)
         - Samples closer to cell center contribute more
@@ -615,11 +621,10 @@ class AutoTuneWorkflow:
         # Convert AFR to numeric
         df[afr_meas_col] = pd.to_numeric(df[afr_meas_col], errors="coerce")
         df = df.dropna(subset=[afr_meas_col])
-        
+
         # Find or create time column for filtering
         time_col = next(
-            (c for c in df.columns if c in ["Time_ms", "timestamp_ms", "time_ms"]), 
-            None
+            (c for c in df.columns if c in ["Time_ms", "timestamp_ms", "time_ms"]), None
         )
         if time_col is None and "Time_s" in df.columns:
             df["Time_ms"] = df["Time_s"] * 1000
@@ -628,23 +633,23 @@ class AutoTuneWorkflow:
             # Create synthetic timestamps based on index
             df["Time_ms"] = df.index * 10  # Assume 100Hz (10ms intervals)
             time_col = "Time_ms"
-        
+
         # Apply filtering if enabled
         filter_stats: Optional[FilterStatistics] = None
         if self.enable_filtering and self._filter_chain is not None:
             times_ms = df[time_col].tolist()
             afr_values = df[afr_meas_col].tolist()
-            
+
             filtered_times, filtered_afr, filter_stats = self._filter_afr_data(
                 times_ms, afr_values
             )
-            
+
             # Create filtered DataFrame by matching timestamps
             # For simplicity, we'll filter the original df to only include rows
             # where the time is in the filtered set
             filtered_time_set = set(filtered_times)
             df = df[df[time_col].isin(filtered_time_set)].copy()
-            
+
             logger.info(
                 f"After filtering: {len(df)} samples remain "
                 f"(rejected: {filter_stats.rejection_reasons})"
@@ -656,7 +661,7 @@ class AutoTuneWorkflow:
         afr_error_matrix = np.full((n_rpm, n_map), np.nan)  # AFR points
         ve_delta_matrix = np.full((n_rpm, n_map), np.nan)  # VE %
         hit_matrix = np.zeros((n_rpm, n_map), dtype=int)
-        
+
         # Use weighted binning if enabled
         if self.use_weighted_binning:
             # TuneLab-style weighted accumulation
@@ -666,42 +671,43 @@ class AutoTuneWorkflow:
                 weighting=self.weighting_strategy,
                 min_hits=self.MIN_HITS_PER_ZONE,
             )
-            
+
             # Add all samples
             for _, row in df.iterrows():
                 rpm = row[rpm_col]
                 afr = row[afr_meas_col]
                 map_kpa = row[map_col]
-                
+
                 if not (pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa)):
                     accumulator.add_sample(rpm, map_kpa, afr)
-            
+
             # Get weighted results
             afr_table = accumulator.get_table()
             hit_matrix = np.array(accumulator.get_hit_counts())
-            
+
             # Calculate errors and VE deltas from weighted means
             for i in range(n_rpm):
                 for j in range(n_map):
                     mean_afr = afr_table[i][j]
-                    if mean_afr is not None and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
+                    if (
+                        mean_afr is not None
+                        and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE
+                    ):
                         target_afr = self.get_target_afr(self.map_axis[j])
                         afr_error = mean_afr - target_afr
                         afr_error_matrix[i, j] = afr_error
-                        
+
                         ve_correction = calculate_ve_correction(
                             mean_afr, target_afr, version=self.math_version, clamp=False
                         )
                         ve_delta_pct = correction_to_percentage(ve_correction)
                         ve_delta_matrix[i, j] = ve_delta_pct
-            
-            logger.info(
-                f"Weighted binning stats: {accumulator.statistics}"
-            )
+
+            logger.info(f"Weighted binning stats: {accumulator.statistics}")
         else:
             # Original simple averaging approach
             afr_sum = np.zeros((n_rpm, n_map))
-            
+
             # Helper to find nearest bin
             def nearest_bin(val: float, bins: list) -> int:
                 return min(range(len(bins)), key=lambda i: abs(bins[i] - val))
