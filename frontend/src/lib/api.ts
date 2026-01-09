@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { encodePathSegment } from './sanitize';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -10,6 +10,48 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Rate limit handling with exponential backoff
+let rateLimitBackoff = 0;
+const MAX_RETRIES = 3;
+const MAX_BACKOFF_MS = 8000;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+api.interceptors.response.use(
+  (response) => {
+    // Reset backoff on success
+    rateLimitBackoff = 0;
+    return response;
+  },
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig & { _retryCount?: number };
+    
+    // Handle 429 rate limiting with exponential backoff
+    if (error.response?.status === 429 && config) {
+      config._retryCount = config._retryCount ?? 0;
+      
+      if (config._retryCount < MAX_RETRIES) {
+        config._retryCount += 1;
+        
+        // Calculate backoff from Retry-After header or exponentially
+        const retryAfter = error.response.headers['retry-after'];
+        const backoffMs = retryAfter 
+          ? parseInt(retryAfter, 10) * 1000 
+          : Math.min(rateLimitBackoff === 0 ? 500 : rateLimitBackoff * 2, MAX_BACKOFF_MS);
+        
+        rateLimitBackoff = backoffMs;
+        
+        console.warn(`[API] Rate limited, retrying in ${backoffMs}ms (attempt ${config._retryCount}/${MAX_RETRIES})`);
+        await sleep(backoffMs);
+        
+        return api.request(config);
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export interface AnalysisParams {

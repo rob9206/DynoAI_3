@@ -1,0 +1,152 @@
+#! frontend-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: frontend
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: frontend
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: dynoai_3
+            com.docker.compose.service: frontend
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: dynoai_3
+                com.docker.compose.service: frontend
+                com.docker.compose.network.dynoai-network: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: dynoai-frontend
+                  image: dynoai_3-frontend
+                  imagePullPolicy: IfNotPresent
+                  args:
+                    - npm
+                    - run
+                    - dev
+                    - --
+                    - --host
+                    - 0.0.0.0
+                  env:
+                    - name: API_PORT
+                      value: "5001"
+                    - name: DYNOAI_CLAMP
+                      value: "15.0"
+                    - name: DYNOAI_CORS_ORIGINS
+                      value: "*"
+                    - name: DYNOAI_DEBUG
+                      value: "false"
+                    - name: DYNOAI_HOST
+                      value: "0.0.0.0"
+                    - name: DYNOAI_HOT_EXTRA
+                      value: "-1.0"
+                    - name: DYNOAI_MAX_UPLOAD_MB
+                      value: "50"
+                    - name: DYNOAI_OUTPUT_DIR
+                      value: "outputs"
+                    - name: DYNOAI_PORT
+                      value: "5001"
+                    - name: DYNOAI_REAR_BIAS
+                      value: "0.0"
+                    - name: DYNOAI_REAR_RULE_DEG
+                      value: "2.0"
+                    - name: DYNOAI_RUNS_DIR
+                      value: "runs"
+                    - name: DYNOAI_SMOOTH_PASSES
+                      value: "2"
+                    - name: DYNOAI_UPLOAD_DIR
+                      value: "uploads"
+                    - name: FRONTEND_PORT
+                      value: "8080"
+                    - name: JETSTREAM_API_KEY
+                      value: ""
+                    - name: JETSTREAM_API_URL
+                      value: ""
+                    - name: JETSTREAM_AUTO_PROCESS
+                      value: "true"
+                    - name: JETSTREAM_ENABLED
+                      value: "false"
+                    - name: JETSTREAM_POLL_INTERVAL
+                      value: "30"
+                    - name: JETSTREAM_STUB_MODE
+                      value: "true"
+                    - name: LOG_FORMAT
+                      value: "development"
+                    - name: LOG_LEVEL
+                      value: "INFO"
+                    - name: RATE_LIMIT_DEFAULT
+                      value: "100/minute"
+                    - name: RATE_LIMIT_ENABLED
+                      value: "true"
+                    - name: RATE_LIMIT_EXPENSIVE
+                      value: "5/minute;20/hour"
+                    - name: RATE_LIMIT_STORAGE
+                      value: "memory://"
+                    - name: REDIS_DB
+                      value: "0"
+                    - name: REDIS_HOST
+                      value: "localhost"
+                    - name: REDIS_PASSWORD
+                      value: ""
+                    - name: REDIS_PORT
+                      value: "6379"
+                    - name: VITE_API_URL
+                      value: "http://localhost:5001"
+                    - name: XAI_API_KEY
+                      value: ""
+                    - name: XAI_API_URL
+                      value: "https://api.x.ai/v1/chat/completions"
+                    - name: XAI_ENABLED
+                      value: "false"
+                    - name: XAI_MODEL
+                      value: "grok-beta"
+                  livenessProbe:
+                    exec:
+                        command: ['wget -q --spider http://localhost:80/health']
+                    periodSeconds: 30
+                    initialDelaySeconds: 5
+                    timeoutSeconds: 10
+                    failureThreshold: 3
+                  ports:
+                    - name: frontend-80
+                      containerPort: 80
+                    - name: frontend-5173
+                      containerPort: 5173
+                  volumeMounts:
+                    - name: app-src
+                      mountPath: /app/src
+                      readOnly: true
+                    - name: app-index-html
+                      mountPath: /app/index.html
+                      readOnly: true
+                    - name: app-vite-config-ts
+                      mountPath: /app/vite.config.ts
+                      readOnly: true
+                    - name: app-tailwind-config-js
+                      mountPath: /app/tailwind.config.js
+                      readOnly: true
+            volumes:
+                - name: app-src
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\frontend\src
+                  readOnly: true
+                - name: app-index-html
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\frontend\index.html
+                  readOnly: true
+                - name: app-vite-config-ts
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\frontend\vite.config.ts
+                  readOnly: true
+                - name: app-tailwind-config-js
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\frontend\tailwind.config.js
+                  readOnly: true

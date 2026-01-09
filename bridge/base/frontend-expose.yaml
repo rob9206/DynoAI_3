@@ -1,0 +1,21 @@
+#! frontend-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: frontend
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: frontend
+spec:
+    selector:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: frontend
+    ports:
+        - name: frontend-80
+          port: 80
+          targetPort: frontend-80
+        - name: frontend-5173
+          port: 5173
+          targetPort: frontend-5173

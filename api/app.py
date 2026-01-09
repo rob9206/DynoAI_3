@@ -70,13 +70,17 @@ except Exception as e:
     print(f"[!] Warning: Admin UI disabled: {e}")
 
 # Initialize rate limiter (optional - graceful degradation if not available)
+# Disabled in standalone mode for better local performance
 limiter = None
-try:
-    from api.rate_limit import init_rate_limiter
+if not os.environ.get("DYNOAI_STANDALONE"):
+    try:
+        from api.rate_limit import init_rate_limiter
 
-    limiter = init_rate_limiter(app)
-except Exception as e:  # pragma: no cover
-    print(f"[!] Warning: Could not initialize rate limiter: {e}")
+        limiter = init_rate_limiter(app)
+    except Exception as e:  # pragma: no cover
+        print(f"[!] Warning: Could not initialize rate limiter: {e}")
+else:
+    print("[*] Rate limiting disabled (standalone mode)")
 
 # Initialize request ID middleware for request tracing
 try:
@@ -289,22 +293,39 @@ def run_dyno_analysis(
     Returns:
         dict: Manifest data from analysis
     """
-    # Ensure we're running from the project root directory
-    project_root = Path(__file__).parent.parent
-    os.chdir(project_root)
-
-    # Find Python executable
-    venv_python = Path(".venv/Scripts/python.exe")
-    if not venv_python.exists():
-        venv_python = Path(".venv/bin/python")  # Unix/Mac
-
-    if not venv_python.exists():
-        venv_python = Path("python")  # Fallback to system Python
+    # Check if running in standalone/PyInstaller mode
+    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, '_MEIPASS')
+    
+    if is_standalone:
+        # In standalone mode, use bundled resources
+        if hasattr(sys, '_MEIPASS'):
+            project_root = Path(sys._MEIPASS)
+        else:
+            project_root = Path(__file__).parent.parent
+        script_path = project_root / "ai_tuner_toolkit_dyno_v1_2.py"
+        python_exe = sys.executable
+    else:
+        # Development mode - use project root and venv
+        project_root = Path(__file__).parent.parent
+        os.chdir(project_root)
+        script_path = project_root / "ai_tuner_toolkit_dyno_v1_2.py"
+        
+        # Find Python executable
+        venv_python = project_root / ".venv/Scripts/python.exe"
+        if not venv_python.exists():
+            venv_python = project_root / ".venv/bin/python"  # Unix/Mac
+        if not venv_python.exists():
+            venv_python = Path("python")  # Fallback to system Python
+        python_exe = str(venv_python)
+    
+    # Verify script exists
+    if not script_path.exists():
+        raise Exception(f"Autotune script not found at {script_path}")
 
     # Build command with optional parameters
     cmd = [
-        str(venv_python),
-        "ai_tuner_toolkit_dyno_v1_2.py",
+        str(python_exe),
+        str(script_path),
         "--csv",
         str(csv_path),
         "--outdir",

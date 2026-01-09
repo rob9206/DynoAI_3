@@ -202,7 +202,7 @@ export function getChannelConfig(name: string): typeof JETDRIVE_CHANNEL_CONFIG[s
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
-    pollInterval: 50,  // 50ms = 20 updates/sec for ultra-responsive gauges and VE table
+    pollInterval: 100,  // 100ms = 10 updates/sec for responsive gauges while respecting rate limits
     historyPublishIntervalMs: 200, // publish chart history at ~5Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
@@ -230,6 +230,10 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const historyRef = useRef<Record<string, { time: number; value: number }[]>>({});
     const lastHistoryPublishAtRef = useRef<number>(0);
+    
+    // Rate limit backoff state
+    const backoffRef = useRef<number>(0); // Current backoff delay in ms
+    const backoffUntilRef = useRef<number>(0); // Timestamp when backoff expires
 
     // UI sound state (debounced to avoid flapping/poll noise)
     const prevConnectedRef = useRef<boolean | null>(null);
@@ -238,8 +242,24 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
     // Check monitor status
     const checkConnection = useCallback(async () => {
+        // Skip if in backoff period
+        if (Date.now() < backoffUntilRef.current) {
+            return;
+        }
+        
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/monitor/status`);
+            
+            // Handle rate limiting
+            if (res.status === 429) {
+                backoffRef.current = Math.min(backoffRef.current === 0 ? 500 : backoffRef.current * 2, 8000);
+                backoffUntilRef.current = Date.now() + backoffRef.current;
+                return;
+            }
+            
+            // Success - reset backoff  
+            backoffRef.current = 0;
+            
             if (!res.ok) throw new Error('Monitor endpoint unavailable');
 
             const raw: unknown = await res.json();
@@ -264,8 +284,28 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
     // Poll live data
     const pollLiveData = useCallback(async () => {
+        // Skip polling if in backoff period
+        if (Date.now() < backoffUntilRef.current) {
+            return;
+        }
+        
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/live/data`);
+            
+            // Handle rate limiting with exponential backoff
+            if (res.status === 429) {
+                // Exponential backoff: 500ms, 1s, 2s, 4s, max 8s
+                backoffRef.current = Math.min(backoffRef.current === 0 ? 500 : backoffRef.current * 2, 8000);
+                backoffUntilRef.current = Date.now() + backoffRef.current;
+                if (opts.debug) {
+                    console.warn(`[useJetDriveLive] Rate limited, backing off for ${backoffRef.current}ms`);
+                }
+                return;
+            }
+            
+            // Success - reset backoff
+            backoffRef.current = 0;
+            
             if (!res.ok) throw new Error('Live data unavailable');
 
             const raw: unknown = await res.json();

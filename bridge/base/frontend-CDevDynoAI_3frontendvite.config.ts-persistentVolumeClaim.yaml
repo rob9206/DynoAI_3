@@ -1,0 +1,18 @@
+#! frontend-C:\Dev\DynoAI_3\frontend\vite.config.ts-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: frontend-c--dev-dynoai-3-frontend-vite-config-ts
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.service: frontend
+        com.docker.compose.volume: C:\Dev\DynoAI_3\frontend\vite.config.ts
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadOnlyMany
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

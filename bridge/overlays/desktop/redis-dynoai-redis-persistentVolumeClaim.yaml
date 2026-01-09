@@ -1,0 +1,9 @@
+#! redis-dynoai-redis-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: redis-dynoai-redis
+    namespace: dynoai-3
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

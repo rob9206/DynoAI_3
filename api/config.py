@@ -214,8 +214,8 @@ class RateLimitConfig:
         == "true"
     )
     default: str = field(
-        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "100/minute")
-    )
+        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "1200/minute")
+    )  # 1200/min allows live data polling at 100ms intervals (10/sec)
     expensive: str = field(
         default_factory=lambda: os.environ.get(
             "RATE_LIMIT_EXPENSIVE", "5/minute;20/hour"

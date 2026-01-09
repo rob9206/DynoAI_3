@@ -1,0 +1,9 @@
+#! api-C:\Dev\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: api-c--dev-dynoai-3-tools-ai-tuner-toolkit-dyno-v1-2-py
+    namespace: dynoai-3
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

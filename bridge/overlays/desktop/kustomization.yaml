@@ -1,0 +1,24 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - ../../base
+patches:
+    - path: api-C:\Dev\DynoAI_3\api-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\dynoai-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\outputs-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\runs-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\scripts-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\tools\tables-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\tools\templates-persistentVolumeClaim.yaml
+    - path: api-C:\Dev\DynoAI_3\uploads-persistentVolumeClaim.yaml
+    - path: api-service.yaml
+    - path: frontend-C:\Dev\DynoAI_3\frontend\index.html-persistentVolumeClaim.yaml
+    - path: frontend-C:\Dev\DynoAI_3\frontend\src-persistentVolumeClaim.yaml
+    - path: frontend-C:\Dev\DynoAI_3\frontend\tailwind.config.js-persistentVolumeClaim.yaml
+    - path: frontend-C:\Dev\DynoAI_3\frontend\vite.config.ts-persistentVolumeClaim.yaml
+    - path: frontend-service.yaml
+    - path: redis-dynoai-redis-persistentVolumeClaim.yaml
+    - path: redis-service.yaml

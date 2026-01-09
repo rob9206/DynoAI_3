@@ -27,8 +27,8 @@ a = Analysis(
         # Include tools (tuning wizards, etc.)
         ('tools/tuning_wizards.py', 'tools'),
         ('tools/tables', 'tools/tables'),
-        # Include the main toolkit script
-        ('tools/ai_tuner_toolkit_dyno_v1_2.py', 'tools'),
+        # Include the main toolkit script (at root for api/app.py compatibility)
+        ('tools/ai_tuner_toolkit_dyno_v1_2.py', '.'),
     ],
     hiddenimports=[
         # Flask and extensions

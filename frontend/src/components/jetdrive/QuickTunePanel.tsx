@@ -44,7 +44,7 @@ export function QuickTunePanel({ apiUrl }: QuickTunePanelProps) {
   } = useJetDriveLive({
     apiUrl,
     autoConnect: false,
-    pollInterval: 50, // 50ms = 20 Hz for responsive detection
+    pollInterval: 100, // 100ms = 10 Hz for responsive detection (rate-limit friendly)
   });
 
   // Get RPM from multiple possible channels

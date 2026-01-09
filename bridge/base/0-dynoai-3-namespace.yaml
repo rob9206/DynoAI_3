@@ -1,0 +1,8 @@
+#! 0-dynoai-3-namespace.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: dynoai-3
+    labels:
+        com.docker.compose.project: dynoai_3

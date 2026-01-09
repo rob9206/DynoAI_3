@@ -53,6 +53,13 @@ def get_workflow() -> AutoTuneWorkflow:
 
 def get_project_root() -> Path:
     """Get project root directory."""
+    # 0) Standalone mode - use user data directory
+    if os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, '_MEIPASS'):
+        # In standalone mode, use user's home directory for data
+        data_dir = Path.home() / "DynoAI"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return data_dir
+    
     # 1) Explicit env override (useful for tests and deployments)
     env_root = os.getenv("DYNOAI_PROJECT_ROOT") or os.getenv("DYNOAI_ROOT")
     if env_root:
@@ -424,7 +431,15 @@ def analyze_run():
     mode="simulator_pull" will automatically save the last simulator pull data
     and analyze it.
     """
-    data = request.get_json()
+    try:
+        data = request.get_json()
+        if data is None:
+            logger.error("Failed to parse JSON from request body")
+            return jsonify({"error": "Invalid JSON in request body"}), 400
+    except Exception as e:
+        logger.error(f"Error parsing JSON request: {e}", exc_info=True)
+        return jsonify({"error": f"Failed to parse request JSON: {str(e)}"}), 400
+    
     if not data or "run_id" not in data:
         return jsonify({"error": "Missing 'run_id' in request body"}), 400
 
@@ -433,29 +448,38 @@ def analyze_run():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    mode = data.get("mode", "simulate")
-    # Normalize mode: strip whitespace and convert to lowercase for comparison
-    if mode:
-        mode = str(mode).strip().lower()
-    else:
-        mode = "simulate"
+    try:
+        mode = data.get("mode", "simulate")
+        # Normalize mode: strip whitespace and convert to lowercase for comparison
+        if mode:
+            mode = str(mode).strip().lower()
+        else:
+            mode = "simulate"
 
-    csv_path = data.get("csv_path")
-    afr_targets = data.get("afr_targets")
+        csv_path = data.get("csv_path")
+        afr_targets = data.get("afr_targets")
 
-    # Log the mode for debugging
-    logger.info(
-        f"Analyze request: run_id={run_id}, mode={mode!r}, simulator_active={_is_simulator_active()}"
-    )
+        # Log the mode for debugging
+        logger.info(
+            f"Analyze request: run_id={run_id}, mode={mode!r}, simulator_active={_is_simulator_active()}"
+        )
 
-    project_root = get_project_root()
-    script_path = project_root / "scripts" / "jetdrive_autotune.py"
+        project_root = get_project_root()
+        script_path = project_root / "scripts" / "jetdrive_autotune.py"
 
-    if not script_path.exists():
-        return jsonify({"error": "Autotune script not found"}), 500
+        if not script_path.exists():
+            logger.error(f"Autotune script not found at: {script_path}")
+            return jsonify({"error": f"Autotune script not found at: {script_path}"}), 500
 
-    # Build command
-    cmd = [sys.executable, str(script_path), "--run-id", run_id]
+        # Build command
+        cmd = [sys.executable, str(script_path), "--run-id", run_id]
+    except Exception as e:
+        logger.error(f"Error in analyze_run setup: {e}", exc_info=True)
+        import traceback
+        error_detail = str(e)
+        if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+            error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
+        return jsonify({"success": False, "error": error_detail}), 500
 
     if mode == "simulate":
         cmd.append("--simulate")
@@ -467,28 +491,36 @@ def analyze_run():
         # Save simulator pull data first
         logger.info(f"Analyzing with simulator_pull mode for run_id={run_id}")
 
-        if not _is_simulator_active():
-            logger.warning("Simulator not active when trying to analyze pull data")
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Simulator is not running. Please start the simulator first.",
-                    }
-                ),
-                400,
-            )
+        try:
+            if not _is_simulator_active():
+                logger.warning("Simulator not active when trying to analyze pull data")
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Simulator is not running. Please start the simulator first.",
+                        }
+                    ),
+                    400,
+                )
 
-        import csv as csv_module
+            import csv as csv_module
 
-        from api.services.dyno_simulator import get_simulator
+            from api.services.dyno_simulator import get_simulator
 
-        sim = get_simulator()
-        sim_state = sim.get_state()
-        logger.info(f"Simulator state: {sim_state.value}")
+            sim = get_simulator()
+            sim_state = sim.get_state()
+            logger.info(f"Simulator state: {sim_state.value}")
 
-        pull_data = sim.get_pull_data()
-        logger.info(f"Pull data retrieved: {len(pull_data) if pull_data else 0} points")
+            pull_data = sim.get_pull_data()
+            logger.info(f"Pull data retrieved: {len(pull_data) if pull_data else 0} points")
+        except Exception as e:
+            logger.error(f"Error getting simulator pull data: {e}", exc_info=True)
+            import traceback
+            error_detail = str(e)
+            if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+                error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
+            return jsonify({"success": False, "error": f"Failed to get simulator pull data: {error_detail}"}), 500
 
         if not pull_data:
             logger.warning("No pull data available from simulator")
@@ -701,12 +733,20 @@ def analyze_run():
         # Restore simulator active state if it was active before
         if was_simulator_active:
             _set_simulator_active(True)
+        logger.error("Analysis timed out after 60 seconds", exc_info=True)
         return jsonify({"success": False, "error": "Analysis timed out"}), 500
     except Exception as e:
         # Restore simulator active state if it was active before
         if was_simulator_active:
             _set_simulator_active(True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        # Log full exception with traceback for debugging
+        logger.error(f"Error in analyze_run endpoint: {e}", exc_info=True)
+        # Return detailed error in development, generic in production
+        import traceback
+        error_detail = str(e)
+        if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+            error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
+        return jsonify({"success": False, "error": error_detail}), 500
 
 
 @jetdrive_bp.route("/analyze-unified", methods=["POST"])

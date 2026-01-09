@@ -1,0 +1,24 @@
+#! dynoai-network-network-policy.yaml
+# Generated code, do not edit
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: dynoai-network-network-policy
+    namespace: dynoai-3
+spec:
+    podSelector:
+        matchLabels:
+            com.docker.compose.network.dynoai-network: "true"
+    policyTypes:
+        - Ingress
+        - Egress
+    ingress:
+        - from:
+            - podSelector:
+                matchLabels:
+                    com.docker.compose.network.dynoai-network: "true"
+    egress:
+        - to:
+            - podSelector:
+                matchLabels:
+                    com.docker.compose.network.dynoai-network: "true"

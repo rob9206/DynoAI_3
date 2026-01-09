@@ -1,0 +1,9 @@
+#! api-C:\Dev\DynoAI_3\runs-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: api-c--dev-dynoai-3-runs
+    namespace: dynoai-3
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

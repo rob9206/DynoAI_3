@@ -1,0 +1,18 @@
+#! api-C:\Dev\DynoAI_3\tools\tables-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: api-c--dev-dynoai-3-tools-tables
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.service: api
+        com.docker.compose.volume: C:\Dev\DynoAI_3\tools\tables
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadOnlyMany
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

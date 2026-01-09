@@ -1,0 +1,9 @@
+#! frontend-C:\Dev\DynoAI_3\frontend\index.html-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: frontend-c--dev-dynoai-3-frontend-index-html
+    namespace: dynoai-3
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

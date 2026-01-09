@@ -1,0 +1,185 @@
+#! api-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: api
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: api
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: dynoai_3
+            com.docker.compose.service: api
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: dynoai_3
+                com.docker.compose.service: api
+                com.docker.compose.network.dynoai-network: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: dynoai-api
+                  image: dynoai_3-api
+                  imagePullPolicy: IfNotPresent
+                  args:
+                    - python
+                    - -m
+                    - flask
+                    - run
+                    - --host=0.0.0.0
+                    - --port=5001
+                    - --reload
+                    - --debugger
+                  env:
+                    - name: API_PORT
+                      value: "5001"
+                    - name: DYNOAI_CLAMP
+                      value: "15.0"
+                    - name: DYNOAI_CORS_ORIGINS
+                      value: "*"
+                    - name: DYNOAI_DEBUG
+                      value: "true"
+                    - name: DYNOAI_HOST
+                      value: "0.0.0.0"
+                    - name: DYNOAI_HOT_EXTRA
+                      value: "-1.0"
+                    - name: DYNOAI_MAX_UPLOAD_MB
+                      value: "50"
+                    - name: DYNOAI_OUTPUT_DIR
+                      value: "/app/outputs"
+                    - name: DYNOAI_PORT
+                      value: "5001"
+                    - name: DYNOAI_REAR_BIAS
+                      value: "0.0"
+                    - name: DYNOAI_REAR_RULE_DEG
+                      value: "2.0"
+                    - name: DYNOAI_RUNS_DIR
+                      value: "/app/runs"
+                    - name: DYNOAI_SMOOTH_PASSES
+                      value: "2"
+                    - name: DYNOAI_UPLOAD_DIR
+                      value: "/app/uploads"
+                    - name: FLASK_APP
+                      value: "api.app:app"
+                    - name: FLASK_ENV
+                      value: "development"
+                    - name: FRONTEND_PORT
+                      value: "8080"
+                    - name: JETSTREAM_API_KEY
+                      value: ""
+                    - name: JETSTREAM_API_URL
+                      value: ""
+                    - name: JETSTREAM_AUTO_PROCESS
+                      value: "true"
+                    - name: JETSTREAM_ENABLED
+                      value: "false"
+                    - name: JETSTREAM_POLL_INTERVAL
+                      value: "30"
+                    - name: JETSTREAM_STUB_MODE
+                      value: "true"
+                    - name: LOG_FORMAT
+                      value: "development"
+                    - name: LOG_LEVEL
+                      value: "INFO"
+                    - name: RATE_LIMIT_DEFAULT
+                      value: "100/minute"
+                    - name: RATE_LIMIT_ENABLED
+                      value: "true"
+                    - name: RATE_LIMIT_EXPENSIVE
+                      value: "5/minute;20/hour"
+                    - name: RATE_LIMIT_STORAGE
+                      value: "memory://"
+                    - name: REDIS_DB
+                      value: "0"
+                    - name: REDIS_HOST
+                      value: "localhost"
+                    - name: REDIS_PASSWORD
+                      value: ""
+                    - name: REDIS_PORT
+                      value: "6379"
+                    - name: VITE_API_URL
+                      value: ""
+                    - name: XAI_API_KEY
+                      value: ""
+                    - name: XAI_API_URL
+                      value: "https://api.x.ai/v1/chat/completions"
+                    - name: XAI_ENABLED
+                      value: "false"
+                    - name: XAI_MODEL
+                      value: "grok-beta"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://localhost:5001/api/health/ready']
+                    periodSeconds: 30
+                    initialDelaySeconds: 10
+                    timeoutSeconds: 10
+                    failureThreshold: 3
+                  ports:
+                    - name: api-5001
+                      containerPort: 5001
+                  volumeMounts:
+                    - name: app-uploads
+                      mountPath: /app/uploads
+                    - name: app-outputs
+                      mountPath: /app/outputs
+                    - name: app-runs
+                      mountPath: /app/runs
+                    - name: app-tables
+                      mountPath: /app/tables
+                      readOnly: true
+                    - name: app-api
+                      mountPath: /app/api
+                      readOnly: true
+                    - name: app-dynoai
+                      mountPath: /app/dynoai
+                      readOnly: true
+                    - name: app-ai-tuner-toolkit-dyno-v1-2-py
+                      mountPath: /app/ai_tuner_toolkit_dyno_v1_2.py
+                      readOnly: true
+                    - name: app-templates
+                      mountPath: /app/templates
+                      readOnly: true
+                    - name: app-scripts
+                      mountPath: /app/scripts
+                      readOnly: true
+            volumes:
+                - name: app-uploads
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\uploads
+                - name: app-outputs
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\outputs
+                - name: app-runs
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\runs
+                - name: app-tables
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\tools\tables
+                  readOnly: true
+                - name: app-api
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\api
+                  readOnly: true
+                - name: app-dynoai
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\dynoai
+                  readOnly: true
+                - name: app-ai-tuner-toolkit-dyno-v1-2-py
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py
+                  readOnly: true
+                - name: app-templates
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\tools\templates
+                  readOnly: true
+                - name: app-scripts
+                  hostPath:
+                    path: C:\Dev\DynoAI_3\scripts
+                  readOnly: true

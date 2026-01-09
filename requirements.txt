@@ -24,3 +24,4 @@ qrcode==8.0
 prometheus-flask-exporter>=0.23.0
 sqlalchemy>=2.0.0
 alembic>=1.13.0
+PyQt6>=6.6.0
