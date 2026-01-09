@@ -4,23 +4,23 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
     - 0-dynoai-3-namespace.yaml
-    - api-C:\Dev\DynoAI_3\api-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\dynoai-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\outputs-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\runs-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\scripts-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\tools\tables-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\tools\templates-persistentVolumeClaim.yaml
-    - api-C:\Dev\DynoAI_3\uploads-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\api-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\dynoai-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\outputs-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\runs-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\scripts-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\tables-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\templates-persistentVolumeClaim.yaml
+    - api-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\uploads-persistentVolumeClaim.yaml
     - api-deployment.yaml
     - api-expose.yaml
     - api-service.yaml
     - dynoai-network-network-policy.yaml
-    - frontend-C:\Dev\DynoAI_3\frontend\index.html-persistentVolumeClaim.yaml
-    - frontend-C:\Dev\DynoAI_3\frontend\src-persistentVolumeClaim.yaml
-    - frontend-C:\Dev\DynoAI_3\frontend\tailwind.config.js-persistentVolumeClaim.yaml
-    - frontend-C:\Dev\DynoAI_3\frontend\vite.config.ts-persistentVolumeClaim.yaml
+    - frontend-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\index.html-persistentVolumeClaim.yaml
+    - frontend-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\src-persistentVolumeClaim.yaml
+    - frontend-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\tailwind.config.js-persistentVolumeClaim.yaml
+    - frontend-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\vite.config.ts-persistentVolumeClaim.yaml
     - frontend-deployment.yaml
     - frontend-expose.yaml
     - frontend-service.yaml

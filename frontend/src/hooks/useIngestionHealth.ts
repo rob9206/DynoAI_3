@@ -20,7 +20,7 @@ import {
 } from '../api/ingestion';
 
 export interface UseIngestionHealthOptions {
-  /** Poll interval in ms (default: 2000) */
+  /** Poll interval in ms (default: 10000) */
   pollInterval?: number;
   /** Auto-start polling (default: true) */
   autoStart?: boolean;
@@ -59,7 +59,7 @@ export interface UseIngestionHealthReturn {
 }
 
 const DEFAULT_OPTIONS: Required<UseIngestionHealthOptions> = {
-  pollInterval: 2000,
+  pollInterval: 10000, // 10 seconds - health status doesn't need high frequency polling
   autoStart: true,
   enableReliability: true,
 };
@@ -90,16 +90,23 @@ export function useIngestionHealth(options: UseIngestionHealthOptions = {}): Use
       setError(null);
       setLastUpdate(Date.now());
     } catch (err) {
-      // Don't overwrite existing data on error
-      if (!dataHealth) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch data health');
-      }
+      // Only set error if we don't already have data
+      setDataHealth(prev => {
+        if (!prev) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch data health');
+        }
+        return prev;
+      });
     }
-  }, [dataHealth]);
+  }, []); // No dependencies - avoids infinite loop
+
+  // Use ref for options to avoid recreating callbacks
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
 
   // Fetch reliability health
   const fetchReliabilityHealth = useCallback(async () => {
-    if (!opts.enableReliability) return;
+    if (!optsRef.current.enableReliability) return;
     
     try {
       const health = await getReliabilityHealth();
@@ -107,7 +114,7 @@ export function useIngestionHealth(options: UseIngestionHealthOptions = {}): Use
     } catch {
       // Silent fail for reliability - it's supplementary data
     }
-  }, [opts.enableReliability]);
+  }, []); // No dependencies - uses ref
 
   // Combined refresh
   const refresh = useCallback(async () => {
@@ -144,8 +151,8 @@ export function useIngestionHealth(options: UseIngestionHealthOptions = {}): Use
       if (Math.random() < 0.5) {
         fetchReliabilityHealth();
       }
-    }, opts.pollInterval);
-  }, [opts.pollInterval, refresh, fetchDataHealth, fetchReliabilityHealth]);
+    }, optsRef.current.pollInterval);
+  }, [refresh, fetchDataHealth, fetchReliabilityHealth]); // Uses ref for poll interval
 
   // Stop polling
   const stopPolling = useCallback(() => {
@@ -156,16 +163,17 @@ export function useIngestionHealth(options: UseIngestionHealthOptions = {}): Use
     }
   }, []);
 
-  // Auto-start effect
+  // Auto-start effect - only runs once on mount
   useEffect(() => {
-    if (opts.autoStart) {
+    if (optsRef.current.autoStart) {
       startPolling();
     }
     
     return () => {
       stopPolling();
     };
-  }, [opts.autoStart, startPolling, stopPolling]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
   // Computed values
   const overallHealth = dataHealth?.overall_health || 'unknown';

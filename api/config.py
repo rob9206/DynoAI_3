@@ -231,8 +231,8 @@ class DrumConfig:
     """Individual dyno drum configuration."""
 
     serial_number: str = ""
-    mass_kg: float = 0.0  # Drum mass in kg (Dynoware calibration factor)
-    retarder_mass_kg: float = 0.0  # Retarder/brake mass
+    mass_slugs: float = 0.0  # Drum mass in slugs (Dynoware calibration factor)
+    retarder_mass_slugs: float = 0.0  # Retarder/brake mass in slugs
     circumference_ft: float = 0.0  # Drum circumference in feet
     num_tabs: int = 1  # Number of pickup tabs
 
@@ -251,29 +251,32 @@ class DrumConfig:
         return self.radius_ft * 0.3048
 
     @property
-    def total_mass_kg(self) -> float:
-        """Total rotating mass including retarder."""
-        return self.mass_kg + self.retarder_mass_kg
+    def total_mass_slugs(self) -> float:
+        """Total rotating mass including retarder (slugs)."""
+        return self.mass_slugs + self.retarder_mass_slugs
 
     @property
-    def rotational_inertia_kgm2(self) -> float:
+    def rotational_inertia_slug_ft2(self) -> float:
         """
         Calculate rotational inertia (I = 0.5 × m × r²) for solid cylinder.
+        Uses slugs and feet for consistent imperial units.
         Used for inertia-based power calculations.
         """
-        if self.radius_m <= 0 or self.total_mass_kg <= 0:
+        if self.radius_ft <= 0 or self.total_mass_slugs <= 0:
             return 0.0
-        return 0.5 * self.total_mass_kg * (self.radius_m**2)
+        return 0.5 * self.total_mass_slugs * (self.radius_ft**2)
 
     @property
     def rotational_inertia_lbft2(self) -> float:
         """Rotational inertia in lb·ft² (for compatibility with simulator)."""
-        # 1 kg·m² = 23.73 lb·ft²
-        return self.rotational_inertia_kgm2 * 23.73
+        # 1 slug·ft² = 1 lb·s²/ft × ft² = 1 lb·ft·s²
+        # For rotational inertia: slug·ft² is equivalent to lb·ft² in the torque equation
+        # since slug = lb·s²/ft, and I·α gives torque in lb·ft
+        return self.rotational_inertia_slug_ft2 * 32.174  # Convert slug·ft² to lb·ft²
 
     def is_configured(self) -> bool:
         """Check if drum has valid configuration."""
-        return self.mass_kg > 0 and self.circumference_ft > 0
+        return self.mass_slugs > 0 and self.circumference_ft > 0
 
 
 @dataclass
@@ -306,7 +309,7 @@ class DynoConfig:
 
     # Network configuration
     ip_address: str = field(
-        default_factory=lambda: os.environ.get("DYNO_IP", "192.168.1.115")
+        default_factory=lambda: os.environ.get("DYNO_IP", "239.255.60.60")
     )
     jetdrive_port: int = field(
         default_factory=lambda: _get_int_env("DYNO_JETDRIVE_PORT", 22344)
@@ -317,12 +320,12 @@ class DynoConfig:
     drum1_serial: str = field(
         default_factory=lambda: os.environ.get("DYNO_DRUM1_SERIAL", "1000588")
     )
-    drum1_mass_kg: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM1_MASS_KG", "14.121"))
+    drum1_mass_slugs: float = field(
+        default_factory=lambda: float(os.environ.get("DYNO_DRUM1_MASS_SLUGS", "14.121"))
     )
-    drum1_retarder_mass_kg: float = field(
+    drum1_retarder_mass_slugs: float = field(
         default_factory=lambda: float(
-            os.environ.get("DYNO_DRUM1_RETARDER_MASS_KG", "0.0")
+            os.environ.get("DYNO_DRUM1_RETARDER_MASS_SLUGS", "0.0")
         )
     )
     drum1_circumference_ft: float = field(
@@ -336,12 +339,12 @@ class DynoConfig:
     drum2_serial: str = field(
         default_factory=lambda: os.environ.get("DYNO_DRUM2_SERIAL", "")
     )
-    drum2_mass_kg: float = field(
-        default_factory=lambda: float(os.environ.get("DYNO_DRUM2_MASS_KG", "0.0"))
+    drum2_mass_slugs: float = field(
+        default_factory=lambda: float(os.environ.get("DYNO_DRUM2_MASS_SLUGS", "0.0"))
     )
-    drum2_retarder_mass_kg: float = field(
+    drum2_retarder_mass_slugs: float = field(
         default_factory=lambda: float(
-            os.environ.get("DYNO_DRUM2_RETARDER_MASS_KG", "0.0")
+            os.environ.get("DYNO_DRUM2_RETARDER_MASS_SLUGS", "0.0")
         )
     )
     drum2_circumference_ft: float = field(
@@ -367,8 +370,8 @@ class DynoConfig:
         """Get Drum 1 configuration object."""
         return DrumConfig(
             serial_number=self.drum1_serial,
-            mass_kg=self.drum1_mass_kg,
-            retarder_mass_kg=self.drum1_retarder_mass_kg,
+            mass_slugs=self.drum1_mass_slugs,
+            retarder_mass_slugs=self.drum1_retarder_mass_slugs,
             circumference_ft=self.drum1_circumference_ft,
             num_tabs=self.drum1_tabs,
         )
@@ -378,8 +381,8 @@ class DynoConfig:
         """Get Drum 2 configuration object."""
         return DrumConfig(
             serial_number=self.drum2_serial,
-            mass_kg=self.drum2_mass_kg,
-            retarder_mass_kg=self.drum2_retarder_mass_kg,
+            mass_slugs=self.drum2_mass_slugs,
+            retarder_mass_slugs=self.drum2_retarder_mass_slugs,
             circumference_ft=self.drum2_circumference_ft,
             num_tabs=self.drum2_tabs,
         )
@@ -438,8 +441,8 @@ class DynoConfig:
             "num_modules": self.num_modules,
             "drum1": {
                 "serial_number": self.drum1_serial,
-                "mass_kg": self.drum1_mass_kg,
-                "retarder_mass_kg": self.drum1_retarder_mass_kg,
+                "mass_slugs": self.drum1_mass_slugs,
+                "retarder_mass_slugs": self.drum1_retarder_mass_slugs,
                 "circumference_ft": self.drum1_circumference_ft,
                 "num_tabs": self.drum1_tabs,
                 "radius_ft": self.drum1.radius_ft,
@@ -448,7 +451,7 @@ class DynoConfig:
             },
             "drum2": {
                 "serial_number": self.drum2_serial,
-                "mass_kg": self.drum2_mass_kg,
+                "mass_slugs": self.drum2_mass_slugs,
                 "circumference_ft": self.drum2_circumference_ft,
                 "configured": self.drum2.is_configured(),
             },

@@ -1,0 +1,32 @@
+# Binary archives
+*.zip
+*.tar.gz
+*.rar
+
+# Python virtual environments
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules and build output
+node_modules/
+dist/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc
+
+# Other existing content follows...
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md
+
+
+# Snyk Security Extension - AI Rules (auto-generated)
+<<<<<<< Updated upstream
+.cursor\rules\snyk_rules.mdc
+=======
+.github\instructions\snyk_rules.instructions.md
+>>>>>>> Stashed changes

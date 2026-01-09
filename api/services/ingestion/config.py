@@ -225,7 +225,7 @@ class DataSourceConfig:
 class JetDriveConfig:
     """JetDrive-specific configuration."""
 
-    multicast_group: str = "224.0.2.10"
+    multicast_group: str = "239.255.60.60"
     port: int = 22344
     interface: str = "0.0.0.0"
     discovery_timeout_sec: float = 3.0
@@ -251,7 +251,7 @@ class JetDriveConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "JetDriveConfig":
         return cls(
-            multicast_group=data.get("multicast_group", "224.0.2.10"),
+            multicast_group=data.get("multicast_group", "239.255.60.60"),
             port=data.get("port", 22344),
             interface=data.get("interface", "0.0.0.0"),
             discovery_timeout_sec=data.get("discovery_timeout_sec", 3.0),
@@ -266,7 +266,7 @@ class JetDriveConfig:
     def from_env(cls) -> "JetDriveConfig":
         """Load configuration from environment variables."""
         return cls(
-            multicast_group=os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10"),
+            multicast_group=os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60"),
             port=int(os.getenv("JETDRIVE_PORT", "22344")),
             interface=os.getenv("JETDRIVE_IFACE", "0.0.0.0"),
         )

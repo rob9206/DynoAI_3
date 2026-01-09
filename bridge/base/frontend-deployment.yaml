@@ -51,7 +51,7 @@ spec:
                     - name: DYNOAI_MAX_UPLOAD_MB
                       value: "50"
                     - name: DYNOAI_OUTPUT_DIR
-                      value: "outputs"
+                      value: "/app/outputs"
                     - name: DYNOAI_PORT
                       value: "5001"
                     - name: DYNOAI_REAR_BIAS
@@ -59,13 +59,21 @@ spec:
                     - name: DYNOAI_REAR_RULE_DEG
                       value: "2.0"
                     - name: DYNOAI_RUNS_DIR
-                      value: "runs"
+                      value: "/app/runs"
                     - name: DYNOAI_SMOOTH_PASSES
                       value: "2"
                     - name: DYNOAI_UPLOAD_DIR
-                      value: "uploads"
+                      value: "/app/uploads"
+                    - name: DYNOWARE_IP
+                      value: "192.168.1.115"
                     - name: FRONTEND_PORT
-                      value: "8080"
+                      value: "80"
+                    - name: JETDRIVE_ENABLED
+                      value: "false"
+                    - name: JETDRIVE_MCAST_GROUP
+                      value: "239.255.60.60"
+                    - name: JETDRIVE_PORT
+                      value: "22344"
                     - name: JETSTREAM_API_KEY
                       value: ""
                     - name: JETSTREAM_API_URL
@@ -79,7 +87,7 @@ spec:
                     - name: JETSTREAM_STUB_MODE
                       value: "true"
                     - name: LOG_FORMAT
-                      value: "development"
+                      value: "production"
                     - name: LOG_LEVEL
                       value: "INFO"
                     - name: RATE_LIMIT_DEFAULT
@@ -89,11 +97,11 @@ spec:
                     - name: RATE_LIMIT_EXPENSIVE
                       value: "5/minute;20/hour"
                     - name: RATE_LIMIT_STORAGE
-                      value: "memory://"
+                      value: "redis://redis:6379"
                     - name: REDIS_DB
                       value: "0"
                     - name: REDIS_HOST
-                      value: "localhost"
+                      value: "redis"
                     - name: REDIS_PASSWORD
                       value: ""
                     - name: REDIS_PORT
@@ -136,17 +144,17 @@ spec:
             volumes:
                 - name: app-src
                   hostPath:
-                    path: C:\Dev\DynoAI_3\frontend\src
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\src
                   readOnly: true
                 - name: app-index-html
                   hostPath:
-                    path: C:\Dev\DynoAI_3\frontend\index.html
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\index.html
                   readOnly: true
                 - name: app-vite-config-ts
                   hostPath:
-                    path: C:\Dev\DynoAI_3\frontend\vite.config.ts
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\vite.config.ts
                   readOnly: true
                 - name: app-tailwind-config-js
                   hostPath:
-                    path: C:\Dev\DynoAI_3\frontend\tailwind.config.js
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\tailwind.config.js
                   readOnly: true

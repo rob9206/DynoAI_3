@@ -66,12 +66,20 @@ spec:
                       value: "2"
                     - name: DYNOAI_UPLOAD_DIR
                       value: "/app/uploads"
+                    - name: DYNOWARE_IP
+                      value: "192.168.1.115"
                     - name: FLASK_APP
                       value: "api.app:app"
                     - name: FLASK_ENV
                       value: "development"
                     - name: FRONTEND_PORT
-                      value: "8080"
+                      value: "80"
+                    - name: JETDRIVE_ENABLED
+                      value: "false"
+                    - name: JETDRIVE_MCAST_GROUP
+                      value: "239.255.60.60"
+                    - name: JETDRIVE_PORT
+                      value: "22344"
                     - name: JETSTREAM_API_KEY
                       value: ""
                     - name: JETSTREAM_API_URL
@@ -85,7 +93,7 @@ spec:
                     - name: JETSTREAM_STUB_MODE
                       value: "true"
                     - name: LOG_FORMAT
-                      value: "development"
+                      value: "production"
                     - name: LOG_LEVEL
                       value: "INFO"
                     - name: RATE_LIMIT_DEFAULT
@@ -95,17 +103,17 @@ spec:
                     - name: RATE_LIMIT_EXPENSIVE
                       value: "5/minute;20/hour"
                     - name: RATE_LIMIT_STORAGE
-                      value: "memory://"
+                      value: "redis://redis:6379"
                     - name: REDIS_DB
                       value: "0"
                     - name: REDIS_HOST
-                      value: "localhost"
+                      value: "redis"
                     - name: REDIS_PASSWORD
                       value: ""
                     - name: REDIS_PORT
                       value: "6379"
                     - name: VITE_API_URL
-                      value: ""
+                      value: "http://localhost:5001"
                     - name: XAI_API_KEY
                       value: ""
                     - name: XAI_API_URL
@@ -152,34 +160,34 @@ spec:
             volumes:
                 - name: app-uploads
                   hostPath:
-                    path: C:\Dev\DynoAI_3\uploads
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\uploads
                 - name: app-outputs
                   hostPath:
-                    path: C:\Dev\DynoAI_3\outputs
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\outputs
                 - name: app-runs
                   hostPath:
-                    path: C:\Dev\DynoAI_3\runs
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\runs
                 - name: app-tables
                   hostPath:
-                    path: C:\Dev\DynoAI_3\tools\tables
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\tables
                   readOnly: true
                 - name: app-api
                   hostPath:
-                    path: C:\Dev\DynoAI_3\api
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\api
                   readOnly: true
                 - name: app-dynoai
                   hostPath:
-                    path: C:\Dev\DynoAI_3\dynoai
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\dynoai
                   readOnly: true
                 - name: app-ai-tuner-toolkit-dyno-v1-2-py
                   hostPath:
-                    path: C:\Dev\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\ai_tuner_toolkit_dyno_v1_2.py
                   readOnly: true
                 - name: app-templates
                   hostPath:
-                    path: C:\Dev\DynoAI_3\tools\templates
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\tools\templates
                   readOnly: true
                 - name: app-scripts
                   hostPath:
-                    path: C:\Dev\DynoAI_3\scripts
+                    path: C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\scripts
                   readOnly: true

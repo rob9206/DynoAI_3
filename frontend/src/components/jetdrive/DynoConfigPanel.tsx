@@ -20,8 +20,8 @@ import { Badge } from '../ui/badge';
 
 interface DrumSpec {
     serial_number: string;
-    mass_kg: number;
-    retarder_mass_kg: number;
+    mass_slugs: number;
+    retarder_mass_slugs: number;
     circumference_ft: number;
     num_tabs: number;
     radius_ft: number;
@@ -191,9 +191,9 @@ export function DynoConfigPanel({
                             </div>
                         </div>
                         <div className="flex items-center gap-4 text-xs text-zinc-400">
-                            <span>⌀ {config.drum1.circumference_ft.toFixed(3)} ft</span>
-                            <span>{config.drum1.mass_kg.toFixed(3)} kg</span>
-                            {config.drum1.configured ? (
+                            <span>⌀ {config.drum1?.circumference_ft?.toFixed(3) ?? 'N/A'} ft</span>
+                            <span>{config.drum1?.mass_slugs?.toFixed(3) ?? 'N/A'} slugs</span>
+                            {config.drum1?.configured ? (
                                 <Badge variant="outline" className="text-emerald-400 border-emerald-600">
                                     <CheckCircle2 className="w-3 h-3 mr-1" />
                                     Configured
@@ -308,7 +308,7 @@ export function DynoConfigPanel({
                             <Disc className="w-4 h-4" />
                             <span className="text-xs uppercase tracking-wider">Drum 1</span>
                         </div>
-                        {config.drum1.configured ? (
+                        {config.drum1?.configured ? (
                             <Badge variant="outline" className="text-emerald-400 border-emerald-600">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
                                 Configured
@@ -324,19 +324,19 @@ export function DynoConfigPanel({
                     <div className="grid grid-cols-3 gap-4 pl-6">
                         <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
                             <p className="text-2xl font-bold text-emerald-400">
-                                {config.drum1.mass_kg.toFixed(3)}
+                                {config.drum1?.mass_slugs?.toFixed(3) ?? 'N/A'}
                             </p>
-                            <p className="text-xs text-zinc-500 mt-1">Mass (kg)</p>
+                            <p className="text-xs text-zinc-500 mt-1">Mass (slugs)</p>
                         </div>
                         <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
                             <p className="text-2xl font-bold text-cyan-400">
-                                {config.drum1.circumference_ft.toFixed(3)}
+                                {config.drum1?.circumference_ft?.toFixed(3) ?? 'N/A'}
                             </p>
                             <p className="text-xs text-zinc-500 mt-1">Circumference (ft)</p>
                         </div>
                         <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
                             <p className="text-2xl font-bold text-violet-400">
-                                {config.drum1.radius_ft.toFixed(4)}
+                                {config.drum1?.radius_ft?.toFixed(4) ?? 'N/A'}
                             </p>
                             <p className="text-xs text-zinc-500 mt-1">Radius (ft)</p>
                         </div>
@@ -345,25 +345,25 @@ export function DynoConfigPanel({
                     <div className="grid grid-cols-2 gap-4 pl-6 text-sm">
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Serial Number:</span>
-                            <span className="text-zinc-300 font-mono">{config.drum1.serial_number}</span>
+                            <span className="text-zinc-300 font-mono">{config.drum1?.serial_number ?? 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Pickup Tabs:</span>
-                            <span className="text-zinc-300">{config.drum1.num_tabs}</span>
+                            <span className="text-zinc-300">{config.drum1?.num_tabs ?? 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Retarder Mass:</span>
-                            <span className="text-zinc-300">{config.drum1.retarder_mass_kg} kg</span>
+                            <span className="text-zinc-300">{config.drum1?.retarder_mass_slugs ?? 0} slugs</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Inertia:</span>
-                            <span className="text-zinc-300">{config.drum1.inertia_lbft2.toFixed(4)} lb·ft²</span>
+                            <span className="text-zinc-300">{config.drum1?.inertia_lbft2?.toFixed(4) ?? 'N/A'} lb·ft²</span>
                         </div>
                     </div>
                 </motion.div>
 
                 {/* Drum 2 (if configured) */}
-                {config.drum2.configured && (
+                {config.drum2?.configured && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -377,13 +377,13 @@ export function DynoConfigPanel({
                         <div className="grid grid-cols-3 gap-4 pl-6">
                             <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
                                 <p className="text-xl font-bold text-emerald-400">
-                                    {config.drum2.mass_kg.toFixed(3)}
+                                    {config.drum2?.mass_slugs?.toFixed(3) ?? 'N/A'}
                                 </p>
-                                <p className="text-xs text-zinc-500 mt-1">Mass (kg)</p>
+                                <p className="text-xs text-zinc-500 mt-1">Mass (slugs)</p>
                             </div>
                             <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
                                 <p className="text-xl font-bold text-cyan-400">
-                                    {config.drum2.circumference_ft.toFixed(3)}
+                                    {config.drum2?.circumference_ft?.toFixed(3) ?? 'N/A'}
                                 </p>
                                 <p className="text-xs text-zinc-500 mt-1">Circumference (ft)</p>
                             </div>
@@ -409,7 +409,7 @@ export function DynoConfigPanel({
                         </p>
                         <p>Torque = Force × Radius</p>
                         <p className="text-xs text-zinc-500 pl-4">
-                            = Force × {config.drum1.radius_ft.toFixed(4)} ft
+                            = Force × {config.drum1?.radius_ft?.toFixed(4) ?? 'N/A'} ft
                         </p>
                     </div>
                 </motion.div>
