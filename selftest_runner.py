@@ -1,7 +1,8 @@
-﻿"""
+"""
 This script executes the main self-test routine from selftest.py.
 It serves as a stable entry point for running the project's validation.
 """
+
 import sys
 from pathlib import Path
 

@@ -64,10 +64,7 @@ class RunManager:
         """
         requested_id = run_id or make_run_id(prefix="run_")
         safe_name = (
-            requested_id.replace("/", "_")
-            .replace("\\", "_")
-            .replace("..", "_")
-            .strip()
+            requested_id.replace("/", "_").replace("\\", "_").replace("..", "_").strip()
         )
         if not safe_name:
             safe_name = make_run_id(prefix="run_")
@@ -234,7 +231,7 @@ class RunManager:
         filtered.sort(key=lambda r: r.get("created_at", ""), reverse=True)
 
         total = len(filtered)
-        runs = filtered[offset : offset + limit]
+        runs = filtered[offset: offset + limit]
 
         return {"runs": runs, "total": total}
 

@@ -42,16 +42,22 @@ class StorageConfig:
     """File storage configuration."""
 
     upload_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "data/uploads"))
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_UPLOAD_DIR", "data/uploads")
+        )
     )
     output_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_OUTPUT_DIR", "data/outputs"))
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_OUTPUT_DIR", "data/outputs")
+        )
     )
     runs_folder: Path = field(
         default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "data/runs"))
     )
     public_export_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_PUBLIC_EXPORT_DIR", "data/public_export"))
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_PUBLIC_EXPORT_DIR", "data/public_export")
+        )
     )
     max_content_length: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_MAX_UPLOAD_MB", 50) * 1024 * 1024
