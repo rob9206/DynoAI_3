@@ -15,6 +15,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -24,7 +25,7 @@ import {
     Activity, ChevronRight, TrendingUp,
     Wrench, Timer, Power, Settings2,
     AlertTriangle, Crosshair, Cpu, StopCircle, Mic,
-    Award, Info, Flame
+    Award, Info, Flame, FileText
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
@@ -60,6 +61,7 @@ import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { getConfidenceReport } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
+import { ReportGenerator } from '../components/reports/ReportGenerator';
 
 const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
 
@@ -1496,6 +1498,33 @@ export default function JetDriveAutoTunePage() {
                                                 </div>
                                             </CardContent>
                                         </Card>
+
+                                        {/* AutoTune Demo Subsection */}
+                                        <Card className="bg-zinc-900/50 border-zinc-800/50 hover:border-cyan-700/50 transition-colors">
+                                            <CardContent className="py-6">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                                                        <Crosshair className="w-6 h-6 text-cyan-400" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h3 className="text-sm font-semibold text-zinc-200 mb-1">AutoTune Demo</h3>
+                                                        <p className="text-xs text-zinc-500 mb-3">
+                                                            Interactive VE auto-correction with live visualization
+                                                        </p>
+                                                        <Link to="/autotune-demo">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                                                            >
+                                                                <Crosshair className="w-3.5 h-3.5 mr-1.5" />
+                                                                Launch Demo
+                                                            </Button>
+                                                        </Link>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
                                     </div>
                                 </div>
                             </div>
@@ -1734,6 +1763,21 @@ export default function JetDriveAutoTunePage() {
                                                             <Download className="w-3 h-3 mr-1" />
                                                             .PVV
                                                         </Button>
+                                                        {selectedRun && (
+                                                            <ReportGenerator 
+                                                                runId={selectedRun}
+                                                                trigger={
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="border-amber-600 text-amber-400 hover:bg-amber-600/20"
+                                                                    >
+                                                                        <FileText className="w-3 h-3 mr-1" />
+                                                                        PDF Report
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        )}
                                                     </div>
                                                 </div>
                                             </CardHeader>
