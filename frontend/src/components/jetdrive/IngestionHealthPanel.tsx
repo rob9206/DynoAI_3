@@ -161,7 +161,7 @@ const ChannelHealthRow = ({ channel }: { channel: ChannelHealth }) => {
 export function IngestionHealthPanel({
   compact = false,
   showCircuitBreakers = true,
-  pollInterval = 2000,
+  pollInterval = 10000, // 10 seconds - health checks don't need high frequency
   className = '',
 }: IngestionHealthPanelProps) {
   const [channelsExpanded, setChannelsExpanded] = useState(!compact);

@@ -11,7 +11,7 @@ services:
   api:
     # Host network mode required for UDP multicast
     # This allows the container to receive UDP packets on port 22344
-    # from the Dynojet Dynoware RT-150 at 192.168.1.115
+    # from the Dynojet Dynoware RT-150 via multicast 239.255.60.60:22344
     network_mode: "host"
     
     environment:
@@ -19,7 +19,7 @@ services:
       - JETDRIVE_ENABLED=true
       - JETDRIVE_PORT=22344
       - JETDRIVE_MCAST_GROUP=239.255.60.60
-      - DYNOWARE_IP=192.168.1.115
+      - DYNOWARE_IP=239.255.60.60
       
       # When using host network, service binds directly to host ports
       - DYNOAI_HOST=0.0.0.0

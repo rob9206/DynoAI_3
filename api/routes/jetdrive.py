@@ -1293,7 +1293,7 @@ def upload_csv():
 # =============================================================================
 
 # JetDrive defaults
-JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
+JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60")
 JETDRIVE_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 JETDRIVE_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
 
@@ -1561,6 +1561,117 @@ def discover_providers():
         )
 
 
+@jetdrive_bp.route("/hardware/discover/multi", methods=["GET"])
+def discover_providers_multi():
+    """
+    Discover JetDrive providers on multiple multicast addresses.
+    
+    Tests both the old default (224.0.2.10) and new address (239.255.60.60)
+    to help identify which one the hardware is actually using.
+    
+    Query params:
+    - timeout: Discovery timeout per address in seconds (default: 3)
+    """
+    timeout = float(request.args.get("timeout", 3.0))
+    
+    # Test both multicast addresses
+    multicast_groups = [
+        "224.0.2.10",      # Old default
+        "239.255.60.60",   # New Docker config
+    ]
+    
+    results = {}
+    
+    try:
+        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        
+        for mcast_group in multicast_groups:
+            try:
+                config = JetDriveConfig(
+                    multicast_group=mcast_group,
+                    port=JETDRIVE_PORT,
+                    iface=JETDRIVE_IFACE,
+                )
+                
+                # Run async discovery
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    providers = loop.run_until_complete(discover_providers(config, timeout=timeout))
+                finally:
+                    try:
+                        loop.close()
+                    except Exception:
+                        pass
+                
+                # Convert to JSON-serializable format
+                provider_list = []
+                for p in providers:
+                    channels = []
+                    for chan_id, chan in p.channels.items():
+                        channels.append(
+                            {
+                                "id": chan_id,
+                                "name": chan.name,
+                                "unit": chan.unit,
+                            }
+                        )
+                    
+                    provider_list.append(
+                        {
+                            "provider_id": p.provider_id,
+                            "provider_id_hex": f"0x{p.provider_id:04X}",
+                            "name": p.name,
+                            "host": p.host,
+                            "port": p.port,
+                            "channels": channels,
+                            "channel_count": len(channels),
+                        }
+                    )
+                
+                results[mcast_group] = {
+                    "success": True,
+                    "providers_found": len(provider_list),
+                    "providers": provider_list,
+                    "error": None,
+                }
+                
+            except Exception as e:
+                results[mcast_group] = {
+                    "success": False,
+                    "providers_found": 0,
+                    "providers": [],
+                    "error": str(e),
+                }
+                logger.error(f"Discovery error for {mcast_group}: {e}", exc_info=True)
+        
+        # Determine which address found providers
+        best_address = None
+        best_count = 0
+        for mcast_group, result in results.items():
+            if result["success"] and result["providers_found"] > best_count:
+                best_count = result["providers_found"]
+                best_address = mcast_group
+        
+        return jsonify({
+            "success": True,
+            "timeout": timeout,
+            "results": results,
+            "recommendation": {
+                "best_address": best_address,
+                "providers_found": best_count,
+                "message": f"Use multicast address: {best_address}" if best_address else "No providers found on either address. Check Power Core settings and network connection.",
+            },
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "results": results,
+        }), 500
+
+
 # Global state for connection monitoring
 _monitor_state: dict[str, Any] = {
     "running": False,
@@ -1698,93 +1809,168 @@ _live_data_lock = threading.Lock()
 
 
 def _live_capture_loop():
-    """Background thread to capture live channel data."""
+    """Background thread to capture live channel data continuously."""
     global _live_data
 
     from api.services.jetdrive_client import (
         JetDriveConfig,
         JetDriveSample,
         discover_providers,
+        subscribe,
     )
 
     config = JetDriveConfig.from_env()
-
-    while True:
-        with _live_data_lock:
-            if not _live_data["capturing"]:
-                break
-
-        # Create a fresh event loop per iteration (thread-local). Ensure it is
-        # always closed, even if discovery/capture throws.
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-
-            # Discover and capture a quick sample
-            providers = loop.run_until_complete(discover_providers(config, timeout=2.0))
-
-            if providers:
-                provider = providers[0]
-
-                # Quick capture for 1 second
-                samples: list[JetDriveSample] = []
-
-                def on_sample(s: JetDriveSample):
-                    samples.append(s)
-
-                async def capture_brief():
-                    from api.services.jetdrive_client import subscribe
-
-                    # Create after loop is running to avoid RuntimeError: no running event loop
-                    stop_event = asyncio.Event()
-
-                    # Schedule stop
-                    async def stop_after():
-                        await asyncio.sleep(1.0)
-                        stop_event.set()
-
-                    asyncio.create_task(stop_after())
-                    await subscribe(
-                        provider, [], on_sample, config=config, stop_event=stop_event
-                    )
-
-                loop.run_until_complete(capture_brief())
-
-                # Update live data with latest values
-                channel_values = {}
-                for s in samples:
-                    entry = {
-                        "id": s.channel_id,
-                        "name": s.channel_name,
-                        "value": s.value,
-                        "timestamp": s.timestamp_ms,
-                    }
-                    channel_values[s.channel_name] = entry
-                    # Also add a stable chan_<id> alias so the frontend can fall back
-                    # even if the provider's channel_name differs from expected.
-                    chan_key = f"chan_{s.channel_id}"
-                    if s.channel_name != chan_key and chan_key not in channel_values:
-                        channel_values[chan_key] = entry
-
+    
+    # Create a single event loop for the entire capture session
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Discover providers first
+        logger.info("Discovering JetDrive providers...")
+        providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+        
+        if not providers:
+            logger.warning("No JetDrive providers found. Check network connection and multicast settings.")
+            with _live_data_lock:
+                _live_data["channels"] = {}
+                _live_data["last_update"] = datetime.now().isoformat()
+                _live_data["error"] = "No providers found"
+            return
+        
+        provider = providers[0]
+        logger.info(f"Connected to provider: {provider.name} (ID: 0x{provider.provider_id:04X}, Host: {provider.host})")
+        
+        # Channel values dictionary - updated continuously
+        channel_values: dict[str, dict[str, Any]] = {}
+        
+        def on_sample(s: JetDriveSample):
+            """Callback for each received sample - updates channel values immediately."""
+            entry = {
+                "id": s.channel_id,
+                "name": s.channel_name,
+                "value": s.value,
+                "timestamp": s.timestamp_ms,
+                "updated_at": datetime.now().isoformat(),
+            }
+            channel_values[s.channel_name] = entry
+            # Also add a stable chan_<id> alias so the frontend can fall back
+            # even if the provider's channel_name differs from expected.
+            chan_key = f"chan_{s.channel_id}"
+            if s.channel_name != chan_key and chan_key not in channel_values:
+                channel_values[chan_key] = entry
+            
+            # Update live data immediately (with lock for thread safety)
+            with _live_data_lock:
+                _live_data["channels"] = dict(channel_values)  # Copy to avoid race conditions
+                _live_data["last_update"] = datetime.now().isoformat()
+                if "error" in _live_data:
+                    del _live_data["error"]
+        
+        # Create stop event that checks the global capturing flag
+        stop_event = asyncio.Event()
+        
+        async def check_stop_periodically():
+            """Periodically check if we should stop capturing."""
+            while True:
+                await asyncio.sleep(0.5)  # Check every 500ms
                 with _live_data_lock:
-                    _live_data["channels"] = channel_values
-                    _live_data["last_update"] = datetime.now().isoformat()
-
-        except Exception as e:
-            logger.warning("Live capture error: %s", e)
-        finally:
-            # Avoid leaving a closed loop as the thread's current loop.
+                    if not _live_data.get("capturing", False):
+                        stop_event.set()
+                        break
+        
+        # Start the periodic check task
+        check_task = loop.create_task(check_stop_periodically())
+        
+        # Start continuous subscription - this will run until stop_event is set
+        logger.info("Starting continuous data capture...")
+        logger.info(f"Provider channels: {list(provider.channels.keys())}")
+        
+        # Track statistics for diagnostics
+        sample_count = [0]  # Use list to allow modification in nested function
+        last_sample_time = [None]
+        stats_dict = {"total_frames": 0, "dropped_frames": 0, "non_provider_frames": 0}
+        
+        def on_sample_with_stats(s: JetDriveSample):
+            sample_count[0] += 1
+            last_sample_time[0] = datetime.now()
+            if sample_count[0] % 100 == 0:  # Log every 100 samples
+                logger.info(f"Received {sample_count[0]} samples, latest: {s.channel_name}={s.value}")
+            on_sample(s)
+        
+        # Wrap subscribe to capture stats
+        async def subscribe_with_stats():
+            from api.services.jetdrive_client import subscribe
             try:
-                asyncio.set_event_loop(None)
+                stats = await subscribe(
+                    provider,
+                    [],  # Empty list means subscribe to all channels
+                    on_sample_with_stats,
+                    config=config,
+                    stop_event=stop_event,
+                    recv_timeout=2.0,  # 2 second timeout for receiving data
+                    debug=True,  # Enable debug logging
+                    return_stats=True,  # Return statistics
+                )
+                if stats:
+                    stats_dict.update(stats)
+                return stats
+            except Exception as e:
+                logger.error(f"Subscribe error: {e}", exc_info=True)
+                raise
+        
+        try:
+            # Start subscription - this will run until stop_event is set
+            logger.info(f"Subscribing to provider {provider.name} (ID: 0x{provider.provider_id:04X})")
+            logger.info(f"Available channels: {list(provider.channels.keys())}")
+            
+            stats = loop.run_until_complete(subscribe_with_stats())
+            
+            # Log final statistics
+            logger.info(f"Capture ended. Statistics: {stats_dict}")
+            logger.info(f"Total samples received: {sample_count[0]}")
+            
+            if stats_dict.get("total_frames", 0) == 0:
+                logger.warning("No frames received during capture period. Check:")
+                logger.warning("  1. DynoWare RT-150 is powered on and connected")
+                logger.warning("  2. JetDrive is enabled in Power Core")
+                logger.warning("  3. Network connection is active")
+                logger.warning("  4. Firewall allows UDP port 22344")
+                with _live_data_lock:
+                    if not _live_data.get("error"):
+                        _live_data["error"] = "No data frames received. Check dyno connection and JetDrive settings."
+            elif stats_dict.get("non_provider_frames", 0) > 0:
+                logger.warning(f"Received {stats_dict['non_provider_frames']} frames from other providers")
+            
+            if sample_count[0] == 0 and stats_dict.get("total_frames", 0) > 0:
+                logger.warning("Frames received but no valid samples parsed. Provider ID may not match.")
+                with _live_data_lock:
+                    if not _live_data.get("error"):
+                        _live_data["error"] = f"Received frames but no samples. Provider ID: 0x{provider.provider_id:04X}"
+            elif sample_count[0] > 0:
+                logger.info(f"Successfully received {sample_count[0]} samples from provider")
+                
+        except Exception as e:
+            logger.error(f"Error during data capture: {e}", exc_info=True)
+            with _live_data_lock:
+                _live_data["error"] = f"Capture error: {str(e)}"
+        finally:
+            check_task.cancel()
+            try:
+                loop.run_until_complete(check_task)
             except Exception:
                 pass
-
-            # Cancel any leftover tasks before closing to prevent warnings/leaks.
-            try:
-                pending = asyncio.all_tasks(loop)
-            except Exception:
-                pending = set()
-
+            
+    except Exception as e:
+        logger.error(f"Live capture loop error: {e}", exc_info=True)
+        with _live_data_lock:
+            _live_data["channels"] = {}
+            _live_data["last_update"] = datetime.now().isoformat()
+            _live_data["error"] = str(e)
+    finally:
+        # Clean up the event loop
+        try:
+            pending = asyncio.all_tasks(loop)
             if pending:
                 for task in pending:
                     task.cancel()
@@ -1794,13 +1980,20 @@ def _live_capture_loop():
                     )
                 except Exception:
                     pass
-
-            try:
-                loop.close()
-            except Exception:
-                pass
-
-        time.sleep(2.0)  # Update every 2 seconds
+        except Exception:
+            pass
+        
+        try:
+            loop.close()
+        except Exception:
+            pass
+        
+        try:
+            asyncio.set_event_loop(None)
+        except Exception:
+            pass
+        
+        logger.info("Live capture loop ended")
 
 
 @jetdrive_bp.route("/hardware/live/start", methods=["POST"])
@@ -1872,6 +2065,22 @@ def get_live_data():
     with _live_data_lock:
         # Copy so we can safely augment without racing the capture thread
         channels: dict[str, Any] = dict(_live_data.get("channels", {}) or {})
+        capturing = _live_data.get("capturing", False)
+        error = _live_data.get("error")
+        last_update = _live_data.get("last_update")
+
+    # Check if data is stale (older than 10 seconds)
+    is_stale = False
+    if last_update:
+        try:
+            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
+            age_seconds = (datetime.now() - last_update_dt.replace(tzinfo=None)).total_seconds()
+            if age_seconds > 10:
+                is_stale = True
+                if not error:
+                    error = f"Data is stale (last update {age_seconds:.1f}s ago)"
+        except Exception:
+            pass
 
     # If the hardware stream doesn't broadcast Horsepower/Torque, compute them from Force + RPM
     try:
@@ -1894,15 +2103,263 @@ def get_live_data():
     except Exception:
         pass
 
-    return jsonify(
-        {
-            "capturing": True,
-            "simulated": False,
-            "last_update": _live_data.get("last_update"),
-            "channels": channels,
-            "channel_count": len(channels),
-        }
-    )
+    response = {
+        "capturing": capturing,
+        "simulated": False,
+        "last_update": _live_data.get("last_update"),
+        "channels": channels,
+        "channel_count": len(channels),
+        "is_stale": is_stale,
+    }
+    
+    if error:
+        response["error"] = error
+    
+    return jsonify(response)
+
+
+@jetdrive_bp.route("/hardware/live/debug", methods=["GET"])
+def get_live_debug():
+    """Get debug information about live capture status."""
+    global _live_data
+    
+    from api.services.jetdrive_client import JetDriveConfig, discover_providers
+    import asyncio
+    import socket
+    
+    with _live_data_lock:
+        capturing = _live_data.get("capturing", False)
+        channels = dict(_live_data.get("channels", {}) or {})
+        last_update = _live_data.get("last_update")
+        error = _live_data.get("error")
+    
+    # Try to discover providers
+    config = JetDriveConfig.from_env()
+    providers = []
+    discovery_error = None
+    
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+        finally:
+            try:
+                loop.close()
+            except Exception:
+                pass
+    except Exception as e:
+        discovery_error = str(e)
+        logger.error(f"Provider discovery error: {e}", exc_info=True)
+    
+    # Test multicast socket binding
+    socket_test = {"success": False, "error": None}
+    try:
+        test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        test_sock.bind((config.iface, config.port))
+        mreq = socket.inet_aton(config.multicast_group) + socket.inet_aton(config.iface or "0.0.0.0")
+        test_sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        test_sock.close()
+        socket_test = {"success": True, "error": None}
+    except Exception as e:
+        socket_test = {"success": False, "error": str(e)}
+        logger.error(f"Socket test error: {e}", exc_info=True)
+    
+    # Calculate data freshness
+    data_age = None
+    if last_update:
+        try:
+            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
+            data_age = (datetime.now() - last_update_dt.replace(tzinfo=None)).total_seconds()
+        except Exception:
+            pass
+    
+    # Get network interfaces
+    interfaces = []
+    try:
+        import socket as sock_module
+        hostname = sock_module.gethostname()
+        local_ip = sock_module.gethostbyname(hostname)
+        interfaces.append({"name": "default", "ip": local_ip})
+    except Exception:
+        pass
+    
+    return jsonify({
+        "capturing": capturing,
+        "channels_received": len(channels),
+        "last_update": last_update,
+        "data_age_seconds": data_age,
+        "error": error,
+        "provider_count": len(providers),
+        "providers": [
+            {
+                "id": f"0x{p.provider_id:04X}",
+                "name": p.name,
+                "host": p.host,
+                "port": p.port,
+                "channels": len(p.channels),
+            }
+            for p in providers
+        ],
+        "discovery_error": discovery_error,
+        "socket_test": socket_test,
+        "config": {
+            "multicast_group": config.multicast_group,
+            "port": config.port,
+            "iface": config.iface,
+        },
+        "troubleshooting": {
+            "check_multicast_group": f"Verify DynoWare RT-150 is broadcasting to {config.multicast_group}:{config.port}",
+            "check_network": "Ensure both devices are on the same network subnet",
+            "check_firewall": "Windows Firewall must allow UDP port 22344 inbound",
+            "check_jetdrive": "Verify JetDrive is enabled in Power Core software",
+            "check_power": "Ensure DynoWare RT-150 is powered on and connected",
+            "try_interface": f"Try setting JETDRIVE_IFACE to your computer's IP address (not 0.0.0.0)",
+        },
+    })
+
+
+@jetdrive_bp.route("/hardware/live/health", methods=["GET"])
+def get_live_health():
+    """Get comprehensive data health status for ingestion monitoring.
+    
+    Returns health metrics expected by the frontend IngestionHealthPanel.
+    """
+    global _live_data
+    
+    with _live_data_lock:
+        channels = dict(_live_data.get("channels", {}) or {})
+        capturing = _live_data.get("capturing", False)
+        last_update = _live_data.get("last_update")
+    
+    # Calculate health metrics
+    total_channels = len(channels)
+    healthy_channels = 0
+    channel_health: dict[str, Any] = {}
+    
+    now = datetime.now()
+    
+    for name, data in channels.items():
+        # Determine channel health based on freshness
+        if isinstance(data, dict):
+            value = data.get("value")
+            updated_at = data.get("updated_at")
+            
+            # Check staleness (consider stale if older than 5 seconds)
+            age_seconds = 0
+            health = "healthy"
+            if updated_at:
+                try:
+                    if isinstance(updated_at, str):
+                        updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                        age_seconds = (now - updated_dt.replace(tzinfo=None)).total_seconds()
+                    else:
+                        age_seconds = (now - updated_at).total_seconds()
+                    
+                    if age_seconds > 10:
+                        health = "stale"
+                    elif age_seconds > 5:
+                        health = "warning"
+                    else:
+                        health = "healthy"
+                        healthy_channels += 1
+                except Exception:
+                    health = "unknown"
+            else:
+                # No timestamp, assume healthy if capturing
+                if capturing:
+                    health = "healthy"
+                    healthy_channels += 1
+                else:
+                    health = "unknown"
+            
+            channel_health[name] = {
+                "health": health,
+                "value": value,
+                "age_seconds": age_seconds,
+                "rate_hz": data.get("rate_hz", 0),
+            }
+        else:
+            channel_health[name] = {
+                "health": "unknown",
+                "value": data,
+                "age_seconds": 0,
+                "rate_hz": 0,
+            }
+    
+    # Determine overall health
+    if not capturing:
+        overall_health = "unknown"
+        health_reason = "Live capture not active"
+    elif total_channels == 0:
+        overall_health = "unknown"
+        health_reason = "No channels detected"
+    elif healthy_channels == total_channels:
+        overall_health = "healthy"
+        health_reason = "All channels healthy"
+    elif healthy_channels > total_channels * 0.5:
+        overall_health = "warning"
+        health_reason = f"{total_channels - healthy_channels} channels degraded"
+    else:
+        overall_health = "critical"
+        health_reason = f"Most channels unhealthy ({healthy_channels}/{total_channels})"
+    
+    return jsonify({
+        "overall_health": overall_health,
+        "health_reason": health_reason,
+        "healthy_channels": healthy_channels,
+        "total_channels": total_channels,
+        "channels": channel_health,
+        "frame_stats": {
+            "total_frames": _live_data.get("frame_count", 0),
+            "dropped_frames": _live_data.get("dropped_frames", 0),
+            "drop_rate_percent": 0.0,
+        },
+        "timestamp": now.timestamp(),
+    })
+
+
+@jetdrive_bp.route("/hardware/live/health/summary", methods=["GET"])
+def get_live_health_summary():
+    """Get quick channel summary for lightweight polling."""
+    global _live_data
+    
+    with _live_data_lock:
+        channels = dict(_live_data.get("channels", {}) or {})
+    
+    now = datetime.now()
+    summary: list[dict[str, Any]] = []
+    
+    for name, data in channels.items():
+        if isinstance(data, dict):
+            value = data.get("value", 0)
+            updated_at = data.get("updated_at")
+            age_seconds = 0
+            
+            if updated_at:
+                try:
+                    if isinstance(updated_at, str):
+                        updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                        age_seconds = (now - updated_dt.replace(tzinfo=None)).total_seconds()
+                except Exception:
+                    pass
+            
+            health = "healthy" if age_seconds < 5 else ("warning" if age_seconds < 10 else "stale")
+            
+            summary.append({
+                "name": name,
+                "id": hash(name) & 0xFFFF,  # Generate a pseudo-ID from name
+                "health": health,
+                "value": value if isinstance(value, (int, float)) else 0,
+                "age_seconds": age_seconds,
+                "rate_hz": data.get("rate_hz", 0),
+            })
+    
+    return jsonify({
+        "channels": summary,
+        "timestamp": now.timestamp(),
+    })
 
 
 # =============================================================================
@@ -2249,7 +2706,7 @@ def validate_hardware():
             "jetdrive_port": env_cfg.jetdrive_port,
             "drum1": {
                 "serial": env_cfg.drum1_serial,
-                "mass_kg": env_cfg.drum1_mass_kg,
+                "mass_slugs": env_cfg.drum1_mass_slugs,
                 "circumference_ft": env_cfg.drum1_circumference_ft,
                 "tabs": env_cfg.drum1_tabs,
             },

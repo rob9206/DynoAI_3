@@ -32,8 +32,8 @@ DYNO_JETDRIVE_PORT=22344
 # -----------------------------------------------------------------------------
 # From: Device Information > Drum Information tab > Drum 1
 DYNO_DRUM1_SERIAL=1000588
-DYNO_DRUM1_MASS_KG=14.121
-DYNO_DRUM1_RETARDER_MASS_KG=0.0
+DYNO_DRUM1_MASS_SLUGS=14.121
+DYNO_DRUM1_RETARDER_MASS_SLUGS=0.0
 DYNO_DRUM1_CIRCUMFERENCE_FT=4.673
 DYNO_DRUM1_TABS=1
 
@@ -43,8 +43,8 @@ DYNO_DRUM1_TABS=1
 # From: Device Information > Drum Information tab > Drum 2
 # Leave at defaults if not equipped (values will be 0)
 DYNO_DRUM2_SERIAL=
-DYNO_DRUM2_MASS_KG=0.0
-DYNO_DRUM2_RETARDER_MASS_KG=0.0
+DYNO_DRUM2_MASS_SLUGS=0.0
+DYNO_DRUM2_RETARDER_MASS_SLUGS=0.0
 DYNO_DRUM2_CIRCUMFERENCE_FT=0.0
 DYNO_DRUM2_TABS=0
 

@@ -1,0 +1,11 @@
+{
+  "idea_id": "baseline",
+  "duration_sec": 1.083,
+  "metrics": {
+    "status": "success",
+    "apply_allowed": false,
+    "bins_total": 55,
+    "bins_covered": 35,
+    "rows_read": 12000
+  }
+}
