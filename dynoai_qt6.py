@@ -28,6 +28,7 @@ from PyQt6.QtGui import QAction, QIcon, QFont
 
 # Import our backend services
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+from dynoai.core.weighted_binning import LogarithmicWeighting
 
 
 class DynoAIMainWindow(QMainWindow):
@@ -35,7 +36,20 @@ class DynoAIMainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.workflow = AutoTuneWorkflow()
+        # Initialize workflow with TuneLab-style features enabled
+        self.workflow = AutoTuneWorkflow(
+            # TuneLab-style signal filtering
+            enable_filtering=True,
+            lowpass_rc_ms=500.0,        # RC smoothing constant
+            afr_min=10.0,               # Reject below this
+            afr_max=19.0,               # Reject above this
+            exclude_time_ms=50.0,       # Exclude ±50ms around outliers
+            enable_statistical_filter=True,  # 2σ outlier rejection
+            sigma_threshold=2.0,
+            # TuneLab-style distance-weighted binning
+            use_weighted_binning=True,
+            weighting_strategy=LogarithmicWeighting(),
+        )
         self.settings = QSettings("DynoAI", "DynoAI Desktop")
         
         self.setWindowTitle("DynoAI - Professional Dyno Tuning Analysis")

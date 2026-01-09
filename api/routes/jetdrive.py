@@ -34,6 +34,7 @@ from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
 from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+from dynoai.core.weighted_binning import LogarithmicWeighting
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +43,119 @@ jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
 # Singleton workflow instance for unified analysis
 _workflow: AutoTuneWorkflow | None = None
 
+# TuneLab-style analysis configuration
+# Can be overridden via environment variables or API
+TUNELAB_CONFIG = {
+    # Signal filtering (TuneLab-style)
+    "enable_filtering": os.environ.get("DYNOAI_ENABLE_FILTERING", "true").lower() == "true",
+    "lowpass_rc_ms": float(os.environ.get("DYNOAI_LOWPASS_RC_MS", "500.0")),
+    "afr_min": float(os.environ.get("DYNOAI_AFR_MIN", "10.0")),
+    "afr_max": float(os.environ.get("DYNOAI_AFR_MAX", "19.0")),
+    "exclude_time_ms": float(os.environ.get("DYNOAI_EXCLUDE_TIME_MS", "50.0")),
+    "enable_statistical_filter": os.environ.get("DYNOAI_ENABLE_STATISTICAL_FILTER", "true").lower() == "true",
+    "sigma_threshold": float(os.environ.get("DYNOAI_SIGMA_THRESHOLD", "2.0")),
+    # Distance-weighted binning (TuneLab-style)
+    "use_weighted_binning": os.environ.get("DYNOAI_USE_WEIGHTED_BINNING", "true").lower() == "true",
+}
+
 
 def get_workflow() -> AutoTuneWorkflow:
-    """Get or create the unified workflow instance."""
+    """Get or create the unified workflow instance with TuneLab features."""
     global _workflow
     if _workflow is None:
-        _workflow = AutoTuneWorkflow()
+        _workflow = AutoTuneWorkflow(
+            # TuneLab-style filtering
+            enable_filtering=TUNELAB_CONFIG["enable_filtering"],
+            lowpass_rc_ms=TUNELAB_CONFIG["lowpass_rc_ms"],
+            afr_min=TUNELAB_CONFIG["afr_min"],
+            afr_max=TUNELAB_CONFIG["afr_max"],
+            exclude_time_ms=TUNELAB_CONFIG["exclude_time_ms"],
+            enable_statistical_filter=TUNELAB_CONFIG["enable_statistical_filter"],
+            sigma_threshold=TUNELAB_CONFIG["sigma_threshold"],
+            # TuneLab-style weighted binning
+            use_weighted_binning=TUNELAB_CONFIG["use_weighted_binning"],
+            weighting_strategy=LogarithmicWeighting(),
+        )
+        logger.info(
+            f"AutoTuneWorkflow initialized with TuneLab features: "
+            f"filtering={TUNELAB_CONFIG['enable_filtering']}, "
+            f"weighted_binning={TUNELAB_CONFIG['use_weighted_binning']}"
+        )
     return _workflow
+
+
+def reset_workflow() -> None:
+    """Reset the workflow instance (e.g., after config change)."""
+    global _workflow
+    _workflow = None
+
+
+# =============================================================================
+# TuneLab Configuration Endpoint
+# =============================================================================
+
+
+@jetdrive_bp.route("/tunelab/config", methods=["GET"])
+def get_tunelab_config():
+    """
+    Get current TuneLab-style analysis configuration.
+    
+    Returns:
+        JSON with current filtering and binning settings
+    """
+    return jsonify({
+        "success": True,
+        "config": TUNELAB_CONFIG,
+        "description": {
+            "enable_filtering": "Enable TuneLab-style AFR signal filtering",
+            "lowpass_rc_ms": "RC time constant for lowpass filter (higher = more smoothing)",
+            "afr_min": "Minimum valid AFR (below = rejected)",
+            "afr_max": "Maximum valid AFR (above = rejected)",
+            "exclude_time_ms": "Time to exclude around outliers (±ms)",
+            "enable_statistical_filter": "Enable 2σ statistical outlier rejection",
+            "sigma_threshold": "Standard deviations for outlier rejection",
+            "use_weighted_binning": "Use TuneLab-style distance-weighted cell accumulation",
+        },
+    })
+
+
+@jetdrive_bp.route("/tunelab/config", methods=["POST"])
+def set_tunelab_config():
+    """
+    Update TuneLab-style analysis configuration.
+    
+    Request body (JSON):
+        Any subset of TUNELAB_CONFIG keys with new values
+        
+    Example:
+        {"enable_filtering": true, "lowpass_rc_ms": 300.0}
+    """
+    try:
+        data = request.get_json() or {}
+        
+        # Update configuration
+        for key in TUNELAB_CONFIG:
+            if key in data:
+                value = data[key]
+                # Type conversion
+                if key in ["enable_filtering", "enable_statistical_filter", "use_weighted_binning"]:
+                    TUNELAB_CONFIG[key] = bool(value)
+                else:
+                    TUNELAB_CONFIG[key] = float(value)
+        
+        # Reset workflow to apply new config
+        reset_workflow()
+        
+        logger.info(f"TuneLab config updated: {TUNELAB_CONFIG}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Configuration updated. Workflow will use new settings.",
+            "config": TUNELAB_CONFIG,
+        })
+    except Exception as e:
+        logger.error(f"Failed to update TuneLab config: {e}")
+        return jsonify({"success": False, "error": str(e)}), 400
 
 
 def get_project_root() -> Path:
@@ -1729,8 +1836,8 @@ def stop_live_capture():
 def get_live_data():
     """Get current live channel data.
 
-    Note: Higher rate limit (600/minute) to support real-time polling
-    at 250ms intervals for live dyno data visualization.
+    This endpoint is exempt from rate limiting to support real-time polling
+    at 100-250ms intervals for live dyno data visualization.
     """
     global _live_data
 

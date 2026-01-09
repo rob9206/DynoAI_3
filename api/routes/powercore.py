@@ -33,6 +33,7 @@ from api.services.powercore_integration import (
     powervision_log_to_dynoai_format,
 )
 from api.services.wp8_parser import find_wp8_files, list_wp8_channels, parse_wp8_file
+from dynoai.core.weighted_binning import LogarithmicWeighting
 
 powercore_bp = Blueprint("powercore", __name__, url_prefix="/api/powercore")
 
@@ -53,10 +54,22 @@ _workflow: AutoTuneWorkflow | None = None
 
 
 def get_workflow() -> AutoTuneWorkflow:
-    """Get or create the workflow instance."""
+    """Get or create the workflow instance with TuneLab features."""
     global _workflow
     if _workflow is None:
-        _workflow = AutoTuneWorkflow()
+        _workflow = AutoTuneWorkflow(
+            # TuneLab-style signal filtering
+            enable_filtering=True,
+            lowpass_rc_ms=500.0,
+            afr_min=10.0,
+            afr_max=19.0,
+            exclude_time_ms=50.0,
+            enable_statistical_filter=True,
+            sigma_threshold=2.0,
+            # TuneLab-style distance-weighted binning
+            use_weighted_binning=True,
+            weighting_strategy=LogarithmicWeighting(),
+        )
     return _workflow
 
 
