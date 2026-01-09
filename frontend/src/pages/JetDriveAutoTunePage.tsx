@@ -656,7 +656,7 @@ export default function JetDriveAutoTunePage() {
         stopCapture,
     } = useJetDriveLive({
         apiUrl: API_BASE,
-        pollInterval: 100,  // 100ms (10Hz) - responsive but rate-limit friendly
+        pollInterval: 250,  // 250ms (4Hz) - responsive and rate-limit friendly
     });
 
     // Extract channel values - memoized to avoid recalculation

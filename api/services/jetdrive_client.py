@@ -12,7 +12,8 @@ from enum import IntEnum
 from typing import Callable
 
 # KLHDV transport defaults (overridable via env vars)
-DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60")
+# 224.0.2.10 = Official Dynojet/JetDrive vendor multicast address
+DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
 DEFAULT_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 # Default to all interfaces (0.0.0.0) to receive from external devices like Dynoware RT.
 # Set JETDRIVE_IFACE to a specific IP (e.g., 169.254.x.x) if you need to bind to a particular interface.
@@ -173,9 +174,18 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
             sock.setsockopt(socket.SOL_SOCKET, reuseport, 1)
 
     iface_ip = _resolve_iface_address(cfg.iface)
+    # #region agent log
+    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:176','message':'Socket bind attempt','data':{'iface_ip':iface_ip,'port':cfg.port,'multicast_group':cfg.multicast_group},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H1'})+'\n')
+    # #endregion
     try:
         sock.bind((iface_ip, cfg.port))
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:181','message':'Socket bind SUCCESS','data':{'iface_ip':iface_ip,'port':cfg.port},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H1'})+'\n')
+        # #endregion
     except OSError as exc:
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:185','message':'Socket bind FAILED','data':{'iface_ip':iface_ip,'port':cfg.port,'error':str(exc)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H1'})+'\n')
+        # #endregion
         sock.close()
         raise RuntimeError(
             f"Failed to bind JetDrive socket on {iface_ip}:{cfg.port}: {exc}"
@@ -187,7 +197,13 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     )
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:199','message':'Multicast join SUCCESS','data':{'multicast_group':cfg.multicast_group,'iface_ip':iface_ip},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H1,H2'})+'\n')
+        # #endregion
     except OSError as exc:
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:203','message':'Multicast join FAILED','data':{'multicast_group':cfg.multicast_group,'iface_ip':iface_ip,'error':str(exc)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H1,H2'})+'\n')
+        # #endregion
         sock.close()
         raise RuntimeError(
             f"Failed to join multicast group {cfg.multicast_group} on {iface_ip}: {exc}"
@@ -316,15 +332,22 @@ async def discover_providers(
     Join multicast, broadcast RequestChannelInfo, and collect ChannelInfo replies.
     """
     cfg = config or JetDriveConfig.from_env()
+    # #region agent log
+    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:319','message':'Discovery started','data':{'multicast_group':cfg.multicast_group,'port':cfg.port,'iface':cfg.iface,'timeout':timeout},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+    # #endregion
     loop = asyncio.get_running_loop()
     sock = _make_socket(cfg)
     seq = random.randint(1, 0xFF)
     host_id = random.randint(1, 0xFFFE)
 
     await send_request_channel_info(sock, cfg, host_id=host_id, seq=seq, dest=ALL_HOSTS)
+    # #region agent log
+    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:329','message':'Discovery request sent','data':{'host_id':host_id,'seq':seq,'dest':ALL_HOSTS},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+    # #endregion
 
     providers: dict[int, JetDriveProviderInfo] = {}
     deadline = loop.time() + timeout
+    frame_count = 0
 
     try:
         while True:
@@ -335,10 +358,17 @@ async def discover_providers(
                 data, addr = await asyncio.wait_for(
                     loop.sock_recvfrom(sock, 4096), remaining
                 )
+                frame_count += 1
+                # #region agent log
+                import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:345','message':'Discovery frame received','data':{'frame_count':frame_count,'addr':addr,'data_len':len(data)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3,H5'})+'\n')
+                # #endregion
             except asyncio.TimeoutError:
                 break
             decoded = _Wire.decode(data)
             if not decoded:
+                # #region agent log
+                import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:353','message':'Frame decode FAILED','data':{'data_hex':data.hex()[:100]},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H5'})+'\n')
+                # #endregion
                 continue
             key, _, host, _, _, value = decoded
             if key == KEY_CHANNEL_INFO:
@@ -348,9 +378,15 @@ async def discover_providers(
                     continue
                 if info:
                     providers[host] = info
+                    # #region agent log
+                    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:366','message':'Provider discovered','data':{'provider_id':host,'name':info.name,'host_ip':info.host,'channel_count':len(info.channels)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+                    # #endregion
             # Ping/Pong and other keys are ignored for now
     finally:
         sock.close()
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:374','message':'Discovery completed','data':{'provider_count':len(providers),'total_frames':frame_count},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+        # #endregion
     return list(providers.values())
 
 
@@ -391,6 +427,9 @@ async def subscribe(
     total_frames = 0
 
     try:
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:396','message':'Subscribe loop started','data':{'provider_id':provider.provider_id,'recv_timeout':recv_timeout},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H4'})+'\n')
+        # #endregion
         while True:
             if stop_event is not None and stop_event.is_set():
                 break
@@ -402,13 +441,25 @@ async def subscribe(
                 continue
 
             total_frames += 1  # Count all received frames
+            # #region agent log
+            if total_frames <= 5:
+                import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:411','message':'Subscribe frame received','data':{'total_frames':total_frames,'data_len':len(data)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H4,H5'})+'\n')
+            # #endregion
             decoded = _Wire.decode(data)
             if not decoded:
                 dropped_frames += 1
+                # #region agent log
+                if dropped_frames <= 3:
+                    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:418','message':'Subscribe frame decode FAILED','data':{'dropped_frames':dropped_frames,'data_hex':data.hex()[:100]},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H5'})+'\n')
+                # #endregion
                 continue
             key, _, host, _, _, value = decoded
             if key != KEY_CHANNEL_VALUES or host != provider.provider_id:
                 non_provider_frames += 1
+                # #region agent log
+                if non_provider_frames <= 3:
+                    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive_client.py:427','message':'Frame filtered (wrong key or provider)','data':{'non_provider_frames':non_provider_frames,'key':key,'host':host,'expected_provider_id':provider.provider_id,'is_channel_values':key==KEY_CHANNEL_VALUES},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H4'})+'\n')
+                # #endregion
                 continue
             try:
                 samples = _parse_channel_values(

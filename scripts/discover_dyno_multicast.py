@@ -21,13 +21,21 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Multicast addresses to test
+# Multicast addresses to test (ordered by likelihood)
 MULTICAST_ADDRESSES = [
+<<<<<<< Current (Your changes)
     "224.0.2.10",  # Official JetDrive address from vendor
     "239.255.60.60",  # Docker config address
     "224.0.0.1",  # All hosts on subnet
     "239.192.0.1",  # Admin scoped
     "239.255.255.250",  # SSDP
+=======
+    "224.0.2.10",      # Official JetDrive address from Dynojet vendor (PRIMARY)
+    "239.255.60.60",   # Alternative address
+    "224.0.0.1",       # All hosts on subnet
+    "239.192.0.1",     # Admin scoped
+    "239.255.255.250", # SSDP
+>>>>>>> Incoming (Background Agent changes)
 ]
 
 PORT = 22344

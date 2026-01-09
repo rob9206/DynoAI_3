@@ -1324,7 +1324,8 @@ def upload_csv():
 # =============================================================================
 
 # JetDrive defaults
-JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60")
+# 224.0.2.10 = Official Dynojet/JetDrive vendor multicast address
+JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
 JETDRIVE_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 JETDRIVE_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
 
@@ -1607,8 +1608,8 @@ def discover_providers_multi():
 
     # Test both multicast addresses
     multicast_groups = [
-        "224.0.2.10",  # Old default
-        "239.255.60.60",  # New Docker config
+        "224.0.2.10",      # Official Dynojet/JetDrive vendor address (PRIMARY)
+        "239.255.60.60",   # Alternative address
     ]
 
     results = {}
@@ -1864,6 +1865,9 @@ def _live_capture_loop():
     )
 
     config = JetDriveConfig.from_env()
+    # #region agent log
+    import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive.py:1867','message':'Live capture loop config','data':{'multicast_group':config.multicast_group,'port':config.port,'iface':config.iface},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H2,H3'})+'\n')
+    # #endregion
 
     # Create a single event loop for the entire capture session
     loop = asyncio.new_event_loop()
@@ -1873,11 +1877,17 @@ def _live_capture_loop():
         # Discover providers first
         logger.info("Discovering JetDrive providers...")
         providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive.py:1879','message':'Discovery completed','data':{'provider_count':len(providers),'provider_ids':[hex(p.provider_id) for p in providers] if providers else []},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+        # #endregion
 
         if not providers:
             logger.warning(
                 "No JetDrive providers found. Check network connection and multicast settings."
             )
+            # #region agent log
+            import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive.py:1886','message':'No providers found - capture aborted','data':{},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+            # #endregion
             with _live_data_lock:
                 _live_data["channels"] = {}
                 _live_data["last_update"] = datetime.now().isoformat()
@@ -1888,6 +1898,9 @@ def _live_capture_loop():
         logger.info(
             f"Connected to provider: {provider.name} (ID: 0x{provider.provider_id:04X}, Host: {provider.host})"
         )
+        # #region agent log
+        import json;import os;_dbg_log=os.environ.get('DEBUG_LOG_PATH','/tmp/jetdrive_debug.log');open(_dbg_log,'a').write(json.dumps({'location':'jetdrive.py:1898','message':'Using provider for capture','data':{'provider_id':hex(provider.provider_id),'provider_name':provider.name,'channel_count':len(provider.channels)},'timestamp':int(__import__('time').time()*1000),'sessionId':'debug-session','hypothesisId':'H3'})+'\n')
+        # #endregion
 
         # Channel values dictionary - updated continuously
         channel_values: dict[str, dict[str, Any]] = {}
@@ -2096,6 +2109,9 @@ def get_live_data():
 
     This endpoint is exempt from rate limiting to support real-time polling
     at 100-250ms intervals for live dyno data visualization.
+    
+    Note: Rate limit exemption is handled by conditional limiter in app.py.
+    The default rate limit (1200/minute) is sufficient for multiple pollers.
     """
     global _live_data
 

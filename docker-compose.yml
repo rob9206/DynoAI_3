@@ -42,8 +42,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks:
-      - dynoai-network
+    # networks:
+    #   - dynoai-network
+    # Note: Commented out to allow jetdrive.yml override with network_mode: host
+    # Services will use default network when not using jetdrive mode
 
   # ==========================================================================
   # Frontend Web Service
