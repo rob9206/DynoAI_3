@@ -100,6 +100,7 @@ config = get_config()
 
 # Only register root route if not in standalone mode (standalone serves React frontend at /)
 if not os.environ.get("DYNOAI_STANDALONE"):
+
     @app.route("/", methods=["GET"])
     def root():
         """
@@ -294,11 +295,11 @@ def run_dyno_analysis(
         dict: Manifest data from analysis
     """
     # Check if running in standalone/PyInstaller mode
-    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, '_MEIPASS')
-    
+    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, "_MEIPASS")
+
     if is_standalone:
         # In standalone mode, use bundled resources
-        if hasattr(sys, '_MEIPASS'):
+        if hasattr(sys, "_MEIPASS"):
             project_root = Path(sys._MEIPASS)
         else:
             project_root = Path(__file__).parent.parent
@@ -309,7 +310,7 @@ def run_dyno_analysis(
         project_root = Path(__file__).parent.parent
         os.chdir(project_root)
         script_path = project_root / "ai_tuner_toolkit_dyno_v1_2.py"
-        
+
         # Find Python executable
         venv_python = project_root / ".venv/Scripts/python.exe"
         if not venv_python.exists():
@@ -317,7 +318,7 @@ def run_dyno_analysis(
         if not venv_python.exists():
             venv_python = Path("python")  # Fallback to system Python
         python_exe = str(venv_python)
-    
+
     # Verify script exists
     if not script_path.exists():
         raise Exception(f"Autotune script not found at {script_path}")
@@ -875,7 +876,9 @@ def get_confidence_report(run_id):
 
 
 @app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
-@app.route("/api/session-replay/<run_id>", methods=["GET"])  # Backwards-compatible alias
+@app.route(
+    "/api/session-replay/<run_id>", methods=["GET"]
+)  # Backwards-compatible alias
 @rate_limit("120/minute")  # Read-only - permissive
 def get_session_replay(run_id):
     """

@@ -54,12 +54,12 @@ def get_workflow() -> AutoTuneWorkflow:
 def get_project_root() -> Path:
     """Get project root directory."""
     # 0) Standalone mode - use user data directory
-    if os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, '_MEIPASS'):
+    if os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, "_MEIPASS"):
         # In standalone mode, use user's home directory for data
         data_dir = Path.home() / "DynoAI"
         data_dir.mkdir(parents=True, exist_ok=True)
         return data_dir
-    
+
     # 1) Explicit env override (useful for tests and deployments)
     env_root = os.getenv("DYNOAI_PROJECT_ROOT") or os.getenv("DYNOAI_ROOT")
     if env_root:
@@ -439,7 +439,7 @@ def analyze_run():
     except Exception as e:
         logger.error(f"Error parsing JSON request: {e}", exc_info=True)
         return jsonify({"error": f"Failed to parse request JSON: {str(e)}"}), 400
-    
+
     if not data or "run_id" not in data:
         return jsonify({"error": "Missing 'run_id' in request body"}), 400
 
@@ -469,13 +469,17 @@ def analyze_run():
 
         if not script_path.exists():
             logger.error(f"Autotune script not found at: {script_path}")
-            return jsonify({"error": f"Autotune script not found at: {script_path}"}), 500
+            return (
+                jsonify({"error": f"Autotune script not found at: {script_path}"}),
+                500,
+            )
 
         # Build command
         cmd = [sys.executable, str(script_path), "--run-id", run_id]
     except Exception as e:
         logger.error(f"Error in analyze_run setup: {e}", exc_info=True)
         import traceback
+
         error_detail = str(e)
         if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
             error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
@@ -513,14 +517,25 @@ def analyze_run():
             logger.info(f"Simulator state: {sim_state.value}")
 
             pull_data = sim.get_pull_data()
-            logger.info(f"Pull data retrieved: {len(pull_data) if pull_data else 0} points")
+            logger.info(
+                f"Pull data retrieved: {len(pull_data) if pull_data else 0} points"
+            )
         except Exception as e:
             logger.error(f"Error getting simulator pull data: {e}", exc_info=True)
             import traceback
+
             error_detail = str(e)
             if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
                 error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
-            return jsonify({"success": False, "error": f"Failed to get simulator pull data: {error_detail}"}), 500
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Failed to get simulator pull data: {error_detail}",
+                    }
+                ),
+                500,
+            )
 
         if not pull_data:
             logger.warning("No pull data available from simulator")
@@ -743,6 +758,7 @@ def analyze_run():
         logger.error(f"Error in analyze_run endpoint: {e}", exc_info=True)
         # Return detailed error in development, generic in production
         import traceback
+
         error_detail = str(e)
         if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
             error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
@@ -1812,7 +1828,9 @@ _innovate_port: str | None = None
 _innovate_device_type: str | None = None
 _innovate_last_error: str | None = None
 _innovate_last_samples: dict[int, Any] = {}
-_innovate_last_sample_at: float | None = None  # wall clock (time.time()) of last sample received
+_innovate_last_sample_at: float | None = (
+    None  # wall clock (time.time()) of last sample received
+)
 
 
 def _innovate_parse_device_type(device_type: Any) -> str:
@@ -1870,7 +1888,10 @@ def innovate_connect():
     body = request.get_json(silent=True) or {}
     port = body.get("port")
     if not isinstance(port, str) or not port.strip():
-        return jsonify({"success": False, "connected": False, "error": "Missing 'port'"}), 400
+        return (
+            jsonify({"success": False, "connected": False, "error": "Missing 'port'"}),
+            400,
+        )
     port = port.strip()
 
     dev_type_norm = _innovate_parse_device_type(body.get("device_type"))
@@ -2047,7 +2068,9 @@ def _load_rt150_config() -> dict[str, Any]:
         with cfg_path.open("r", encoding="utf-8") as fh:
             return json.load(fh)
     except Exception as exc:
-        raise RuntimeError(f"Failed to load RT-150 config at {cfg_path}: {exc}") from exc
+        raise RuntimeError(
+            f"Failed to load RT-150 config at {cfg_path}: {exc}"
+        ) from exc
 
 
 @jetdrive_bp.route("/hardware/validate", methods=["GET"])
@@ -2079,10 +2102,12 @@ def validate_hardware():
     ref_port = (rt150.get("network") or {}).get("jetdrive_port")
 
     if ref_ip and env_cfg.ip_address and str(ref_ip) != str(env_cfg.ip_address):
-        warnings.append(
-            f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}"
-        )
-    if ref_port and env_cfg.jetdrive_port and int(ref_port) != int(env_cfg.jetdrive_port):
+        warnings.append(f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}")
+    if (
+        ref_port
+        and env_cfg.jetdrive_port
+        and int(ref_port) != int(env_cfg.jetdrive_port)
+    ):
         warnings.append(
             f"Port mismatch: reference {ref_port} vs env {env_cfg.jetdrive_port}"
         )
@@ -2189,7 +2214,12 @@ def hardware_heartbeat():
             {
                 "ok": True,
                 "providers": [
-                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    {
+                        "id": p.provider_id,
+                        "host": p.host,
+                        "name": p.name,
+                        "port": p.port,
+                    }
                     for p in providers
                 ],
                 "count": len(providers),
@@ -2226,7 +2256,12 @@ def connect_hardware():
                 "success": True,
                 "connected": len(providers) > 0,
                 "providers": [
-                    {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
+                    {
+                        "id": p.provider_id,
+                        "host": p.host,
+                        "name": p.name,
+                        "port": p.port,
+                    }
                     for p in providers
                 ],
                 "count": len(providers),
