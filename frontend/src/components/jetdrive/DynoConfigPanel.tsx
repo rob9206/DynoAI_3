@@ -140,7 +140,7 @@ export function DynoConfigPanel({
             } catch {
                 // ignore transient poll errors
             }
-        }, 1000);
+        }, 2000);  // Poll every 2 seconds to avoid rate limits
         return () => {
             cancelled = true;
             clearInterval(interval);

@@ -249,6 +249,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Power Core integration: {e}")
 
+# Register Reports blueprint (PDF generation)
+try:
+    from api.routes.reports import reports_bp
+
+    app.register_blueprint(reports_bp)
+    print("[+] Report generation registered at /api/reports")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Report generation: {e}")
+
 # Store active analysis jobs
 active_jobs = {}
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { toast } from '@/lib/toast';
-import { Loader2, CheckCircle, Play, Activity, FileText, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle, Play, Activity, FileText, Clock, AlertCircle, Sparkles, Box } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
 import { uploadAndAnalyze, pollJobStatus, handleApiError, AnalysisParams, healthCheck } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -148,6 +148,32 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* VE Demo Banner */}
+      <Link to="/autotune-demo" className="block group">
+        <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent hover:border-amber-500/50 hover:from-amber-500/15 transition-all duration-300 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Box className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  Interactive VE Table Demo
+                  <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">NEW</span>
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  See how DynoAI smooths VE tables in real-time with 3D visualization
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" className="border-amber-500/50 text-amber-500 hover:bg-amber-500/10 group-hover:border-amber-400 group-hover:text-amber-400">
+              View Demo
+              <Play className="ml-2 h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* LEFT COLUMN: Upload & Action */}

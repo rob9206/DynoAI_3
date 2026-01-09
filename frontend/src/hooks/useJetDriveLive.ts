@@ -202,8 +202,8 @@ export function getChannelConfig(name: string): typeof JETDRIVE_CHANNEL_CONFIG[s
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
-    pollInterval: 100,  // 100ms = 10 updates/sec for responsive gauges while respecting rate limits
-    historyPublishIntervalMs: 200, // publish chart history at ~5Hz to reduce render/memory pressure
+    pollInterval: 250,  // 250ms = 4 updates/sec for responsive gauges while avoiding rate limits
+    historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
 };

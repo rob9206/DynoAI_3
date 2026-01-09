@@ -30,6 +30,9 @@ interface SessionReplayViewerProps {
 }
 
 export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c4f84577-4e75-4160-830d-a50a3d6aea34',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionReplayViewer.tsx:render',message:'Component render',data:{runId,runIdType:typeof runId,runIdEmpty:runId===''},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
     const [actionFilter, setActionFilter] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [showStats, setShowStats] = useState(true);
@@ -44,6 +47,9 @@ export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
         queryFn: () => getSessionReplay(runId),
         retry: 1,
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c4f84577-4e75-4160-830d-a50a3d6aea34',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionReplayViewer.tsx:queryState',message:'Query state',data:{isLoading,hasError:!!error,errorMsg:error instanceof Error?error.message:String(error),hasReplayData:!!replayData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
 
     // Calculate statistics
     const stats = useMemo(() => {
@@ -99,10 +105,17 @@ export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
         return filtered;
     }, [replayData, actionFilter, searchQuery]);
 
-    // Get unique action types for filter
+    // Get unique action types for filter (filter out empty strings to avoid SelectItem errors)
     const actionTypes = useMemo(() => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c4f84577-4e75-4160-830d-a50a3d6aea34',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionReplayViewer.tsx:actionTypes',message:'Computing actionTypes',data:{hasReplayData:!!replayData,decisionsType:replayData?typeof replayData.decisions:'n/a',decisionsIsArray:replayData?Array.isArray(replayData.decisions):'n/a',decisionsLength:replayData?.decisions?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         if (!replayData) return [];
-        const types = new Set(replayData.decisions.map((d) => d.action));
+        if (!replayData.decisions || !Array.isArray(replayData.decisions)) return [];
+        const types = new Set(replayData.decisions.map((d) => d.action).filter(Boolean));
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c4f84577-4e75-4160-830d-a50a3d6aea34',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionReplayViewer.tsx:actionTypes:result',message:'Computed actionTypes',data:{actionTypes:Array.from(types),hasEmptyString:types.has('')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         return Array.from(types).sort();
     }, [replayData]);
 
@@ -259,6 +272,9 @@ export function SessionReplayViewer({ runId }: SessionReplayViewerProps) {
                         </div>
 
                         {/* Action Filter */}
+                        {/* #region agent log */}
+                        {(() => { fetch('http://127.0.0.1:7242/ingest/c4f84577-4e75-4160-830d-a50a3d6aea34',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionReplayViewer.tsx:SelectRender',message:'About to render Select',data:{actionTypesCount:actionTypes.length,actionTypes:actionTypes,hasEmptyInList:actionTypes.includes('')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{}); return null; })()}
+                        {/* #endregion */}
                         <Select value={actionFilter} onValueChange={setActionFilter}>
                             <SelectTrigger className="w-full md:w-[250px]">
                                 <Filter className="h-4 w-4 mr-2" />
