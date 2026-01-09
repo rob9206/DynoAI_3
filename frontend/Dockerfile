@@ -4,7 +4,7 @@
 # =============================================================================
 # Stage 1: Dependencies
 # =============================================================================
-FROM node:20-alpine as deps
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm ci --legacy-peer-deps
 # =============================================================================
 # Stage 2: Build
 # =============================================================================
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN npm run build
 # =============================================================================
 # Stage 3: Production with Nginx
 # =============================================================================
-FROM nginx:alpine as production
+FROM nginx:alpine AS production
 
 ARG DYNOAI_VERSION=0.0.0-dev
 
@@ -77,7 +77,7 @@ CMD ["nginx", "-g", "daemon off;"]
 # =============================================================================
 # Stage 4: Development
 # =============================================================================
-FROM node:20-alpine as development
+FROM node:20-alpine AS development
 
 WORKDIR /app
 

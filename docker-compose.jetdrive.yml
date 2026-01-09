@@ -1,0 +1,60 @@
+# DynoAI Docker Compose - JetDrive Configuration
+# Use: docker-compose -f docker-compose.yml -f docker-compose.jetdrive.yml up
+#
+# This configuration enables JetDrive UDP multicast support for live dyno communication.
+# IMPORTANT: Uses host network mode to support UDP multicast on port 22344.
+
+services:
+  # ==========================================================================
+  # Backend API Service with JetDrive Support
+  # ==========================================================================
+  api:
+    # Host network mode required for UDP multicast
+    # This allows the container to receive UDP packets on port 22344
+    # from the Dynojet Dynoware RT-150 at 192.168.1.115
+    network_mode: "host"
+    
+    environment:
+      # JetDrive Configuration
+      - JETDRIVE_ENABLED=true
+      - JETDRIVE_PORT=22344
+      - JETDRIVE_MCAST_GROUP=239.255.60.60
+      - DYNOWARE_IP=192.168.1.115
+      
+      # When using host network, service binds directly to host ports
+      - DYNOAI_HOST=0.0.0.0
+      - DYNOAI_PORT=5001
+    
+    # Note: Port mappings are ignored in host network mode
+    # The API will be accessible at http://localhost:5001
+    
+  # ==========================================================================
+  # Frontend - Keep on bridge network
+  # ==========================================================================
+  frontend:
+    # Frontend doesn't need host network, keep it isolated
+    # It will communicate with API via localhost:5001
+    environment:
+      - VITE_API_URL=http://localhost:5001
+    
+    ports:
+      - "80:80"
+
+  # ==========================================================================
+  # Redis - Keep on bridge network
+  # ==========================================================================
+  redis:
+    # Redis stays on default network
+    # API will connect via localhost:6379 in host network mode
+    ports:
+      - "6379:6379"
+
+# =============================================================================
+# Notes:
+# =============================================================================
+# - Host network mode on Windows Docker Desktop has limitations
+# - If UDP multicast doesn't work, you may need to run the API natively
+# - The frontend and Redis can still run in Docker
+# - Test with: curl http://localhost:5001/api/jetdrive/diagnostics
+# - Verify UDP binding: netstat -an | findstr :22344
+# =============================================================================

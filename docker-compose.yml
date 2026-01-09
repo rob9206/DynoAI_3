@@ -1,8 +1,6 @@
 # DynoAI Docker Compose Configuration
 # Orchestrates the full application stack
 
-version: '3.8'
-
 services:
   # ==========================================================================
   # Backend API Service

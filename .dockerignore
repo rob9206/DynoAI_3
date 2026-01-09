@@ -1,113 +1,140 @@
-# =============================================================================
-# DynoAI Docker Ignore File
-# Excludes files and directories from Docker build context
-# =============================================================================
+# DynoAI Docker Build Ignore File
+# Excludes unnecessary files from Docker build context for faster builds
 
-# Git
-.git
-.gitignore
-.gitattributes
-
-# IDE and Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.cursor/
-
+# ============================================================================
 # Python
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+dist/
+build/
 *.egg
-MANIFEST
-.mypy_cache/
 .pytest_cache/
-.ruff_cache/
-htmlcov/
+.mypy_cache/
 .coverage
-coverage.xml
-*.cover
+htmlcov/
+.tox/
+.hypothesis/
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-
-# Node.js (frontend is built separately)
+# ============================================================================
+# Node.js / Frontend
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 frontend/node_modules/
-frontend/.npm/
 frontend/dist/
+frontend/.vite/
 
-# Test and temporary files
-temp_selftest/
-test_output/
-*.log
-*.tmp
-.temp/
+# ============================================================================
+# IDE / Editor
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
 
-# Documentation (not needed in container)
-docs/
-*.md
-!README.md
+# ============================================================================
+# Git
+# ============================================================================
+.git/
+.gitignore
+.gitattributes
 
-# Data files (mounted as volumes instead)
+# ============================================================================
+# Environment / Config
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.local
+
+# ============================================================================
+# Runtime Data (exclude from image, use volumes)
+# ============================================================================
 uploads/
 outputs/
 runs/
-experiments/
+logs/
+*.log
+*.db
+*.db-shm
+*.db-wal
 
-# Development files
-.pre-commit-config.yaml
-.env
-.env.*
-!.env.example
-
-# Docker files (prevent recursion)
+# ============================================================================
+# Docker
+# ============================================================================
 Dockerfile*
 docker-compose*.yml
 .dockerignore
 
+# ============================================================================
+# Documentation
+# ============================================================================
+docs/
+*.md
+!README.md
+
+# ============================================================================
+# Testing
+# ============================================================================
+tests/
+.coverage
+coverage/
+*.test
+
+# ============================================================================
 # CI/CD
+# ============================================================================
 .github/
+.gitlab-ci.yml
 
-# Large/unnecessary files
-*.zip
-*.tar
-*.tar.gz
-*.pdf
-opus_bundle.zip
-node.msi
+# ============================================================================
+# Build artifacts
+# ============================================================================
+build_exe.ps1
+dynoai.spec
+installer.iss
+installer_output/
+dist/
+build/dynoai/
 
-# Windows files
+# ============================================================================
+# Data files (too large for build context)
+# ============================================================================
+data/
+vendor/
+tools/experiments/
+tools/deepcode/
+
+# ============================================================================
+# Temporary files
+# ============================================================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# ============================================================================
+# Windows
+# ============================================================================
 Thumbs.db
-ehthumbs.db
-Desktop.ini
+desktop.ini
 
-# macOS files
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Legacy nested duplicate directories
-DynoAI_3*/
-
+# ============================================================================
+# Scripts (not needed in container)
+# ============================================================================
+*.bat
+*.ps1
+*.sh
+!start-web.ps1

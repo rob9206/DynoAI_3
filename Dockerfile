@@ -4,7 +4,7 @@
 # =============================================================================
 # Stage 1: Build stage
 # =============================================================================
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # =============================================================================
 # Stage 2: Production stage
 # =============================================================================
-FROM python:3.11-slim as production
+FROM python:3.11-slim AS production
 
 ARG DYNOAI_VERSION=0.0.0-dev
 
@@ -57,13 +57,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application code
 COPY --chown=dynoai:dynoai api/ ./api/
 COPY --chown=dynoai:dynoai dynoai/ ./dynoai/
-COPY --chown=dynoai:dynoai ai_tuner_toolkit_dyno_v1_2.py .
-COPY --chown=dynoai:dynoai tables/ ./tables/
-COPY --chown=dynoai:dynoai templates/ ./templates/
+
+# Copy toolkit files from tools/ directory
+COPY --chown=dynoai:dynoai tools/ai_tuner_toolkit_dyno_v1_2.py .
+COPY --chown=dynoai:dynoai tools/tables/ ./tables/
+COPY --chown=dynoai:dynoai tools/templates/ ./templates/
+
+# Copy scripts directory (includes jetdrive_autotune.py)
+COPY --chown=dynoai:dynoai scripts/ ./scripts/
 
 # Create necessary directories with proper permissions
-RUN mkdir -p uploads outputs runs && \
-    chown -R dynoai:dynoai uploads outputs runs
+RUN mkdir -p uploads outputs runs public_export data && \
+    chown -R dynoai:dynoai uploads outputs runs public_export data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -74,6 +79,7 @@ ENV PYTHONUNBUFFERED=1 \
     DYNOAI_UPLOAD_DIR=/app/uploads \
     DYNOAI_OUTPUT_DIR=/app/outputs \
     DYNOAI_RUNS_DIR=/app/runs \
+    DYNOAI_PUBLIC_EXPORT_DIR=/app/public_export \
     DYNOAI_VERSION=${DYNOAI_VERSION}
 
 # Expose the API port
@@ -92,7 +98,7 @@ CMD ["python", "-m", "api.app"]
 # =============================================================================
 # Stage 3: Development stage (optional, for local development)
 # =============================================================================
-FROM production as development
+FROM production AS development
 
 USER root
 
