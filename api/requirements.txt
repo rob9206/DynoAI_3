@@ -2,7 +2,7 @@ flask==3.0.3
 flask-cors==6.0.0
 flask-limiter>=3.5.0
 flask-socketio>=5.3.0
-werkzeug==3.1.4
+werkzeug==3.1.5
 python-dotenv==1.0.0
 jsonschema==4.23.0
 flasgger>=0.9.7
