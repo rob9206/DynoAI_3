@@ -24,7 +24,8 @@
   },
   
   "network": {
-    "ip_address": "239.255.60.60",
+    "ip_address": "169.254.187.108",
+    "multicast_group": "224.0.2.10",
     "jetdrive_port": 22344,
     "protocol": "Power Core JetDrive (UDP multicast)"
   },

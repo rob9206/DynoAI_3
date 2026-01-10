@@ -1324,7 +1324,8 @@ def upload_csv():
 # =============================================================================
 
 # JetDrive defaults
-JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60")
+# 224.0.2.10 = Official Dynojet/JetDrive vendor multicast address
+JETDRIVE_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
 JETDRIVE_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 JETDRIVE_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
 
@@ -1607,8 +1608,8 @@ def discover_providers_multi():
 
     # Test both multicast addresses
     multicast_groups = [
-        "224.0.2.10",  # Old default
-        "239.255.60.60",  # New Docker config
+        "224.0.2.10",      # Official Dynojet/JetDrive vendor address (PRIMARY)
+        "239.255.60.60",   # Alternative address
     ]
 
     results = {}
@@ -1864,16 +1865,15 @@ def _live_capture_loop():
     )
 
     config = JetDriveConfig.from_env()
-
     # Create a single event loop for the entire capture session
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
-        # Discover providers first
-        logger.info("Discovering JetDrive providers...")
-        providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
-
+        # Discover providers first - use longer timeout to ensure ChannelInfo packets arrive
+        # Power Core broadcasts ChannelInfo periodically (not immediately on request)
+        logger.info("Discovering JetDrive providers (waiting for ChannelInfo)...")
+        providers = loop.run_until_complete(discover_providers(config, timeout=10.0))
         if not providers:
             logger.warning(
                 "No JetDrive providers found. Check network connection and multicast settings."
@@ -1888,7 +1888,6 @@ def _live_capture_loop():
         logger.info(
             f"Connected to provider: {provider.name} (ID: 0x{provider.provider_id:04X}, Host: {provider.host})"
         )
-
         # Channel values dictionary - updated continuously
         channel_values: dict[str, dict[str, Any]] = {}
 
@@ -2096,6 +2095,9 @@ def get_live_data():
 
     This endpoint is exempt from rate limiting to support real-time polling
     at 100-250ms intervals for live dyno data visualization.
+    
+    Note: Rate limit exemption is handled by conditional limiter in app.py.
+    The default rate limit (1200/minute) is sufficient for multiple pollers.
     """
     global _live_data
 
@@ -2153,8 +2155,9 @@ def get_live_data():
     try:
         from api.config import get_config
 
-        rpm = _get_value(channels, ["Digital RPM 1", "RPM", "chan_42", "chan_10"])
-        force = _get_value(channels, ["Force Drum 1", "Force", "chan_39", "chan_12"])
+        # Channel IDs from Power Core: ID 39=Digital RPM 1, ID 9=Engine RPM, ID 36=Force Drum 1, ID 32=Force
+        rpm = _get_value(channels, ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"])
+        force = _get_value(channels, ["Force Drum 1", "Force", "Force 1", "chan_36", "chan_32", "chan_34"])
 
         if rpm is not None and force is not None and rpm > 0:
             cfg = get_config().dyno
@@ -2169,6 +2172,14 @@ def get_live_data():
             channels.setdefault("Torque", {"value": tq})
     except Exception:
         pass
+
+    # Sanitize channel values - replace Infinity/NaN with None (valid JSON)
+    import math
+    for ch_name, ch_data in channels.items():
+        if isinstance(ch_data, dict) and "value" in ch_data:
+            val = ch_data["value"]
+            if isinstance(val, float) and (math.isinf(val) or math.isnan(val)):
+                ch_data["value"] = None  # Replace invalid floats with null
 
     response = {
         "capturing": capturing,
@@ -2353,16 +2364,28 @@ def get_live_health():
                 else:
                     health = "unknown"
 
+            # Sanitize Infinity/NaN values for valid JSON
+            import math
+            safe_value = value
+            if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+                safe_value = None
+
             channel_health[name] = {
                 "health": health,
-                "value": value,
+                "value": safe_value,
                 "age_seconds": age_seconds,
                 "rate_hz": data.get("rate_hz", 0),
             }
         else:
+            # Sanitize raw values too
+            import math
+            safe_data = data
+            if isinstance(data, float) and (math.isinf(data) or math.isnan(data)):
+                safe_data = None
+
             channel_health[name] = {
                 "health": "unknown",
-                "value": data,
+                "value": safe_data,
                 "age_seconds": 0,
                 "rate_hz": 0,
             }
@@ -2436,12 +2459,18 @@ def get_live_health_summary():
                 else ("warning" if age_seconds < 10 else "stale")
             )
 
+            # Sanitize Infinity/NaN for valid JSON
+            import math
+            safe_value = value if isinstance(value, (int, float)) else 0
+            if isinstance(safe_value, float) and (math.isinf(safe_value) or math.isnan(safe_value)):
+                safe_value = 0
+
             summary.append(
                 {
                     "name": name,
                     "id": hash(name) & 0xFFFF,  # Generate a pseudo-ID from name
                     "health": health,
-                    "value": value if isinstance(value, (int, float)) else 0,
+                    "value": safe_value,
                     "age_seconds": age_seconds,
                     "rate_hz": data.get("rate_hz", 0),
                 }

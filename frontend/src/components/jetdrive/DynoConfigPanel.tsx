@@ -125,27 +125,10 @@ export function DynoConfigPanel({
         }
     };
 
-    // Poll live channels when capturing
-    useEffect(() => {
-        if (!capturing) return;
-        let cancelled = false;
-        const interval = setInterval(async () => {
-            try {
-                const res = await fetch(`${apiUrl}/hardware/live/data`);
-                if (!res.ok) return;
-                const data = await res.json();
-                if (cancelled) return;
-                setChannels(data.channels || {});
-                setLastUpdate(data.last_update || null);
-            } catch {
-                // ignore transient poll errors
-            }
-        }, 2000);  // Poll every 2 seconds to avoid rate limits
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
-    }, [apiUrl, capturing]);
+    // NOTE: Polling removed - this component was creating redundant requests.
+    // Parent components using useJetDriveLive hook provide live channel data.
+    // Redundant polling was causing Windows ephemeral port exhaustion (429 errors).
+    // If you need live channel updates here, pass them as props from parent.
 
     if (loading) {
         return (

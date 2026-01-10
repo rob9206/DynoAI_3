@@ -220,8 +220,8 @@ class RateLimitConfig:
         == "true"
     )
     default: str = field(
-        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "1200/minute")
-    )  # 1200/min allows live data polling at 100ms intervals (10/sec)
+        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "3000/minute")
+    )  # 3000/min allows multiple live data pollers at 100-250ms intervals (50 req/sec)
     expensive: str = field(
         default_factory=lambda: os.environ.get(
             "RATE_LIMIT_EXPENSIVE", "5/minute;20/hour"
@@ -314,8 +314,10 @@ class DynoConfig:
     )
 
     # Network configuration
+    # DYNO_IP is the actual dyno device IP (e.g., link-local 169.254.x.x)
+    # For JetDrive multicast, use JETDRIVE_MCAST_GROUP instead
     ip_address: str = field(
-        default_factory=lambda: os.environ.get("DYNO_IP", "239.255.60.60")
+        default_factory=lambda: os.environ.get("DYNO_IP", "169.254.187.108")
     )
     jetdrive_port: int = field(
         default_factory=lambda: _get_int_env("DYNO_JETDRIVE_PORT", 22344)

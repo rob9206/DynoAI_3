@@ -343,10 +343,10 @@ export function JetDriveLiveDashboard({
                         {displayedChannels.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 {displayedChannels.map(({ name, data, config }) => {
-                                    // Use config label, or derive from channel name
-                                    const displayLabel = config.label || name.replace('chan_', 'Ch ').replace(/_/g, ' ');
-                                    const displayUnits = config.units || inferUnits(name, data.value);
-                                    const quantizedValue = quantizeToDecimals(data.value, config.decimals ?? 1);
+                                    // Use config label, or derive from channel name (null-safe)
+                                    const displayLabel = config?.label || name.replace('chan_', 'Ch ').replace(/_/g, ' ');
+                                    const displayUnits = config?.units || inferUnits(name, data?.value);
+                                    const quantizedValue = quantizeToDecimals(data?.value ?? 0, config?.decimals ?? 1);
 
                                     return (
                                         <LiveLinkGauge
@@ -354,12 +354,12 @@ export function JetDriveLiveDashboard({
                                             name={displayLabel}
                                             value={quantizedValue}
                                             units={displayUnits}
-                                            min={config.min}
-                                            max={config.max}
-                                            decimals={config.decimals}
-                                            color={config.color}
-                                            warningThreshold={config.warning}
-                                            criticalThreshold={config.critical}
+                                            min={config?.min ?? 0}
+                                            max={config?.max ?? 100}
+                                            decimals={config?.decimals}
+                                            color={config?.color}
+                                            warningThreshold={config?.warning}
+                                            criticalThreshold={config?.critical}
                                         />
                                     );
                                 })}
