@@ -12,7 +12,8 @@ from enum import IntEnum
 from typing import Callable
 
 # KLHDV transport defaults (overridable via env vars)
-DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "239.255.60.60")
+# 224.0.2.10 = Official Dynojet/JetDrive vendor multicast address
+DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
 DEFAULT_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 # Default to all interfaces (0.0.0.0) to receive from external devices like Dynoware RT.
 # Set JETDRIVE_IFACE to a specific IP (e.g., 169.254.x.x) if you need to bind to a particular interface.
@@ -165,6 +166,10 @@ def _resolve_iface_address(iface: str) -> str:
 
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
+    # #region agent log
+    import json as _json; _log_path = r"c:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\.cursor\debug.log"
+    with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:entry","message":"Creating socket","data":{"iface":cfg.iface,"multicast_group":cfg.multicast_group,"port":cfg.port},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+    # #endregion
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     reuseport = getattr(socket, "SO_REUSEPORT", None)
@@ -173,24 +178,42 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
             sock.setsockopt(socket.SOL_SOCKET, reuseport, 1)
 
     iface_ip = _resolve_iface_address(cfg.iface)
+    # #region agent log
+    with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:resolved_iface","message":"Resolved interface","data":{"cfg_iface":cfg.iface,"resolved_ip":iface_ip},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+    # #endregion
+    # On Windows, bind to 0.0.0.0 but join multicast on the specific interface
+    # This allows receiving from all sources while directing multicast traffic correctly
+    bind_ip = "0.0.0.0"
     try:
-        sock.bind((iface_ip, cfg.port))
+        sock.bind((bind_ip, cfg.port))
+        # #region agent log
+        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:bind_success","message":"Socket bound successfully","data":{"bind_ip":bind_ip,"iface_ip":iface_ip,"port":cfg.port},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+        # #endregion
     except OSError as exc:
+        # #region agent log
+        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:bind_failed","message":"BIND FAILED","data":{"bind_ip":bind_ip,"iface_ip":iface_ip,"port":cfg.port,"error":str(exc),"errno":exc.errno},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+        # #endregion
         sock.close()
         raise RuntimeError(
-            f"Failed to bind JetDrive socket on {iface_ip}:{cfg.port}: {exc}"
+            f"Failed to bind JetDrive socket on {bind_ip}:{cfg.port}: {exc}"
         ) from exc
 
-    # Join multicast on the specific interface if provided, otherwise INADDR_ANY.
-    mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(
-        iface_ip or "0.0.0.0"
-    )
+    # Join multicast on the configured interface (iface_ip).
+    # This MUST match the interface Dynoware RT is broadcasting on.
+    multicast_iface = iface_ip if iface_ip else "0.0.0.0"
+    mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(multicast_iface)
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # #region agent log
+        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:multicast_joined","message":"Joined multicast group","data":{"group":cfg.multicast_group,"multicast_iface":multicast_iface,"cfg_iface":iface_ip},"hypothesisId":"H6","timestamp":__import__("time").time()}) + "\n")
+        # #endregion
     except OSError as exc:
+        # #region agent log
+        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:multicast_failed","message":"MULTICAST JOIN FAILED","data":{"group":cfg.multicast_group,"multicast_iface":multicast_iface,"error":str(exc),"errno":exc.errno},"hypothesisId":"H6","timestamp":__import__("time").time()}) + "\n")
+        # #endregion
         sock.close()
         raise RuntimeError(
-            f"Failed to join multicast group {cfg.multicast_group} on {iface_ip}: {exc}"
+            f"Failed to join multicast group {cfg.multicast_group} on {multicast_iface}: {exc}"
         ) from exc
 
     sock.setblocking(False)
@@ -308,50 +331,185 @@ async def send_request_channel_info(
     await loop.sock_sendto(sock, msg, (cfg.multicast_group, cfg.port))
 
 
+# Cache provider info across discoveries so we don't lose channel names
+_provider_cache: dict[int, JetDriveProviderInfo] = {}
+
+
+def _discover_providers_sync(
+    cfg: JetDriveConfig,
+    timeout: float = 2.0,
+) -> list[JetDriveProviderInfo]:
+    """
+    Synchronous discovery using blocking sockets (works reliably on Windows).
+    Caches provider info so channel names persist even if ChannelInfo isn't re-sent.
+    
+    Note: Power Core sends multiple ChannelInfo packets (e.g., 39 channels + 3 channels).
+    This function MERGES them instead of overwriting, ensuring all channels are captured.
+    """
+    global _provider_cache
+    import time
+    
+    # Create BLOCKING socket (don't call _make_socket which sets non-blocking)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", cfg.port))
+    
+    # Join BOTH multicast groups on specific interface (Power Core may use either)
+    for group in [cfg.multicast_group, "224.0.2.10"]:
+        try:
+            mreq = socket.inet_aton(group) + socket.inet_aton(cfg.iface)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        except Exception:
+            pass  # May fail if already joined
+    
+    # Set timeout for blocking recv
+    sock.settimeout(1.0)
+    
+    # Send RequestChannelInfo to request ChannelInfo (Key=1) from providers
+    seq = random.randint(1, 0xFF)
+    host_id = random.randint(1, 0xFFFE)
+    msg = _Wire.encode(KEY_REQUEST_CHANNEL_INFO, host_id, ALL_HOSTS, seq, b"")
+    sock.sendto(msg, (cfg.multicast_group, cfg.port))
+    
+    providers: dict[int, JetDriveProviderInfo] = {}
+    deadline = time.time() + timeout
+    
+    try:
+        while time.time() < deadline:
+            try:
+                data, addr = sock.recvfrom(4096)
+                decoded = _Wire.decode(data)
+                if not decoded:
+                    continue
+                key, _, host, _, _, value = decoded
+                
+                if key == KEY_CHANNEL_INFO:
+                    try:
+                        info = _parse_channel_info(host, addr[0], value, port=cfg.port)
+                        if info:
+                            # MERGE channels instead of overwriting
+                            # Power Core sends multiple ChannelInfo packets that should be combined
+                            if host in providers:
+                                providers[host].channels.update(info.channels)
+                            else:
+                                providers[host] = info
+                            _provider_cache[host] = providers[host]  # Cache the merged version
+                    except Exception:
+                        continue
+                elif key == KEY_CHANNEL_VALUES and host not in providers:
+                    # Check cache first - use cached info if we have it
+                    if host in _provider_cache:
+                        providers[host] = _provider_cache[host]
+                    else:
+                        # Create minimal entry - we know a provider exists at this host
+                        providers[host] = JetDriveProviderInfo(
+                            provider_id=host,
+                            name=f"JetDrive Provider 0x{host:04X}",
+                            host=addr[0],
+                            port=cfg.port,
+                            channels={},  # Empty dict - unknown until ChannelInfo received
+                        )
+            except socket.timeout:
+                continue
+    finally:
+        sock.close()
+    
+    return list(providers.values())
+
+
 async def discover_providers(
     config: JetDriveConfig | None = None,
     timeout: float = 2.0,
 ) -> list[JetDriveProviderInfo]:
     """
     Join multicast, broadcast RequestChannelInfo, and collect ChannelInfo replies.
+    Uses synchronous blocking socket in a thread pool (works reliably on Windows).
     """
     cfg = config or JetDriveConfig.from_env()
-    loop = asyncio.get_running_loop()
-    sock = _make_socket(cfg)
-    seq = random.randint(1, 0xFF)
-    host_id = random.randint(1, 0xFFFE)
+    # Run sync discovery in thread pool to avoid blocking event loop
+    return await asyncio.to_thread(_discover_providers_sync, cfg, timeout)
 
-    await send_request_channel_info(sock, cfg, host_id=host_id, seq=seq, dest=ALL_HOSTS)
 
-    providers: dict[int, JetDriveProviderInfo] = {}
-    deadline = loop.time() + timeout
+def _subscribe_sync(
+    provider: JetDriveProviderInfo,
+    channel_names: list[str],
+    on_sample: Callable[[JetDriveSample], None],
+    cfg: JetDriveConfig,
+    stop_flag: list,  # Use mutable list as thread-safe flag [False]
+    recv_timeout: float = 0.5,
+    debug: bool = False,
+) -> dict[str, int]:
+    """
+    Synchronous subscribe using blocking sockets (works reliably on Windows).
+    """
+    # Create BLOCKING socket for Windows multicast compatibility
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", cfg.port))
+    
+    # Join multicast on specific interface
+    for group in [cfg.multicast_group, "224.0.2.10"]:
+        try:
+            mreq = socket.inet_aton(group) + socket.inet_aton(cfg.iface)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        except Exception:
+            pass
+    
+    sock.settimeout(recv_timeout)
+
+    channel_lookup = provider.channels
+    allowed_ids = set()
+    if channel_names:
+        names = {n.strip().lower() for n in channel_names}
+        for chan_id, meta in channel_lookup.items():
+            if meta.name.lower() in names:
+                allowed_ids.add(chan_id)
+
+    dropped_frames = 0
+    non_provider_frames = 0
+    total_frames = 0
 
     try:
-        while True:
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                break
+        while not stop_flag[0]:
             try:
-                data, addr = await asyncio.wait_for(
-                    loop.sock_recvfrom(sock, 4096), remaining
-                )
-            except asyncio.TimeoutError:
-                break
+                data, _ = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
+
+            total_frames += 1
             decoded = _Wire.decode(data)
             if not decoded:
+                dropped_frames += 1
                 continue
             key, _, host, _, _, value = decoded
-            if key == KEY_CHANNEL_INFO:
-                try:
-                    info = _parse_channel_info(host, addr[0], value, port=cfg.port)
-                except Exception:
+            if key != KEY_CHANNEL_VALUES or host != provider.provider_id:
+                non_provider_frames += 1
+                continue
+            try:
+                samples = _parse_channel_values(
+                    provider.provider_id, channel_lookup, value
+                )
+            except Exception:
+                dropped_frames += 1
+                continue
+            for sample in samples:
+                if allowed_ids and sample.channel_id not in allowed_ids:
                     continue
-                if info:
-                    providers[host] = info
-            # Ping/Pong and other keys are ignored for now
+                on_sample(sample)
     finally:
         sock.close()
-    return list(providers.values())
+        if debug:
+            print(
+                f"[jetdrive_client._subscribe_sync] dropped_frames={dropped_frames}, "
+                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}",
+                flush=True,
+            )
+
+    return {
+        "dropped_frames": dropped_frames,
+        "non_provider_frames": non_provider_frames,
+        "total_frames": total_frames,
+    }
 
 
 async def subscribe(
@@ -367,77 +525,38 @@ async def subscribe(
 ) -> dict[str, int] | None:
     """
     Listen for ChannelValues from a provider and invoke the callback.
-
-    Args:
-        return_stats: If True, returns frame statistics dict instead of None
-
-    Returns:
-        None or dict with 'dropped_frames', 'non_provider_frames', 'total_frames' if return_stats=True
+    Uses synchronous blocking socket in a thread (works reliably on Windows).
     """
     cfg = config or JetDriveConfig.from_env()
-    loop = asyncio.get_running_loop()
-    sock = _make_socket(cfg)
-
-    channel_lookup = provider.channels
-    allowed_ids = set()
-    if channel_names:
-        names = {n.strip().lower() for n in channel_names}
-        for chan_id, meta in channel_lookup.items():
-            if meta.name.lower() in names:
-                allowed_ids.add(chan_id)
-
-    dropped_frames = 0
-    non_provider_frames = 0
-    total_frames = 0
-
+    
+    # Use a mutable list as a thread-safe stop flag
+    stop_flag = [False]
+    
+    async def monitor_stop():
+        if stop_event:
+            await stop_event.wait()
+            stop_flag[0] = True
+    
+    # Start stop monitor task
+    monitor_task = asyncio.create_task(monitor_stop()) if stop_event else None
+    
     try:
-        while True:
-            if stop_event is not None and stop_event.is_set():
-                break
-            try:
-                data, _ = await asyncio.wait_for(
-                    loop.sock_recvfrom(sock, 4096), recv_timeout
-                )
-            except asyncio.TimeoutError:
-                continue
-
-            total_frames += 1  # Count all received frames
-            decoded = _Wire.decode(data)
-            if not decoded:
-                dropped_frames += 1
-                continue
-            key, _, host, _, _, value = decoded
-            if key != KEY_CHANNEL_VALUES or host != provider.provider_id:
-                non_provider_frames += 1
-                continue
-            try:
-                samples = _parse_channel_values(
-                    provider.provider_id, channel_lookup, value
-                )
-            except Exception:
-                dropped_frames += 1
-                # Skip malformed payloads
-                continue
-            for sample in samples:
-                if allowed_ids and sample.channel_id not in allowed_ids:
-                    continue
-                on_sample(sample)
-    finally:
-        sock.close()
-        if debug:
-            print(
-                f"[jetdrive_client.subscribe] dropped_frames={dropped_frames}, "
-                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}",
-                flush=True,
-            )
-
+        # Run sync subscribe in thread pool
+        result = await asyncio.to_thread(
+            _subscribe_sync,
+            provider, channel_names, on_sample, cfg, stop_flag, recv_timeout, debug
+        )
         if return_stats:
-            return {
-                "dropped_frames": dropped_frames,
-                "non_provider_frames": non_provider_frames,
-                "total_frames": total_frames,
-            }
+            return result
         return None
+    finally:
+        stop_flag[0] = True
+        if monitor_task:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
 
 
 async def run_until_cancelled(

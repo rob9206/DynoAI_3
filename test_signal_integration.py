@@ -3,12 +3,13 @@ Test script to verify signal integration and user feedback
 Run this after starting the GUI to test the new features
 """
 
-import sys
 import io
+import sys
 
 # Fix Windows console encoding
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
 
 def test_afr_validation():
     """Test AFR input validation dialogs"""
@@ -28,6 +29,7 @@ def test_afr_validation():
     print("   - Format Error: Shows examples of valid input")
     print("   - Success: Cell updates with color coding")
     print()
+
 
 def test_signal_connections():
     """Test hardware panel signal connections"""
@@ -57,6 +59,7 @@ def test_signal_connections():
     print("   - Check console for health status updates")
     print()
 
+
 def test_resource_management():
     """Test resource cleanup on page hide"""
     print("=" * 60)
@@ -74,6 +77,7 @@ def test_resource_management():
     print("   - Watch Task Manager for CPU usage drops")
     print("   - Check network traffic when page hidden")
     print()
+
 
 def test_data_correlation():
     """Test RPM/MAP correlation between panels"""
@@ -94,6 +98,7 @@ def test_data_correlation():
     print("   - All data sources synchronized")
     print()
 
+
 def main():
     """Run all tests"""
     print("\n")
@@ -101,12 +106,12 @@ def main():
     print(" " * 10 + "JetDrive Signal Integration Tests")
     print("=" * 60)
     print()
-    
+
     test_afr_validation()
     test_signal_connections()
     test_resource_management()
     test_data_correlation()
-    
+
     print("=" * 60)
     print("[SUCCESS] ALL FEATURES READY FOR TESTING")
     print("=" * 60)
@@ -131,6 +136,6 @@ def main():
     print("   - Test with backend API running for full integration")
     print()
 
+
 if __name__ == "__main__":
     main()
-

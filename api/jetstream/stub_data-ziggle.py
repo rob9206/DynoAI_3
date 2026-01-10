@@ -12,7 +12,9 @@ from jetstream.models import RunError, RunStatus
 from services.run_manager import get_run_manager
 
 STUB_ENV = os.getenv("JETSTREAM_STUB_DATA") or os.getenv("JETSTREAM_USE_STUBS")
-_STUB_ENABLED = bool(STUB_ENV and STUB_ENV.strip().lower() in {"1", "true", "yes", "on"})
+_STUB_ENABLED = bool(
+    STUB_ENV and STUB_ENV.strip().lower() in {"1", "true", "yes", "on"}
+)
 
 VE_DELTA_SAMPLE = """RPM,0,10,20,30,40,50,60,70,80,100
 1000,-2.5,-1.8,-0.3,0.5,1.2,2.8,4.5,6.2,8.1,10.5
@@ -74,7 +76,9 @@ def get_stub_status() -> Dict[str, Any]:
         None,
     )
     pending = sum(
-        1 for run in _SAMPLE_RUNS if run["status"] in {RunStatus.PENDING, RunStatus.DOWNLOADING}
+        1
+        for run in _SAMPLE_RUNS
+        if run["status"] in {RunStatus.PENDING, RunStatus.DOWNLOADING}
     )
     return {
         "connected": True,
@@ -88,7 +92,9 @@ def get_stub_status() -> Dict[str, Any]:
 
 def get_stub_sync_response() -> Dict[str, Any]:
     """Return a deterministic sync response."""
-    newest = next((run for run in _SAMPLE_RUNS if run["status"] != RunStatus.COMPLETE), None)
+    newest = next(
+        (run for run in _SAMPLE_RUNS if run["status"] != RunStatus.COMPLETE), None
+    )
     if not newest:
         return {"new_runs_found": 0, "run_ids": [], "stubbed": True}
     return {"new_runs_found": 1, "run_ids": [newest["run_id"]], "stubbed": True}
@@ -126,9 +132,21 @@ _SAMPLE_RUNS: List[Dict[str, Any]] = [
             "cells_clamped": 8,
         },
         "files": [
-            {"name": "VE_Correction_Delta_DYNO.csv", "type": "csv", "content": VE_DELTA_SAMPLE},
-            {"name": "Diagnostics_Report.txt", "type": "text", "content": DIAGNOSTICS_REPORT},
-            {"name": "Anomaly_Hypotheses.json", "type": "json", "content": ANOMALY_SAMPLE},
+            {
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "type": "csv",
+                "content": VE_DELTA_SAMPLE,
+            },
+            {
+                "name": "Diagnostics_Report.txt",
+                "type": "text",
+                "content": DIAGNOSTICS_REPORT,
+            },
+            {
+                "name": "Anomaly_Hypotheses.json",
+                "type": "json",
+                "content": ANOMALY_SAMPLE,
+            },
         ],
         "stats": {"rows_read": 18432, "front_accepted": 58, "rear_accepted": 54},
     },
@@ -217,7 +235,9 @@ def _write_metadata(run_id: str, metadata: Optional[Dict[str, Any]]) -> None:
     run_dir = manager.get_run_dir(run_id)
     if not run_dir:
         return
-    (run_dir / "jetstream_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    (run_dir / "jetstream_metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
 
 
 def _write_stub_outputs(stub: Dict[str, Any]) -> None:
@@ -295,4 +315,6 @@ def _write_manifest(stub: Dict[str, Any], files: List[Path]) -> None:
         "outputs": manifest_outputs,
         "apply": {"allowed": True, "reasons_blocked": []},
     }
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (output_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )

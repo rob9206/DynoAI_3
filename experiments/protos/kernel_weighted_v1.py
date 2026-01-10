@@ -7,15 +7,16 @@ import numpy as np
 def _valid_mask(grid: np.ndarray) -> np.ndarray:
     return np.isfinite(grid)
 
+
 def kernel_smooth(
     grid: np.ndarray,
     coverage: np.ndarray | None = None,
     *,
     passes: int = 2,
-    alpha: float = 0.20,      # coverage scale
-    center_bias: float = 1.25,# bias toward keeping original cell
-    min_hits: int = 1,        # τ
-    dist_pow: int = 1,        # p
+    alpha: float = 0.20,  # coverage scale
+    center_bias: float = 1.25,  # bias toward keeping original cell
+    min_hits: int = 1,  # τ
+    dist_pow: int = 1,  # p
 ) -> np.ndarray:
     """
     Coverage-weighted 4-neighbor smoothing.
@@ -71,7 +72,7 @@ def kernel_smooth(
                     ii, jj = i + di, j + dj
                     if 0 <= ii < m and 0 <= jj < n and finite[ii, jj]:
                         if c[ii, jj] >= min_hits:
-                            w_ij = (1.0 + alpha * c[ii, jj]) / (d ** dist_pow)
+                            w_ij = (1.0 + alpha * c[ii, jj]) / (d**dist_pow)
                             w_sum += w_ij
                             v_sum += w_ij * z[ii, jj]
 

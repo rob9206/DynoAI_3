@@ -66,6 +66,9 @@ $env:DYNOAI_PORT = "5001"
 $env:DYNOAI_DEBUG = "false"
 $env:LOG_LEVEL = "INFO"
 
+# Disable rate limiting for JetDrive mode (high-frequency live data polling)
+$env:DYNOAI_STANDALONE = "true"
+
 # Dynoware RT-150 settings
 $env:DYNO_MODEL = "Dynoware RT-150"
 $env:DYNO_SERIAL = "RT00220413"
@@ -73,9 +76,10 @@ $env:DYNO_LOCATION = "Dawson Dynamics"
 $env:DYNO_IP = $DynoIP  # Use parameter value
 $env:DYNO_JETDRIVE_PORT = "22344"
 
-# JetDrive network configuration - bind to your computer's IP
-$env:JETDRIVE_IFACE = "192.168.1.86"  # Your computer's IP address
-$env:JETDRIVE_MCAST_GROUP = "239.255.60.60"  # Multicast group
+# JetDrive network configuration - use same interface as Dynoware RT
+# Dynoware is broadcasting on Ethernet 3 (10.0.0.100)
+$env:JETDRIVE_IFACE = "10.0.0.100"  # Ethernet 3 - matches Dynoware RT JetDrive setting
+$env:JETDRIVE_MCAST_GROUP = "239.255.60.60"  # Standard JetDrive multicast group
 $env:JETDRIVE_PORT = "22344"
 
 # Drum 1 settings

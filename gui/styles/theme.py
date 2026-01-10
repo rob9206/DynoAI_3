@@ -4,52 +4,53 @@ Minimalist, high-contrast industrial precision UI theme for engineering software
 All color tokens and styling rules centralized here.
 """
 
-from PyQt6.QtGui import QColor, QPalette, QFont
+from PyQt6.QtGui import QColor, QFont, QPalette
 from PyQt6.QtWidgets import QApplication
 
 # ============================================================================
 # DESIGN TOKENS - Shadow Suite
 # ============================================================================
 
+
 class ShadowTokens:
     """Design tokens for Shadow Suite theme - DO NOT MODIFY without approval."""
-    
+
     # Backgrounds
-    BG0 = "#0B0D10"          # Main background
-    BG1 = "#0F1216"          # Panel background
-    BG2 = "#131820"          # Raised/hover background
-    
+    BG0 = "#0B0D10"  # Main background
+    BG1 = "#0F1216"  # Panel background
+    BG2 = "#131820"  # Raised/hover background
+
     # Structure
-    BORDER = "#2A313B"       # Borders, dividers
-    
+    BORDER = "#2A313B"  # Borders, dividers
+
     # Typography
-    TEXT = "#D7DCE3"         # Primary text (off-white)
-    MUTED = "#9AA5B1"        # Secondary/muted text
-    
+    TEXT = "#D7DCE3"  # Primary text (off-white)
+    MUTED = "#9AA5B1"  # Secondary/muted text
+
     # Accent (steel - use sparingly)
-    ACCENT = "#8FA3B8"       # Primary accent for focus, selection
-    
+    ACCENT = "#8FA3B8"  # Primary accent for focus, selection
+
     # Conditional State Colors (use ONLY for their semantic meaning)
-    OK = "#6FAF8A"           # Active/running/armed states only
-    WARN = "#C7A86A"         # Warnings, AFR lean context only
-    DANGER = "#C86B6B"       # Abort, destructive actions only
-    
+    OK = "#6FAF8A"  # Active/running/armed states only
+    WARN = "#C7A86A"  # Warnings, AFR lean context only
+    DANGER = "#C86B6B"  # Abort, destructive actions only
+
     # Typography scale
-    FONT_SIZE_BASE = 12      # Base font size (px equivalent)
-    FONT_SIZE_SMALL = 10     # Small text
-    FONT_SIZE_LARGE = 14     # Large text
-    FONT_SIZE_H1 = 20        # Headers
-    FONT_SIZE_H2 = 16        # Sub-headers
-    
+    FONT_SIZE_BASE = 12  # Base font size (px equivalent)
+    FONT_SIZE_SMALL = 10  # Small text
+    FONT_SIZE_LARGE = 14  # Large text
+    FONT_SIZE_H1 = 20  # Headers
+    FONT_SIZE_H2 = 16  # Sub-headers
+
     # Spacing rhythm (6px base unit)
     SPACING_XS = 6
     SPACING_SM = 12
     SPACING_MD = 18
     SPACING_LG = 24
-    
+
     # Borders & Radius
     BORDER_WIDTH = 1
-    BORDER_RADIUS = 3        # Minimal rounding
+    BORDER_RADIUS = 3  # Minimal rounding
 
 
 # Dictionary for backward compatibility
@@ -72,10 +73,10 @@ COLORS = {
     "muted": ShadowTokens.BG2,
 }
 
-
 # ============================================================================
 # SHADOW SUITE STYLESHEET
 # ============================================================================
+
 
 def build_stylesheet() -> str:
     """
@@ -83,7 +84,7 @@ def build_stylesheet() -> str:
     Rules are organized by component type.
     """
     T = ShadowTokens  # Shorthand
-    
+
     return f"""
     /* ========================================================================
        BASE & LAYOUT
@@ -534,6 +535,7 @@ def get_stylesheet() -> str:
 # THEME APPLICATION
 # ============================================================================
 
+
 def apply_theme(app: QApplication) -> None:
     """
     Apply the Shadow Suite theme to the application.
@@ -541,11 +543,11 @@ def apply_theme(app: QApplication) -> None:
     """
     # Use Fusion style for consistent cross-platform appearance
     app.setStyle("Fusion")
-    
+
     # Set base font
     base_font = QFont("Segoe UI", ShadowTokens.FONT_SIZE_BASE)
     app.setFont(base_font)
-    
+
     # Set palette for native components and dialogs
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(ShadowTokens.BG0))
@@ -561,9 +563,9 @@ def apply_theme(app: QApplication) -> None:
     palette.setColor(QPalette.ColorRole.Link, QColor(ShadowTokens.ACCENT))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(ShadowTokens.ACCENT))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(ShadowTokens.BG0))
-    
+
     app.setPalette(palette)
-    
+
     # Apply stylesheet
     app.setStyleSheet(build_stylesheet())
 
@@ -577,6 +579,7 @@ def apply_dark_theme(app: QApplication) -> None:
 # Export tokens for direct access if needed
 class Colors:
     """Backward compatibility class."""
+
     BACKGROUND = ShadowTokens.BG0
     SURFACE = ShadowTokens.BG1
     SURFACE_HOVER = ShadowTokens.BG2
