@@ -34,7 +34,9 @@ from api.metrics import init_metrics, record_analysis, record_file_upload
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all API routes
+CORS(app, resources={r"/api/*": {
+    "origins": "*"
+}})  # Enable CORS for all API routes
 
 # Initialize Swagger UI for API documentation (available at /api/docs)
 try:
@@ -110,15 +112,13 @@ if not os.environ.get("DYNOAI_STANDALONE"):
         pointer payload rather than a 404 to reduce confusion and help health checks.
         """
         return (
-            jsonify(
-                {
-                    "status": "ok",
-                    "service": "DynoAI API",
-                    "health": "/api/health",
-                    "docs": "/api/docs",
-                    "admin": "/admin",
-                }
-            ),
+            jsonify({
+                "status": "ok",
+                "service": "DynoAI API",
+                "health": "/api/health",
+                "docs": "/api/docs",
+                "admin": "/admin",
+            }),
             200,
         )
 
@@ -175,8 +175,10 @@ try:
     jetstream_config = JetstreamConfig(
         api_url=os.environ.get("JETSTREAM_API_URL", ""),
         api_key=os.environ.get("JETSTREAM_API_KEY", ""),
-        poll_interval_seconds=int(os.environ.get("JETSTREAM_POLL_INTERVAL", "30")),
-        auto_process=os.environ.get("JETSTREAM_AUTO_PROCESS", "true").lower() == "true",
+        poll_interval_seconds=int(
+            os.environ.get("JETSTREAM_POLL_INTERVAL", "30")),
+        auto_process=os.environ.get("JETSTREAM_AUTO_PROCESS",
+                                    "true").lower() == "true",
         enabled=os.environ.get("JETSTREAM_ENABLED", "false").lower() == "true",
     )
     if is_stub_mode_enabled():
@@ -231,7 +233,8 @@ try:
 
     app.register_blueprint(transient_bp)
 except Exception as e:  # pragma: no cover
-    print(f"[!] Warning: Could not initialize Transient Fuel Compensation: {e}")
+    print(
+        f"[!] Warning: Could not initialize Transient Fuel Compensation: {e}")
 
 # Virtual Tuning (Closed-Loop Orchestrator)
 try:
@@ -280,7 +283,8 @@ def _get_int_form(key: str, default: int) -> int:
 
 def allowed_file(filename: str) -> bool:
     """Check if file extension is allowed"""
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(
+        ".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def run_dyno_analysis(
@@ -304,7 +308,8 @@ def run_dyno_analysis(
         dict: Manifest data from analysis
     """
     # Check if running in standalone/PyInstaller mode
-    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(sys, "_MEIPASS")
+    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(
+        sys, "_MEIPASS")
 
     if is_standalone:
         # In standalone mode, use bundled resources
@@ -332,9 +337,8 @@ def run_dyno_analysis(
     if not script_path.exists():
         from api.errors import AnalysisError
 
-        raise AnalysisError(
-            f"Autotune script not found at {script_path}", stage="setup"
-        )
+        raise AnalysisError(f"Autotune script not found at {script_path}",
+                            stage="setup")
 
     # Build command with optional parameters
     cmd = [
@@ -375,9 +379,10 @@ def run_dyno_analysis(
             if "balance_mode" in params:
                 cmd.extend(["--balance-mode", str(params["balance_mode"])])
             if "balance_max_correction" in params:
-                cmd.extend(
-                    ["--balance-max-correction", str(params["balance_max_correction"])]
-                )
+                cmd.extend([
+                    "--balance-max-correction",
+                    str(params["balance_max_correction"])
+                ])
     else:
         # Default parameters
         cmd.extend(["--clamp", "15", "--smooth_passes", "2"])
@@ -387,12 +392,10 @@ def run_dyno_analysis(
     if result.returncode != 0:
         # Collect both stdout and stderr for better debugging
         stdout_msg = result.stdout.strip() if result.stdout else ""
-        stderr_msg = result.stderr.strip() if result.stderr else "No error output"
-        error_details = (
-            f"[STDOUT] {stdout_msg}\n[STDERR] {stderr_msg}"
-            if stdout_msg
-            else f"[ERROR] {stderr_msg}"
-        )
+        stderr_msg = result.stderr.strip(
+        ) if result.stderr else "No error output"
+        error_details = (f"[STDOUT] {stdout_msg}\n[STDERR] {stderr_msg}"
+                         if stdout_msg else f"[ERROR] {stderr_msg}")
         from api.errors import SubprocessError
 
         raise SubprocessError(
@@ -406,9 +409,8 @@ def run_dyno_analysis(
     if not manifest_path.exists():
         from api.errors import ManifestError
 
-        raise ManifestError(
-            "Manifest file not generated", manifest_path=str(manifest_path)
-        )
+        raise ManifestError("Manifest file not generated",
+                            manifest_path=str(manifest_path))
 
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
@@ -449,33 +451,34 @@ def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
         dict: Frontend-compatible manifest
     """
     return {
-        "runId": run_id,
-        "timestamp": manifest.get("timing", {}).get(
-            "start", datetime.utcnow().isoformat()
-        ),
-        "inputFile": manifest.get("input", {}).get("path", "unknown.csv"),
-        "rowsProcessed": manifest.get("stats", {}).get("rows_read", 0),
-        "correctionsApplied": manifest.get("stats", {}).get("front_accepted", 0)
-        + manifest.get("stats", {}).get("rear_accepted", 0),
-        "outputFiles": [
-            {
-                "name": (output.get("name") or Path(output.get("path", "")).name),
-                "type": (
-                    "VE Table"
-                    if "VE" in (output.get("name") or output.get("path", ""))
-                    else "Analysis Data"
-                ),
-                "url": f"/api/download/{run_id}/{Path(output.get('path') or output.get('name', '')).name}",
-            }
-            for output in manifest.get("outputs", [])
-        ],
+        "runId":
+        run_id,
+        "timestamp":
+        manifest.get("timing", {}).get("start",
+                                       datetime.utcnow().isoformat()),
+        "inputFile":
+        manifest.get("input", {}).get("path", "unknown.csv"),
+        "rowsProcessed":
+        manifest.get("stats", {}).get("rows_read", 0),
+        "correctionsApplied":
+        manifest.get("stats", {}).get("front_accepted", 0) +
+        manifest.get("stats", {}).get("rear_accepted", 0),
+        "outputFiles": [{
+            "name": (output.get("name") or Path(output.get("path", "")).name),
+            "type": ("VE Table" if "VE" in (output.get("name") or output.get(
+                "path", "")) else "Analysis Data"),
+            "url":
+            f"/api/download/{run_id}/{Path(output.get('path') or output.get('name', '')).name}",
+        } for output in manifest.get("outputs", [])],
         "analysisMetrics": {
-            "avgCorrection": 2.5,  # Calculate from actual corrections if available
-            "maxCorrection": 7.0,
-            "targetAFR": 14.7,
-            "iterations": manifest.get("config", {})
-            .get("args", {})
-            .get("smooth_passes", 2),
+            "avgCorrection":
+            2.5,  # Calculate from actual corrections if available
+            "maxCorrection":
+            7.0,
+            "targetAFR":
+            14.7,
+            "iterations":
+            manifest.get("config", {}).get("args", {}).get("smooth_passes", 2),
         },
     }
 
@@ -506,7 +509,9 @@ def analyze():
 
     if not allowed_file(file.filename):
         return (
-            jsonify({"error": "Invalid file type. Only CSV and TXT files allowed"}),
+            jsonify(
+                {"error":
+                 "Invalid file type. Only CSV and TXT files allowed"}),
             400,
         )
 
@@ -524,7 +529,8 @@ def analyze():
 
         # Verify file was saved
         if not upload_path.exists():
-            raise AnalysisError(f"File upload failed - file not found at {upload_path}")
+            raise AnalysisError(
+                f"File upload failed - file not found at {upload_path}")
 
         file_size = upload_path.stat().st_size
         print(f"[+] File saved successfully ({file_size} bytes)")
@@ -535,19 +541,24 @@ def analyze():
 
         # Extract tuning parameters from form data
         params = {
-            "smooth_passes": int(
-                request.form.get("smoothPasses", config.analysis.default_smooth_passes)
-            ),
-            "clamp": float(request.form.get("clamp", config.analysis.default_clamp)),
-            "rear_bias": float(
-                request.form.get("rearBias", config.analysis.default_rear_bias)
-            ),
-            "rear_rule_deg": float(
-                request.form.get("rearRuleDeg", config.analysis.default_rear_rule_deg)
-            ),
-            "hot_extra": float(
-                request.form.get("hotExtra", config.analysis.default_hot_extra)
-            ),
+            "smooth_passes":
+            int(
+                request.form.get("smoothPasses",
+                                 config.analysis.default_smooth_passes)),
+            "clamp":
+            float(request.form.get("clamp", config.analysis.default_clamp)),
+            "rear_bias":
+            float(
+                request.form.get("rearBias",
+                                 config.analysis.default_rear_bias)),
+            "rear_rule_deg":
+            float(
+                request.form.get("rearRuleDeg",
+                                 config.analysis.default_rear_rule_deg)),
+            "hot_extra":
+            float(
+                request.form.get("hotExtra",
+                                 config.analysis.default_hot_extra)),
         }
 
         # Extract decel tuning options from form data
@@ -559,7 +570,8 @@ def analyze():
         # Extract cylinder balancing options from form data
         balance_cylinders = _get_bool_form("balanceCylinders", False)
         balance_mode = request.form.get("balanceMode", "equalize")
-        balance_max_correction = float(request.form.get("balanceMaxCorrection", "3.0"))
+        balance_max_correction = float(
+            request.form.get("balanceMaxCorrection", "3.0"))
 
         tuning_options = {
             "decel_management": decel_management,
@@ -586,9 +598,8 @@ def analyze():
             try:
                 active_jobs[run_id]["status"] = "running"
                 active_jobs[run_id]["message"] = "Running analysis..."
-                manifest = run_dyno_analysis(
-                    upload_path, output_dir, run_id, params, tuning_options
-                )
+                manifest = run_dyno_analysis(upload_path, output_dir, run_id,
+                                             params, tuning_options)
                 active_jobs[run_id]["manifest"] = manifest
                 active_jobs[run_id]["status"] = "completed"
                 active_jobs[run_id]["message"] = "Analysis complete"
@@ -601,9 +612,11 @@ def analyze():
         thread.start()
 
         return (
-            jsonify(
-                {"runId": run_id, "status": "queued", "message": "Analysis started"}
-            ),
+            jsonify({
+                "runId": run_id,
+                "status": "queued",
+                "message": "Analysis started"
+            }),
             202,
         )
 
@@ -619,12 +632,10 @@ def analyze():
         logger.error(f"Error in analyze endpoint: {error_msg}", exc_info=True)
         try:
             return (
-                jsonify(
-                    {
-                        "error": error_msg,
-                        # Never return stack traces to clients (logged server-side via exc_info=True)
-                    }
-                ),
+                jsonify({
+                    "error": error_msg,
+                    # Never return stack traces to clients (logged server-side via exc_info=True)
+                }),
                 500,
             )
         except Exception as json_error:
@@ -632,7 +643,9 @@ def analyze():
             print(f"[!] Failed to create JSON response: {json_error}")
             from flask import Response
 
-            return Response(f"Error: {error_msg}", status=500, mimetype="text/plain")
+            return Response(f"Error: {error_msg}",
+                            status=500,
+                            mimetype="text/plain")
 
 
 @app.route("/api/status/<run_id>", methods=["GET"])
@@ -664,8 +677,7 @@ def get_status(run_id):
 
     if job["status"] == "completed" and "manifest" in job:
         response["manifest"] = convert_manifest_to_frontend_format(
-            job["manifest"], run_id
-        )
+            job["manifest"], run_id)
 
     return jsonify(response), 200
 
@@ -759,27 +771,25 @@ def get_ve_data(run_id):
         # Parse VE delta CSV
         from api.services.csv_parser import parse_ve_delta_csv
 
-        rpm_points, load_points, corrections = parse_ve_delta_csv(ve_delta_file)
+        rpm_points, load_points, corrections = parse_ve_delta_csv(
+            ve_delta_file)
 
         # Generate before/after data from corrections
         # Assume baseline VE of 100 for all cells
         baseline_ve = 100.0
         before_data = [[baseline_ve for _ in load_points] for _ in rpm_points]
-        after_data = [
-            [baseline_ve + corrections[i][j] for j in range(len(load_points))]
-            for i in range(len(rpm_points))
-        ]
+        after_data = [[
+            baseline_ve + corrections[i][j] for j in range(len(load_points))
+        ] for i in range(len(rpm_points))]
 
         return (
-            jsonify(
-                {
-                    "rpm": rpm_points,
-                    "load": load_points,
-                    "corrections": corrections,
-                    "before": before_data,
-                    "after": after_data,
-                }
-            ),
+            jsonify({
+                "rpm": rpm_points,
+                "load": load_points,
+                "corrections": corrections,
+                "before": before_data,
+                "after": after_data,
+            }),
             200,
         )
 
@@ -799,13 +809,14 @@ def list_runs():
                 if manifest_path.exists():
                     with open(manifest_path, "r") as f:
                         manifest = json.load(f)
-                    runs.append(
-                        {
-                            "runId": run_dir.name,
-                            "timestamp": manifest.get("timing", {}).get("start"),
-                            "inputFile": manifest.get("input", {}).get("path"),
-                        }
-                    )
+                    runs.append({
+                        "runId":
+                        run_dir.name,
+                        "timestamp":
+                        manifest.get("timing", {}).get("start"),
+                        "inputFile":
+                        manifest.get("input", {}).get("path"),
+                    })
 
         return jsonify({"runs": runs}), 200
 
@@ -884,9 +895,8 @@ def get_confidence_report(run_id):
 
 
 @app.route("/api/runs/<run_id>/session-replay", methods=["GET"])
-@app.route(
-    "/api/session-replay/<run_id>", methods=["GET"]
-)  # Backwards-compatible alias
+@app.route("/api/session-replay/<run_id>",
+           methods=["GET"])  # Backwards-compatible alias
 @rate_limit("120/minute")  # Read-only - permissive
 def get_session_replay(run_id):
     """
@@ -968,7 +978,8 @@ def get_coverage(run_id):
 
                 for row in reader:
                     rpm_points.append(int(row[0]))
-                    coverage_data.append([int(val) if val else 0 for val in row[1:]])
+                    coverage_data.append(
+                        [int(val) if val else 0 for val in row[1:]])
 
                 result["front"] = {
                     "rpm": rpm_points,
@@ -987,7 +998,8 @@ def get_coverage(run_id):
 
                 for row in reader:
                     rpm_points.append(int(row[0]))
-                    coverage_data.append([int(val) if val else 0 for val in row[1:]])
+                    coverage_data.append(
+                        [int(val) if val else 0 for val in row[1:]])
 
                 result["rear"] = {
                     "rpm": rpm_points,
@@ -1082,7 +1094,8 @@ def apply_ve_corrections():
         # Use default base VE from tables folder
         base_ve_path = Path("tables/FXDLS_Wheelie_VE_Base_Front_fixed.csv")
         if not base_ve_path.exists():
-            raise ValidationError("No base VE file specified and default not found")
+            raise ValidationError(
+                "No base VE file specified and default not found")
 
     # Create output paths
     ve_output_path = output_dir / "VE_Applied.csv"
@@ -1118,15 +1131,13 @@ def apply_ve_corrections():
         print(f"[!] Warning: Could not record timeline event: {e}")
 
     return (
-        jsonify(
-            {
-                "success": True,
-                "applied_at": apply_metadata.get("applied_at_utc"),
-                "cells_modified": apply_metadata.get("cells_modified", 0),
-                "output_path": str(ve_output_path),
-                "timeline_event_id": timeline_event_id,
-            }
-        ),
+        jsonify({
+            "success": True,
+            "applied_at": apply_metadata.get("applied_at_utc"),
+            "cells_modified": apply_metadata.get("cells_modified", 0),
+            "output_path": str(ve_output_path),
+            "timeline_event_id": timeline_event_id,
+        }),
         200,
     )
 
@@ -1184,7 +1195,8 @@ def rollback_ve_corrections():
     metadata_path = output_dir / "VE_Applied_meta.json"
 
     if not ve_applied_path.exists():
-        raise ValidationError("No VE corrections have been applied to this run")
+        raise ValidationError(
+            "No VE corrections have been applied to this run")
 
     if not metadata_path.exists():
         raise ValidationError("Cannot rollback: metadata file not found")
@@ -1223,14 +1235,12 @@ def rollback_ve_corrections():
         print(f"[!] Warning: Could not record timeline event: {e}")
 
     return (
-        jsonify(
-            {
-                "success": True,
-                "rolled_back_at": rollback_info.get("rolled_back_at_utc"),
-                "restored_path": str(ve_restored_path),
-                "timeline_event_id": timeline_event_id,
-            }
-        ),
+        jsonify({
+            "success": True,
+            "rolled_back_at": rollback_info.get("rolled_back_at_utc"),
+            "restored_path": str(ve_restored_path),
+            "timeline_event_id": timeline_event_id,
+        }),
         200,
     )
 
@@ -1278,7 +1288,9 @@ def print_startup_banner():
     print("\n[*] Tuning Wizard endpoints:")
     print("  GET  /api/wizards/config              - Get all wizard options")
     print("  POST /api/wizards/decel/preview       - Preview decel fix")
-    print("  POST /api/wizards/decel/apply         - Apply decel fix (one-click)")
+    print(
+        "  POST /api/wizards/decel/apply         - Apply decel fix (one-click)"
+    )
     print("  GET  /api/wizards/stages              - List stage presets")
     print("  GET  /api/wizards/cams                - List cam family presets")
     print("  POST /api/wizards/heat-soak/analyze   - Analyze heat soak")

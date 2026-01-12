@@ -13,8 +13,7 @@ from api.errors import CSVParsingError, ValidationError
 
 
 def parse_ve_delta_csv(
-    file_path: Path,
-) -> Tuple[List[int], List[int], List[List[float]]]:
+        file_path: Path, ) -> Tuple[List[int], List[int], List[List[float]]]:
     """
     Parse VE delta CSV file with RPM rows and kPa columns.
 
@@ -240,9 +239,8 @@ def parse_csv_with_validation(
         )
 
 
-def safe_float_conversion(
-    value: str, default: Optional[float] = None
-) -> Optional[float]:
+def safe_float_conversion(value: str,
+                          default: Optional[float] = None) -> Optional[float]:
     """
     Safely convert string to float, handling common issues.
 
@@ -265,7 +263,8 @@ def safe_float_conversion(
 
     try:
         # Remove common formatting characters
-        cleaned = value.replace("+", "").replace("'", "").replace('"', "").strip()
+        cleaned = value.replace("+", "").replace("'", "").replace('"',
+                                                                  "").strip()
         if not cleaned:
             return default
         return float(cleaned)
@@ -273,7 +272,8 @@ def safe_float_conversion(
         return default
 
 
-def safe_int_conversion(value: str, default: Optional[int] = None) -> Optional[int]:
+def safe_int_conversion(value: str,
+                        default: Optional[int] = None) -> Optional[int]:
     """
     Safely convert string to int, handling common issues.
 
