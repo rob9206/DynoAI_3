@@ -193,7 +193,10 @@ class VEOperationError(APIError):
     """Raised when VE table apply/rollback operations fail."""
 
     def __init__(
-        self, message: str, operation: Optional[str] = None, run_id: Optional[str] = None
+        self,
+        message: str,
+        operation: Optional[str] = None,
+        run_id: Optional[str] = None,
     ):
         details = {}
         if operation:
@@ -234,7 +237,9 @@ class AuthenticationError(APIError):
 class PermissionError(APIError):
     """Raised when user lacks permission for an operation."""
 
-    def __init__(self, message: str = "Permission denied", resource: Optional[str] = None):
+    def __init__(
+        self, message: str = "Permission denied", resource: Optional[str] = None
+    ):
         super().__init__(
             message=message,
             status_code=403,

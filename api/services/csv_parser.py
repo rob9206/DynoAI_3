@@ -240,7 +240,9 @@ def parse_csv_with_validation(
         )
 
 
-def safe_float_conversion(value: str, default: Optional[float] = None) -> Optional[float]:
+def safe_float_conversion(
+    value: str, default: Optional[float] = None
+) -> Optional[float]:
     """
     Safely convert string to float, handling common issues.
 
