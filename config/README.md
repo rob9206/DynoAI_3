@@ -55,7 +55,7 @@ Reference configuration for the Dynojet Dynoware RT-150 at Dawson Dynamics.
 
 **Contents:**
 - Drum specifications (Serial 1000588)
-- Drum mass: 14.121 kg
+- Drum mass: 14.121 slugs
 - Drum circumference: 4.673 ft
 - Drum radius: 0.7437 ft
 - Network configuration (192.168.1.115, UDP 22344)

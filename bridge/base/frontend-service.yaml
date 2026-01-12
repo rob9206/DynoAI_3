@@ -13,8 +13,8 @@ spec:
         com.docker.compose.project: dynoai_3
         com.docker.compose.service: frontend
     ports:
-        - name: frontend-8080
-          port: 8080
+        - name: frontend-80
+          port: 80
           protocol: TCP
           targetPort: frontend-80
         - name: frontend-5173

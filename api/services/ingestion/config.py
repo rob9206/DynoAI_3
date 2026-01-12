@@ -225,7 +225,7 @@ class DataSourceConfig:
 class JetDriveConfig:
     """JetDrive-specific configuration."""
 
-    multicast_group: str = "224.0.2.10"
+    multicast_group: str = "224.0.2.10"  # Official Dynojet/JetDrive vendor address
     port: int = 22344
     interface: str = "0.0.0.0"
     discovery_timeout_sec: float = 3.0

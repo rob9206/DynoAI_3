@@ -166,6 +166,14 @@ def handle_api_error(error: APIError) -> Tuple[Response, int]:
 
 def handle_exception(error: Exception) -> Tuple[Response, int]:
     """Handle unexpected exceptions."""
+    import sys
+
+    # Always print to stderr for debugging
+    print(
+        f"[ERROR] Unhandled exception: {type(error).__name__}: {error}", file=sys.stderr
+    )
+    traceback.print_exc(file=sys.stderr)
+
     logger.error(
         f"Unhandled exception: {str(error)}",
         exc_info=True,

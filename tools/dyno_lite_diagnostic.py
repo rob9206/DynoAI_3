@@ -45,7 +45,7 @@ RT150_CONFIG = {
     "expected_ip": "192.168.1.115",
     "serial": "RT00220413",
     "drum_serial": "1000588",
-    "drum_mass_kg": 14.121,
+    "drum_mass_slugs": 14.121,
     "drum_circumference_ft": 4.673,
     "firmware": "DWRT 2.1.7034.17067",
 }

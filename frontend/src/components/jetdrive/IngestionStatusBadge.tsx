@@ -52,7 +52,7 @@ const HealthIcon = ({ health, size = 'sm' }: { health: string; size?: 'sm' | 'md
 
 export function IngestionStatusBadge({
   onViewDetails,
-  pollInterval = 3000,
+  pollInterval = 10000, // Poll every 10 seconds - health checks don't need to be fast
   showLabel = true,
   className = '',
 }: IngestionStatusBadgeProps) {
@@ -69,15 +69,12 @@ export function IngestionStatusBadge({
     refresh,
   } = useIngestionHealth({ pollInterval, autoStart: true });
 
-  // Pause polling when popover is closed
-  const { startPolling, stopPolling } = useIngestionHealth({ autoStart: false });
-
+  // Refresh data when popover opens
   useEffect(() => {
     if (isOpen) {
-      startPolling();
+      refresh();
     }
-    return () => stopPolling();
-  }, [isOpen, startPolling, stopPolling]);
+  }, [isOpen, refresh]);
 
   const badgeVariant = {
     healthy: 'default',

@@ -1,0 +1,398 @@
+{
+  "anomalies": [
+    {
+      "type": "Spatial discontinuity",
+      "score": 4.618549752651337,
+      "cell": {
+        "rpm": 3500,
+        "kpa": 65
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 4.522255211831334,
+      "cell": {
+        "rpm": 3500,
+        "kpa": 80
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 8.05673467204422,
+      "cell": {
+        "rpm": 4500,
+        "kpa": 50
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    },
+    {
+      "type": "Spatial discontinuity",
+      "score": 5.099002651815411,
+      "cell": {
+        "rpm": 4500,
+        "kpa": 65
+      },
+      "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+      "next_checks": [
+        "Re-run steady-state in this cell",
+        "Inspect for vacuum leaks, throttle sync, or sensor noise"
+      ]
+    }
+  ],
+  "correction_diagnostics": {
+    "front": {
+      "accepted_wb": 12000,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 0,
+      "no_requested_afr": 0,
+      "total_records_processed": 12000,
+      "per_bin_stats": {
+        "mad": [
+          [
+            5.8552421638667145,
+            5.032625100287816,
+            5.443271783480726,
+            5.432357221460727,
+            5.467275909886563
+          ],
+          [
+            5.33789562941476,
+            5.471725125268435,
+            5.482173226686196,
+            4.884130841216714,
+            4.760953601899126
+          ],
+          [
+            5.987422549792174,
+            5.503948266995661,
+            5.331603358537278,
+            5.556143844800507,
+            6.436209211845287
+          ],
+          [
+            5.839126249340121,
+            5.145458143677015,
+            5.459629753108439,
+            5.594718585655134,
+            5.384929951844097
+          ],
+          [
+            5.8916803654296475,
+            5.635997986214571,
+            5.717673592968493,
+            5.75334382376081,
+            5.8241349429949265
+          ],
+          [
+            5.1012279531949805,
+            5.78051460166635,
+            5.627421928424898,
+            5.986934330182239,
+            5.6990727030966015
+          ],
+          [
+            6.344201265344214,
+            4.851916840523523,
+            3.616887058301155,
+            6.179708165158329,
+            4.783432228671826
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "hits": [
+          [
+            872,
+            707,
+            748,
+            862,
+            697
+          ],
+          [
+            186,
+            286,
+            261,
+            325,
+            330
+          ],
+          [
+            326,
+            284,
+            251,
+            265,
+            257
+          ],
+          [
+            223,
+            301,
+            243,
+            269,
+            430
+          ],
+          [
+            439,
+            429,
+            308,
+            405,
+            359
+          ],
+          [
+            326,
+            267,
+            161,
+            345,
+            226
+          ],
+          [
+            98,
+            132,
+            66,
+            181,
+            135
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    "rear": {
+      "accepted_wb": 11994,
+      "temp_out_of_range": 0,
+      "map_out_of_range": 0,
+      "tps_out_of_range": 0,
+      "ve_out_of_range": 0,
+      "bad_afr_or_request_afr": 6,
+      "no_requested_afr": 0,
+      "total_records_processed": 12000,
+      "per_bin_stats": {
+        "mad": [
+          [
+            6.6289033488155535,
+            6.2514153752387,
+            5.969698114633317,
+            6.161884776017623,
+            6.216820264085682
+          ],
+          [
+            6.030986423143281,
+            6.3886753109736,
+            5.779819980837679,
+            7.104208882585211,
+            6.074621712680216
+          ],
+          [
+            6.6737777850116995,
+            6.221436951966209,
+            5.584079775543422,
+            5.456196747139989,
+            5.839126249340121
+          ],
+          [
+            6.151675716465164,
+            6.064617095626882,
+            5.8670084575183505,
+            5.930664346895749,
+            6.33116883116883
+          ],
+          [
+            5.762615695592047,
+            6.326074042241248,
+            6.443578506920255,
+            6.22388301555111,
+            6.236472586310674
+          ],
+          [
+            6.118920810643486,
+            6.358989409836861,
+            4.831625183016106,
+            6.238803463167377,
+            5.825837242288662
+          ],
+          [
+            5.548319649977511,
+            6.14081517991994,
+            5.906427647170004,
+            7.235331397927074,
+            6.681155920470096
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "hits": [
+          [
+            872,
+            707,
+            748,
+            862,
+            697
+          ],
+          [
+            186,
+            285,
+            261,
+            324,
+            330
+          ],
+          [
+            326,
+            284,
+            251,
+            264,
+            257
+          ],
+          [
+            223,
+            301,
+            243,
+            269,
+            430
+          ],
+          [
+            439,
+            429,
+            308,
+            405,
+            359
+          ],
+          [
+            325,
+            266,
+            161,
+            345,
+            226
+          ],
+          [
+            98,
+            132,
+            66,
+            180,
+            135
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    }
+  }
+}

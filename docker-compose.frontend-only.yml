@@ -1,0 +1,19 @@
+# Docker Compose - Frontend + Redis Only
+# For use when running API natively (e.g., JetDrive mode on Windows)
+# Use: docker compose -f docker-compose.yml -f docker-compose.frontend-only.yml up frontend redis
+
+services:
+  # Remove API service from deployment
+  api:
+    deploy:
+      replicas: 0
+      
+  frontend:
+    # Frontend proxies to native API via host.docker.internal
+    # nginx.conf already configured to use host.docker.internal:5001
+    ports:
+      - "80:80"
+      
+  redis:
+    ports:
+      - "6379:6379"

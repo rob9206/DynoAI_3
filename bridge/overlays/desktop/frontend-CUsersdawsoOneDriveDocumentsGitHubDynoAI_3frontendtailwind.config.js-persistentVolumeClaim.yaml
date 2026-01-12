@@ -1,0 +1,9 @@
+#! frontend-C:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\frontend\tailwind.config.js-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: frontend-c--users-dawso-onedrive-documents-github-dynoai-3-frontend-tailwind-config-js
+    namespace: dynoai-3
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

@@ -14,7 +14,7 @@ This allows full testing of the JetDrive Command Center without hardware.
 
 Dyno Configuration:
 - Uses actual drum specs from DynoConfig (Dynoware RT-150)
-- Drum 1: Mass 14.121 kg, Circumference 4.673 ft
+- Drum 1: Mass 14.121 slugs, Circumference 4.673 ft
 - Force calculation: F = τ / r (torque / drum radius)
 - HP calculation: P = F × v / 550 (force × velocity / conversion)
 """

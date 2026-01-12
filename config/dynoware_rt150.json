@@ -24,7 +24,8 @@
   },
   
   "network": {
-    "ip_address": "192.168.1.115",
+    "ip_address": "169.254.187.108",
+    "multicast_group": "224.0.2.10",
     "jetdrive_port": 22344,
     "protocol": "Power Core JetDrive (UDP multicast)"
   },
@@ -32,8 +33,8 @@
   "drums": {
     "drum1": {
       "serial_number": "1000588",
-      "mass_kg": 14.121,
-      "retarder_mass_kg": 0,
+      "mass_slugs": 14.121,
+      "retarder_mass_slugs": 0,
       "circumference_ft": 4.673,
       "num_tabs": 1,
       "_calculated": {
@@ -47,8 +48,8 @@
     },
     "drum2": {
       "serial_number": "0",
-      "mass_kg": 0,
-      "retarder_mass_kg": 0,
+      "mass_slugs": 0,
+      "retarder_mass_slugs": 0,
       "circumference_ft": 0,
       "num_tabs": 0,
       "_note": "Drum 2 not configured/installed"

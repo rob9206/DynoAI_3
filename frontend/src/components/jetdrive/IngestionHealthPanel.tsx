@@ -95,7 +95,7 @@ const CircuitBreakerCard = ({
         <div>
           <div className="font-medium text-sm">{name}</div>
           <div className="text-xs opacity-70">
-            {breaker.failure_count} failures • {(breaker.success_rate * 100).toFixed(0)}% success
+            {breaker.failure_count ?? 0} failures • {((breaker.success_rate ?? 0) * 100).toFixed(0)}% success
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@ const ChannelHealthRow = ({ channel }: { channel: ChannelHealth }) => {
             <TooltipTrigger asChild>
               <span className="flex items-center gap-1">
                 {rateIndicator}
-                {channel.samples_per_second.toFixed(1)} Hz
+                {(channel.samples_per_second ?? 0).toFixed(1)} Hz
               </span>
             </TooltipTrigger>
             <TooltipContent>
@@ -151,7 +151,7 @@ const ChannelHealthRow = ({ channel }: { channel: ChannelHealth }) => {
           {formatDuration(channel.age_seconds)} ago
         </span>
         <span className="font-mono w-16 text-right">
-          {channel.last_value.toFixed(2)}
+          {(channel.last_value ?? 0).toFixed(2)}
         </span>
       </div>
     </div>
@@ -161,7 +161,7 @@ const ChannelHealthRow = ({ channel }: { channel: ChannelHealth }) => {
 export function IngestionHealthPanel({
   compact = false,
   showCircuitBreakers = true,
-  pollInterval = 2000,
+  pollInterval = 10000, // 10 seconds - health checks don't need high frequency
   className = '',
 }: IngestionHealthPanelProps) {
   const [channelsExpanded, setChannelsExpanded] = useState(!compact);
@@ -291,7 +291,7 @@ export function IngestionHealthPanel({
             </div>
             <div className="flex items-baseline gap-1">
               <span className={`text-xl font-bold ${getHealthColor(dropSeverity)}`}>
-                {frameStats.dropRate.toFixed(1)}%
+                {(frameStats.dropRate ?? 0).toFixed(1)}%
               </span>
               <span className="text-sm text-muted-foreground">drop</span>
             </div>

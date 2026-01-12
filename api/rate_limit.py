@@ -54,8 +54,9 @@ def init_rate_limiter(app: Flask) -> Limiter:
     global _limiter
 
     enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
-    # Default 1200/minute allows real-time polling at 100ms intervals (10/sec)
-    default_limit = os.getenv("RATE_LIMIT_DEFAULT", "1200/minute")
+    # Default 3000/minute allows multiple real-time pollers (50 req/sec)
+    # Supports 3-5 simultaneous components polling at 100-250ms intervals
+    default_limit = os.getenv("RATE_LIMIT_DEFAULT", "3000/minute")
     storage_uri = os.getenv("RATE_LIMIT_STORAGE", "memory://")
 
     limiter = Limiter(

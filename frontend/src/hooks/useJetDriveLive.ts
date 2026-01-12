@@ -202,7 +202,7 @@ export function getChannelConfig(name: string): typeof JETDRIVE_CHANNEL_CONFIG[s
 const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
-    pollInterval: 250,  // 250ms = 4 updates/sec for responsive gauges while avoiding rate limits
+    pollInterval: 1000,  // 1000ms = 1 update/sec - balances responsiveness with connection pool limits
     historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
@@ -289,11 +289,22 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             return;
         }
         
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/78113279-9244-4ae6-8f9e-203bcc2c7404',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useJetDriveLive.ts:286',message:'poll_initiated',data:{apiUrl:opts.apiUrl,backoff:backoffRef.current},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+        
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/live/data`);
             
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/78113279-9244-4ae6-8f9e-203bcc2c7404',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useJetDriveLive.ts:293',message:'fetch_response',data:{status:res.status,ok:res.ok,type:res.type,url:res.url},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+            // #endregion
+            
             // Handle rate limiting with exponential backoff
             if (res.status === 429) {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/78113279-9244-4ae6-8f9e-203bcc2c7404',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useJetDriveLive.ts:296',message:'429_received_frontend',data:{status:res.status,statusText:res.statusText,backoffCurrent:backoffRef.current,retryAfter:res.headers.get('Retry-After'),headers:Object.fromEntries(res.headers.entries())},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H4'})}).catch(()=>{});
+                // #endregion
                 // Exponential backoff: 500ms, 1s, 2s, 4s, max 8s
                 backoffRef.current = Math.min(backoffRef.current === 0 ? 500 : backoffRef.current * 2, 8000);
                 backoffUntilRef.current = Date.now() + backoffRef.current;
