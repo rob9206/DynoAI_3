@@ -77,3 +77,14 @@ build/
 dist/
 installer_output/
 *.spec.bak
+
+# Environment and configuration files
+.env
+.env.local
+.env.*.local
+
+# Temporary files and IDE artifacts
+tmpclaude-*-cwd
+.claude/
+*.backup
+*.bak
