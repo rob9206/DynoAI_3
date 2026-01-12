@@ -133,6 +133,140 @@ class ConfigurationError(APIError):
         )
 
 
+class CSVParsingError(APIError):
+    """Raised when CSV parsing fails."""
+
+    def __init__(
+        self,
+        message: str,
+        file_path: Optional[str] = None,
+        line_number: Optional[int] = None,
+    ):
+        details = {}
+        if file_path:
+            details["file_path"] = file_path
+        if line_number:
+            details["line_number"] = line_number
+        super().__init__(
+            message=f"CSV parsing error: {message}",
+            status_code=400,
+            error_code="CSV_PARSING_ERROR",
+            details=details,
+        )
+
+
+class SubprocessError(APIError):
+    """Raised when subprocess execution fails."""
+
+    def __init__(
+        self,
+        message: str,
+        command: Optional[str] = None,
+        exit_code: Optional[int] = None,
+    ):
+        details = {}
+        if command:
+            details["command"] = command
+        if exit_code is not None:
+            details["exit_code"] = exit_code
+        super().__init__(
+            message=f"Subprocess error: {message}",
+            status_code=500,
+            error_code="SUBPROCESS_ERROR",
+            details=details,
+        )
+
+
+class ManifestError(APIError):
+    """Raised when manifest file is missing or invalid."""
+
+    def __init__(self, message: str, manifest_path: Optional[str] = None):
+        super().__init__(
+            message=f"Manifest error: {message}",
+            status_code=500,
+            error_code="MANIFEST_ERROR",
+            details={"manifest_path": manifest_path} if manifest_path else {},
+        )
+
+
+class VEOperationError(APIError):
+    """Raised when VE table apply/rollback operations fail."""
+
+    def __init__(
+        self, message: str, operation: Optional[str] = None, run_id: Optional[str] = None
+    ):
+        details = {}
+        if operation:
+            details["operation"] = operation
+        if run_id:
+            details["run_id"] = run_id
+        super().__init__(
+            message=f"VE operation failed: {message}",
+            status_code=500,
+            error_code="VE_OPERATION_ERROR",
+            details=details,
+        )
+
+
+class DataIntegrityError(APIError):
+    """Raised when data validation or integrity checks fail."""
+
+    def __init__(self, message: str, field: Optional[str] = None):
+        super().__init__(
+            message=f"Data integrity error: {message}",
+            status_code=422,
+            error_code="DATA_INTEGRITY_ERROR",
+            details={"field": field} if field else {},
+        )
+
+
+class AuthenticationError(APIError):
+    """Raised when authentication fails."""
+
+    def __init__(self, message: str = "Authentication required"):
+        super().__init__(
+            message=message,
+            status_code=401,
+            error_code="AUTHENTICATION_ERROR",
+        )
+
+
+class PermissionError(APIError):
+    """Raised when user lacks permission for an operation."""
+
+    def __init__(self, message: str = "Permission denied", resource: Optional[str] = None):
+        super().__init__(
+            message=message,
+            status_code=403,
+            error_code="PERMISSION_ERROR",
+            details={"resource": resource} if resource else {},
+        )
+
+
+class PowerCoreError(APIError):
+    """Raised when Power Core integration fails."""
+
+    def __init__(self, message: str, operation: Optional[str] = None):
+        super().__init__(
+            message=f"Power Core error: {message}",
+            status_code=502,
+            error_code="POWER_CORE_ERROR",
+            details={"operation": operation} if operation else {},
+        )
+
+
+class JetDriveError(APIError):
+    """Raised when JetDrive integration fails."""
+
+    def __init__(self, message: str, operation: Optional[str] = None):
+        super().__init__(
+            message=f"JetDrive error: {message}",
+            status_code=502,
+            error_code="JETDRIVE_ERROR",
+            details={"operation": operation} if operation else {},
+        )
+
+
 def error_response(
     message: str,
     status_code: int = 500,

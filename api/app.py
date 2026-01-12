@@ -329,7 +329,9 @@ def run_dyno_analysis(
     
     # Verify script exists
     if not script_path.exists():
-        raise Exception(f"Autotune script not found at {script_path}")
+        from api.errors import AnalysisError
+
+        raise AnalysisError(f"Autotune script not found at {script_path}", stage="setup")
 
     # Build command with optional parameters
     cmd = [
@@ -388,12 +390,20 @@ def run_dyno_analysis(
             if stdout_msg
             else f"[ERROR] {stderr_msg}"
         )
-        raise Exception(f"Analysis failed: {error_details}")
+        from api.errors import SubprocessError
+
+        raise SubprocessError(
+            error_details,
+            command=" ".join(cmd),
+            exit_code=result.returncode,
+        )
 
     # Read the manifest file
     manifest_path = output_dir / "manifest.json"
     if not manifest_path.exists():
-        raise Exception("Manifest file not generated")
+        from api.errors import ManifestError
+
+        raise ManifestError("Manifest file not generated", manifest_path=str(manifest_path))
 
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
@@ -742,24 +752,9 @@ def get_ve_data(run_id):
             return jsonify({"error": "VE data not found"}), 404
 
         # Parse VE delta CSV
-        import csv
+        from api.services.csv_parser import parse_ve_delta_csv
 
-        with open(ve_delta_file, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            header = next(reader)
-
-            # Extract kPa bins from header (skip first "RPM" column)
-            load_points = [int(h) for h in header[1:]]
-
-            rpm_points = []
-            corrections = []
-
-            for row in reader:
-                rpm_points.append(int(row[0]))
-                # Remove '+' prefix and convert to float
-                corrections.append(
-                    [float(val.replace("+", "").replace("'", "")) for val in row[1:]]
-                )
+        rpm_points, load_points, corrections = parse_ve_delta_csv(ve_delta_file)
 
         # Generate before/after data from corrections
         # Assume baseline VE of 100 for all cells
@@ -1130,6 +1125,7 @@ def apply_ve_corrections():
 
 
 @app.route("/api/rollback", methods=["POST"])
+@require_api_key  # Protect state-changing VE operations
 @with_error_handling
 def rollback_ve_corrections():
     """
