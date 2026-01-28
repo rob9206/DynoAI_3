@@ -236,9 +236,8 @@ class JetDriveDataValidator:
         """Get the currently active provider ID."""
         return self._active_provider_id
 
-    def set_channel_range(
-        self, channel_name: str, min_val: float, max_val: float
-    ) -> None:
+    def set_channel_range(self, channel_name: str, min_val: float,
+                          max_val: float) -> None:
         """Set expected value range for a channel (applies to all providers)."""
         self._value_ranges[channel_name] = (min_val, max_val)
         with self._metrics_lock:
@@ -262,7 +261,8 @@ class JetDriveDataValidator:
             if sample.provider_id != self._active_provider_id:
                 # Track as non-provider frame but don't record metrics
                 with self._frame_stats_lock:
-                    self._frame_stats[sample.provider_id].non_provider_frames += 1
+                    self._frame_stats[
+                        sample.provider_id].non_provider_frames += 1
                 return False
 
         current_time = time.time()
@@ -305,15 +305,15 @@ class JetDriveDataValidator:
             stats.malformed_frames += malformed
             stats.non_provider_frames += non_provider
 
-    def get_channel_health(
-        self, provider_id: int, channel_id: int
-    ) -> ChannelMetrics | None:
+    def get_channel_health(self, provider_id: int,
+                           channel_id: int) -> ChannelMetrics | None:
         """Get health metrics for a specific channel from a specific provider."""
         key = (provider_id, channel_id)
         with self._metrics_lock:
             return self._metrics.get(key)
 
-    def get_channels_for_provider(self, provider_id: int) -> list[ChannelMetrics]:
+    def get_channels_for_provider(self,
+                                  provider_id: int) -> list[ChannelMetrics]:
         """Get all channel metrics for a specific provider."""
         with self._metrics_lock:
             return [
@@ -369,9 +369,12 @@ class JetDriveDataValidator:
             else:
                 # Aggregate across all providers
                 total = sum(s.total_frames for s in self._frame_stats.values())
-                dropped = sum(s.dropped_frames for s in self._frame_stats.values())
-                malformed = sum(s.malformed_frames for s in self._frame_stats.values())
-                non_provider = sum(s.non_provider_frames for s in self._frame_stats.values())
+                dropped = sum(s.dropped_frames
+                              for s in self._frame_stats.values())
+                malformed = sum(s.malformed_frames
+                                for s in self._frame_stats.values())
+                non_provider = sum(s.non_provider_frames
+                                   for s in self._frame_stats.values())
                 drop_rate = (dropped / total * 100) if total > 0 else 0.0
                 frame_stats = {
                     "provider_id": None,
@@ -383,9 +386,8 @@ class JetDriveDataValidator:
                 }
 
         # Calculate overall health
-        healthy_count = sum(
-            1 for m in metrics_list if m.health == ChannelHealth.HEALTHY
-        )
+        healthy_count = sum(1 for m in metrics_list
+                            if m.health == ChannelHealth.HEALTHY)
         total_count = len(metrics_list)
 
         overall_health = ChannelHealth.HEALTHY
@@ -412,7 +414,8 @@ class JetDriveDataValidator:
             "timestamp": current_time,
         }
 
-    def get_channel_summary(self, provider_id: int | None = None) -> dict[str, Any]:
+    def get_channel_summary(self,
+                            provider_id: int | None = None) -> dict[str, Any]:
         """
         Get a summary of all channels for quick status check.
 
@@ -425,21 +428,21 @@ class JetDriveDataValidator:
 
         with self._metrics_lock:
             summary = []
-            for metrics in sorted(self._metrics.values(), key=lambda m: m.channel_name):
-                if filter_provider is not None and metrics.provider_id != filter_provider:
+            for metrics in sorted(self._metrics.values(),
+                                  key=lambda m: m.channel_name):
+                if (filter_provider is not None
+                        and metrics.provider_id != filter_provider):
                     continue
                 age = metrics.get_age_seconds(current_time)
-                summary.append(
-                    {
-                        "provider_id": metrics.provider_id,
-                        "name": metrics.channel_name,
-                        "id": metrics.channel_id,
-                        "health": metrics.health.value,
-                        "value": metrics.last_value,
-                        "age_seconds": round(age, 2),
-                        "rate_hz": round(metrics.samples_per_second, 2),
-                    }
-                )
+                summary.append({
+                    "provider_id": metrics.provider_id,
+                    "name": metrics.channel_name,
+                    "id": metrics.channel_id,
+                    "health": metrics.health.value,
+                    "value": metrics.last_value,
+                    "age_seconds": round(age, 2),
+                    "rate_hz": round(metrics.samples_per_second, 2),
+                })
 
         return {
             "channels": summary,
