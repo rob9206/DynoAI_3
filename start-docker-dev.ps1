@@ -277,7 +277,7 @@ if ($script:warnings.Count -gt 0) {
 }
 
 Write-Host ""
-Write-Host "✅ Docker environment is ready!" -ForegroundColor Green
+Write-Host "Docker environment is ready!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Green
 Write-Host "  1. Review .env file and customize settings" -ForegroundColor Green
