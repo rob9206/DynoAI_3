@@ -28,20 +28,20 @@ import time
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
-from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
-from dynoai.core.weighted_binning import LogarithmicWeighting
+if TYPE_CHECKING:
+    from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
 
 logger = logging.getLogger(__name__)
 
 jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
 
 # Singleton workflow instance for unified analysis
-_workflow: AutoTuneWorkflow | None = None
+_workflow: "AutoTuneWorkflow" | None = None
 
 # TuneLab-style analysis configuration
 # Can be overridden via environment variables or API
@@ -66,10 +66,23 @@ TUNELAB_CONFIG = {
 }
 
 
-def get_workflow() -> AutoTuneWorkflow:
+def _get_autotune_types():
+    try:
+        from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+        from dynoai.core.weighted_binning import LogarithmicWeighting
+    except Exception as exc:
+        logger.error("Autotune dependencies unavailable: %s", exc, exc_info=True)
+        raise RuntimeError(
+            "Autotune workflow unavailable. Verify analysis dependencies are installed."
+        ) from exc
+    return AutoTuneWorkflow, DataSource, LogarithmicWeighting
+
+
+def get_workflow() -> "AutoTuneWorkflow":
     """Get or create the unified workflow instance with TuneLab features."""
     global _workflow
     if _workflow is None:
+        AutoTuneWorkflow, _, LogarithmicWeighting = _get_autotune_types()
         _workflow = AutoTuneWorkflow(
             # TuneLab-style filtering
             enable_filtering=TUNELAB_CONFIG["enable_filtering"],
@@ -918,6 +931,7 @@ def analyze_unified():
     output_dir = project_root / "runs" / run_id
 
     try:
+        _, DataSource, _ = _get_autotune_types()
         workflow = get_workflow()
 
         # Run the unified workflow with JetDrive data source
@@ -961,6 +975,7 @@ def create_workflow_session():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
+    _, DataSource, _ = _get_autotune_types()
     workflow = get_workflow()
     session = workflow.create_session(run_id=run_id, data_source=DataSource.JETDRIVE)
 

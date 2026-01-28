@@ -126,12 +126,52 @@ export function MappingConfidencePanel({
     const queryClient = useQueryClient();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+    const buildErrorMessage = async (res: Response, fallback: string) => {
+        const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : `${res.status}`;
+        const base = `${fallback} (${statusLabel})`;
+
+        try {
+            const contentType = res.headers.get('content-type') ?? '';
+            if (contentType.includes('application/json')) {
+                const payload: unknown = await res.json();
+                const errorValue =
+                    payload &&
+                    typeof payload === 'object' &&
+                    'error' in payload
+                        ? (payload as { error?: unknown }).error
+                        : payload;
+
+                if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
+                    return `${base}: ${errorValue}`;
+                }
+
+                if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
+                    const message = (errorValue as { message?: unknown }).message;
+                    if (typeof message === 'string' && message.trim().length > 0) {
+                        return `${base}: ${message}`;
+                    }
+                }
+
+                if (errorValue != null) {
+                    return `${base}: ${JSON.stringify(errorValue)}`;
+                }
+            }
+
+            const text = await res.text();
+            return text.trim().length > 0 ? `${base}: ${text}` : base;
+        } catch {
+            return base;
+        }
+    };
+
     // Fetch confidence report
     const { data: report, isLoading, error, refetch } = useQuery<ConfidenceReport>({
         queryKey: ['jetdrive-mapping-confidence', apiUrl],
         queryFn: async () => {
             const res = await fetch(`${apiUrl}/mapping/confidence`);
-            if (!res.ok) throw new Error('Failed to fetch confidence report');
+            if (!res.ok) {
+                throw new Error(await buildErrorMessage(res, 'Failed to fetch confidence report'));
+            }
             return res.json();
         },
         refetchInterval: false, // Manual refresh only

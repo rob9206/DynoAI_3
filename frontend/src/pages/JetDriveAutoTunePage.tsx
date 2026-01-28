@@ -63,7 +63,8 @@ import { getConfidenceReport } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
 
-const API_BASE = 'http://127.0.0.1:5001/api/jetdrive';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
+const API_BASE = `${API_BASE_URL}/api/jetdrive`;
 
 // ==================== TYPES ====================
 

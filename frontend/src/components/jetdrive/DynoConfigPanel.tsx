@@ -62,13 +62,51 @@ export function DynoConfigPanel({
     const [channels, setChannels] = useState<Record<string, any>>({});
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
+    const buildErrorMessage = async (res: Response, fallback: string) => {
+        const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : `${res.status}`;
+        const base = `${fallback} (${statusLabel})`;
+
+        try {
+            const contentType = res.headers.get('content-type') ?? '';
+            if (contentType.includes('application/json')) {
+                const payload: unknown = await res.json();
+                const errorValue =
+                    payload &&
+                    typeof payload === 'object' &&
+                    'error' in payload
+                        ? (payload as { error?: unknown }).error
+                        : payload;
+
+                if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
+                    return `${base}: ${errorValue}`;
+                }
+
+                if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
+                    const message = (errorValue as { message?: unknown }).message;
+                    if (typeof message === 'string' && message.trim().length > 0) {
+                        return `${base}: ${message}`;
+                    }
+                }
+
+                if (errorValue != null) {
+                    return `${base}: ${JSON.stringify(errorValue)}`;
+                }
+            }
+
+            const text = await res.text();
+            return text.trim().length > 0 ? `${base}: ${text}` : base;
+        } catch {
+            return base;
+        }
+    };
+
     const fetchConfig = async () => {
         setLoading(true);
         setError(null);
         
         try {
             const res = await fetch(`${apiUrl}/dyno/config`);
-            if (!res.ok) throw new Error('Failed to fetch dyno config');
+            if (!res.ok) throw new Error(await buildErrorMessage(res, 'Failed to fetch dyno config'));
             
             const data = await res.json();
             if (data.success) {
@@ -93,6 +131,9 @@ export function DynoConfigPanel({
         setLiveError(null);
         try {
             const res = await fetch(`${apiUrl}/hardware/connect`, { method: 'POST' });
+            if (!res.ok) {
+                throw new Error(await buildErrorMessage(res, 'Failed to connect to dyno'));
+            }
             const data = await res.json();
             setConnected(Boolean(data.connected));
         } catch (e) {
@@ -107,7 +148,9 @@ export function DynoConfigPanel({
         setLiveError(null);
         try {
             const res = await fetch(`${apiUrl}/hardware/start`, { method: 'POST' });
-            if (!res.ok) throw new Error('Failed to start live capture');
+            if (!res.ok) {
+                throw new Error(await buildErrorMessage(res, 'Failed to start live capture'));
+            }
             setCapturing(true);
         } catch (e) {
             setLiveError(e instanceof Error ? e.message : 'Start failed');
@@ -118,7 +161,9 @@ export function DynoConfigPanel({
         setLiveError(null);
         try {
             const res = await fetch(`${apiUrl}/hardware/stop`, { method: 'POST' });
-            if (!res.ok) throw new Error('Failed to stop live capture');
+            if (!res.ok) {
+                throw new Error(await buildErrorMessage(res, 'Failed to stop live capture'));
+            }
             setCapturing(false);
         } catch (e) {
             setLiveError(e instanceof Error ? e.message : 'Stop failed');

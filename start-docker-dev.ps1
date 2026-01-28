@@ -32,17 +32,17 @@ function Test-Requirement {
     $result = & $Test
     
     if ($result) {
-        Write-Host " ✓" -ForegroundColor Green
+        Write-Host " [OK]" -ForegroundColor Green
         if ($Verbose) { Write-Host "  $SuccessMessage" -ForegroundColor Gray }
         $script:passed += $Name
         return $true
     } else {
         if ($IsWarning) {
-            Write-Host " ⚠" -ForegroundColor Yellow
+            Write-Host " [WARN]" -ForegroundColor Yellow
             Write-Host "  WARNING: $FailureMessage" -ForegroundColor Yellow
             $script:warnings += $FailureMessage
         } else {
-            Write-Host " ✗" -ForegroundColor Red
+            Write-Host " [FAIL]" -ForegroundColor Red
             Write-Host "  ERROR: $FailureMessage" -ForegroundColor Red
             $script:issues += $FailureMessage
         }
@@ -138,7 +138,7 @@ Test-Requirement -Name "Environment File" -Test {
   -Fix {
     if (Test-Path "config/env.example") {
         Copy-Item "config/env.example" ".env"
-        Write-Host "  ✓ Created .env from config/env.example" -ForegroundColor Green
+    Write-Host "  [OK] Created .env from config/env.example" -ForegroundColor Green
     }
 }
 
@@ -255,23 +255,23 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host "  Validation Summary" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
-Write-Host "`n✓ Passed: $($script:passed.Count)" -ForegroundColor Green
+Write-Host "`nPassed: $($script:passed.Count)" -ForegroundColor Green
 if ($script:warnings.Count -gt 0) {
-    Write-Host "⚠ Warnings: $($script:warnings.Count)" -ForegroundColor Yellow
+    Write-Host "Warnings: $($script:warnings.Count)" -ForegroundColor Yellow
 }
 if ($script:issues.Count -gt 0) {
-    Write-Host "✗ Errors: $($script:issues.Count)" -ForegroundColor Red
+    Write-Host "Errors: $($script:issues.Count)" -ForegroundColor Red
 }
 
 if ($script:issues.Count -gt 0) {
-    Write-Host "`n❌ Critical Issues Found:" -ForegroundColor Red
+    Write-Host "`nCritical issues found:" -ForegroundColor Red
     $script:issues | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     Write-Host "`nPlease resolve these issues before running Docker." -ForegroundColor Yellow
     exit 1
 }
 
 if ($script:warnings.Count -gt 0) {
-    Write-Host "`n⚠️  Warnings:" -ForegroundColor Yellow
+    Write-Host "`nWarnings:" -ForegroundColor Yellow
     $script:warnings | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
     Write-Host "`nThese issues may not prevent Docker from running." -ForegroundColor Gray
 }

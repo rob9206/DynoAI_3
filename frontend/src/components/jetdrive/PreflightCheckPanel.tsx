@@ -245,6 +245,57 @@ export function PreflightCheckPanel({
   const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
   const [showDetails, setShowDetails] = useState(false);
 
+  const formatErrorMessage = async (response: Response) => {
+    const base = `HTTP ${response.status}`;
+
+    try {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const errorData: unknown = await response.json();
+        const errorValue =
+          errorData &&
+          typeof errorData === "object" &&
+          "error" in errorData
+            ? (errorData as { error?: unknown }).error
+            : errorData;
+
+        if (typeof errorValue === "string" && errorValue.trim().length > 0) {
+          return errorValue;
+        }
+
+        if (errorValue && typeof errorValue === "object" && "message" in errorValue) {
+          const message = (errorValue as { message?: unknown }).message;
+          if (typeof message === "string" && message.trim().length > 0) {
+            return message;
+          }
+        }
+
+        if (errorValue != null) {
+          return JSON.stringify(errorValue);
+        }
+      }
+
+      const text = await response.text();
+      return text.trim().length > 0 ? text : base;
+    } catch {
+      return base;
+    }
+  };
+
+  const getErrorMessage = (err: unknown) => {
+    if (err instanceof Error && err.message) {
+      return err.message;
+    }
+    if (typeof err === "string" && err.trim().length > 0) {
+      return err;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "Unknown error";
+    }
+  };
+
   const toggleCheckExpanded = (name: string) => {
     setExpandedChecks((prev) => {
       const next = new Set(prev);
@@ -277,8 +328,8 @@ export function PreflightCheckPanel({
       setProgress(100);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+        const errorMessage = await formatErrorMessage(response);
+        throw new Error(errorMessage);
       }
 
       const data: PreflightResult = await response.json();
@@ -295,7 +346,7 @@ export function PreflightCheckPanel({
       }
     } catch (err) {
       clearInterval(progressInterval);
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(getErrorMessage(err));
     } finally {
       setIsRunning(false);
     }

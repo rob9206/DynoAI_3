@@ -7,6 +7,37 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
+const buildErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  const statusLabel = response.statusText ? `${response.status} ${response.statusText}` : `${response.status}`;
+  const baseMessage = `${fallback} (${statusLabel})`;
+
+  try {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload: unknown = await response.json();
+      const errorValue =
+        payload &&
+        typeof payload === 'object' &&
+        'error' in payload
+          ? (payload as { error?: unknown }).error
+          : payload;
+
+      if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
+        return `${baseMessage}: ${errorValue}`;
+      }
+
+      if (errorValue != null) {
+        return `${baseMessage}: ${JSON.stringify(errorValue)}`;
+      }
+    }
+
+    const text = await response.text();
+    return text.trim().length > 0 ? `${baseMessage}: ${text}` : baseMessage;
+  } catch {
+    return baseMessage;
+  }
+};
+
 // === Types ===
 
 export interface ChannelHealth {
@@ -123,7 +154,7 @@ export interface IngestionMetrics {
 export async function getDataHealth(): Promise<DataHealth> {
   const response = await fetch(`${API_BASE_URL}/api/jetdrive/hardware/live/health`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch data health: ${response.statusText}`);
+    throw new Error(await buildErrorMessage(response, 'Failed to fetch data health'));
   }
   return response.json();
 }
@@ -134,7 +165,7 @@ export async function getDataHealth(): Promise<DataHealth> {
 export async function getChannelSummary(): Promise<{ channels: ChannelSummary[]; timestamp: number }> {
   const response = await fetch(`${API_BASE_URL}/api/jetdrive/hardware/live/health/summary`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch channel summary: ${response.statusText}`);
+    throw new Error(await buildErrorMessage(response, 'Failed to fetch channel summary'));
   }
   return response.json();
 }
@@ -145,7 +176,7 @@ export async function getChannelSummary(): Promise<{ channels: ChannelSummary[];
 export async function getReliabilityHealth(): Promise<ReliabilityHealth> {
   const response = await fetch(`${API_BASE_URL}/api/reliability/health`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch reliability health: ${response.statusText}`);
+    throw new Error(await buildErrorMessage(response, 'Failed to fetch reliability health'));
   }
   return response.json();
 }
@@ -158,7 +189,7 @@ export async function resetCircuitBreaker(name: string): Promise<{ success: bool
     method: 'POST',
   });
   if (!response.ok) {
-    throw new Error(`Failed to reset circuit breaker: ${response.statusText}`);
+    throw new Error(await buildErrorMessage(response, 'Failed to reset circuit breaker'));
   }
   return response.json();
 }
