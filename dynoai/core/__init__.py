@@ -22,4 +22,3 @@ __all__ = [
     "next_test_planner",
     "nextgen_payload",
 ]
-

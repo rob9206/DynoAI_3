@@ -28,7 +28,7 @@ import time
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
@@ -47,22 +47,24 @@ _workflow: "AutoTuneWorkflow" | None = None
 # Can be overridden via environment variables or API
 TUNELAB_CONFIG = {
     # Signal filtering (TuneLab-style)
-    "enable_filtering": os.environ.get("DYNOAI_ENABLE_FILTERING", "true").lower()
-    == "true",
-    "lowpass_rc_ms": float(os.environ.get("DYNOAI_LOWPASS_RC_MS", "500.0")),
-    "afr_min": float(os.environ.get("DYNOAI_AFR_MIN", "10.0")),
-    "afr_max": float(os.environ.get("DYNOAI_AFR_MAX", "19.0")),
-    "exclude_time_ms": float(os.environ.get("DYNOAI_EXCLUDE_TIME_MS", "50.0")),
-    "enable_statistical_filter": os.environ.get(
-        "DYNOAI_ENABLE_STATISTICAL_FILTER", "true"
-    ).lower()
-    == "true",
-    "sigma_threshold": float(os.environ.get("DYNOAI_SIGMA_THRESHOLD", "2.0")),
+    "enable_filtering":
+    os.environ.get("DYNOAI_ENABLE_FILTERING", "true").lower() == "true",
+    "lowpass_rc_ms":
+    float(os.environ.get("DYNOAI_LOWPASS_RC_MS", "500.0")),
+    "afr_min":
+    float(os.environ.get("DYNOAI_AFR_MIN", "10.0")),
+    "afr_max":
+    float(os.environ.get("DYNOAI_AFR_MAX", "19.0")),
+    "exclude_time_ms":
+    float(os.environ.get("DYNOAI_EXCLUDE_TIME_MS", "50.0")),
+    "enable_statistical_filter":
+    os.environ.get("DYNOAI_ENABLE_STATISTICAL_FILTER",
+                   "true").lower() == "true",
+    "sigma_threshold":
+    float(os.environ.get("DYNOAI_SIGMA_THRESHOLD", "2.0")),
     # Distance-weighted binning (TuneLab-style)
-    "use_weighted_binning": os.environ.get(
-        "DYNOAI_USE_WEIGHTED_BINNING", "true"
-    ).lower()
-    == "true",
+    "use_weighted_binning":
+    os.environ.get("DYNOAI_USE_WEIGHTED_BINNING", "true").lower() == "true",
 }
 
 
@@ -71,7 +73,9 @@ def _get_autotune_types():
         from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
         from dynoai.core.weighted_binning import LogarithmicWeighting
     except Exception as exc:
-        logger.error("Autotune dependencies unavailable: %s", exc, exc_info=True)
+        logger.error("Autotune dependencies unavailable: %s",
+                     exc,
+                     exc_info=True)
         raise RuntimeError(
             "Autotune workflow unavailable. Verify analysis dependencies are installed."
         ) from exc
@@ -90,7 +94,8 @@ def get_workflow() -> "AutoTuneWorkflow":
             afr_min=TUNELAB_CONFIG["afr_min"],
             afr_max=TUNELAB_CONFIG["afr_max"],
             exclude_time_ms=TUNELAB_CONFIG["exclude_time_ms"],
-            enable_statistical_filter=TUNELAB_CONFIG["enable_statistical_filter"],
+            enable_statistical_filter=TUNELAB_CONFIG[
+                "enable_statistical_filter"],
             sigma_threshold=TUNELAB_CONFIG["sigma_threshold"],
             # TuneLab-style weighted binning
             use_weighted_binning=TUNELAB_CONFIG["use_weighted_binning"],
@@ -99,8 +104,7 @@ def get_workflow() -> "AutoTuneWorkflow":
         logger.info(
             f"AutoTuneWorkflow initialized with TuneLab features: "
             f"filtering={TUNELAB_CONFIG['enable_filtering']}, "
-            f"weighted_binning={TUNELAB_CONFIG['use_weighted_binning']}"
-        )
+            f"weighted_binning={TUNELAB_CONFIG['use_weighted_binning']}")
     return _workflow
 
 
@@ -123,22 +127,28 @@ def get_tunelab_config():
     Returns:
         JSON with current filtering and binning settings
     """
-    return jsonify(
-        {
-            "success": True,
-            "config": TUNELAB_CONFIG,
-            "description": {
-                "enable_filtering": "Enable TuneLab-style AFR signal filtering",
-                "lowpass_rc_ms": "RC time constant for lowpass filter (higher = more smoothing)",
-                "afr_min": "Minimum valid AFR (below = rejected)",
-                "afr_max": "Maximum valid AFR (above = rejected)",
-                "exclude_time_ms": "Time to exclude around outliers (±ms)",
-                "enable_statistical_filter": "Enable 2σ statistical outlier rejection",
-                "sigma_threshold": "Standard deviations for outlier rejection",
-                "use_weighted_binning": "Use TuneLab-style distance-weighted cell accumulation",
-            },
-        }
-    )
+    return jsonify({
+        "success": True,
+        "config": TUNELAB_CONFIG,
+        "description": {
+            "enable_filtering":
+            "Enable TuneLab-style AFR signal filtering",
+            "lowpass_rc_ms":
+            "RC time constant for lowpass filter (higher = more smoothing)",
+            "afr_min":
+            "Minimum valid AFR (below = rejected)",
+            "afr_max":
+            "Maximum valid AFR (above = rejected)",
+            "exclude_time_ms":
+            "Time to exclude around outliers (±ms)",
+            "enable_statistical_filter":
+            "Enable 2σ statistical outlier rejection",
+            "sigma_threshold":
+            "Standard deviations for outlier rejection",
+            "use_weighted_binning":
+            "Use TuneLab-style distance-weighted cell accumulation",
+        },
+    })
 
 
 @jetdrive_bp.route("/tunelab/config", methods=["POST"])
@@ -161,9 +171,9 @@ def set_tunelab_config():
                 value = data[key]
                 # Type conversion
                 if key in [
-                    "enable_filtering",
-                    "enable_statistical_filter",
-                    "use_weighted_binning",
+                        "enable_filtering",
+                        "enable_statistical_filter",
+                        "use_weighted_binning",
                 ]:
                     TUNELAB_CONFIG[key] = bool(value)
                 else:
@@ -174,13 +184,12 @@ def set_tunelab_config():
 
         logger.info(f"TuneLab config updated: {TUNELAB_CONFIG}")
 
-        return jsonify(
-            {
-                "success": True,
-                "message": "Configuration updated. Workflow will use new settings.",
-                "config": TUNELAB_CONFIG,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "message":
+            "Configuration updated. Workflow will use new settings.",
+            "config": TUNELAB_CONFIG,
+        })
     except Exception as e:
         logger.error(f"Failed to update TuneLab config: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
@@ -302,9 +311,9 @@ def validate_csv_path(csv_path: str) -> Path:
     raise ValueError("CSV path must be under uploads/ or runs/")
 
 
-def _compute_power_curve_from_run_csv(
-    run_id: str, rpm_bin_size: int = 100
-) -> list[dict[str, float]] | None:
+def _compute_power_curve_from_run_csv(run_id: str,
+                                      rpm_bin_size: int = 100
+                                      ) -> list[dict[str, float]] | None:
     """
     Best-effort power curve extraction for UI overlay charts.
 
@@ -320,8 +329,10 @@ def _compute_power_curve_from_run_csv(
         with open(csv_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                rpm_raw = row.get("RPM") or row.get("Engine RPM") or row.get("rpm")
-                hp_raw = row.get("Horsepower") or row.get("HP") or row.get("hp")
+                rpm_raw = row.get("RPM") or row.get("Engine RPM") or row.get(
+                    "rpm")
+                hp_raw = row.get("Horsepower") or row.get("HP") or row.get(
+                    "hp")
                 tq_raw = row.get("Torque") or row.get("TQ") or row.get("tq")
                 if rpm_raw is None or hp_raw is None or tq_raw is None:
                     continue
@@ -351,14 +362,11 @@ def _compute_power_curve_from_run_csv(
         if not buckets:
             return None
 
-        return [
-            {
-                "rpm": float(rpm_bin),
-                "hp": round(vals["hp"], 2),
-                "tq": round(vals["tq"], 2),
-            }
-            for rpm_bin, vals in sorted(buckets.items(), key=lambda kv: kv[0])
-        ]
+        return [{
+            "rpm": float(rpm_bin),
+            "hp": round(vals["hp"], 2),
+            "tq": round(vals["tq"], 2),
+        } for rpm_bin, vals in sorted(buckets.items(), key=lambda kv: kv[0])]
     except Exception:
         return None
 
@@ -374,9 +382,8 @@ def _infer_run_source_from_manifest(manifest: dict[str, Any]) -> str:
     - unknown: cannot determine
     """
     try:
-        inputs = (
-            manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
-        )
+        inputs = (manifest.get("inputs")
+                  if isinstance(manifest.get("inputs"), dict) else {})
         mode = inputs.get("mode")
         if isinstance(mode, str):
             mode_norm = mode.strip().lower()
@@ -411,14 +418,12 @@ def test_mode_validation():
     test_mode = "simulator_pull"
     normalized = str(test_mode).strip().lower()
     is_valid = normalized in ["simulate", "csv", "simulator_pull"]
-    return jsonify(
-        {
-            "original": test_mode,
-            "normalized": normalized,
-            "is_valid": is_valid,
-            "code_version": "v2_with_normalization",
-        }
-    )
+    return jsonify({
+        "original": test_mode,
+        "normalized": normalized,
+        "is_valid": is_valid,
+        "code_version": "v2_with_normalization",
+    })
 
 
 @jetdrive_bp.route("/status", methods=["GET"])
@@ -430,7 +435,9 @@ def get_status():
     source_filter = request.args.get("source")
     if source_filter is not None:
         source_filter = str(source_filter).strip().lower()
-        if source_filter not in {"simulator_pull", "real", "simulate", "unknown"}:
+        if source_filter not in {
+                "simulator_pull", "real", "simulate", "unknown"
+        }:
             return jsonify({"error": "Invalid source filter"}), 400
 
     runs = []
@@ -446,55 +453,46 @@ def get_status():
                         peak_perf = manifest.get("peak_performance", {}) or {}
 
                         # Support multiple historical key conventions
-                        peak_hp = (
-                            analysis.get("peak_hp")
-                            or peak_perf.get("peak_hp")
-                            or manifest.get("peak_hp")
-                            or 0
-                        )
-                        peak_tq = (
-                            analysis.get("peak_tq")
-                            or analysis.get("peak_torque")
-                            or peak_perf.get("peak_tq")
-                            or peak_perf.get("peak_torque")
-                            or manifest.get("peak_tq")
-                            or manifest.get("peak_torque")
-                            or 0
-                        )
-                        source = (
-                            _infer_run_source_from_manifest(manifest)
-                            if isinstance(manifest, dict)
-                            else "unknown"
-                        )
+                        peak_hp = (analysis.get("peak_hp")
+                                   or peak_perf.get("peak_hp")
+                                   or manifest.get("peak_hp") or 0)
+                        peak_tq = (analysis.get("peak_tq")
+                                   or analysis.get("peak_torque")
+                                   or peak_perf.get("peak_tq")
+                                   or peak_perf.get("peak_torque")
+                                   or manifest.get("peak_tq")
+                                   or manifest.get("peak_torque") or 0)
+                        source = (_infer_run_source_from_manifest(manifest)
+                                  if isinstance(manifest, dict) else "unknown")
                         if source_filter and source != source_filter:
                             continue
-                        runs.append(
-                            {
-                                "run_id": run_dir.name,
-                                "timestamp": manifest.get("timestamp", ""),
-                                "peak_hp": peak_hp or 0,
-                                "peak_tq": peak_tq or 0,
-                                "status": analysis.get("overall_status", ""),
-                                "source": source,
-                            }
-                        )
+                        runs.append({
+                            "run_id":
+                            run_dir.name,
+                            "timestamp":
+                            manifest.get("timestamp", ""),
+                            "peak_hp":
+                            peak_hp or 0,
+                            "peak_tq":
+                            peak_tq or 0,
+                            "status":
+                            analysis.get("overall_status", ""),
+                            "source":
+                            source,
+                        })
                     except Exception:
-                        runs.append(
-                            {
-                                "run_id": run_dir.name,
-                                "timestamp": "",
-                                "status": "unknown",
-                                "source": "unknown",
-                            }
-                        )
+                        runs.append({
+                            "run_id": run_dir.name,
+                            "timestamp": "",
+                            "status": "unknown",
+                            "source": "unknown",
+                        })
 
-    return jsonify(
-        {
-            "available": True,
-            "runs_count": len(runs),
-            "runs": runs[:20],  # Limit to 20 most recent
-        }
-    )
+    return jsonify({
+        "available": True,
+        "runs_count": len(runs),
+        "runs": runs[:20],  # Limit to 20 most recent
+    })
 
 
 # =============================================================================
@@ -514,16 +512,17 @@ def get_power_opportunities(run_id: str):
         safe_run_id = sanitize_run_id(run_id)
 
         # Look for PowerOpportunities.json in the run directory
-        power_opp_path = safe_path_in_runs(safe_run_id, "PowerOpportunities.json")
+        power_opp_path = safe_path_in_runs(safe_run_id,
+                                           "PowerOpportunities.json")
 
         if not power_opp_path.exists():
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Power opportunities analysis not found for this run",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "error":
+                    "Power opportunities analysis not found for this run",
+                }),
                 404,
             )
 
@@ -531,7 +530,11 @@ def get_power_opportunities(run_id: str):
         with open(power_opp_path, "r") as f:
             data = json.load(f)
 
-        return jsonify({"success": True, "run_id": safe_run_id, "data": data}), 200
+        return jsonify({
+            "success": True,
+            "run_id": safe_run_id,
+            "data": data
+        }), 200
 
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
@@ -573,7 +576,8 @@ def analyze_run():
             return jsonify({"error": "Invalid JSON in request body"}), 400
     except Exception as e:
         logger.error(f"Error parsing JSON request: {e}", exc_info=True)
-        return jsonify({"error": f"Failed to parse request JSON: {str(e)}"}), 400
+        return jsonify({"error":
+                        f"Failed to parse request JSON: {str(e)}"}), 400
 
     if not data or "run_id" not in data:
         return jsonify({"error": "Missing 'run_id' in request body"}), 400
@@ -605,7 +609,8 @@ def analyze_run():
         if not script_path.exists():
             logger.error(f"Autotune script not found at: {script_path}")
             return (
-                jsonify({"error": f"Autotune script not found at: {script_path}"}),
+                jsonify(
+                    {"error": f"Autotune script not found at: {script_path}"}),
                 500,
             )
 
@@ -616,7 +621,8 @@ def analyze_run():
         import traceback
 
         error_detail = str(e)
-        if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+        if os.getenv("FLASK_ENV") == "development" or os.getenv(
+                "DYNOAI_DEBUG"):
             error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
         return jsonify({"success": False, "error": error_detail}), 500
 
@@ -632,14 +638,15 @@ def analyze_run():
 
         try:
             if not _is_simulator_active():
-                logger.warning("Simulator not active when trying to analyze pull data")
+                logger.warning(
+                    "Simulator not active when trying to analyze pull data")
                 return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "Simulator is not running. Please start the simulator first.",
-                        }
-                    ),
+                    jsonify({
+                        "success":
+                        False,
+                        "error":
+                        "Simulator is not running. Please start the simulator first.",
+                    }),
                     400,
                 )
 
@@ -656,34 +663,34 @@ def analyze_run():
                 f"Pull data retrieved: {len(pull_data) if pull_data else 0} points"
             )
         except Exception as e:
-            logger.error(f"Error getting simulator pull data: {e}", exc_info=True)
+            logger.error(f"Error getting simulator pull data: {e}",
+                         exc_info=True)
             import traceback
 
             error_detail = str(e)
-            if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+            if os.getenv("FLASK_ENV") == "development" or os.getenv(
+                    "DYNOAI_DEBUG"):
                 error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": f"Failed to get simulator pull data: {error_detail}",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "error":
+                    f"Failed to get simulator pull data: {error_detail}",
+                }),
                 500,
             )
 
         if not pull_data:
             logger.warning("No pull data available from simulator")
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": (
-                            "No simulator pull data available. Please run a pull first by clicking "
-                            "'Trigger Pull' in the simulator controls."
-                        ),
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "error":
+                    ("No simulator pull data available. Please run a pull first by clicking "
+                     "'Trigger Pull' in the simulator controls."),
+                }),
                 400,
             )
 
@@ -691,12 +698,12 @@ def analyze_run():
         if len(pull_data) == 0:
             logger.warning("Pull data is empty list")
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Simulator pull data is empty. Please run a pull first.",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "error":
+                    "Simulator pull data is empty. Please run a pull first.",
+                }),
                 400,
             )
 
@@ -706,14 +713,15 @@ def analyze_run():
         required_fields = ["Engine RPM", "Torque", "Horsepower"]
         missing_fields = [f for f in required_fields if f not in first_point]
         if missing_fields:
-            logger.error(f"Missing required fields in pull data: {missing_fields}")
+            logger.error(
+                f"Missing required fields in pull data: {missing_fields}")
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "error":
+                    f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
+                }),
                 400,
             )
 
@@ -741,36 +749,33 @@ def analyze_run():
 
                 for i, row in enumerate(pull_data):
                     # Use average of front/rear AFR
-                    afr_avg = (
-                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
-                    ) / 2
+                    afr_avg = (row.get("AFR Meas F", 14.7) +
+                               row.get("AFR Meas R", 14.7)) / 2
 
-                    writer.writerow(
-                        {
-                            "timestamp_ms": i
-                            * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
-                            "RPM": row.get("Engine RPM", 0),
-                            "Torque": row.get("Torque", 0),
-                            "Horsepower": row.get("Horsepower", 0),
-                            "AFR": afr_avg,
-                            "MAP_kPa": row.get("MAP kPa", 0),
-                            "TPS": row.get("TPS", 0),
-                            "IAT": row.get("IAT F", 85),
-                        }
-                    )
+                    writer.writerow({
+                        "timestamp_ms":
+                        i * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
+                        "RPM": row.get("Engine RPM", 0),
+                        "Torque": row.get("Torque", 0),
+                        "Horsepower": row.get("Horsepower", 0),
+                        "AFR": afr_avg,
+                        "MAP_kPa": row.get("MAP kPa", 0),
+                        "TPS": row.get("TPS", 0),
+                        "IAT": row.get("IAT F", 85),
+                    })
         except Exception as e:
-            return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
+            return jsonify(
+                {"error": f"Failed to save simulator data: {str(e)}"}), 500
 
         # Now analyze the saved CSV
         cmd.extend(["--csv", csv_path])
     else:
         valid_modes = ["simulate", "csv", "simulator_pull"]
         return (
-            jsonify(
-                {
-                    "error": f"Invalid mode: {mode!r}. Valid modes are: {', '.join(valid_modes)}"
-                }
-            ),
+            jsonify({
+                "error":
+                f"Invalid mode: {mode!r}. Valid modes are: {', '.join(valid_modes)}"
+            }),
             400,
         )
 
@@ -789,7 +794,10 @@ def analyze_run():
             capture_output=True,
             text=True,
             cwd=str(project_root),
-            env={**dict(__import__("os").environ), "PYTHONPATH": str(project_root)},
+            env={
+                **dict(__import__("os").environ), "PYTHONPATH":
+                str(project_root)
+            },
             timeout=60,
         )
 
@@ -799,13 +807,11 @@ def analyze_run():
                 _set_simulator_active(True)
 
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": result.stderr or "Analysis failed",
-                        "stdout": result.stdout,
-                    }
-                ),
+                jsonify({
+                    "success": False,
+                    "error": result.stderr or "Analysis failed",
+                    "stdout": result.stdout,
+                }),
                 500,
             )
 
@@ -818,12 +824,10 @@ def analyze_run():
 
         if not manifest_path.exists():
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Analysis completed but no manifest found",
-                    }
-                ),
+                jsonify({
+                    "success": False,
+                    "error": "Analysis completed but no manifest found",
+                }),
                 500,
             )
 
@@ -839,13 +843,13 @@ def analyze_run():
                     inputs = {}
                     manifest["inputs"] = inputs
                 inputs["mode"] = mode
-                inputs["mode_recorded_at"] = datetime.utcnow().isoformat() + "Z"
+                inputs["mode_recorded_at"] = datetime.utcnow().isoformat(
+                ) + "Z"
                 with open(manifest_path, "w", encoding="utf-8") as wf:
                     json.dump(manifest, wf, indent=2)
         except Exception:
-            logger.warning(
-                "Failed to persist inputs.mode into manifest.json", exc_info=True
-            )
+            logger.warning("Failed to persist inputs.mode into manifest.json",
+                           exc_info=True)
 
         # Read VE correction grid
         ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
@@ -856,12 +860,10 @@ def analyze_run():
                 for line in lines[1:]:  # Skip header
                     parts = line.strip().split(",")
                     if parts:
-                        ve_grid.append(
-                            {
-                                "rpm": int(parts[0]),
-                                "values": [float(v) for v in parts[1:]],
-                            }
-                        )
+                        ve_grid.append({
+                            "rpm": int(parts[0]),
+                            "values": [float(v) for v in parts[1:]],
+                        })
 
         # Ensure simulator stays active after analysis if it was active before
         if was_simulator_active:
@@ -895,7 +897,8 @@ def analyze_run():
         import traceback
 
         error_detail = str(e)
-        if os.getenv("FLASK_ENV") == "development" or os.getenv("DYNOAI_DEBUG"):
+        if os.getenv("FLASK_ENV") == "development" or os.getenv(
+                "DYNOAI_DEBUG"):
             error_detail += f"\nTraceback: {''.join(traceback.format_exc())}"
         return jsonify({"success": False, "error": error_detail}), 500
 
@@ -916,7 +919,8 @@ def analyze_unified():
     """
     data = request.get_json()
     if not data or "run_id" not in data or "csv_path" not in data:
-        return jsonify({"error": "Missing 'run_id' or 'csv_path' in request body"}), 400
+        return jsonify(
+            {"error": "Missing 'run_id' or 'csv_path' in request body"}), 400
 
     try:
         run_id = sanitize_run_id(data["run_id"])
@@ -943,21 +947,22 @@ def analyze_unified():
 
         if session.status == "error":
             return (
-                jsonify({"success": False, "errors": session.errors}),
+                jsonify({
+                    "success": False,
+                    "errors": session.errors
+                }),
                 500,
             )
 
         # Get session summary (which includes all the analysis results)
         summary = workflow.get_session_summary(session)
 
-        return jsonify(
-            {
-                "success": True,
-                "run_id": run_id,
-                "output_dir": str(output_dir),
-                **summary,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "run_id": run_id,
+            "output_dir": str(output_dir),
+            **summary,
+        })
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -977,7 +982,8 @@ def create_workflow_session():
 
     _, DataSource, _ = _get_autotune_types()
     workflow = get_workflow()
-    session = workflow.create_session(run_id=run_id, data_source=DataSource.JETDRIVE)
+    session = workflow.create_session(run_id=run_id,
+                                      data_source=DataSource.JETDRIVE)
 
     return jsonify({"success": True, "session_id": session.id})
 
@@ -1030,9 +1036,10 @@ def get_run(run_id: str):
             for line in lines[1:]:  # Skip header
                 parts = line.strip().split(",")
                 if parts:
-                    ve_grid.append(
-                        {"rpm": int(parts[0]), "values": [float(v) for v in parts[1:]]}
-                    )
+                    ve_grid.append({
+                        "rpm": int(parts[0]),
+                        "values": [float(v) for v in parts[1:]]
+                    })
 
     # Read hit count grid
     hits_csv_path = safe_path_in_runs(run_id, "Hit_Count_2D.csv")
@@ -1043,9 +1050,10 @@ def get_run(run_id: str):
             for line in lines[1:]:
                 parts = line.strip().split(",")
                 if parts:
-                    hit_grid.append(
-                        {"rpm": int(parts[0]), "values": [int(v) for v in parts[1:]]}
-                    )
+                    hit_grid.append({
+                        "rpm": int(parts[0]),
+                        "values": [int(v) for v in parts[1:]]
+                    })
 
     # Read AFR error grid
     afr_csv_path = safe_path_in_runs(run_id, "AFR_Error_2D.csv")
@@ -1073,23 +1081,22 @@ def get_run(run_id: str):
             with open(confidence_path) as f:
                 confidence = json.load(f)
         except Exception as e:
-            logger.warning(f"Failed to load confidence report for {run_id}: {e}")
+            logger.warning(
+                f"Failed to load confidence report for {run_id}: {e}")
 
-    return jsonify(
-        {
-            "run_id": run_id,
-            "manifest": manifest,
-            "ve_grid": ve_grid,
-            "hit_grid": hit_grid,
-            "afr_grid": afr_grid,
-            "confidence": confidence,
-            "files": {
-                "pvv": str(output_dir / "VE_Correction.pvv"),
-                "csv": str(output_dir / "run.csv"),
-                "report": str(output_dir / "Diagnostics_Report.txt"),
-            },
-        }
-    )
+    return jsonify({
+        "run_id": run_id,
+        "manifest": manifest,
+        "ve_grid": ve_grid,
+        "hit_grid": hit_grid,
+        "afr_grid": afr_grid,
+        "confidence": confidence,
+        "files": {
+            "pvv": str(output_dir / "VE_Correction.pvv"),
+            "csv": str(output_dir / "run.csv"),
+            "report": str(output_dir / "Diagnostics_Report.txt"),
+        },
+    })
 
 
 @jetdrive_bp.route("/run/<run_id>/pvv", methods=["GET"])
@@ -1106,13 +1113,11 @@ def get_pvv(run_id: str):
     with open(pvv_path, encoding="utf-8") as f:
         content = f.read()
 
-    return jsonify(
-        {
-            "run_id": sanitize_run_id(run_id),
-            "filename": "VE_Correction.pvv",
-            "content": content,
-        }
-    )
+    return jsonify({
+        "run_id": sanitize_run_id(run_id),
+        "filename": "VE_Correction.pvv",
+        "content": content,
+    })
 
 
 @jetdrive_bp.route("/run/<run_id>/report", methods=["GET"])
@@ -1129,13 +1134,11 @@ def get_report(run_id: str):
     with open(report_path, encoding="utf-8") as f:
         content = f.read()
 
-    return jsonify(
-        {
-            "run_id": sanitize_run_id(run_id),
-            "filename": "Diagnostics_Report.txt",
-            "content": content,
-        }
-    )
+    return jsonify({
+        "run_id": sanitize_run_id(run_id),
+        "filename": "Diagnostics_Report.txt",
+        "content": content,
+    })
 
 
 @jetdrive_bp.route("/run/<run_id>/export-text", methods=["GET"])
@@ -1183,23 +1186,28 @@ def export_text(run_id: str):
         lines.append("PERFORMANCE SUMMARY")
         lines.append("-" * 80)
         peak_hp = analysis.get("peak_hp", 0)
-        peak_hp_rpm = analysis.get("peak_hp_rpm", analysis.get("hp_peak_rpm", 0))
+        peak_hp_rpm = analysis.get("peak_hp_rpm",
+                                   analysis.get("hp_peak_rpm", 0))
         peak_tq = analysis.get("peak_tq", analysis.get("peak_torque", 0))
         peak_tq_rpm = analysis.get(
             "peak_tq_rpm",
             analysis.get("tq_peak_rpm", analysis.get("torque_peak_rpm", 0)),
         )
-        lines.append(f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM")
-        lines.append(f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM")
+        lines.append(
+            f"Peak Horsepower: {peak_hp:.2f} HP @ {peak_hp_rpm:.0f} RPM")
+        lines.append(
+            f"Peak Torque: {peak_tq:.2f} lb-ft @ {peak_tq_rpm:.0f} RPM")
         lines.append(f"Total Samples: {analysis.get('total_samples', 0)}")
-        lines.append(f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
+        lines.append(
+            f"Duration: {analysis.get('duration_ms', 0) / 1000:.1f} seconds")
         lines.append("")
 
     # AFR analysis
     if analysis:
         lines.append("AFR ANALYSIS")
         lines.append("-" * 80)
-        lines.append(f"Overall Status: {analysis.get('overall_status', 'N/A')}")
+        lines.append(
+            f"Overall Status: {analysis.get('overall_status', 'N/A')}")
         lines.append(f"Lean Cells: {analysis.get('lean_cells', 0)}")
         lines.append(f"Rich Cells: {analysis.get('rich_cells', 0)}")
         lines.append(f"OK Cells: {analysis.get('ok_cells', 0)}")
@@ -1278,13 +1286,11 @@ def export_text(run_id: str):
 
     content = "\n".join(lines)
 
-    return jsonify(
-        {
-            "run_id": sanitize_run_id(run_id),
-            "filename": f"DynoAI_Analysis_{run_id}.txt",
-            "content": content,
-        }
-    )
+    return jsonify({
+        "run_id": sanitize_run_id(run_id),
+        "filename": f"DynoAI_Analysis_{run_id}.txt",
+        "content": content,
+    })
 
 
 # =============================================================================
@@ -1325,13 +1331,11 @@ def upload_csv():
 
     file.save(str(filepath))
 
-    return jsonify(
-        {
-            "success": True,
-            "filename": safe_filename,
-            "path": str(filepath),
-        }
-    )
+    return jsonify({
+        "success": True,
+        "filename": safe_filename,
+        "path": str(filepath),
+    })
 
 
 # =============================================================================
@@ -1358,35 +1362,29 @@ def get_network_interfaces() -> list[dict[str, Any]]:
                 for addr in addrs[netifaces.AF_INET]:
                     ip = addr.get("addr", "")
                     if ip:
-                        interfaces.append(
-                            {
-                                "name": iface_name,
-                                "ip": ip,
-                                "is_loopback": ip.startswith("127."),
-                            }
-                        )
+                        interfaces.append({
+                            "name": iface_name,
+                            "ip": ip,
+                            "is_loopback": ip.startswith("127."),
+                        })
     except ImportError:
         # Fallback: use socket
         try:
             hostname = socket.gethostname()
             ip = socket.gethostbyname(hostname)
-            interfaces.append(
-                {
-                    "name": "default",
-                    "ip": ip,
-                    "is_loopback": ip.startswith("127."),
-                }
-            )
+            interfaces.append({
+                "name": "default",
+                "ip": ip,
+                "is_loopback": ip.startswith("127."),
+            })
         except socket.error:
             pass
 
-        interfaces.append(
-            {
-                "name": "loopback",
-                "ip": "127.0.0.1",
-                "is_loopback": True,
-            }
-        )
+        interfaces.append({
+            "name": "loopback",
+            "ip": "127.0.0.1",
+            "is_loopback": True,
+        })
 
     return interfaces
 
@@ -1394,7 +1392,8 @@ def get_network_interfaces() -> list[dict[str, Any]]:
 def test_multicast_support(interface_ip: str = "0.0.0.0") -> tuple[bool, str]:
     """Test if multicast is supported."""
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,
+                             socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         mreq = struct.pack(
@@ -1444,14 +1443,12 @@ def run_diagnostics():
 
     # 1. Network interfaces
     interfaces = get_network_interfaces()
-    results["checks"].append(
-        {
-            "name": "network_interfaces",
-            "status": "ok" if interfaces else "error",
-            "message": f"Found {len(interfaces)} interface(s)",
-            "details": interfaces,
-        }
-    )
+    results["checks"].append({
+        "name": "network_interfaces",
+        "status": "ok" if interfaces else "error",
+        "message": f"Found {len(interfaces)} interface(s)",
+        "details": interfaces,
+    })
     if not interfaces:
         errors += 1
 
@@ -1463,65 +1460,57 @@ def run_diagnostics():
         if iface["is_loopback"]:
             continue
         ok, msg = test_multicast_support(iface["ip"])
-        multicast_results.append(
-            {
-                "interface": iface["ip"],
-                "status": "ok" if ok else "warning",
-                "message": msg,
-            }
-        )
+        multicast_results.append({
+            "interface": iface["ip"],
+            "status": "ok" if ok else "warning",
+            "message": msg,
+        })
         if ok:
             multicast_ok = True
 
     # Also test 0.0.0.0
     ok, msg = test_multicast_support("0.0.0.0")
-    multicast_results.append(
-        {
-            "interface": "0.0.0.0 (any)",
-            "status": "ok" if ok else "error",
-            "message": msg,
-        }
-    )
+    multicast_results.append({
+        "interface": "0.0.0.0 (any)",
+        "status": "ok" if ok else "error",
+        "message": msg,
+    })
     if ok:
         multicast_ok = True
     else:
         errors += 1
 
-    results["checks"].append(
-        {
-            "name": "multicast_support",
-            "status": "ok" if multicast_ok else "error",
-            "message": f"Multicast group: {JETDRIVE_MCAST_GROUP}",
-            "details": multicast_results,
-        }
-    )
+    results["checks"].append({
+        "name": "multicast_support",
+        "status": "ok" if multicast_ok else "error",
+        "message": f"Multicast group: {JETDRIVE_MCAST_GROUP}",
+        "details": multicast_results,
+    })
 
     # 3. Port availability
     ok, msg = test_port_available(JETDRIVE_PORT)
-    results["checks"].append(
-        {
-            "name": "port_availability",
-            "status": "ok" if ok else "error",
-            "message": msg,
-            "details": {"port": JETDRIVE_PORT},
-        }
-    )
+    results["checks"].append({
+        "name": "port_availability",
+        "status": "ok" if ok else "error",
+        "message": msg,
+        "details": {
+            "port": JETDRIVE_PORT
+        },
+    })
     if not ok:
         errors += 1
 
     # 4. Environment configuration
-    results["checks"].append(
-        {
-            "name": "environment",
-            "status": "ok",
-            "message": "Environment configuration",
-            "details": {
-                "JETDRIVE_MCAST_GROUP": JETDRIVE_MCAST_GROUP,
-                "JETDRIVE_PORT": JETDRIVE_PORT,
-                "JETDRIVE_IFACE": JETDRIVE_IFACE,
-            },
-        }
-    )
+    results["checks"].append({
+        "name": "environment",
+        "status": "ok",
+        "message": "Environment configuration",
+        "details": {
+            "JETDRIVE_MCAST_GROUP": JETDRIVE_MCAST_GROUP,
+            "JETDRIVE_PORT": JETDRIVE_PORT,
+            "JETDRIVE_IFACE": JETDRIVE_IFACE,
+        },
+    })
 
     # Overall status
     if errors > 0:
@@ -1547,8 +1536,7 @@ def discover_providers():
         sys.path.insert(0, str(project_root))
 
         from api.services.jetdrive_client import (
-            JetDriveConfig,
-        )
+            JetDriveConfig, )
         from api.services.jetdrive_client import discover_providers as async_discover
 
         config = JetDriveConfig(
@@ -1565,45 +1553,37 @@ def discover_providers():
         for p in providers:
             channels = []
             for chan_id, chan in p.channels.items():
-                channels.append(
-                    {
-                        "id": chan_id,
-                        "name": chan.name,
-                        "unit": chan.unit,
-                    }
-                )
+                channels.append({
+                    "id": chan_id,
+                    "name": chan.name,
+                    "unit": chan.unit,
+                })
 
-            provider_list.append(
-                {
-                    "provider_id": p.provider_id,
-                    "provider_id_hex": f"0x{p.provider_id:04X}",
-                    "name": p.name,
-                    "host": p.host,
-                    "port": p.port,
-                    "channels": channels,
-                    "channel_count": len(channels),
-                }
-            )
+            provider_list.append({
+                "provider_id": p.provider_id,
+                "provider_id_hex": f"0x{p.provider_id:04X}",
+                "name": p.name,
+                "host": p.host,
+                "port": p.port,
+                "channels": channels,
+                "channel_count": len(channels),
+            })
 
-        return jsonify(
-            {
-                "success": True,
-                "timeout": timeout,
-                "providers_found": len(provider_list),
-                "providers": provider_list,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "timeout": timeout,
+            "providers_found": len(provider_list),
+            "providers": provider_list,
+        })
 
     except Exception as e:
         return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "providers_found": 0,
-                    "providers": [],
-                }
-            ),
+            jsonify({
+                "success": False,
+                "error": str(e),
+                "providers_found": 0,
+                "providers": [],
+            }),
             500,
         )
 
@@ -1623,8 +1603,8 @@ def discover_providers_multi():
 
     # Test both multicast addresses
     multicast_groups = [
-        "224.0.2.10",      # Official Dynojet/JetDrive vendor address (PRIMARY)
-        "239.255.60.60",   # Alternative address
+        "224.0.2.10",  # Official Dynojet/JetDrive vendor address (PRIMARY)
+        "239.255.60.60",  # Alternative address
     ]
 
     results = {}
@@ -1645,8 +1625,7 @@ def discover_providers_multi():
                 asyncio.set_event_loop(loop)
                 try:
                     providers = loop.run_until_complete(
-                        discover_providers(config, timeout=timeout)
-                    )
+                        discover_providers(config, timeout=timeout))
                 finally:
                     try:
                         loop.close()
@@ -1658,25 +1637,21 @@ def discover_providers_multi():
                 for p in providers:
                     channels = []
                     for chan_id, chan in p.channels.items():
-                        channels.append(
-                            {
-                                "id": chan_id,
-                                "name": chan.name,
-                                "unit": chan.unit,
-                            }
-                        )
+                        channels.append({
+                            "id": chan_id,
+                            "name": chan.name,
+                            "unit": chan.unit,
+                        })
 
-                    provider_list.append(
-                        {
-                            "provider_id": p.provider_id,
-                            "provider_id_hex": f"0x{p.provider_id:04X}",
-                            "name": p.name,
-                            "host": p.host,
-                            "port": p.port,
-                            "channels": channels,
-                            "channel_count": len(channels),
-                        }
-                    )
+                    provider_list.append({
+                        "provider_id": p.provider_id,
+                        "provider_id_hex": f"0x{p.provider_id:04X}",
+                        "name": p.name,
+                        "host": p.host,
+                        "port": p.port,
+                        "channels": channels,
+                        "channel_count": len(channels),
+                    })
 
                 results[mcast_group] = {
                     "success": True,
@@ -1692,7 +1667,8 @@ def discover_providers_multi():
                     "providers": [],
                     "error": str(e),
                 }
-                logger.error(f"Discovery error for {mcast_group}: {e}", exc_info=True)
+                logger.error(f"Discovery error for {mcast_group}: {e}",
+                             exc_info=True)
 
         # Determine which address found providers
         best_address = None
@@ -1702,32 +1678,29 @@ def discover_providers_multi():
                 best_count = result["providers_found"]
                 best_address = mcast_group
 
-        return jsonify(
-            {
-                "success": True,
-                "timeout": timeout,
-                "results": results,
-                "recommendation": {
-                    "best_address": best_address,
-                    "providers_found": best_count,
-                    "message": (
-                        f"Use multicast address: {best_address}"
-                        if best_address
-                        else "No providers found on either address. Check Power Core settings and network connection."
-                    ),
-                },
-            }
-        )
+        return jsonify({
+            "success": True,
+            "timeout": timeout,
+            "results": results,
+            "recommendation": {
+                "best_address":
+                best_address,
+                "providers_found":
+                best_count,
+                "message":
+                (f"Use multicast address: {best_address}" if best_address else
+                 "No providers found on either address. Check Power Core settings and network connection."
+                 ),
+            },
+        })
 
     except Exception as e:
         return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "results": results,
-                }
-            ),
+            jsonify({
+                "success": False,
+                "error": str(e),
+                "results": results,
+            }),
             500,
         )
 
@@ -1750,8 +1723,7 @@ def _monitor_loop():
     sys.path.insert(0, str(project_root))
 
     from api.services.jetdrive_client import (
-        JetDriveConfig,
-    )
+        JetDriveConfig, )
     from api.services.jetdrive_client import discover_providers as async_discover
 
     config = JetDriveConfig(
@@ -1770,25 +1742,24 @@ def _monitor_loop():
 
             provider_list = []
             for p in providers:
-                provider_list.append(
-                    {
-                        "provider_id": p.provider_id,
-                        "name": p.name,
-                        "host": p.host,
-                        "channel_count": len(p.channels),
-                    }
-                )
+                provider_list.append({
+                    "provider_id": p.provider_id,
+                    "name": p.name,
+                    "host": p.host,
+                    "channel_count": len(p.channels),
+                })
 
             with _monitor_lock:
                 _monitor_state["last_check"] = datetime.now().isoformat()
                 _monitor_state["providers"] = provider_list
-                _monitor_state["history"].append(
-                    {
-                        "timestamp": _monitor_state["last_check"],
-                        "connected": len(provider_list) > 0,
-                        "provider_count": len(provider_list),
-                    }
-                )
+                _monitor_state["history"].append({
+                    "timestamp":
+                    _monitor_state["last_check"],
+                    "connected":
+                    len(provider_list) > 0,
+                    "provider_count":
+                    len(provider_list),
+                })
                 # Keep only last 60 entries (about 3 minutes at 3s interval)
                 if len(_monitor_state["history"]) > 60:
                     _monitor_state["history"] = _monitor_state["history"][-60:]
@@ -1797,14 +1768,16 @@ def _monitor_loop():
             with _monitor_lock:
                 _monitor_state["last_check"] = datetime.now().isoformat()
                 _monitor_state["providers"] = []
-                _monitor_state["history"].append(
-                    {
-                        "timestamp": _monitor_state["last_check"],
-                        "connected": False,
-                        "provider_count": 0,
-                        "error": True,
-                    }
-                )
+                _monitor_state["history"].append({
+                    "timestamp":
+                    _monitor_state["last_check"],
+                    "connected":
+                    False,
+                    "provider_count":
+                    0,
+                    "error":
+                    True,
+                })
 
         time.sleep(3.0)
 
@@ -1844,15 +1817,13 @@ def get_monitor_status():
     global _monitor_state
 
     with _monitor_lock:
-        return jsonify(
-            {
-                "running": _monitor_state["running"],
-                "last_check": _monitor_state["last_check"],
-                "providers": _monitor_state["providers"],
-                "connected": len(_monitor_state["providers"]) > 0,
-                "history": _monitor_state["history"][-20:],  # Last 20 entries
-            }
-        )
+        return jsonify({
+            "running": _monitor_state["running"],
+            "last_check": _monitor_state["last_check"],
+            "providers": _monitor_state["providers"],
+            "connected": len(_monitor_state["providers"]) > 0,
+            "history": _monitor_state["history"][-20:],  # Last 20 entries
+        })
 
 
 # =============================================================================
@@ -1892,8 +1863,11 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         discover_providers,
         subscribe,
     )
+    from api.services.jetdrive_live_queue import (
+        get_live_queue_manager,
+        reset_live_queue_manager,
+    )
     from api.services.jetdrive_validation import get_validator
-    from api.services.jetdrive_live_queue import get_live_queue_manager, reset_live_queue_manager
 
     config = JetDriveConfig.from_env()
     validator = get_validator()
@@ -1909,8 +1883,10 @@ def _live_capture_loop(requested_provider_id: int | None = None):
     try:
         # Discover providers first - use longer timeout to ensure ChannelInfo packets arrive
         # Power Core broadcasts ChannelInfo periodically (not immediately on request)
-        logger.info("Discovering JetDrive providers (waiting for ChannelInfo)...")
-        providers = loop.run_until_complete(discover_providers(config, timeout=10.0))
+        logger.info(
+            "Discovering JetDrive providers (waiting for ChannelInfo)...")
+        providers = loop.run_until_complete(
+            discover_providers(config, timeout=10.0))
         if not providers:
             logger.warning(
                 "No JetDrive providers found. Check network connection and multicast settings."
@@ -1937,14 +1913,16 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     f"Requested provider 0x{requested_provider_id:04X} not found. Available: {[hex(p.provider_id) for p in providers]}"
                 )
                 with _live_data_lock:
-                    _live_data["error"] = f"Provider 0x{requested_provider_id:04X} not found"
+                    _live_data["error"] = (
+                        f"Provider 0x{requested_provider_id:04X} not found")
                 return
         else:
             provider = providers[0]
 
         # Pin the provider in the validator (reject samples from other providers)
         validator.set_active_provider(provider.provider_id)
-        validator.reset(provider.provider_id)  # Clear old metrics for this provider
+        validator.reset(
+            provider.provider_id)  # Clear old metrics for this provider
 
         logger.info(
             f"Connected and pinned to provider: {provider.name} (ID: 0x{provider.provider_id:04X}, Host: {provider.host})"
@@ -1997,8 +1975,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             # Update live data immediately (with lock for thread safety)
             with _live_data_lock:
                 _live_data["channels"] = dict(
-                    channel_values
-                )  # Copy to avoid race conditions
+                    channel_values)  # Copy to avoid race conditions
                 _live_data["last_update"] = datetime.now().isoformat()
                 if "error" in _live_data:
                     del _live_data["error"]
@@ -2025,13 +2002,18 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         # Track statistics for diagnostics
         sample_count = [0]  # Use list to allow modification in nested function
         last_sample_time = [None]
-        stats_dict = {"total_frames": 0, "dropped_frames": 0, "non_provider_frames": 0}
+        stats_dict = {
+            "total_frames": 0,
+            "dropped_frames": 0,
+            "non_provider_frames": 0
+        }
 
         def on_sample_with_stats(s: JetDriveSample):
             sample_count[0] += 1
             last_sample_time[0] = datetime.now()
             # Reduced logging frequency to avoid spam at 20Hz+ rates
-            if sample_count[0] % 500 == 0:  # Log every 500 samples (~25 seconds at 20Hz)
+            if (sample_count[0] %
+                    500 == 0):  # Log every 500 samples (~25 seconds at 20Hz)
                 logger.info(
                     f"Received {sample_count[0]} samples from provider 0x{s.provider_id:04X}, latest: {s.channel_name}={s.value}"
                 )
@@ -2067,7 +2049,8 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             logger.info(
                 f"Subscribing to provider {provider.name} (ID: 0x{provider.provider_id:04X})"
             )
-            logger.info(f"Available channels: {list(provider.channels.keys())}")
+            logger.info(
+                f"Available channels: {list(provider.channels.keys())}")
 
             stats = loop.run_until_complete(subscribe_with_stats())
 
@@ -2076,8 +2059,10 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             logger.info(f"Total samples received: {sample_count[0]}")
 
             if stats_dict.get("total_frames", 0) == 0:
-                logger.warning("No frames received during capture period. Check:")
-                logger.warning("  1. DynoWare RT-150 is powered on and connected")
+                logger.warning(
+                    "No frames received during capture period. Check:")
+                logger.warning(
+                    "  1. DynoWare RT-150 is powered on and connected")
                 logger.warning("  2. JetDrive is enabled in Power Core")
                 logger.warning("  3. Network connection is active")
                 logger.warning("  4. Firewall allows UDP port 22344")
@@ -2112,10 +2097,10 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         finally:
             # Flush any remaining aggregated samples
             queue_mgr.force_flush()
-            
+
             # Stop queue processing if it was started
             # queue_mgr.stop_processing()  # Uncomment when CSV writing is active
-            
+
             check_task.cancel()
             try:
                 loop.run_until_complete(check_task)
@@ -2137,8 +2122,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     task.cancel()
                 try:
                     loop.run_until_complete(
-                        asyncio.gather(*pending, return_exceptions=True)
-                    )
+                        asyncio.gather(*pending, return_exceptions=True))
                 except Exception:
                     pass
         except Exception:
@@ -2179,10 +2163,15 @@ def start_live_capture():
             else:
                 requested_provider_id = int(provider_id_param)
         except ValueError:
-            return jsonify({
-                "status": "error",
-                "error": f"Invalid provider_id format: {provider_id_param}"
-            }), 400
+            return (
+                jsonify({
+                    "status":
+                    "error",
+                    "error":
+                    f"Invalid provider_id format: {provider_id_param}",
+                }),
+                400,
+            )
 
     with _live_data_lock:
         if _live_data["capturing"]:
@@ -2198,11 +2187,9 @@ def start_live_capture():
         _live_data["provider_name"] = None
         _live_data["provider_host"] = None
 
-    thread = threading.Thread(
-        target=_live_capture_loop,
-        args=(requested_provider_id,),
-        daemon=True
-    )
+    thread = threading.Thread(target=_live_capture_loop,
+                              args=(requested_provider_id, ),
+                              daemon=True)
     thread.start()
 
     return jsonify({
@@ -2238,7 +2225,7 @@ def get_live_data():
 
     This endpoint is exempt from rate limiting to support real-time polling
     at 100-250ms intervals for live dyno data visualization.
-    
+
     Note: Rate limit exemption is handled by conditional limiter in app.py.
     The default rate limit (1200/minute) is sufficient for multiple pollers.
     """
@@ -2251,18 +2238,17 @@ def get_live_data():
         sim = get_simulator()
         channels = sim.get_channels()
         state = sim.get_state().value
-        return jsonify(
-            {
-                "capturing": True,
-                "simulated": True,
-                "sim_state": state,
-                "last_update": datetime.now().isoformat(),
-                "channels": channels,
-                "channel_count": len(channels),
-            }
-        )
+        return jsonify({
+            "capturing": True,
+            "simulated": True,
+            "sim_state": state,
+            "last_update": datetime.now().isoformat(),
+            "channels": channels,
+            "channel_count": len(channels),
+        })
 
-    def _get_value(channels_dict: dict[str, Any], keys: list[str]) -> float | None:
+    def _get_value(channels_dict: dict[str, Any],
+                   keys: list[str]) -> float | None:
         for k in keys:
             v = channels_dict.get(k)
             if isinstance(v, dict) and "value" in v:
@@ -2286,10 +2272,11 @@ def get_live_data():
     is_stale = False
     if last_update:
         try:
-            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
+            last_update_dt = datetime.fromisoformat(
+                last_update.replace("Z", "+00:00"))
             age_seconds = (
-                datetime.now() - last_update_dt.replace(tzinfo=None)
-            ).total_seconds()
+                datetime.now() -
+                last_update_dt.replace(tzinfo=None)).total_seconds()
             if age_seconds > 10:
                 is_stale = True
                 if not error:
@@ -2302,8 +2289,16 @@ def get_live_data():
         from api.config import get_config
 
         # Channel IDs from Power Core: ID 39=Digital RPM 1, ID 9=Engine RPM, ID 36=Force Drum 1, ID 32=Force
-        rpm = _get_value(channels, ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"])
-        force = _get_value(channels, ["Force Drum 1", "Force", "Force 1", "chan_36", "chan_32", "chan_34"])
+        rpm = _get_value(
+            channels,
+            ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"])
+        force = _get_value(
+            channels,
+            [
+                "Force Drum 1", "Force", "Force 1", "chan_36", "chan_32",
+                "chan_34"
+            ],
+        )
 
         if rpm is not None and force is not None and rpm > 0:
             cfg = get_config().dyno
@@ -2321,6 +2316,7 @@ def get_live_data():
 
     # Sanitize channel values - replace Infinity/NaN with None (valid JSON)
     import math
+
     for ch_name, ch_data in channels.items():
         if isinstance(ch_data, dict) and "value" in ch_data:
             val = ch_data["value"]
@@ -2371,7 +2367,8 @@ def get_live_debug():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                discover_providers(config, timeout=5.0))
         finally:
             try:
                 loop.close()
@@ -2384,12 +2381,12 @@ def get_live_debug():
     # Test multicast socket binding
     socket_test = {"success": False, "error": None}
     try:
-        test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,
+                                  socket.IPPROTO_UDP)
         test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         test_sock.bind((config.iface, config.port))
         mreq = socket.inet_aton(config.multicast_group) + socket.inet_aton(
-            config.iface or "0.0.0.0"
-        )
+            config.iface or "0.0.0.0")
         test_sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         test_sock.close()
         socket_test = {"success": True, "error": None}
@@ -2401,10 +2398,10 @@ def get_live_debug():
     data_age = None
     if last_update:
         try:
-            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
-            data_age = (
-                datetime.now() - last_update_dt.replace(tzinfo=None)
-            ).total_seconds()
+            last_update_dt = datetime.fromisoformat(
+                last_update.replace("Z", "+00:00"))
+            data_age = (datetime.now() -
+                        last_update_dt.replace(tzinfo=None)).total_seconds()
         except Exception:
             pass
 
@@ -2419,41 +2416,50 @@ def get_live_debug():
     except Exception:
         pass
 
-    return jsonify(
-        {
-            "capturing": capturing,
-            "channels_received": len(channels),
-            "last_update": last_update,
-            "data_age_seconds": data_age,
-            "error": error,
-            "provider_count": len(providers),
-            "providers": [
-                {
-                    "id": f"0x{p.provider_id:04X}",
-                    "name": p.name,
-                    "host": p.host,
-                    "port": p.port,
-                    "channels": len(p.channels),
-                }
-                for p in providers
-            ],
-            "discovery_error": discovery_error,
-            "socket_test": socket_test,
-            "config": {
-                "multicast_group": config.multicast_group,
-                "port": config.port,
-                "iface": config.iface,
-            },
-            "troubleshooting": {
-                "check_multicast_group": f"Verify DynoWare RT-150 is broadcasting to {config.multicast_group}:{config.port}",
-                "check_network": "Ensure both devices are on the same network subnet",
-                "check_firewall": "Windows Firewall must allow UDP port 22344 inbound",
-                "check_jetdrive": "Verify JetDrive is enabled in Power Core software",
-                "check_power": "Ensure DynoWare RT-150 is powered on and connected",
-                "try_interface": f"Try setting JETDRIVE_IFACE to your computer's IP address (not 0.0.0.0)",
-            },
-        }
-    )
+    return jsonify({
+        "capturing":
+        capturing,
+        "channels_received":
+        len(channels),
+        "last_update":
+        last_update,
+        "data_age_seconds":
+        data_age,
+        "error":
+        error,
+        "provider_count":
+        len(providers),
+        "providers": [{
+            "id": f"0x{p.provider_id:04X}",
+            "name": p.name,
+            "host": p.host,
+            "port": p.port,
+            "channels": len(p.channels),
+        } for p in providers],
+        "discovery_error":
+        discovery_error,
+        "socket_test":
+        socket_test,
+        "config": {
+            "multicast_group": config.multicast_group,
+            "port": config.port,
+            "iface": config.iface,
+        },
+        "troubleshooting": {
+            "check_multicast_group":
+            f"Verify DynoWare RT-150 is broadcasting to {config.multicast_group}:{config.port}",
+            "check_network":
+            "Ensure both devices are on the same network subnet",
+            "check_firewall":
+            "Windows Firewall must allow UDP port 22344 inbound",
+            "check_jetdrive":
+            "Verify JetDrive is enabled in Power Core software",
+            "check_power":
+            "Ensure DynoWare RT-150 is powered on and connected",
+            "try_interface":
+            f"Try setting JETDRIVE_IFACE to your computer's IP address (not 0.0.0.0)",
+        },
+    })
 
 
 @jetdrive_bp.route("/hardware/live/health", methods=["GET"])
@@ -2547,6 +2553,7 @@ def get_live_health_summary():
 # Preflight Validation
 # =============================================================================
 
+
 @jetdrive_bp.route("/preflight/run", methods=["POST"])
 def run_preflight_check():
     """
@@ -2564,6 +2571,7 @@ def run_preflight_check():
         PreflightResult with pass/fail status and detailed check results
     """
     import asyncio
+
     from api.services.jetdrive_preflight import run_preflight
 
     # Parse parameters
@@ -2576,17 +2584,27 @@ def run_preflight_check():
             else:
                 requested_provider_id = int(provider_id_param)
         except ValueError:
-            return jsonify({
-                "passed": False,
-                "error": f"Invalid provider_id format: {provider_id_param}"
-            }), 400
+            return (
+                jsonify({
+                    "passed":
+                    False,
+                    "error":
+                    f"Invalid provider_id format: {provider_id_param}",
+                }),
+                400,
+            )
 
     mode = request.args.get("mode", "blocking")
     if mode not in ("blocking", "advisory"):
-        return jsonify({
-            "passed": False,
-            "error": f"Invalid mode: {mode}. Must be 'blocking' or 'advisory'"
-        }), 400
+        return (
+            jsonify({
+                "passed":
+                False,
+                "error":
+                f"Invalid mode: {mode}. Must be 'blocking' or 'advisory'",
+            }),
+            400,
+        )
 
     try:
         sample_seconds = int(request.args.get("sample_seconds", 15))
@@ -2607,8 +2625,7 @@ def run_preflight_check():
                     provider_id=requested_provider_id,
                     sample_seconds=sample_seconds,
                     mode=mode,
-                )
-            )
+                ))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -2617,15 +2634,18 @@ def run_preflight_check():
 
     except Exception as e:
         logger.error(f"Preflight check failed: {e}", exc_info=True)
-        return jsonify({
-            "passed": False,
-            "error": str(e),
-            "checks": [],
-            "missing_channels": [],
-            "suspected_mislabels": [],
-            "can_override": mode == "advisory",
-            "mode": mode,
-        }), 500
+        return (
+            jsonify({
+                "passed": False,
+                "error": str(e),
+                "checks": [],
+                "missing_channels": [],
+                "suspected_mislabels": [],
+                "can_override": mode == "advisory",
+                "mode": mode,
+            }),
+            500,
+        )
 
 
 @jetdrive_bp.route("/preflight/status", methods=["GET"])
@@ -2637,6 +2657,7 @@ def get_preflight_status():
     Useful for quick status checks in the UI.
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
 
     config = JetDriveConfig.from_env()
@@ -2645,7 +2666,8 @@ def get_preflight_status():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                discover_providers(config, timeout=5.0))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -2660,15 +2682,20 @@ def get_preflight_status():
         provider_list = []
         for p in providers:
             provider_list.append({
-                "provider_id": p.provider_id,
-                "provider_id_hex": f"0x{p.provider_id:04X}",
-                "name": p.name,
-                "host": p.host,
-                "channel_count": len(p.channels),
-                "channels": [
-                    {"id": c.chan_id, "name": c.name}
-                    for c in p.channels.values()
-                ],
+                "provider_id":
+                p.provider_id,
+                "provider_id_hex":
+                f"0x{p.provider_id:04X}",
+                "name":
+                p.name,
+                "host":
+                p.host,
+                "channel_count":
+                len(p.channels),
+                "channels": [{
+                    "id": c.chan_id,
+                    "name": c.name
+                } for c in p.channels.values()],
             })
 
         return jsonify({
@@ -2679,16 +2706,20 @@ def get_preflight_status():
 
     except Exception as e:
         logger.error(f"Preflight status check failed: {e}", exc_info=True)
-        return jsonify({
-            "connected": False,
-            "providers": [],
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "connected": False,
+                "providers": [],
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 # =============================================================================
 # Channel Mapping
 # =============================================================================
+
 
 @jetdrive_bp.route("/mapping/<signature>", methods=["GET"])
 def get_channel_mapping(signature: str):
@@ -2705,10 +2736,13 @@ def get_channel_mapping(signature: str):
 
     mapping = get_mapping(signature)
     if mapping is None:
-        return jsonify({
-            "error": "Mapping not found",
-            "signature": signature,
-        }), 404
+        return (
+            jsonify({
+                "error": "Mapping not found",
+                "signature": signature,
+            }),
+            404,
+        )
 
     return jsonify(mapping.to_dict())
 
@@ -2787,7 +2821,10 @@ def get_mapping_template(template_id: str):
 
     template = get_template(template_id)
     if template is None:
-        return jsonify({"error": "Template not found", "template_id": template_id}), 404
+        return jsonify({
+            "error": "Template not found",
+            "template_id": template_id
+        }), 404
 
     return jsonify(template)
 
@@ -2807,6 +2844,7 @@ def create_mapping_from_template_endpoint():
         New ProviderMapping (not saved yet - client should review and PUT)
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
         compute_provider_signature,
@@ -2826,7 +2864,8 @@ def create_mapping_from_template_endpoint():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                discover_providers(config, timeout=5.0))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -2842,31 +2881,39 @@ def create_mapping_from_template_endpoint():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify({
+                        "error": f"Provider {requested_provider_id} not found",
+                        "available": [p.provider_id for p in providers],
+                    }),
+                    404,
+                )
         else:
             provider = providers[0]
 
         # Create mapping from template
         signature = compute_provider_signature(provider)
-        mapping = create_mapping_from_template(template_id, provider, signature)
+        mapping = create_mapping_from_template(template_id, provider,
+                                               signature)
 
         if mapping is None:
-            return jsonify({"error": f"Template '{template_id}' not found"}), 404
+            return jsonify({"error":
+                            f"Template '{template_id}' not found"}), 404
 
         return jsonify({
-            "mapping": mapping.to_dict(),
-            "provider_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-            ],
-            "message": "Review mapping and PUT to /mapping/<signature> to save",
+            "mapping":
+            mapping.to_dict(),
+            "provider_channels": [{
+                "id": c.chan_id,
+                "name": c.name
+            } for c in provider.channels.values()],
+            "message":
+            "Review mapping and PUT to /mapping/<signature> to save",
         })
 
     except Exception as e:
-        logger.error(f"Failed to create mapping from template: {e}", exc_info=True)
+        logger.error(f"Failed to create mapping from template: {e}",
+                     exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -2886,6 +2933,7 @@ def auto_detect_mapping():
         Auto-detected ProviderMapping (not saved - client should review and PUT)
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
         compute_provider_signature,
@@ -2901,7 +2949,8 @@ def auto_detect_mapping():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                discover_providers(config, timeout=5.0))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -2917,10 +2966,13 @@ def auto_detect_mapping():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify({
+                        "error": f"Provider {requested_provider_id} not found",
+                        "available": [p.provider_id for p in providers],
+                    }),
+                    404,
+                )
         else:
             provider = providers[0]
 
@@ -2929,19 +2981,24 @@ def auto_detect_mapping():
         mapping = create_auto_mapping(provider, signature)
 
         return jsonify({
-            "mapping": mapping.to_dict(),
-            "provider_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-            ],
-            "unmapped_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-                if c.chan_id not in [m.source_id for m in mapping.channels.values()]
-            ],
-            "missing_required": mapping.get_missing_required(),
-            "missing_recommended": mapping.get_missing_recommended(),
-            "message": "Review mapping and PUT to /mapping/<signature> to save",
+            "mapping":
+            mapping.to_dict(),
+            "provider_channels": [{
+                "id": c.chan_id,
+                "name": c.name
+            } for c in provider.channels.values()],
+            "unmapped_channels":
+            [{
+                "id": c.chan_id,
+                "name": c.name
+            } for c in provider.channels.values() if c.chan_id not in
+                [m.source_id for m in mapping.channels.values()]],
+            "missing_required":
+            mapping.get_missing_required(),
+            "missing_recommended":
+            mapping.get_missing_recommended(),
+            "message":
+            "Review mapping and PUT to /mapping/<signature> to save",
         })
 
     except Exception as e:
@@ -2979,10 +3036,10 @@ def get_available_transforms():
 def get_mapping_confidence():
     """
     Get confidence report for current or auto-detected mapping.
-    
+
     Query params:
         provider_id: Optional provider ID to check
-    
+
     Returns:
         Confidence report with:
         - overall_confidence (0.0-1.0)
@@ -2993,32 +3050,34 @@ def get_mapping_confidence():
         - suspected_mislabels
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
-        compute_provider_signature,
-        get_mapping,
-        auto_map_channels_with_confidence,
-        get_unmapped_required_channels,
-        get_low_confidence_mappings,
         ProviderMapping,
+        auto_map_channels_with_confidence,
+        compute_provider_signature,
+        get_low_confidence_mappings,
+        get_mapping,
+        get_unmapped_required_channels,
     )
-    
+
     try:
         requested_provider_id = request.args.get("provider_id", type=int)
-        
+
         # Discover provider
         config = JetDriveConfig.from_env()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                discover_providers(config, timeout=5.0))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
-        
+
         if not providers:
             return jsonify({"error": "No JetDrive providers found"}), 404
-        
+
         # Find requested provider or use first
         provider = None
         if requested_provider_id:
@@ -3027,39 +3086,47 @@ def get_mapping_confidence():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify({
+                        "error": f"Provider {requested_provider_id} not found",
+                        "available": [p.provider_id for p in providers],
+                    }),
+                    404,
+                )
         else:
             provider = providers[0]
-        
+
         # Get provider signature
         signature = compute_provider_signature(provider)
-        
+
         # Try to load existing mapping, or auto-detect
         existing_mapping = get_mapping(signature)
-        
+
         if existing_mapping:
             # Use existing mapping - but we need confidence scores
             # Re-score the existing mappings
             confidence_map = {}
             all_channels = list(provider.channels.values())
-            
-            for canonical_name, channel_mapping in existing_mapping.channels.items():
+
+            for canonical_name, channel_mapping in existing_mapping.channels.items(
+            ):
                 # Find the channel by source_id
                 channel = provider.channels.get(channel_mapping.source_id)
                 if channel:
-                    from api.services.jetdrive_mapping import score_channel_for_canonical
-                    conf = score_channel_for_canonical(channel, canonical_name, all_channels)
+                    from api.services.jetdrive_mapping import (
+                        score_channel_for_canonical, )
+
+                    conf = score_channel_for_canonical(channel, canonical_name,
+                                                       all_channels)
                     conf.transform = channel_mapping.transform  # Use existing transform
                     confidence_map[canonical_name] = conf
-            
-            unmapped_required = get_unmapped_required_channels(existing_mapping)
+
+            unmapped_required = get_unmapped_required_channels(
+                existing_mapping)
         else:
             # Auto-detect with confidence
             confidence_map = auto_map_channels_with_confidence(provider)
-            
+
             # Create temporary mapping to check for missing required
             temp_mapping = ProviderMapping(
                 provider_signature=signature,
@@ -3069,6 +3136,7 @@ def get_mapping_confidence():
             )
             # Convert confidence map to channel mappings
             from api.services.jetdrive_mapping import ChannelMapping
+
             for canonical_name, conf in confidence_map.items():
                 temp_mapping.channels[canonical_name] = ChannelMapping(
                     canonical_name=canonical_name,
@@ -3077,45 +3145,59 @@ def get_mapping_confidence():
                     transform=conf.transform,
                     enabled=True,
                 )
-            
+
             unmapped_required = get_unmapped_required_channels(temp_mapping)
-        
+
         # Calculate overall confidence
         if confidence_map:
-            overall_confidence = sum(c.confidence for c in confidence_map.values()) / len(confidence_map)
+            overall_confidence = sum(
+                c.confidence
+                for c in confidence_map.values()) / len(confidence_map)
         else:
             overall_confidence = 0.0
-        
+
         # Get low confidence mappings
-        low_confidence = get_low_confidence_mappings(confidence_map, threshold=0.7)
-        
+        low_confidence = get_low_confidence_mappings(confidence_map,
+                                                     threshold=0.7)
+
         # Determine if ready for capture
-        ready_for_capture = (
-            len(unmapped_required) == 0 and
-            overall_confidence >= 0.7 and
-            len(low_confidence) == 0
-        )
-        
+        ready_for_capture = (len(unmapped_required) == 0
+                             and overall_confidence >= 0.7
+                             and len(low_confidence) == 0)
+
         # Get unmapped recommended channels
         from api.services.jetdrive_mapping import RECOMMENDED_CANONICAL
+
         mapped = set(confidence_map.keys())
-        unmapped_recommended = [ch for ch in RECOMMENDED_CANONICAL if ch not in mapped]
-        
+        unmapped_recommended = [
+            ch for ch in RECOMMENDED_CANONICAL if ch not in mapped
+        ]
+
         return jsonify({
-            "success": True,
-            "provider_signature": signature,
-            "provider_id": provider.provider_id,
-            "provider_name": provider.name,
-            "overall_confidence": round(overall_confidence, 2),
-            "ready_for_capture": ready_for_capture,
+            "success":
+            True,
+            "provider_signature":
+            signature,
+            "provider_id":
+            provider.provider_id,
+            "provider_name":
+            provider.name,
+            "overall_confidence":
+            round(overall_confidence, 2),
+            "ready_for_capture":
+            ready_for_capture,
             "mappings": [conf.to_dict() for conf in confidence_map.values()],
-            "unmapped_required": unmapped_required,
-            "unmapped_recommended": unmapped_recommended,
+            "unmapped_required":
+            unmapped_required,
+            "unmapped_recommended":
+            unmapped_recommended,
             "low_confidence": [conf.to_dict() for conf in low_confidence],
-            "suspected_mislabels": [],  # Can integrate with preflight semantic checks
-            "has_existing_mapping": existing_mapping is not None,
+            "suspected_mislabels":
+            [],  # Can integrate with preflight semantic checks
+            "has_existing_mapping":
+            existing_mapping is not None,
         })
-    
+
     except Exception as e:
         logger.error(f"Failed to get mapping confidence: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3125,30 +3207,33 @@ def get_mapping_confidence():
 def export_mapping(signature: str):
     """
     Export a mapping as downloadable JSON file.
-    
+
     Args:
         signature: Provider signature
-    
+
     Returns:
         JSON file download
     """
-    from api.services.jetdrive_mapping import get_mapping
-    from flask import send_file
     import io
     import json
-    
+
+    from flask import send_file
+
+    from api.services.jetdrive_mapping import get_mapping
+
     try:
         mapping = get_mapping(signature)
-        
+
         if not mapping:
             return jsonify({"error": f"Mapping not found: {signature}"}), 404
-        
+
         # Create export format
         export_data = {
             "version": "1.0",
             "type": "dynoai_mapping_export",
             "name": f"{mapping.provider_name} Mapping",
-            "description": f"Channel mapping for {mapping.provider_name} (ID: 0x{mapping.provider_id:04X})",
+            "description":
+            f"Channel mapping for {mapping.provider_name} (ID: 0x{mapping.provider_id:04X})",
             "created_at": mapping.created_at,
             "exported_at": datetime.now().isoformat(),
             "provider_signature": mapping.provider_signature,
@@ -3160,23 +3245,23 @@ def export_mapping(signature: str):
                 for name, ch in mapping.channels.items()
             },
         }
-        
+
         # Create in-memory file
         json_str = json.dumps(export_data, indent=2)
-        file_obj = io.BytesIO(json_str.encode('utf-8'))
+        file_obj = io.BytesIO(json_str.encode("utf-8"))
         file_obj.seek(0)
-        
+
         # Generate filename
         safe_name = mapping.provider_name.replace(" ", "_").replace("/", "_")
         filename = f"jetdrive_mapping_{safe_name}_{signature[:8]}.json"
-        
+
         return send_file(
             file_obj,
-            mimetype='application/json',
+            mimetype="application/json",
             as_attachment=True,
-            download_name=filename
+            download_name=filename,
         )
-    
+
     except Exception as e:
         logger.error(f"Failed to export mapping: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3186,40 +3271,44 @@ def export_mapping(signature: str):
 def import_mapping():
     """
     Import a mapping from JSON file.
-    
+
     Request:
         Multipart form data with 'file' field containing JSON
         OR JSON body with mapping data
-    
+
     Returns:
         Imported mapping (saved to disk)
     """
+    import json
+
     from api.services.jetdrive_mapping import (
-        ProviderMapping,
         ChannelMapping,
+        ProviderMapping,
         save_mapping,
     )
-    import json
-    
+
     try:
         # Try to get JSON from file upload or request body
         mapping_data = None
-        
-        if 'file' in request.files:
-            file = request.files['file']
-            if file.filename and file.filename.endswith('.json'):
-                content = file.read().decode('utf-8')
+
+        if "file" in request.files:
+            file = request.files["file"]
+            if file.filename and file.filename.endswith(".json"):
+                content = file.read().decode("utf-8")
                 mapping_data = json.loads(content)
         elif request.is_json:
             mapping_data = request.get_json()
-        
+
         if not mapping_data:
             return jsonify({"error": "No mapping data provided"}), 400
-        
+
         # Validate import format
-        if mapping_data.get("type") not in ("dynoai_mapping_export", "dynoai_mapping_template"):
+        if mapping_data.get("type") not in (
+                "dynoai_mapping_export",
+                "dynoai_mapping_template",
+        ):
             return jsonify({"error": "Invalid mapping file format"}), 400
-        
+
         # Create ProviderMapping
         mapping = ProviderMapping(
             version=mapping_data.get("version", "1.0"),
@@ -3227,23 +3316,27 @@ def import_mapping():
             provider_id=mapping_data.get("provider_id", 0),
             provider_name=mapping_data.get("provider_name", "Imported"),
             host=mapping_data.get("host", ""),
-            created_at=mapping_data.get("created_at", datetime.now().isoformat()),
+            created_at=mapping_data.get("created_at",
+                                        datetime.now().isoformat()),
         )
-        
+
         # Import channels
         for name, ch_data in mapping_data.get("channels", {}).items():
             mapping.channels[name] = ChannelMapping.from_dict(name, ch_data)
-        
+
         # Save mapping
         if save_mapping(mapping):
             return jsonify({
-                "success": True,
-                "mapping": mapping.to_dict(),
-                "message": f"Imported mapping for {mapping.provider_name}",
+                "success":
+                True,
+                "mapping":
+                mapping.to_dict(),
+                "message":
+                f"Imported mapping for {mapping.provider_name}",
             })
         else:
             return jsonify({"error": "Failed to save mapping"}), 500
-    
+
     except Exception as e:
         logger.error(f"Failed to import mapping: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3253,62 +3346,64 @@ def import_mapping():
 def export_as_template():
     """
     Export current mapping as a reusable template.
-    
+
     Request Body:
         {
             "signature": "provider_signature",
             "template_name": "My Shop Dyno",
             "description": "Custom template description"
         }
-    
+
     Returns:
         Success message with template ID
     """
-    from api.services.jetdrive_mapping import get_mapping, MAPPING_DIR
     import json
-    
+
+    from api.services.jetdrive_mapping import MAPPING_DIR, get_mapping
+
     try:
         data = request.get_json()
         signature = data.get("signature")
         template_name = data.get("template_name", "Custom Template")
         description = data.get("description", "")
-        
+
         if not signature:
             return jsonify({"error": "Missing signature"}), 400
-        
+
         # Load existing mapping
         mapping = get_mapping(signature)
         if not mapping:
             return jsonify({"error": f"Mapping not found: {signature}"}), 404
-        
+
         # Create template
         template_id = template_name.lower().replace(" ", "_")
         template_data = {
             "version": "1.0",
             "type": "dynoai_mapping_template",
             "name": template_name,
-            "description": description or f"Template based on {mapping.provider_name}",
+            "description": description
+            or f"Template based on {mapping.provider_name}",
             "created_at": datetime.now().isoformat(),
             "channels": {
                 name: ch.to_dict()
                 for name, ch in mapping.channels.items()
             },
         }
-        
+
         # Save template
         MAPPING_DIR.mkdir(parents=True, exist_ok=True)
         template_path = MAPPING_DIR / f"template_{template_id}.json"
-        
-        with open(template_path, 'w') as f:
+
+        with open(template_path, "w") as f:
             json.dump(template_data, f, indent=2)
-        
+
         return jsonify({
             "success": True,
             "template_id": template_id,
             "template_name": template_name,
             "message": f"Template saved as {template_path.name}",
         })
-    
+
     except Exception as e:
         logger.error(f"Failed to export template: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3318,7 +3413,7 @@ def export_as_template():
 def get_queue_health():
     """
     Get live capture queue health and statistics.
-    
+
     Returns metrics for ingestion queue monitoring:
     - Samples received, aggregated, enqueued, dropped
     - Queue size and high watermark
@@ -3326,11 +3421,11 @@ def get_queue_health():
     - Persistence status and lag
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         stats = queue_mgr.get_stats()
-        
+
         return jsonify({
             "success": True,
             "stats": stats,
@@ -3338,35 +3433,41 @@ def get_queue_health():
         })
     except Exception as e:
         logger.error(f"Failed to get queue health: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 @jetdrive_bp.route("/queue/reset", methods=["POST"])
 def reset_queue():
     """
     Reset the live capture queue.
-    
+
     Clears all queued items and resets statistics.
     Useful for testing or after errors.
     """
     from api.services.jetdrive_live_queue import reset_live_queue_manager
-    
+
     try:
         reset_live_queue_manager()
-        
+
         return jsonify({
             "success": True,
             "message": "Queue reset successfully",
         })
     except Exception as e:
         logger.error(f"Failed to reset queue: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 # =============================================================================
@@ -3378,10 +3479,10 @@ def reset_queue():
 def get_realtime_analysis():
     """
     Get current real-time analysis state.
-    
+
     Returns coverage map, VE delta, quality metrics, and alerts.
     Analysis must be enabled via POST /realtime/enable first.
-    
+
     Returns:
         JSON with:
         - enabled: bool
@@ -3391,50 +3492,56 @@ def get_realtime_analysis():
         - alerts: [{type, severity, channel, message, timestamp}, ...]
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         analysis = queue_mgr.get_realtime_analysis()
-        
+
         if analysis is None:
             return jsonify({
-                "success": True,
-                "enabled": False,
-                "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
+                "success":
+                True,
+                "enabled":
+                False,
+                "message":
+                "Realtime analysis not enabled. POST to /realtime/enable to start.",
             })
-        
+
         return jsonify({
             "success": True,
             **analysis,
         })
     except Exception as e:
         logger.error(f"Failed to get realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/enable", methods=["POST"])
 def enable_realtime_analysis():
     """
     Enable real-time analysis during capture.
-    
+
     Query params:
         target_afr: Target AFR for VE delta calculation (default 14.7)
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         # Parse target AFR from request
         target_afr = request.args.get("target_afr", 14.7, type=float)
-        
+
         queue_mgr = get_live_queue_manager()
         queue_mgr.enable_realtime_analysis(target_afr=target_afr)
-        
+
         return jsonify({
             "success": True,
             "message": f"Realtime analysis enabled (target AFR: {target_afr})",
@@ -3442,77 +3549,89 @@ def enable_realtime_analysis():
         })
     except Exception as e:
         logger.error(f"Failed to enable realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/disable", methods=["POST"])
 def disable_realtime_analysis():
     """
     Disable real-time analysis.
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         queue_mgr.disable_realtime_analysis()
-        
+
         return jsonify({
             "success": True,
             "message": "Realtime analysis disabled",
         })
     except Exception as e:
         logger.error(f"Failed to disable realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/reset", methods=["POST"])
 def reset_realtime_analysis():
     """
     Reset real-time analysis state (clear coverage, alerts, etc).
-    
+
     Keeps analysis enabled but clears all accumulated data.
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
     from api.services.jetdrive_realtime_analysis import reset_realtime_engine
-    
+
     try:
         queue_mgr = get_live_queue_manager()
-        
+
         if not queue_mgr.realtime_analysis_enabled:
-            return jsonify({
-                "success": False,
-                "error": "Realtime analysis not enabled",
-            }), 400
-        
+            return (
+                jsonify({
+                    "success": False,
+                    "error": "Realtime analysis not enabled",
+                }),
+                400,
+            )
+
         # Reset the engine
         reset_realtime_engine()
-        
+
         # Re-enable with same settings
         target_afr = request.args.get("target_afr", 14.7, type=float)
         queue_mgr.enable_realtime_analysis(target_afr=target_afr)
-        
+
         return jsonify({
             "success": True,
             "message": "Realtime analysis reset",
         })
     except Exception as e:
         logger.error(f"Failed to reset realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify({
+                "success": False,
+                "error": str(e),
+            }),
+            500,
+        )
 
 
 # =============================================================================
@@ -3572,7 +3691,8 @@ def innovate_list_ports():
             port = p.get("port")
             if not isinstance(port, str) or not port:
                 continue
-            desc = p.get("description") if isinstance(p.get("description"), str) else ""
+            desc = p.get("description") if isinstance(p.get("description"),
+                                                      str) else ""
             simplified.append({"port": port, "description": desc})
 
         return jsonify({"success": True, "ports": simplified})
@@ -3590,7 +3710,11 @@ def innovate_connect():
     port = body.get("port")
     if not isinstance(port, str) or not port.strip():
         return (
-            jsonify({"success": False, "connected": False, "error": "Missing 'port'"}),
+            jsonify({
+                "success": False,
+                "connected": False,
+                "error": "Missing 'port'"
+            }),
             400,
         )
     port = port.strip()
@@ -3634,13 +3758,11 @@ def innovate_connect():
             with _innovate_lock:
                 _innovate_last_error = msg
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "connected": False,
-                        "error": msg,
-                    }
-                ),
+                jsonify({
+                    "success": False,
+                    "connected": False,
+                    "error": msg,
+                }),
                 200,
             )
 
@@ -3658,25 +3780,31 @@ def innovate_connect():
             _innovate_device_type = dev_enum.value
             _innovate_last_error = None
 
-        return jsonify(
-            {
-                "success": True,
-                "connected": True,
-                "port": port,
-                "device_type": dev_enum.value,
-                "streaming": started,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "connected": True,
+            "port": port,
+            "device_type": dev_enum.value,
+            "streaming": started,
+        })
 
     except ImportError as exc:
         # Most commonly: pyserial missing
         with _innovate_lock:
             _innovate_last_error = str(exc)
-        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+        return jsonify({
+            "success": False,
+            "connected": False,
+            "error": str(exc)
+        }), 500
     except Exception as exc:
         with _innovate_lock:
             _innovate_last_error = str(exc)
-        return jsonify({"success": False, "connected": False, "error": str(exc)}), 500
+        return jsonify({
+            "success": False,
+            "connected": False,
+            "error": str(exc)
+        }), 500
 
 
 @jetdrive_bp.route("/innovate/disconnect", methods=["POST"])
@@ -3714,17 +3842,14 @@ def innovate_status():
         samples = dict(_innovate_last_samples)
         last_sample_at = _innovate_last_sample_at
 
-    connected = bool(client is not None and getattr(client, "connected", False))
+    connected = bool(client is not None
+                     and getattr(client, "connected", False))
     # "running" means the stream loop is active; "streaming" means we saw data recently.
     running = bool(client is not None and getattr(client, "running", False))
 
     now = time.time()
-    streaming = bool(
-        connected
-        and running
-        and last_sample_at is not None
-        and (now - float(last_sample_at)) < 2.0
-    )
+    streaming = bool(connected and running and last_sample_at is not None
+                     and (now - float(last_sample_at)) < 2.0)
 
     samples_out: dict[str, Any] = {}
     for ch, s in samples.items():
@@ -3741,20 +3866,22 @@ def innovate_status():
             ts = float(getattr(s, "timestamp", 0.0))
         except Exception:
             ts = 0.0
-        samples_out[f"channel_{ch}"] = {"afr": afr, "lambda": lam, "timestamp": ts}
-
-    return jsonify(
-        {
-            "success": True,
-            "connected": connected,
-            "streaming": streaming,
-            "has_samples": len(samples_out) > 0,
-            "port": port,
-            "device_type": device_type,
-            "error": last_error,
-            "samples": samples_out,
+        samples_out[f"channel_{ch}"] = {
+            "afr": afr,
+            "lambda": lam,
+            "timestamp": ts
         }
-    )
+
+    return jsonify({
+        "success": True,
+        "connected": connected,
+        "streaming": streaming,
+        "has_samples": len(samples_out) > 0,
+        "port": port,
+        "device_type": device_type,
+        "error": last_error,
+        "samples": samples_out,
+    })
 
 
 # =============================================================================
@@ -3770,8 +3897,7 @@ def _load_rt150_config() -> dict[str, Any]:
             return json.load(fh)
     except Exception as exc:
         raise RuntimeError(
-            f"Failed to load RT-150 config at {cfg_path}: {exc}"
-        ) from exc
+            f"Failed to load RT-150 config at {cfg_path}: {exc}") from exc
 
 
 @jetdrive_bp.route("/hardware/validate", methods=["GET"])
@@ -3795,20 +3921,23 @@ def validate_hardware():
 
         env_cfg = get_config().dyno
     except Exception as exc:
-        logger.error("Failed to read env config in /hardware/validate", exc_info=True)
-        return jsonify({"ok": False, "error": "Failed to read environment config"}), 500
+        logger.error("Failed to read env config in /hardware/validate",
+                     exc_info=True)
+        return jsonify({
+            "ok": False,
+            "error": "Failed to read environment config"
+        }), 500
 
     # Compare key parameters
     ref_ip = (rt150.get("network") or {}).get("ip_address")
     ref_port = (rt150.get("network") or {}).get("jetdrive_port")
 
-    if ref_ip and env_cfg.ip_address and str(ref_ip) != str(env_cfg.ip_address):
-        warnings.append(f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}")
-    if (
-        ref_port
-        and env_cfg.jetdrive_port
-        and int(ref_port) != int(env_cfg.jetdrive_port)
-    ):
+    if ref_ip and env_cfg.ip_address and str(ref_ip) != str(
+            env_cfg.ip_address):
+        warnings.append(
+            f"IP mismatch: reference {ref_ip} vs env {env_cfg.ip_address}")
+    if (ref_port and env_cfg.jetdrive_port
+            and int(ref_port) != int(env_cfg.jetdrive_port)):
         warnings.append(
             f"Port mismatch: reference {ref_port} vs env {env_cfg.jetdrive_port}"
         )
@@ -3827,7 +3956,8 @@ def validate_hardware():
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.5))
+            providers = loop.run_until_complete(
+                discover_providers(cfg, timeout=1.5))
         finally:
             try:
                 asyncio.set_event_loop(None)
@@ -3842,16 +3972,14 @@ def validate_hardware():
             hostsame = bool(ref_ip) and str(p.host) == str(ref_ip)
             if hostsame:
                 matched_provider = True
-            providers_info.append(
-                {
-                    "provider_id": p.provider_id,
-                    "name": p.name,
-                    "host": p.host,
-                    "port": p.port,
-                    "channels": len(p.channels or {}),
-                    "matches_expected_ip": hostsame,
-                }
-            )
+            providers_info.append({
+                "provider_id": p.provider_id,
+                "name": p.name,
+                "host": p.host,
+                "port": p.port,
+                "channels": len(p.channels or {}),
+                "matches_expected_ip": hostsame,
+            })
     except Exception as exc:
         logger.warning("Discovery error in /hardware/validate", exc_info=True)
         warnings.append("Discovery error")
@@ -3900,7 +4028,8 @@ def hardware_heartbeat():
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+            providers = loop.run_until_complete(
+                discover_providers(cfg, timeout=1.0))
         finally:
             try:
                 asyncio.set_event_loop(None)
@@ -3911,22 +4040,20 @@ def hardware_heartbeat():
             except Exception:
                 pass
 
-        return jsonify(
-            {
-                "ok": True,
-                "providers": [
-                    {
-                        "id": p.provider_id,
-                        "host": p.host,
-                        "name": p.name,
-                        "port": p.port,
-                    }
-                    for p in providers
-                ],
-                "count": len(providers),
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
+        return jsonify({
+            "ok":
+            True,
+            "providers": [{
+                "id": p.provider_id,
+                "host": p.host,
+                "name": p.name,
+                "port": p.port,
+            } for p in providers],
+            "count":
+            len(providers),
+            "timestamp":
+            datetime.now().isoformat(),
+        })
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -3941,7 +4068,8 @@ def connect_hardware():
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            providers = loop.run_until_complete(discover_providers(cfg, timeout=2.0))
+            providers = loop.run_until_complete(
+                discover_providers(cfg, timeout=2.0))
         finally:
             try:
                 asyncio.set_event_loop(None)
@@ -3952,23 +4080,22 @@ def connect_hardware():
             except Exception:
                 pass
 
-        return jsonify(
-            {
-                "success": True,
-                "connected": len(providers) > 0,
-                "providers": [
-                    {
-                        "id": p.provider_id,
-                        "host": p.host,
-                        "name": p.name,
-                        "port": p.port,
-                    }
-                    for p in providers
-                ],
-                "count": len(providers),
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
+        return jsonify({
+            "success":
+            True,
+            "connected":
+            len(providers) > 0,
+            "providers": [{
+                "id": p.provider_id,
+                "host": p.host,
+                "name": p.name,
+                "port": p.port,
+            } for p in providers],
+            "count":
+            len(providers),
+            "timestamp":
+            datetime.now().isoformat(),
+        })
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 500
 
@@ -4001,7 +4128,8 @@ def hardware_status():
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            providers = loop.run_until_complete(discover_providers(cfg, timeout=1.0))
+            providers = loop.run_until_complete(
+                discover_providers(cfg, timeout=1.0))
         finally:
             try:
                 asyncio.set_event_loop(None)
@@ -4019,21 +4147,23 @@ def hardware_status():
         last_update = _live_data.get("last_update")
         channel_count = len(_live_data.get("channels", {}))
 
-    return jsonify(
-        {
-            "connected": len(providers) > 0,
-            "providers": [
-                {"id": p.provider_id, "host": p.host, "name": p.name, "port": p.port}
-                for p in providers
-            ],
-            "live": {
-                "capturing": capturing,
-                "last_update": last_update,
-                "channel_count": channel_count,
-            },
-            "timestamp": datetime.now().isoformat(),
-        }
-    )
+    return jsonify({
+        "connected":
+        len(providers) > 0,
+        "providers": [{
+            "id": p.provider_id,
+            "host": p.host,
+            "name": p.name,
+            "port": p.port
+        } for p in providers],
+        "live": {
+            "capturing": capturing,
+            "last_update": last_update,
+            "channel_count": channel_count,
+        },
+        "timestamp":
+        datetime.now().isoformat(),
+    })
 
 
 @jetdrive_bp.route("/hardware/channels/discover", methods=["GET"])
@@ -4073,23 +4203,24 @@ def discover_channels():
 
         if not channels_data:
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "No channel data available. Start live capture first.",
-                        "channel_count": 0,
-                        "channels": [],
-                    }
-                ),
+                jsonify({
+                    "success": False,
+                    "error":
+                    "No channel data available. Start live capture first.",
+                    "channel_count": 0,
+                    "channels": [],
+                }),
                 404,
             )
 
         # Build channel discovery info
         channels = []
         for name, ch in channels_data.items():
-            channel = (
-                ch if isinstance(ch, dict) else {"value": ch, "id": 0, "name": name}
-            )
+            channel = (ch if isinstance(ch, dict) else {
+                "value": ch,
+                "id": 0,
+                "name": name
+            })
 
             # Get recent values (if available in history)
             sample_values = []
@@ -4162,12 +4293,8 @@ def discover_channels():
                     "color": "#06b6d4",
                 }
                 keyword_matched = True
-            elif (
-                "temp" in name_lower
-                or "iat" in name_lower
-                or "ect" in name_lower
-                or "coolant" in name_lower
-            ):
+            elif ("temp" in name_lower or "iat" in name_lower
+                  or "ect" in name_lower or "coolant" in name_lower):
                 suggested_config = {
                     "label": "Temperature",
                     "units": "°C",
@@ -4197,11 +4324,8 @@ def discover_channels():
                     "color": "#eab308",
                 }
                 keyword_matched = True
-            elif (
-                "hp" in name_lower
-                or "horsepower" in name_lower
-                or "power" in name_lower
-            ):
+            elif ("hp" in name_lower or "horsepower" in name_lower
+                  or "power" in name_lower):
                 suggested_config = {
                     "label": "Horsepower",
                     "units": "HP",
@@ -4266,32 +4390,31 @@ def discover_channels():
                         "color": "#f59e0b",
                     }
 
-            channels.append(
-                {
-                    "id": channel.get("id", 0),
-                    "name": name,
-                    "value": channel.get("value", 0),
-                    "sample_values": sample_values,
-                    "value_range": value_range,
-                    "suggested_config": suggested_config,
-                }
-            )
+            channels.append({
+                "id": channel.get("id", 0),
+                "name": name,
+                "value": channel.get("value", 0),
+                "sample_values": sample_values,
+                "value_range": value_range,
+                "suggested_config": suggested_config,
+            })
 
-        return jsonify(
-            {
-                "success": True,
-                "channel_count": len(channels),
-                "channels": channels,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
+        return jsonify({
+            "success": True,
+            "channel_count": len(channels),
+            "channels": channels,
+            "timestamp": datetime.now().isoformat(),
+        })
 
     except Exception as e:
         logger.error(f"Error discovering channels: {e}", exc_info=True)
         return (
-            jsonify(
-                {"success": False, "error": str(e), "channel_count": 0, "channels": []}
-            ),
+            jsonify({
+                "success": False,
+                "error": str(e),
+                "channel_count": 0,
+                "channels": []
+            }),
             500,
         )
 
@@ -4310,15 +4433,13 @@ def check_hardware_health():
             channels = sim.get_channels()
             latency_ms = (time.time() - start_time) * 1000
 
-            return jsonify(
-                {
-                    "healthy": True,
-                    "connected": True,
-                    "simulated": True,
-                    "latency_ms": latency_ms,
-                    "channel_count": len(channels),
-                }
-            )
+            return jsonify({
+                "healthy": True,
+                "connected": True,
+                "simulated": True,
+                "latency_ms": latency_ms,
+                "channel_count": len(channels),
+            })
 
         global _live_data
         with _live_data_lock:
@@ -4326,21 +4447,23 @@ def check_hardware_health():
             channel_count = len(_live_data["channels"])
             latency_ms = (time.time() - start_time) * 1000
 
-        return jsonify(
-            {
-                "healthy": True,
-                "connected": True,
-                "simulated": False,
-                "capturing": capturing,
-                "latency_ms": latency_ms,
-                "channel_count": channel_count,
-            }
-        )
+        return jsonify({
+            "healthy": True,
+            "connected": True,
+            "simulated": False,
+            "capturing": capturing,
+            "latency_ms": latency_ms,
+            "channel_count": channel_count,
+        })
 
     except Exception as e:
         logger.exception("Health check failed")
         return (
-            jsonify({"healthy": False, "connected": False, "error": str(e)}),
+            jsonify({
+                "healthy": False,
+                "connected": False,
+                "error": str(e)
+            }),
             503,
         )
 
@@ -4358,7 +4481,8 @@ def _is_simulator_active() -> bool:
     """Thread-safe check for simulator activity."""
     # Environment override to force simulator fallback (useful for demos/CI)
     try:
-        env_override = os.getenv("DYNOAI_SIMULATOR_FALLBACK", "").strip().lower()
+        env_override = os.getenv("DYNOAI_SIMULATOR_FALLBACK",
+                                 "").strip().lower()
         if env_override in {"1", "true", "yes", "on"}:
             return True
     except Exception:
@@ -4448,20 +4572,26 @@ def start_simulator():
                 ve_rear = baseline_ve
             elif scenario == "lean":
                 ve_front = create_intentionally_wrong_ve_table(
-                    baseline_ve, error_pct_mean=-10.0, error_pct_std=5.0, seed=42
-                )
+                    baseline_ve,
+                    error_pct_mean=-10.0,
+                    error_pct_std=5.0,
+                    seed=42)
                 ve_rear = ve_front
             elif scenario == "rich":
                 ve_front = create_intentionally_wrong_ve_table(
-                    baseline_ve, error_pct_mean=10.0, error_pct_std=5.0, seed=42
-                )
+                    baseline_ve,
+                    error_pct_mean=10.0,
+                    error_pct_std=5.0,
+                    seed=42)
                 ve_rear = ve_front
             elif scenario == "custom":
                 ve_error = ecu_config.get("ve_error_pct", -10.0)
                 ve_std = ecu_config.get("ve_error_std", 5.0)
                 ve_front = create_intentionally_wrong_ve_table(
-                    baseline_ve, error_pct_mean=ve_error, error_pct_std=ve_std, seed=42
-                )
+                    baseline_ve,
+                    error_pct_mean=ve_error,
+                    error_pct_std=ve_std,
+                    seed=42)
                 ve_rear = ve_front
             else:
                 ve_front = baseline_ve
@@ -4483,8 +4613,7 @@ def start_simulator():
                 ve_table_rear=ve_rear,
                 afr_target_table=afr_table,
                 barometric_pressure_inhg=ecu_config.get(
-                    "barometric_pressure_inhg", 29.92
-                ),
+                    "barometric_pressure_inhg", 29.92),
                 ambient_temp_f=ecu_config.get("ambient_temp_f", 75.0),
             )
 
@@ -4497,35 +4626,31 @@ def start_simulator():
         sim.start()
         _set_simulator_active(True)
 
-        return jsonify(
-            {
-                "success": True,
-                "virtual_ecu_enabled": virtual_ecu is not None,
-                "status": "started",
-                "profile": {
-                    "name": profile.name,
-                    "family": profile.family,
-                    "displacement_ci": profile.displacement_ci,
-                    "idle_rpm": profile.idle_rpm,
-                    "redline_rpm": profile.redline_rpm,
-                    "max_hp": profile.max_hp,
-                    "max_tq": profile.max_tq,
-                },
-                "auto_pull": config.auto_pull,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "virtual_ecu_enabled": virtual_ecu is not None,
+            "status": "started",
+            "profile": {
+                "name": profile.name,
+                "family": profile.family,
+                "displacement_ci": profile.displacement_ci,
+                "idle_rpm": profile.idle_rpm,
+                "redline_rpm": profile.redline_rpm,
+                "max_hp": profile.max_hp,
+                "max_tq": profile.max_tq,
+            },
+            "auto_pull": config.auto_pull,
+        })
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Failed to start simulator: {error_msg}", exc_info=True)
 
         return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": f"Failed to start simulator: {error_msg}",
-                    # Never return stack traces to clients (logged server-side via exc_info=True)
-                }
-            ),
+            jsonify({
+                "success": False,
+                "error": f"Failed to start simulator: {error_msg}",
+                # Never return stack traces to clients (logged server-side via exc_info=True)
+            }),
             500,
         )
 
@@ -4546,12 +4671,10 @@ def stop_simulator():
 def get_simulator_status():
     """Get current simulator status."""
     if not _is_simulator_active():
-        return jsonify(
-            {
-                "active": False,
-                "state": "stopped",
-            }
-        )
+        return jsonify({
+            "active": False,
+            "state": "stopped",
+        })
 
     from api.services.dyno_simulator import get_simulator
 
@@ -4562,13 +4685,11 @@ def get_simulator_status():
     except Exception as e:
         # If simulator errors, don't deactivate - just return last known state
         logger.error(f"Error getting simulator status: {e}")
-        return jsonify(
-            {
-                "active": True,  # Keep showing as active
-                "state": "idle",  # Safe fallback
-                "error": str(e),
-            }
-        )
+        return jsonify({
+            "active": True,  # Keep showing as active
+            "state": "idle",  # Safe fallback
+            "error": str(e),
+        })
 
     # Extract key values
     rpm = channels.get("Digital RPM 1", {}).get("value", 0)
@@ -4577,20 +4698,18 @@ def get_simulator_status():
     afr = channels.get("Air/Fuel Ratio 1", {}).get("value", 0)
     tps = channels.get("TPS", {}).get("value", 0)
 
-    return jsonify(
-        {
-            "active": True,
-            "state": state.value,
-            "profile": sim.config.profile.name,
-            "current": {
-                "rpm": round(rpm, 0),
-                "horsepower": round(hp, 1),
-                "torque": round(tq, 1),
-                "afr": round(afr, 2),
-                "tps": round(tps, 1),
-            },
-        }
-    )
+    return jsonify({
+        "active": True,
+        "state": state.value,
+        "profile": sim.config.profile.name,
+        "current": {
+            "rpm": round(rpm, 0),
+            "horsepower": round(hp, 1),
+            "torque": round(tq, 1),
+            "afr": round(afr, 2),
+            "tps": round(tps, 1),
+        },
+    })
 
 
 @jetdrive_bp.route("/simulator/pull", methods=["POST"])
@@ -4606,24 +4725,20 @@ def trigger_pull():
 
     if current_state != SimState.IDLE:
         return (
-            jsonify(
-                {
-                    "error": f"Cannot start pull in state: {current_state.value}",
-                    "current_state": current_state.value,
-                }
-            ),
+            jsonify({
+                "error": f"Cannot start pull in state: {current_state.value}",
+                "current_state": current_state.value,
+            }),
             400,
         )
 
     sim.trigger_pull()
 
-    return jsonify(
-        {
-            "success": True,
-            "status": "pull_started",
-            "state": "pull",
-        }
-    )
+    return jsonify({
+        "success": True,
+        "status": "pull_started",
+        "state": "pull",
+    })
 
 
 @jetdrive_bp.route("/simulator/throttle", methods=["POST"])
@@ -4672,40 +4787,34 @@ def get_pull_data():
     )
 
     if not data or len(data) == 0:
-        return jsonify(
-            {
-                "success": True,
-                "has_data": False,
-                "data": [],
-                "state": sim_state.value,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "has_data": False,
+            "data": [],
+            "state": sim_state.value,
+        })
 
     # Calculate peak values
     peak_hp = max((d.get("Horsepower", 0) for d in data), default=0)
     peak_tq = max((d.get("Torque", 0) for d in data), default=0)
 
     # Find peak RPMs
-    hp_peak_rpm = next(
-        (d["Engine RPM"] for d in data if d.get("Horsepower", 0) == peak_hp), 0
-    )
+    hp_peak_rpm = next((d["Engine RPM"]
+                        for d in data if d.get("Horsepower", 0) == peak_hp), 0)
     tq_peak_rpm = next(
-        (d["Engine RPM"] for d in data if d.get("Torque", 0) == peak_tq), 0
-    )
+        (d["Engine RPM"] for d in data if d.get("Torque", 0) == peak_tq), 0)
 
-    return jsonify(
-        {
-            "success": True,
-            "has_data": True,
-            "points": len(data),
-            "peak_hp": round(peak_hp, 1),
-            "hp_peak_rpm": round(hp_peak_rpm, 0),
-            "peak_tq": round(peak_tq, 1),
-            "tq_peak_rpm": round(tq_peak_rpm, 0),
-            "state": sim_state.value,
-            "data": data,
-        }
-    )
+    return jsonify({
+        "success": True,
+        "has_data": True,
+        "points": len(data),
+        "peak_hp": round(peak_hp, 1),
+        "hp_peak_rpm": round(hp_peak_rpm, 0),
+        "peak_tq": round(peak_tq, 1),
+        "tq_peak_rpm": round(tq_peak_rpm, 0),
+        "state": sim_state.value,
+        "data": data,
+    })
 
 
 @jetdrive_bp.route("/simulator/save-pull", methods=["POST"])
@@ -4745,8 +4854,7 @@ def save_simulator_pull():
     try:
         run_id = sanitize_run_id(
             request_data.get("run_id")
-            or f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        )
+            or f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -4780,31 +4888,26 @@ def save_simulator_pull():
                 for i, row in enumerate(data):
                     # Convert simulator format to analysis format
                     # Use average of front/rear AFR
-                    afr_avg = (
-                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
-                    ) / 2
+                    afr_avg = (row.get("AFR Meas F", 14.7) +
+                               row.get("AFR Meas R", 14.7)) / 2
 
-                    writer.writerow(
-                        {
-                            "timestamp_ms": i * 50,  # 20Hz = 50ms per sample
-                            "RPM": row.get("Engine RPM", 0),
-                            "Torque": row.get("Torque", 0),
-                            "Horsepower": row.get("Horsepower", 0),
-                            "AFR": afr_avg,
-                            "MAP_kPa": row.get("MAP kPa", 0),
-                            "TPS": row.get("TPS", 0),
-                            "IAT": row.get("IAT F", 85),
-                        }
-                    )
+                    writer.writerow({
+                        "timestamp_ms": i * 50,  # 20Hz = 50ms per sample
+                        "RPM": row.get("Engine RPM", 0),
+                        "Torque": row.get("Torque", 0),
+                        "Horsepower": row.get("Horsepower", 0),
+                        "AFR": afr_avg,
+                        "MAP_kPa": row.get("MAP kPa", 0),
+                        "TPS": row.get("TPS", 0),
+                        "IAT": row.get("IAT F", 85),
+                    })
 
-        return jsonify(
-            {
-                "success": True,
-                "run_id": run_id,
-                "csv_path": str(csv_path),
-                "points": len(data),
-            }
-        )
+        return jsonify({
+            "success": True,
+            "run_id": run_id,
+            "csv_path": str(csv_path),
+            "points": len(data),
+        })
 
     except Exception as e:
         return jsonify({"error": f"Failed to save CSV: {str(e)}"}), 500
@@ -4824,19 +4927,17 @@ def get_profiles():
 
     result = []
     for key, profile in profiles.items():
-        result.append(
-            {
-                "id": key,
-                "name": profile.name,
-                "family": profile.family,
-                "displacement_ci": profile.displacement_ci,
-                "idle_rpm": profile.idle_rpm,
-                "redline_rpm": profile.redline_rpm,
-                "max_hp": profile.max_hp,
-                "hp_peak_rpm": profile.hp_peak_rpm,
-                "max_tq": profile.max_tq,
-                "tq_peak_rpm": profile.tq_peak_rpm,
-            }
-        )
+        result.append({
+            "id": key,
+            "name": profile.name,
+            "family": profile.family,
+            "displacement_ci": profile.displacement_ci,
+            "idle_rpm": profile.idle_rpm,
+            "redline_rpm": profile.redline_rpm,
+            "max_hp": profile.max_hp,
+            "hp_peak_rpm": profile.hp_peak_rpm,
+            "max_tq": profile.max_tq,
+            "tq_peak_rpm": profile.tq_peak_rpm,
+        })
 
     return jsonify({"profiles": result})

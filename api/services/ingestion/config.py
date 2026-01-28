@@ -58,7 +58,8 @@ class RetrySettings:
             exponential_base=data.get("exponential_base", 2.0),
             jitter=data.get("jitter", True),
             retry_on_timeout=data.get("retry_on_timeout", True),
-            retry_on_connection_error=data.get("retry_on_connection_error", True),
+            retry_on_connection_error=data.get("retry_on_connection_error",
+                                               True),
         )
 
 
@@ -181,8 +182,7 @@ class DataSourceConfig:
     buffer_size: int = 4096
     retry: RetrySettings = field(default_factory=RetrySettings)
     circuit_breaker: CircuitBreakerSettings = field(
-        default_factory=CircuitBreakerSettings
-    )
+        default_factory=CircuitBreakerSettings)
     validation: ValidationSettings = field(default_factory=ValidationSettings)
     custom_settings: dict[str, Any] = field(default_factory=dict)
 
@@ -209,9 +209,9 @@ class DataSourceConfig:
             buffer_size=data.get("buffer_size", 4096),
             retry=RetrySettings.from_dict(data.get("retry", {})),
             circuit_breaker=CircuitBreakerSettings.from_dict(
-                data.get("circuit_breaker", {})
-            ),
-            validation=ValidationSettings.from_dict(data.get("validation", {})),
+                data.get("circuit_breaker", {})),
+            validation=ValidationSettings.from_dict(data.get("validation",
+                                                             {})),
             custom_settings=data.get("custom_settings", {}),
         )
 
@@ -340,9 +340,9 @@ class IngestionConfig:
     # Default retry/circuit breaker (can be overridden per source)
     default_retry: RetrySettings = field(default_factory=RetrySettings)
     default_circuit_breaker: CircuitBreakerSettings = field(
-        default_factory=CircuitBreakerSettings
-    )
-    default_validation: ValidationSettings = field(default_factory=ValidationSettings)
+        default_factory=CircuitBreakerSettings)
+    default_validation: ValidationSettings = field(
+        default_factory=ValidationSettings)
 
     # Data source specific configs
     jetdrive: JetDriveConfig = field(default_factory=JetDriveConfig)
@@ -375,7 +375,8 @@ class IngestionConfig:
             "jetdrive": self.jetdrive.to_dict(),
             "innovate": self.innovate.to_dict(),
             "data_sources": {
-                name: config.to_dict() for name, config in self.data_sources.items()
+                name: config.to_dict()
+                for name, config in self.data_sources.items()
             },
         }
 
@@ -391,13 +392,12 @@ class IngestionConfig:
             metrics_enabled=data.get("metrics_enabled", True),
             metrics_interval_sec=data.get("metrics_interval_sec", 60.0),
             queue=QueueSettings.from_dict(data.get("queue", {})),
-            default_retry=RetrySettings.from_dict(data.get("default_retry", {})),
+            default_retry=RetrySettings.from_dict(data.get(
+                "default_retry", {})),
             default_circuit_breaker=CircuitBreakerSettings.from_dict(
-                data.get("default_circuit_breaker", {})
-            ),
+                data.get("default_circuit_breaker", {})),
             default_validation=ValidationSettings.from_dict(
-                data.get("default_validation", {})
-            ),
+                data.get("default_validation", {})),
             jetdrive=JetDriveConfig.from_dict(data.get("jetdrive", {})),
             innovate=InnovateConfig.from_dict(data.get("innovate", {})),
             data_sources=data_sources,
@@ -444,7 +444,8 @@ def get_ingestion_config() -> IngestionConfig:
         # Try to load from default locations
         config_paths = [
             Path("config/ingestion.json"),
-            Path(__file__).parent.parent.parent.parent / "config" / "ingestion.json",
+            Path(__file__).parent.parent.parent.parent / "config" /
+            "ingestion.json",
         ]
 
         for path in config_paths:

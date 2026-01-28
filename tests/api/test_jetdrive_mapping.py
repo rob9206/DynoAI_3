@@ -11,56 +11,32 @@ Tests:
 """
 
 import json
-import pytest
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
 
-from api.services.jetdrive_mapping import (
-    # Signature
-    compute_provider_signature,
-    parse_provider_signature,
-    # Transforms
-    lambda_to_afr,
-    afr_to_lambda,
-    nm_to_ftlb,
-    ftlb_to_nm,
-    kw_to_hp,
-    hp_to_kw,
-    celsius_to_fahrenheit,
-    fahrenheit_to_celsius,
-    apply_transform,
-    TRANSFORMS,
-    # Data classes
-    ChannelMapping,
-    ProviderMapping,
-    # Persistence
-    get_mapping,
-    save_mapping,
-    delete_mapping,
-    list_mappings,
-    MAPPING_DIR,
-    # Templates
-    get_templates,
-    get_template,
-    create_mapping_from_template,
-    BUILTIN_TEMPLATES,
-    # Auto-mapping
-    auto_map_channels,
-    create_auto_mapping,
-    # Application
-    apply_mapping_to_sample,
+import pytest
+
+from api.services.jetdrive_mapping import (  # Signature; Transforms; Data classes; Persistence; Templates; Auto-mapping; Application
+    BUILTIN_TEMPLATES, MAPPING_DIR, TRANSFORMS, ChannelMapping,
+    ProviderMapping, afr_to_lambda, apply_mapping_to_sample, apply_transform,
+    auto_map_channels, celsius_to_fahrenheit, compute_provider_signature,
+    create_auto_mapping, create_mapping_from_template, delete_mapping,
+    fahrenheit_to_celsius, ftlb_to_nm, get_mapping, get_template,
+    get_templates, hp_to_kw, kw_to_hp, lambda_to_afr, list_mappings,
+    nm_to_ftlb, parse_provider_signature, save_mapping,
 )
-
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
+
 @dataclass
 class MockChannelInfo:
     """Mock ChannelInfo for testing."""
+
     chan_id: int
     name: str
     unit: int
@@ -69,6 +45,7 @@ class MockChannelInfo:
 @dataclass
 class MockProvider:
     """Mock JetDriveProviderInfo for testing."""
+
     provider_id: int
     name: str
     host: str
@@ -107,6 +84,7 @@ def temp_mapping_dir(tmp_path):
 # Provider Signature Tests
 # =============================================================================
 
+
 class TestProviderSignature:
     """Test provider signature computation."""
 
@@ -132,7 +110,9 @@ class TestProviderSignature:
         sig1 = compute_provider_signature(mock_provider)
 
         # Add a new channel
-        mock_provider.channels[30] = MockChannelInfo(chan_id=30, name="TPS", unit=16)
+        mock_provider.channels[30] = MockChannelInfo(chan_id=30,
+                                                     name="TPS",
+                                                     unit=16)
         sig2 = compute_provider_signature(mock_provider)
 
         assert sig1 != sig2, "Signature should change when channels are added"
@@ -161,6 +141,7 @@ class TestProviderSignature:
 # =============================================================================
 # Transform Tests
 # =============================================================================
+
 
 class TestTransforms:
     """Test value transform functions."""
@@ -206,15 +187,20 @@ class TestTransforms:
         """Test apply_transform function."""
         assert apply_transform(1.0, "lambda_to_afr") == pytest.approx(14.7)
         assert apply_transform(100, "identity") == 100
-        assert apply_transform(100, "unknown_transform") == 100  # Falls back to identity
+        assert (apply_transform(100, "unknown_transform") == 100
+                )  # Falls back to identity
 
     def test_all_transforms_registered(self):
         """All documented transforms should be in registry."""
         expected = [
-            "lambda_to_afr", "afr_to_lambda",
-            "nm_to_ftlb", "ftlb_to_nm",
-            "kw_to_hp", "hp_to_kw",
-            "c_to_f", "f_to_c",
+            "lambda_to_afr",
+            "afr_to_lambda",
+            "nm_to_ftlb",
+            "ftlb_to_nm",
+            "kw_to_hp",
+            "hp_to_kw",
+            "c_to_f",
+            "f_to_c",
             "identity",
         ]
         for name in expected:
@@ -224,6 +210,7 @@ class TestTransforms:
 # =============================================================================
 # Data Class Tests
 # =============================================================================
+
 
 class TestDataClasses:
     """Test mapping data classes."""
@@ -266,8 +253,11 @@ class TestDataClasses:
             provider_name="Test Dyno",
             host="192.168.1.100",
             channels={
-                "rpm": ChannelMapping("rpm", 10, "Digital RPM 1"),
-                "afr_front": ChannelMapping("afr_front", 15, "Air/Fuel Ratio 1", "lambda_to_afr"),
+                "rpm":
+                ChannelMapping("rpm", 10, "Digital RPM 1"),
+                "afr_front":
+                ChannelMapping("afr_front", 15, "Air/Fuel Ratio 1",
+                               "lambda_to_afr"),
             },
         )
 
@@ -287,13 +277,13 @@ class TestDataClasses:
         """Test detection of missing required channels."""
         # Only RPM mapped
         mapping = ProviderMapping(
-            channels={"rpm": ChannelMapping("rpm", 10, "Digital RPM 1")}
-        )
+            channels={"rpm": ChannelMapping("rpm", 10, "Digital RPM 1")})
         missing = mapping.get_missing_required()
         assert "afr (any)" in missing  # Missing AFR
 
         # RPM + AFR mapped
-        mapping.channels["afr_front"] = ChannelMapping("afr_front", 15, "AFR 1")
+        mapping.channels["afr_front"] = ChannelMapping("afr_front", 15,
+                                                       "AFR 1")
         missing = mapping.get_missing_required()
         assert len(missing) == 0
 
@@ -302,12 +292,14 @@ class TestDataClasses:
 # Persistence Tests
 # =============================================================================
 
+
 class TestMappingPersistence:
     """Test mapping file persistence."""
 
     def test_save_and_load_mapping(self, mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR",
+                   temp_mapping_dir):
             sig = "4097_192.168.1.100_abc123"
             mapping = ProviderMapping(
                 provider_signature=sig,
@@ -330,13 +322,15 @@ class TestMappingPersistence:
 
     def test_get_nonexistent_mapping(self, temp_mapping_dir):
         """Test loading a mapping that doesn't exist."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR",
+                   temp_mapping_dir):
             mapping = get_mapping("nonexistent_signature")
             assert mapping is None
 
     def test_delete_mapping(self, temp_mapping_dir):
         """Test deleting a mapping file."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR",
+                   temp_mapping_dir):
             sig = "to_delete"
             mapping = ProviderMapping(provider_signature=sig)
             save_mapping(mapping)
@@ -352,7 +346,8 @@ class TestMappingPersistence:
 
     def test_list_mappings(self, temp_mapping_dir):
         """Test listing all mappings."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR",
+                   temp_mapping_dir):
             # Save a few mappings
             for i in range(3):
                 mapping = ProviderMapping(
@@ -368,6 +363,7 @@ class TestMappingPersistence:
 # =============================================================================
 # Template Tests
 # =============================================================================
+
 
 class TestTemplates:
     """Test mapping template system."""
@@ -392,7 +388,8 @@ class TestTemplates:
     def test_create_mapping_from_template(self, mock_provider):
         """Test creating a mapping from a template."""
         sig = compute_provider_signature(mock_provider)
-        mapping = create_mapping_from_template("dynojet_rt150", mock_provider, sig)
+        mapping = create_mapping_from_template("dynojet_rt150", mock_provider,
+                                               sig)
 
         assert mapping is not None
         assert mapping.provider_signature == sig
@@ -407,6 +404,7 @@ class TestTemplates:
 # =============================================================================
 # Auto-Mapping Tests
 # =============================================================================
+
 
 class TestAutoMapping:
     """Test automatic channel mapping heuristics."""
@@ -443,6 +441,7 @@ class TestAutoMapping:
 # Mapping Application Tests
 # =============================================================================
 
+
 class TestMappingApplication:
     """Test applying mappings to samples."""
 
@@ -451,10 +450,10 @@ class TestMappingApplication:
         mapping = ProviderMapping(
             channels={
                 "rpm": ChannelMapping("rpm", 10, "Digital RPM 1", "identity"),
-            }
-        )
+            })
 
-        canonical, value = apply_mapping_to_sample(mapping, 10, "Digital RPM 1", 3500)
+        canonical, value = apply_mapping_to_sample(mapping, 10,
+                                                   "Digital RPM 1", 3500)
 
         assert canonical == "rpm"
         assert value == 3500
@@ -463,11 +462,12 @@ class TestMappingApplication:
         """Test applying mapping with transform."""
         mapping = ProviderMapping(
             channels={
-                "afr_front": ChannelMapping("afr_front", 15, "Lambda 1", "lambda_to_afr"),
-            }
-        )
+                "afr_front":
+                ChannelMapping("afr_front", 15, "Lambda 1", "lambda_to_afr"),
+            })
 
-        canonical, value = apply_mapping_to_sample(mapping, 15, "Lambda 1", 1.0)
+        canonical, value = apply_mapping_to_sample(mapping, 15, "Lambda 1",
+                                                   1.0)
 
         assert canonical == "afr_front"
         assert value == pytest.approx(14.7)
@@ -477,10 +477,10 @@ class TestMappingApplication:
         mapping = ProviderMapping(
             channels={
                 "rpm": ChannelMapping("rpm", 10, "Digital RPM 1"),
-            }
-        )
+            })
 
-        canonical, value = apply_mapping_to_sample(mapping, 99, "Unknown", 123.4)
+        canonical, value = apply_mapping_to_sample(mapping, 99, "Unknown",
+                                                   123.4)
 
         assert canonical is None
         assert value == 123.4
@@ -489,6 +489,7 @@ class TestMappingApplication:
 # =============================================================================
 # Signature Change Detection Tests
 # =============================================================================
+
 
 class TestSignatureChangeDetection:
     """Test detection of provider config changes."""
