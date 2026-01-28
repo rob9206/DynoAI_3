@@ -422,6 +422,247 @@ export const getSystemDiagnostics = async (): Promise<SystemDiagnostics> => {
   return response.data;
 };
 
+// =============================================================================
+// NextGen Analysis API (Physics-Informed ECU Reasoning)
+// =============================================================================
+
+/** Surface axis definition */
+export interface NextGenSurfaceAxis {
+  name: string;
+  unit: string;
+  bins: number[];
+}
+
+/** Surface statistics */
+export interface NextGenSurfaceStats {
+  min: number | null;
+  max: number | null;
+  mean: number | null;
+  p05: number | null;
+  p95: number | null;
+  non_nan_cells: number;
+  total_cells: number;
+  total_samples: number;
+  coverage_pct: number;
+}
+
+/** 2D surface data for heatmap display */
+export interface NextGenSurface {
+  surface_id: string;
+  title: string;
+  description: string;
+  rpm_axis: NextGenSurfaceAxis;
+  map_axis: NextGenSurfaceAxis;
+  values: (number | null)[][];
+  hit_count: number[][];
+  stats: NextGenSurfaceStats;
+  mask_info: string | null;
+}
+
+/** Spark valley finding */
+export interface SparkValleyFinding {
+  cylinder: 'front' | 'rear' | 'global';
+  rpm_center: number;
+  rpm_band: [number, number];
+  depth_deg: number;
+  valley_min_deg: number;
+  pre_valley_deg: number;
+  post_valley_deg: number;
+  map_band_used: number;
+  confidence: number;
+  evidence: string[];
+}
+
+/** Causal hypothesis */
+export interface NextGenHypothesis {
+  hypothesis_id: string;
+  title: string;
+  confidence: number;
+  category: 'transient' | 'load_signal' | 'knock_limit' | 'temp_trim' | 'fuel_model' | 'data_quality';
+  evidence: string[];
+  distinguishing_checks: string[];
+}
+
+/** Cause tree result */
+export interface NextGenCauseTree {
+  hypotheses: NextGenHypothesis[];
+  summary: string;
+  analysis_notes: string[];
+}
+
+/** Test step recommendation */
+export interface NextGenTestStep {
+  name: string;
+  goal: string;
+  rpm_range: [number, number] | null;
+  map_range: [number, number] | null;
+  test_type: string;
+  constraints: string;
+  required_channels: string[];
+  success_criteria: string;
+  risk_notes: string;
+  priority: number;
+  expected_coverage_gain?: number;
+  efficiency_score?: number;
+}
+
+/** Coverage gap with detailed info for UI */
+export interface NextGenCoverageGap {
+  rpm_range: [number, number];
+  map_range: [number, number];
+  empty_cells: number;
+  total_cells: number;
+  coverage_pct: number;
+  impact: 'high' | 'medium' | 'low';
+  region_type: 'high_map_midrange' | 'idle_low_map' | 'tip_in' | 'general';
+  description: string;
+}
+
+/** Next test plan */
+export interface NextGenTestPlan {
+  steps: NextGenTestStep[];
+  priority_rationale: string;
+  coverage_gaps: string[];
+  coverage_gaps_detailed: NextGenCoverageGap[];
+  total_estimated_pulls: number;
+  dyno_step_count: number;
+  street_step_count: number;
+}
+
+/** Channel status in checklist */
+export interface NextGenChannelStatus {
+  name: string;
+  label: string;
+  present: boolean;
+  required: boolean;
+  impact?: string;
+  note?: string;
+}
+
+/** Structured warning with stable code */
+export interface NextGenChannelWarning {
+  code: string;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+  feature_impact: string;
+}
+
+/** Channel readiness checklist */
+export interface NextGenChannelReadiness {
+  required_present: number;
+  required_total: number;
+  recommended_present: number;
+  recommended_total: number;
+  required_channels: NextGenChannelStatus[];
+  recommended_channels: NextGenChannelStatus[];
+  warnings: NextGenChannelWarning[];
+  warning_codes: string[];
+  features_available: string[];
+  features_degraded: string[];
+  features_disabled: string[];
+  trust_summary: string;
+  confidence_score: number;
+  is_ready: boolean;
+}
+
+/** Full NextGen analysis payload */
+export interface NextGenAnalysisPayload {
+  schema_version: string;
+  run_id: string;
+  generated_at: string;
+  inputs_present: Record<string, boolean>;
+  channel_readiness: NextGenChannelReadiness;
+  mode_summary: Record<string, number>;
+  surfaces: Record<string, NextGenSurface>;
+  spark_valley: SparkValleyFinding[];
+  cause_tree: NextGenCauseTree;
+  next_tests: NextGenTestPlan;
+  notes_warnings: string[];
+  warning_codes: string[];
+  /** Short, factual notes explaining the ECU mental model */
+  ecu_model_notes: string[];
+}
+
+/** Summary returned from generate endpoint */
+export interface NextGenSummary {
+  total_samples: number;
+  surface_count: number;
+  spark_valley_count: number;
+  hypothesis_count: number;
+  test_step_count: number;
+  warning_count: number;
+  top_hypothesis: {
+    title: string;
+    confidence: number;
+    category: string;
+  } | null;
+  mode_distribution: {
+    wot_percent: number;
+    cruise_percent: number;
+  };
+}
+
+/** Response from generate endpoint */
+export interface NextGenGenerateResponse {
+  success: boolean;
+  run_id: string;
+  generated_at: string;
+  from_cache: boolean;
+  summary: NextGenSummary;
+  download_url: string;
+  payload?: NextGenAnalysisPayload;
+  error?: string;
+}
+
+/** Get cached NextGen analysis payload */
+export const getNextGenAnalysis = async (runId: string): Promise<NextGenAnalysisPayload> => {
+  const response = await api.get(`/api/nextgen/${encodePathSegment(runId)}`);
+  return response.data;
+};
+
+/** Generate NextGen analysis for a run */
+export const generateNextGenAnalysis = async (
+  runId: string,
+  options?: { force?: boolean; includeFull?: boolean }
+): Promise<NextGenGenerateResponse> => {
+  const params = new URLSearchParams();
+  if (options?.force) params.append('force', 'true');
+  if (options?.includeFull) params.append('include', 'full');
+  
+  const url = `/api/nextgen/${encodePathSegment(runId)}/generate${params.toString() ? '?' + params.toString() : ''}`;
+  const response = await api.post(url);
+  return response.data;
+};
+
+/** Get NextGen surfaces only */
+export const getNextGenSurfaces = async (
+  runId: string,
+  surfaceId?: string
+): Promise<{ surfaces: Record<string, NextGenSurface>; surface_ids: string[] }> => {
+  const params = surfaceId ? `?surface_id=${surfaceId}` : '';
+  const response = await api.get(`/api/nextgen/${encodePathSegment(runId)}/surfaces${params}`);
+  return response.data;
+};
+
+/** Get NextGen hypotheses with optional filtering */
+export const getNextGenHypotheses = async (
+  runId: string,
+  options?: { minConfidence?: number; category?: string }
+): Promise<{
+  hypotheses: NextGenHypothesis[];
+  total_count: number;
+  filtered_count: number;
+  summary: string;
+}> => {
+  const params = new URLSearchParams();
+  if (options?.minConfidence != null) params.append('min_confidence', options.minConfidence.toString());
+  if (options?.category) params.append('category', options.category);
+  
+  const url = `/api/nextgen/${encodePathSegment(runId)}/hypotheses${params.toString() ? '?' + params.toString() : ''}`;
+  const response = await api.get(url);
+  return response.data;
+};
+
 // Error handler
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {

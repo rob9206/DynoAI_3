@@ -37,8 +37,9 @@ class ChannelHealth(Enum):
 
 @dataclass
 class ChannelMetrics:
-    """Metrics for a single channel."""
+    """Metrics for a single channel, scoped by provider."""
 
+    provider_id: int  # Provider that owns this channel
     channel_id: int
     channel_name: str
 
@@ -62,6 +63,11 @@ class ChannelMetrics:
     # Expected ranges (optional, can be set per channel)
     min_value: float | None = None
     max_value: float | None = None
+
+    @property
+    def key(self) -> tuple[int, int]:
+        """Return the unique key for this channel (provider_id, channel_id)."""
+        return (self.provider_id, self.channel_id)
 
     def update(self, sample: JetDriveSample, current_time: float) -> None:
         """Update metrics with a new sample."""
@@ -145,6 +151,7 @@ class ChannelMetrics:
     def to_dict(self, current_time: float) -> dict[str, Any]:
         """Convert to dictionary for API response."""
         return {
+            "provider_id": self.provider_id,
             "channel_id": self.channel_id,
             "channel_name": self.channel_name,
             "health": self.health.value,
@@ -178,6 +185,9 @@ class FrameStats:
 class JetDriveDataValidator:
     """
     Validates and tracks data quality for JetDrive channels.
+
+    Channels are uniquely identified by (provider_id, channel_id) to prevent
+    cross-contamination when multiple providers have overlapping channel IDs.
     """
 
     def __init__(
@@ -198,21 +208,38 @@ class JetDriveDataValidator:
         self.min_rate = min_samples_per_second
         self.max_rate = max_samples_per_second
 
-        # Channel metrics
-        self._metrics: dict[int, ChannelMetrics] = {}
+        # Channel metrics keyed by (provider_id, channel_id) tuple
+        self._metrics: dict[tuple[int, int], ChannelMetrics] = {}
         self._metrics_lock = Lock()
 
-        # Frame statistics
-        self._frame_stats = FrameStats()
+        # Frame statistics (per provider)
+        self._frame_stats: dict[int, FrameStats] = defaultdict(FrameStats)
         self._frame_stats_lock = Lock()
 
-        # Channel value ranges (can be configured)
+        # Channel value ranges (can be configured by channel name)
         self._value_ranges: dict[str, tuple[float, float]] = {}
+
+        # Active provider filter (None = accept all)
+        self._active_provider_id: int | None = None
+
+    def set_active_provider(self, provider_id: int | None) -> None:
+        """
+        Set the active provider filter.
+
+        When set, only samples from this provider will be recorded.
+        Set to None to accept samples from all providers.
+        """
+        self._active_provider_id = provider_id
+        logger.info(f"Active provider set to: {provider_id}")
+
+    def get_active_provider(self) -> int | None:
+        """Get the currently active provider ID."""
+        return self._active_provider_id
 
     def set_channel_range(
         self, channel_name: str, min_val: float, max_val: float
     ) -> None:
-        """Set expected value range for a channel."""
+        """Set expected value range for a channel (applies to all providers)."""
         self._value_ranges[channel_name] = (min_val, max_val)
         with self._metrics_lock:
             for metrics in self._metrics.values():
@@ -220,14 +247,32 @@ class JetDriveDataValidator:
                     metrics.min_value = min_val
                     metrics.max_value = max_val
 
-    def record_sample(self, sample: JetDriveSample) -> None:
-        """Record a new sample and update metrics."""
+    def record_sample(self, sample: JetDriveSample) -> bool:
+        """
+        Record a new sample and update metrics.
+
+        Args:
+            sample: The JetDrive sample to record
+
+        Returns:
+            True if sample was recorded, False if rejected (wrong provider)
+        """
+        # Filter by active provider if set
+        if self._active_provider_id is not None:
+            if sample.provider_id != self._active_provider_id:
+                # Track as non-provider frame but don't record metrics
+                with self._frame_stats_lock:
+                    self._frame_stats[sample.provider_id].non_provider_frames += 1
+                return False
+
         current_time = time.time()
+        key = (sample.provider_id, sample.channel_id)
 
         with self._metrics_lock:
-            if sample.channel_id not in self._metrics:
-                # Create new metrics
+            if key not in self._metrics:
+                # Create new metrics for this (provider, channel) pair
                 metrics = ChannelMetrics(
+                    provider_id=sample.provider_id,
                     channel_id=sample.channel_id,
                     channel_name=sample.channel_name,
                 )
@@ -238,53 +283,110 @@ class JetDriveDataValidator:
                     metrics.min_value = min_val
                     metrics.max_value = max_val
 
-                self._metrics[sample.channel_id] = metrics
+                self._metrics[key] = metrics
 
-            self._metrics[sample.channel_id].update(sample, current_time)
+            self._metrics[key].update(sample, current_time)
+
+        return True
 
     def record_frame_stats(
         self,
+        provider_id: int,
         dropped: int = 0,
         malformed: int = 0,
         non_provider: int = 0,
         total: int = 1,
     ) -> None:
-        """Record frame-level statistics."""
+        """Record frame-level statistics for a provider."""
         with self._frame_stats_lock:
-            self._frame_stats.total_frames += total
-            self._frame_stats.dropped_frames += dropped
-            self._frame_stats.malformed_frames += malformed
-            self._frame_stats.non_provider_frames += non_provider
+            stats = self._frame_stats[provider_id]
+            stats.total_frames += total
+            stats.dropped_frames += dropped
+            stats.malformed_frames += malformed
+            stats.non_provider_frames += non_provider
 
-    def get_channel_health(self, channel_id: int) -> ChannelMetrics | None:
-        """Get health metrics for a specific channel."""
+    def get_channel_health(
+        self, provider_id: int, channel_id: int
+    ) -> ChannelMetrics | None:
+        """Get health metrics for a specific channel from a specific provider."""
+        key = (provider_id, channel_id)
         with self._metrics_lock:
-            return self._metrics.get(channel_id)
+            return self._metrics.get(key)
 
-    def get_all_health(self) -> dict[str, Any]:
-        """Get health status for all channels."""
+    def get_channels_for_provider(self, provider_id: int) -> list[ChannelMetrics]:
+        """Get all channel metrics for a specific provider."""
+        with self._metrics_lock:
+            return [
+                m for m in self._metrics.values()
+                if m.provider_id == provider_id
+            ]
+
+    def get_all_health(self, provider_id: int | None = None) -> dict[str, Any]:
+        """
+        Get health status for all channels.
+
+        Args:
+            provider_id: If specified, only return health for this provider.
+                         If None, return health for all providers (or active provider if set).
+        """
         current_time = time.time()
 
-        with self._metrics_lock:
-            channels = {
-                str(metrics.channel_id): metrics.to_dict(current_time)
-                for metrics in self._metrics.values()
-            }
+        # Determine which provider(s) to report on
+        filter_provider = provider_id or self._active_provider_id
 
+        with self._metrics_lock:
+            if filter_provider is not None:
+                # Filter to specific provider
+                channels = {
+                    f"{m.provider_id}_{m.channel_id}": m.to_dict(current_time)
+                    for m in self._metrics.values()
+                    if m.provider_id == filter_provider
+                }
+                metrics_list = [
+                    m for m in self._metrics.values()
+                    if m.provider_id == filter_provider
+                ]
+            else:
+                # All providers
+                channels = {
+                    f"{m.provider_id}_{m.channel_id}": m.to_dict(current_time)
+                    for m in self._metrics.values()
+                }
+                metrics_list = list(self._metrics.values())
+
+        # Aggregate frame stats
         with self._frame_stats_lock:
-            frame_stats = {
-                "total_frames": self._frame_stats.total_frames,
-                "dropped_frames": self._frame_stats.dropped_frames,
-                "malformed_frames": self._frame_stats.malformed_frames,
-                "non_provider_frames": self._frame_stats.non_provider_frames,
-                "drop_rate_percent": round(self._frame_stats.get_drop_rate(), 2),
-            }
+            if filter_provider is not None:
+                stats = self._frame_stats.get(filter_provider, FrameStats())
+                frame_stats = {
+                    "provider_id": filter_provider,
+                    "total_frames": stats.total_frames,
+                    "dropped_frames": stats.dropped_frames,
+                    "malformed_frames": stats.malformed_frames,
+                    "non_provider_frames": stats.non_provider_frames,
+                    "drop_rate_percent": round(stats.get_drop_rate(), 2),
+                }
+            else:
+                # Aggregate across all providers
+                total = sum(s.total_frames for s in self._frame_stats.values())
+                dropped = sum(s.dropped_frames for s in self._frame_stats.values())
+                malformed = sum(s.malformed_frames for s in self._frame_stats.values())
+                non_provider = sum(s.non_provider_frames for s in self._frame_stats.values())
+                drop_rate = (dropped / total * 100) if total > 0 else 0.0
+                frame_stats = {
+                    "provider_id": None,
+                    "total_frames": total,
+                    "dropped_frames": dropped,
+                    "malformed_frames": malformed,
+                    "non_provider_frames": non_provider,
+                    "drop_rate_percent": round(drop_rate, 2),
+                }
 
         # Calculate overall health
         healthy_count = sum(
-            1 for m in self._metrics.values() if m.health == ChannelHealth.HEALTHY
+            1 for m in metrics_list if m.health == ChannelHealth.HEALTHY
         )
-        total_count = len(self._metrics)
+        total_count = len(metrics_list)
 
         overall_health = ChannelHealth.HEALTHY
         if total_count == 0:
@@ -304,21 +406,32 @@ class JetDriveDataValidator:
             "health_reason": health_reason,
             "healthy_channels": healthy_count,
             "total_channels": total_count,
+            "active_provider_id": self._active_provider_id,
             "channels": channels,
             "frame_stats": frame_stats,
             "timestamp": current_time,
         }
 
-    def get_channel_summary(self) -> dict[str, Any]:
-        """Get a summary of all channels for quick status check."""
+    def get_channel_summary(self, provider_id: int | None = None) -> dict[str, Any]:
+        """
+        Get a summary of all channels for quick status check.
+
+        Args:
+            provider_id: If specified, only return summary for this provider.
+                         If None, use active provider if set, else return all.
+        """
         current_time = time.time()
+        filter_provider = provider_id or self._active_provider_id
 
         with self._metrics_lock:
             summary = []
             for metrics in sorted(self._metrics.values(), key=lambda m: m.channel_name):
+                if filter_provider is not None and metrics.provider_id != filter_provider:
+                    continue
                 age = metrics.get_age_seconds(current_time)
                 summary.append(
                     {
+                        "provider_id": metrics.provider_id,
                         "name": metrics.channel_name,
                         "id": metrics.channel_id,
                         "health": metrics.health.value,
@@ -330,16 +443,38 @@ class JetDriveDataValidator:
 
         return {
             "channels": summary,
+            "active_provider_id": self._active_provider_id,
             "timestamp": current_time,
         }
 
-    def reset(self) -> None:
-        """Reset all metrics (useful for testing or restart)."""
+    def reset(self, provider_id: int | None = None) -> None:
+        """
+        Reset metrics.
+
+        Args:
+            provider_id: If specified, only reset metrics for this provider.
+                         If None, reset all metrics.
+        """
         with self._metrics_lock:
-            self._metrics.clear()
+            if provider_id is not None:
+                # Remove only metrics for this provider
+                keys_to_remove = [
+                    k for k in self._metrics.keys() if k[0] == provider_id
+                ]
+                for key in keys_to_remove:
+                    del self._metrics[key]
+            else:
+                self._metrics.clear()
 
         with self._frame_stats_lock:
-            self._frame_stats = FrameStats()
+            if provider_id is not None:
+                self._frame_stats[provider_id] = FrameStats()
+            else:
+                self._frame_stats.clear()
+
+        # Also reset active provider if resetting all
+        if provider_id is None:
+            self._active_provider_id = None
 
 
 # Global validator instance

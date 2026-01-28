@@ -18,6 +18,7 @@ if (Test-Path $venvPath) {
 
 # Build React frontend
 Write-Host "[2/4] Building React frontend..." -ForegroundColor Yellow
+$env:PATH = "C:\Program Files\nodejs;" + $env:PATH
 Set-Location "$PSScriptRoot\frontend"
 npm run build
 if ($LASTEXITCODE -ne 0) {

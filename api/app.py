@@ -259,6 +259,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Report generation: {e}")
 
+# Register NextGen Analysis blueprint (physics-informed ECU reasoning)
+try:
+    from api.routes.nextgen import nextgen_bp
+
+    app.register_blueprint(nextgen_bp)
+    print("[+] NextGen Analysis registered at /api/nextgen")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize NextGen Analysis: {e}")
+
 # Store active analysis jobs
 active_jobs = {}
 
@@ -1282,6 +1291,14 @@ def print_startup_banner():
     print("  GET  /api/wizards/stages              - List stage presets")
     print("  GET  /api/wizards/cams                - List cam family presets")
     print("  POST /api/wizards/heat-soak/analyze   - Analyze heat soak")
+    print("\n[*] NextGen Analysis endpoints:")
+    print("  POST /api/nextgen/<run_id>/generate   - Generate NextGen analysis")
+    print("  GET  /api/nextgen/<run_id>            - Get cached analysis payload")
+    print("  GET  /api/nextgen/<run_id>/download   - Download analysis JSON")
+    print("  GET  /api/nextgen/<run_id>/summary    - Get analysis summary")
+    print("  GET  /api/nextgen/<run_id>/surfaces   - Get surface data")
+    print("  GET  /api/nextgen/<run_id>/hypotheses - Get causal hypotheses")
+    print("  GET  /api/nextgen/<run_id>/test-plan  - Get next-test plan")
     print("\n" + "=" * 60 + "\n")
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")

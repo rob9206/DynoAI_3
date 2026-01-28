@@ -37,6 +37,17 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 - **2D Grid Analysis** - RPM × MAP zone-based analysis (11×9 grid = 99 cells)
 - **Conservative Clamping** - Default ±7% limit for production safety
 
+### 🧠 NextGen Analysis (Phase 7: Predictive Test Planning)
+- **Physics-Informed ECU Reasoning** - Understanding VE, spark, and knock interactions
+- **Spark Valley Detection** - Automatic identification of timing valleys at high load
+- **Cause Tree Hypotheses** - Ranked diagnostic hypotheses with evidence
+- **Predictive Test Planning** - AI-driven suggestions that maximize coverage with minimal dyno time
+- **Cross-Run Coverage Tracking** - Learns from every session to suggest optimal next tests
+- **Efficiency Scoring** - Each test ranked by expected coverage gain per minute
+- **User Constraints** - Configure RPM/MAP limits, max pulls, test environment preferences
+- **Visual Priority Overlay** - Color-coded heatmap showing exactly which cells to target
+- **Feedback Loop** - Suggestions evolve as coverage improves across sessions
+
 ### 🔌 JetDrive Integration
 - **Live Data Capture** - Real-time dyno data via KLHDV multicast protocol
 - **Auto-Tune Workflow** - Automated capture → analysis → correction pipeline
@@ -339,11 +350,22 @@ A comprehensive test suite verifies all VE tuning math is deterministic and cons
 - [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) - Web app setup
 - [README_VE_OPERATIONS.md](README_VE_OPERATIONS.md) - VE apply/rollback system
 - [TWO_STAGE_KERNEL_INTEGRATION.md](TWO_STAGE_KERNEL_INTEGRATION.md) - Adaptive kernel details
+
 ### Core Specifications
 - **[DETERMINISTIC_MATH_SPECIFICATION.md](docs/DETERMINISTIC_MATH_SPECIFICATION.md)** - Complete mathematical specification and world-class positioning
 - **[KERNEL_SPECIFICATION.md](docs/KERNEL_SPECIFICATION.md)** - Detailed kernel algorithms (K1, K2, K3) with frozen parameters
 - **[DYNOAI_ARCHITECTURE_OVERVIEW.md](docs/DYNOAI_ARCHITECTURE_OVERVIEW.md)** - System architecture and design
 - **[README_VE_OPERATIONS.md](README_VE_OPERATIONS.md)** - VE apply/rollback system documentation
+
+### NextGen Analysis & Predictive Planning
+- **[NEXTGEN_COMPLETE_GUIDE_PHASES_1-7.md](docs/NEXTGEN_COMPLETE_GUIDE_PHASES_1-7.md)** - **START HERE** - Complete guide covering all 7 phases
+- **[PHASE_7_USER_GUIDE.md](docs/PHASE_7_USER_GUIDE.md)** - Complete user guide for predictive test planning
+- **[PHASE_7_API_REFERENCE.md](docs/PHASE_7_API_REFERENCE.md)** - API documentation with request/response examples
+- **[PHASE_7_IMPLEMENTATION_SUMMARY.md](docs/PHASE_7_IMPLEMENTATION_SUMMARY.md)** - Quick reference and overview
+- **[PHASE_7_PREDICTIVE_PLANNING_COMPLETE.md](docs/PHASE_7_PREDICTIVE_PLANNING_COMPLETE.md)** - Technical implementation details
+- **[PHASE_4_REALTIME_ANALYSIS_COMPLETE.md](docs/PHASE_4_REALTIME_ANALYSIS_COMPLETE.md)** - Real-time analysis during live capture
+- **[PHASE_6_AUTO_MAPPING_COMPLETE.md](docs/PHASE_6_AUTO_MAPPING_COMPLETE.md)** - Automatic channel mapping with confidence
+- **[PHASE_3_LIVE_CAPTURE_PIPELINE_COMPLETE.md](docs/PHASE_3_LIVE_CAPTURE_PIPELINE_COMPLETE.md)** - Live capture pipeline integration
 
 ### Integration Guides
 - **[JETDRIVE_HARDWARE_TESTING.md](docs/JETDRIVE_HARDWARE_TESTING.md)** - Hardware setup and testing

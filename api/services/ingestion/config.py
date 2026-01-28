@@ -562,3 +562,24 @@ def create_low_latency_config() -> IngestionConfig:
             reject_out_of_range=False,
         ),
     )
+
+
+def create_live_capture_queue_config() -> QueueSettings:
+    """
+    Create queue configuration for JetDrive live capture.
+
+    Optimized for 20Hz UI update rate with bounded memory and graceful degradation.
+    - 50ms aggregation window (20Hz)
+    - Small bounded queue (1000 items = ~50 seconds at 20Hz)
+    - Drop oldest on overload (keep latest data)
+    - Optional persistence for crash recovery
+    """
+    return QueueSettings(
+        max_size=1000,  # ~50 seconds at 20Hz
+        batch_size=20,  # Process 20 items (1 second) per batch
+        flush_interval_sec=1.0,  # Flush every second for CSV writing
+        persist_to_disk=False,  # Can be enabled for critical sessions
+        persist_path="data/jetdrive_live_queue",
+        drop_on_full=True,  # Graceful degradation
+        drop_oldest=True,  # Keep latest data
+    )

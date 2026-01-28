@@ -34,6 +34,7 @@ import type { RunStatus, OutputFile } from '../api/jetstream';
 import { sanitizeDownloadName } from '../lib/sanitize';
 import { VEHeatmap } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
+import { NextGenAnalysisPanel } from '../components/results/NextGenAnalysisPanel';
 import { useVEData } from '../hooks/useVEData';
 import { FilePreview, useFileContent } from '../components/results/FilePreview';
 import { SessionReplayViewer } from '../components/session-replay';
@@ -326,6 +327,9 @@ export default function RunDetailPage() {
               <VEHeatmapWithData runId={run.run_id} />
             </CardContent>
           </Card>
+
+          {/* NextGen Analysis (Physics-Informed ECU Reasoning) */}
+          <NextGenAnalysisPanel runId={run.run_id} />
 
           {/* Decel Fuel Management Results */}
           {run.output_files?.some((f) => f.name === 'Decel_Fuel_Overlay.csv') && (

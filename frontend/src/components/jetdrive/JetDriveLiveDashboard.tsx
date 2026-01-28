@@ -10,18 +10,31 @@ import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Activity, Gauge, Flame, Thermometer, Zap, Wind, Battery,
-    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic, Search
+    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic, Search, BarChart3, AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Alert, AlertDescription } from '../ui/alert';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../ui/alert-dialog';
 import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
 import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDriveChannel } from '../../hooks/useJetDriveLive';
 import { AudioCapturePanel } from './AudioCapturePanel';
 import { InnovateAFRPanel } from './InnovateAFRPanel';
+import { LiveAnalysisOverlay } from './LiveAnalysisOverlay';
+import { MappingConfidencePanel } from './MappingConfidencePanel';
 import type { RecordedAudio } from '../../hooks/useAudioCapture';
 import { toast } from '@/lib/toast';
 import { useQuery } from '@tanstack/react-query';
@@ -112,6 +125,9 @@ export function JetDriveLiveDashboard({
     const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('all');
     const [chartChannel, setChartChannel] = useState<string>('');
     const [audioEnabled, setAudioEnabled] = useState(true);
+    const [mappingReady, setMappingReady] = useState(true); // Assume ready unless confidence panel says otherwise
+    const [showConfidenceWarning, setShowConfidenceWarning] = useState(false);
+    const [pendingCaptureStart, setPendingCaptureStart] = useState(false);
 
     // Health monitoring
     const { data: health } = useQuery({
@@ -175,11 +191,34 @@ export function JetDriveLiveDashboard({
             if (isCapturing) {
                 await stopCapture();
             } else {
+                // Check mapping confidence before starting
+                if (!mappingReady) {
+                    setShowConfidenceWarning(true);
+                    setPendingCaptureStart(true);
+                    return;
+                }
+                
                 await startCapture();
             }
         } catch (err) {
             console.error('Toggle capture error:', err);
         }
+    };
+    
+    // Handle confidence warning dialog
+    const handleProceedAnyway = async () => {
+        setShowConfidenceWarning(false);
+        setPendingCaptureStart(false);
+        try {
+            await startCapture();
+        } catch (err) {
+            console.error('Start capture error:', err);
+        }
+    };
+    
+    const handleCancelCapture = () => {
+        setShowConfidenceWarning(false);
+        setPendingCaptureStart(false);
     };
 
     // Handle audio recording completion
@@ -326,6 +365,10 @@ export function JetDriveLiveDashboard({
                 <Tabs defaultValue="gauges" className="space-y-4">
                     <TabsList>
                         <TabsTrigger value="gauges">Gauges</TabsTrigger>
+                        <TabsTrigger value="analysis" className="flex items-center gap-1.5">
+                            <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
+                            Analysis
+                        </TabsTrigger>
                         <TabsTrigger value="wideband" className="flex items-center gap-1.5">
                             <Flame className="h-3.5 w-3.5 text-orange-500" />
                             Wideband
@@ -371,6 +414,59 @@ export function JetDriveLiveDashboard({
                                 </CardContent>
                             </Card>
                         )}
+                    </TabsContent>
+
+                    {/* Live Analysis View */}
+                    <TabsContent value="analysis">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <LiveAnalysisOverlay
+                                apiUrl={apiUrl}
+                                enabled={isCapturing}
+                                refreshInterval={1000}
+                            />
+                            <Card className="bg-gray-900/50 border-gray-700">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <BarChart3 className="h-5 w-5 text-blue-500" />
+                                        Analysis Guide
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <div className="font-medium text-green-400">Coverage</div>
+                                            <div className="text-gray-400 space-y-1 mt-1">
+                                                <div>Tracks RPM x MAP cells hit</div>
+                                                <div>500 RPM x 10 kPa bins</div>
+                                                <div>Higher % = more data</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-orange-400">VE Delta</div>
+                                            <div className="text-gray-400 space-y-1 mt-1">
+                                                <div>AFR error per cell</div>
+                                                <div>+ = lean, - = rich</div>
+                                                <div>Target: 14.7 stoich</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-700">
+                                        <div className="font-medium text-blue-400">Quality Score</div>
+                                        <div className="text-gray-400 mt-1">
+                                            Weighted: freshness (40%) + coverage (30%) + missing channels (30%)
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-700">
+                                        <div className="font-medium text-yellow-400">Alerts</div>
+                                        <div className="text-gray-400 mt-1 space-y-1">
+                                            <div>• Frozen RPM: Engine stalled?</div>
+                                            <div>• Implausible AFR: Sensor issue?</div>
+                                            <div>• Missing channels: Check mapping</div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </TabsContent>
 
                     {/* Wideband AFR View */}
@@ -530,6 +626,43 @@ export function JetDriveLiveDashboard({
                     </TabsContent>
                 </Tabs>
             )}
+            
+            {/* Confidence Warning Dialog */}
+            <AlertDialog open={showConfidenceWarning} onOpenChange={setShowConfidenceWarning}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                            Mapping Confidence Check
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The current channel mapping has low confidence or missing required channels.
+                            Starting capture now may result in incorrect data or missing signals.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-4">
+                        <Alert>
+                            <AlertDescription className="text-sm">
+                                <div className="font-medium mb-2">Recommended Actions:</div>
+                                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                                    <li>Review channel mappings in the Hardware tab</li>
+                                    <li>Run auto-detect to update mappings</li>
+                                    <li>Verify required channels are enabled in Power Core</li>
+                                    <li>Check mapping confidence panel for details</li>
+                                </ul>
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={handleCancelCapture}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={handleProceedAnyway} className="bg-yellow-600 hover:bg-yellow-700">
+                            Proceed Anyway
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
