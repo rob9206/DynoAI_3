@@ -28,7 +28,7 @@ import time
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
@@ -1623,8 +1623,8 @@ def discover_providers_multi():
 
     # Test both multicast addresses
     multicast_groups = [
-        "224.0.2.10",      # Official Dynojet/JetDrive vendor address (PRIMARY)
-        "239.255.60.60",   # Alternative address
+        "224.0.2.10",  # Official Dynojet/JetDrive vendor address (PRIMARY)
+        "239.255.60.60",  # Alternative address
     ]
 
     results = {}
@@ -1892,8 +1892,11 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         discover_providers,
         subscribe,
     )
+    from api.services.jetdrive_live_queue import (
+        get_live_queue_manager,
+        reset_live_queue_manager,
+    )
     from api.services.jetdrive_validation import get_validator
-    from api.services.jetdrive_live_queue import get_live_queue_manager, reset_live_queue_manager
 
     config = JetDriveConfig.from_env()
     validator = get_validator()
@@ -1927,7 +1930,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         # Merge ALL providers - Power Core CPU and Atmospheric Probe are separate providers
         # but we want data from both
         from api.services.jetdrive_client import merge_all_providers
-        
+
         if requested_provider_id is not None:
             # Find specific provider if requested
             provider = None
@@ -1940,12 +1943,16 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     f"Requested provider 0x{requested_provider_id:04X} not found. Available: {[hex(p.provider_id) for p in providers]}"
                 )
                 with _live_data_lock:
-                    _live_data["error"] = f"Provider 0x{requested_provider_id:04X} not found"
+                    _live_data["error"] = (
+                        f"Provider 0x{requested_provider_id:04X} not found"
+                    )
                 return
         else:
             # Merge all providers into one for multi-provider support
             provider = merge_all_providers(providers)
-            logger.info(f"Merged {len(providers)} providers: {[hex(p.provider_id) for p in providers]}")
+            logger.info(
+                f"Merged {len(providers)} providers: {[hex(p.provider_id) for p in providers]}"
+            )
 
         # Don't pin to a specific provider - accept samples from ALL providers
         # Power Core CPU and Atmospheric Probe are separate providers but we want both
@@ -1987,7 +1994,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 "value": s.value,
                 "timestamp": s.timestamp_ms,
                 "updated_at": datetime.now().isoformat(),
-                "category": getattr(s, "category", "misc"),  # Channel category for grouping
+                "category": getattr(
+                    s, "category", "misc"
+                ),  # Channel category for grouping
                 "units": getattr(s, "units", ""),  # Channel units
             }
 
@@ -2038,7 +2047,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             sample_count[0] += 1
             last_sample_time[0] = datetime.now()
             # Reduced logging frequency to avoid spam at 20Hz+ rates
-            if sample_count[0] % 500 == 0:  # Log every 500 samples (~25 seconds at 20Hz)
+            if (
+                sample_count[0] % 500 == 0
+            ):  # Log every 500 samples (~25 seconds at 20Hz)
                 logger.info(
                     f"Received {sample_count[0]} samples from provider 0x{s.provider_id:04X}, latest: {s.channel_name}={s.value}"
                 )
@@ -2119,10 +2130,10 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         finally:
             # Flush any remaining aggregated samples
             queue_mgr.force_flush()
-            
+
             # Stop queue processing
             queue_mgr.stop_processing()
-            
+
             check_task.cancel()
             try:
                 loop.run_until_complete(check_task)
@@ -2186,18 +2197,25 @@ def start_live_capture():
             else:
                 requested_provider_id = int(provider_id_param)
         except ValueError:
-            return jsonify({
-                "status": "error",
-                "error": f"Invalid provider_id format: {provider_id_param}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error": f"Invalid provider_id format: {provider_id_param}",
+                    }
+                ),
+                400,
+            )
 
     with _live_data_lock:
         if _live_data["capturing"]:
-            return jsonify({
-                "status": "already_capturing",
-                "provider_id": _live_data.get("provider_id"),
-                "provider_name": _live_data.get("provider_name"),
-            })
+            return jsonify(
+                {
+                    "status": "already_capturing",
+                    "provider_id": _live_data.get("provider_id"),
+                    "provider_name": _live_data.get("provider_name"),
+                }
+            )
 
         _live_data["capturing"] = True
         _live_data["channels"] = {}
@@ -2206,16 +2224,16 @@ def start_live_capture():
         _live_data["provider_host"] = None
 
     thread = threading.Thread(
-        target=_live_capture_loop,
-        args=(requested_provider_id,),
-        daemon=True
+        target=_live_capture_loop, args=(requested_provider_id,), daemon=True
     )
     thread.start()
 
-    return jsonify({
-        "status": "started",
-        "requested_provider_id": requested_provider_id,
-    })
+    return jsonify(
+        {
+            "status": "started",
+            "requested_provider_id": requested_provider_id,
+        }
+    )
 
 
 @jetdrive_bp.route("/hardware/live/stop", methods=["POST"])
@@ -2233,10 +2251,12 @@ def stop_live_capture():
     validator = get_validator()
     validator.set_active_provider(None)
 
-    return jsonify({
-        "status": "stopped",
-        "released_provider_id": provider_id,
-    })
+    return jsonify(
+        {
+            "status": "stopped",
+            "released_provider_id": provider_id,
+        }
+    )
 
 
 @jetdrive_bp.route("/hardware/live/data", methods=["GET"])
@@ -2245,7 +2265,7 @@ def get_live_data():
 
     This endpoint is exempt from rate limiting to support real-time polling
     at 100-250ms intervals for live dyno data visualization.
-    
+
     Note: Rate limit exemption is handled by conditional limiter in app.py.
     The default rate limit (1200/minute) is sufficient for multiple pollers.
     """
@@ -2309,8 +2329,13 @@ def get_live_data():
         from api.config import get_config
 
         # Channel IDs from Power Core: ID 39=Digital RPM 1, ID 9=Engine RPM, ID 36=Force Drum 1, ID 32=Force
-        rpm = _get_value(channels, ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"])
-        force = _get_value(channels, ["Force Drum 1", "Force", "Force 1", "chan_36", "chan_32", "chan_34"])
+        rpm = _get_value(
+            channels, ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"]
+        )
+        force = _get_value(
+            channels,
+            ["Force Drum 1", "Force", "Force 1", "chan_36", "chan_32", "chan_34"],
+        )
 
         if rpm is not None and force is not None and rpm > 0:
             cfg = get_config().dyno
@@ -2328,6 +2353,7 @@ def get_live_data():
 
     # Sanitize channel values - replace Infinity/NaN with None (valid JSON)
     import math
+
     for ch_name, ch_data in channels.items():
         if isinstance(ch_data, dict) and "value" in ch_data:
             val = ch_data["value"]
@@ -2554,6 +2580,7 @@ def get_live_health_summary():
 # Preflight Validation
 # =============================================================================
 
+
 @jetdrive_bp.route("/preflight/run", methods=["POST"])
 def run_preflight_check():
     """
@@ -2571,6 +2598,7 @@ def run_preflight_check():
         PreflightResult with pass/fail status and detailed check results
     """
     import asyncio
+
     from api.services.jetdrive_preflight import run_preflight
 
     # Parse parameters
@@ -2583,17 +2611,27 @@ def run_preflight_check():
             else:
                 requested_provider_id = int(provider_id_param)
         except ValueError:
-            return jsonify({
-                "passed": False,
-                "error": f"Invalid provider_id format: {provider_id_param}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "passed": False,
+                        "error": f"Invalid provider_id format: {provider_id_param}",
+                    }
+                ),
+                400,
+            )
 
     mode = request.args.get("mode", "blocking")
     if mode not in ("blocking", "advisory"):
-        return jsonify({
-            "passed": False,
-            "error": f"Invalid mode: {mode}. Must be 'blocking' or 'advisory'"
-        }), 400
+        return (
+            jsonify(
+                {
+                    "passed": False,
+                    "error": f"Invalid mode: {mode}. Must be 'blocking' or 'advisory'",
+                }
+            ),
+            400,
+        )
 
     try:
         sample_seconds = int(request.args.get("sample_seconds", 15))
@@ -2624,15 +2662,20 @@ def run_preflight_check():
 
     except Exception as e:
         logger.error(f"Preflight check failed: {e}", exc_info=True)
-        return jsonify({
-            "passed": False,
-            "error": str(e),
-            "checks": [],
-            "missing_channels": [],
-            "suspected_mislabels": [],
-            "can_override": mode == "advisory",
-            "mode": mode,
-        }), 500
+        return (
+            jsonify(
+                {
+                    "passed": False,
+                    "error": str(e),
+                    "checks": [],
+                    "missing_channels": [],
+                    "suspected_mislabels": [],
+                    "can_override": mode == "advisory",
+                    "mode": mode,
+                }
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/preflight/status", methods=["GET"])
@@ -2644,6 +2687,7 @@ def get_preflight_status():
     Useful for quick status checks in the UI.
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
 
     config = JetDriveConfig.from_env()
@@ -2658,44 +2702,55 @@ def get_preflight_status():
             asyncio.set_event_loop(None)
 
         if not providers:
-            return jsonify({
-                "connected": False,
-                "providers": [],
-                "message": "No JetDrive providers found",
-            })
+            return jsonify(
+                {
+                    "connected": False,
+                    "providers": [],
+                    "message": "No JetDrive providers found",
+                }
+            )
 
         provider_list = []
         for p in providers:
-            provider_list.append({
-                "provider_id": p.provider_id,
-                "provider_id_hex": f"0x{p.provider_id:04X}",
-                "name": p.name,
-                "host": p.host,
-                "channel_count": len(p.channels),
-                "channels": [
-                    {"id": c.chan_id, "name": c.name}
-                    for c in p.channels.values()
-                ],
-            })
+            provider_list.append(
+                {
+                    "provider_id": p.provider_id,
+                    "provider_id_hex": f"0x{p.provider_id:04X}",
+                    "name": p.name,
+                    "host": p.host,
+                    "channel_count": len(p.channels),
+                    "channels": [
+                        {"id": c.chan_id, "name": c.name} for c in p.channels.values()
+                    ],
+                }
+            )
 
-        return jsonify({
-            "connected": True,
-            "providers": provider_list,
-            "message": f"Found {len(providers)} provider(s)",
-        })
+        return jsonify(
+            {
+                "connected": True,
+                "providers": provider_list,
+                "message": f"Found {len(providers)} provider(s)",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Preflight status check failed: {e}", exc_info=True)
-        return jsonify({
-            "connected": False,
-            "providers": [],
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "connected": False,
+                    "providers": [],
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
 # Channel Mapping
 # =============================================================================
+
 
 @jetdrive_bp.route("/mapping/<signature>", methods=["GET"])
 def get_channel_mapping(signature: str):
@@ -2712,10 +2767,15 @@ def get_channel_mapping(signature: str):
 
     mapping = get_mapping(signature)
     if mapping is None:
-        return jsonify({
-            "error": "Mapping not found",
-            "signature": signature,
-        }), 404
+        return (
+            jsonify(
+                {
+                    "error": "Mapping not found",
+                    "signature": signature,
+                }
+            ),
+            404,
+        )
 
     return jsonify(mapping.to_dict())
 
@@ -2769,10 +2829,12 @@ def list_channel_mappings():
     from api.services.jetdrive_mapping import list_mappings
 
     mappings = list_mappings()
-    return jsonify({
-        "mappings": [m.to_dict() for m in mappings],
-        "count": len(mappings),
-    })
+    return jsonify(
+        {
+            "mappings": [m.to_dict() for m in mappings],
+            "count": len(mappings),
+        }
+    )
 
 
 @jetdrive_bp.route("/mapping/templates", methods=["GET"])
@@ -2781,10 +2843,12 @@ def get_mapping_templates():
     from api.services.jetdrive_mapping import get_templates
 
     templates = get_templates()
-    return jsonify({
-        "templates": templates,
-        "count": len(templates),
-    })
+    return jsonify(
+        {
+            "templates": templates,
+            "count": len(templates),
+        }
+    )
 
 
 @jetdrive_bp.route("/mapping/templates/<template_id>", methods=["GET"])
@@ -2814,6 +2878,7 @@ def create_mapping_from_template_endpoint():
         New ProviderMapping (not saved yet - client should review and PUT)
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
         compute_provider_signature,
@@ -2849,10 +2914,15 @@ def create_mapping_from_template_endpoint():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify(
+                        {
+                            "error": f"Provider {requested_provider_id} not found",
+                            "available": [p.provider_id for p in providers],
+                        }
+                    ),
+                    404,
+                )
         else:
             provider = providers[0]
 
@@ -2863,14 +2933,16 @@ def create_mapping_from_template_endpoint():
         if mapping is None:
             return jsonify({"error": f"Template '{template_id}' not found"}), 404
 
-        return jsonify({
-            "mapping": mapping.to_dict(),
-            "provider_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-            ],
-            "message": "Review mapping and PUT to /mapping/<signature> to save",
-        })
+        return jsonify(
+            {
+                "mapping": mapping.to_dict(),
+                "provider_channels": [
+                    {"id": c.chan_id, "name": c.name}
+                    for c in provider.channels.values()
+                ],
+                "message": "Review mapping and PUT to /mapping/<signature> to save",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to create mapping from template: {e}", exc_info=True)
@@ -2893,6 +2965,7 @@ def auto_detect_mapping():
         Auto-detected ProviderMapping (not saved - client should review and PUT)
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
         compute_provider_signature,
@@ -2924,10 +2997,15 @@ def auto_detect_mapping():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify(
+                        {
+                            "error": f"Provider {requested_provider_id} not found",
+                            "available": [p.provider_id for p in providers],
+                        }
+                    ),
+                    404,
+                )
         else:
             provider = providers[0]
 
@@ -2935,21 +3013,23 @@ def auto_detect_mapping():
         signature = compute_provider_signature(provider)
         mapping = create_auto_mapping(provider, signature)
 
-        return jsonify({
-            "mapping": mapping.to_dict(),
-            "provider_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-            ],
-            "unmapped_channels": [
-                {"id": c.chan_id, "name": c.name}
-                for c in provider.channels.values()
-                if c.chan_id not in [m.source_id for m in mapping.channels.values()]
-            ],
-            "missing_required": mapping.get_missing_required(),
-            "missing_recommended": mapping.get_missing_recommended(),
-            "message": "Review mapping and PUT to /mapping/<signature> to save",
-        })
+        return jsonify(
+            {
+                "mapping": mapping.to_dict(),
+                "provider_channels": [
+                    {"id": c.chan_id, "name": c.name}
+                    for c in provider.channels.values()
+                ],
+                "unmapped_channels": [
+                    {"id": c.chan_id, "name": c.name}
+                    for c in provider.channels.values()
+                    if c.chan_id not in [m.source_id for m in mapping.channels.values()]
+                ],
+                "missing_required": mapping.get_missing_required(),
+                "missing_recommended": mapping.get_missing_recommended(),
+                "message": "Review mapping and PUT to /mapping/<signature> to save",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to auto-detect mapping: {e}", exc_info=True)
@@ -2970,26 +3050,30 @@ def get_available_transforms():
         else:
             description = name.replace("_", " ").title()
 
-        transforms.append({
-            "id": name,
-            "name": name,
-            "description": description,
-        })
+        transforms.append(
+            {
+                "id": name,
+                "name": name,
+                "description": description,
+            }
+        )
 
-    return jsonify({
-        "transforms": transforms,
-        "count": len(transforms),
-    })
+    return jsonify(
+        {
+            "transforms": transforms,
+            "count": len(transforms),
+        }
+    )
 
 
 @jetdrive_bp.route("/mapping/confidence", methods=["GET"])
 def get_mapping_confidence():
     """
     Get confidence report for current or auto-detected mapping.
-    
+
     Query params:
         provider_id: Optional provider ID to check
-    
+
     Returns:
         Confidence report with:
         - overall_confidence (0.0-1.0)
@@ -3000,19 +3084,20 @@ def get_mapping_confidence():
         - suspected_mislabels
     """
     import asyncio
+
     from api.services.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive_mapping import (
-        compute_provider_signature,
-        get_mapping,
-        auto_map_channels_with_confidence,
-        get_unmapped_required_channels,
-        get_low_confidence_mappings,
         ProviderMapping,
+        auto_map_channels_with_confidence,
+        compute_provider_signature,
+        get_low_confidence_mappings,
+        get_mapping,
+        get_unmapped_required_channels,
     )
-    
+
     try:
         requested_provider_id = request.args.get("provider_id", type=int)
-        
+
         # Discover provider
         config = JetDriveConfig.from_env()
         loop = asyncio.new_event_loop()
@@ -3022,10 +3107,10 @@ def get_mapping_confidence():
         finally:
             loop.close()
             asyncio.set_event_loop(None)
-        
+
         if not providers:
             return jsonify({"error": "No JetDrive providers found"}), 404
-        
+
         # Find requested provider or use first
         provider = None
         if requested_provider_id:
@@ -3034,39 +3119,49 @@ def get_mapping_confidence():
                     provider = p
                     break
             if provider is None:
-                return jsonify({
-                    "error": f"Provider {requested_provider_id} not found",
-                    "available": [p.provider_id for p in providers],
-                }), 404
+                return (
+                    jsonify(
+                        {
+                            "error": f"Provider {requested_provider_id} not found",
+                            "available": [p.provider_id for p in providers],
+                        }
+                    ),
+                    404,
+                )
         else:
             provider = providers[0]
-        
+
         # Get provider signature
         signature = compute_provider_signature(provider)
-        
+
         # Try to load existing mapping, or auto-detect
         existing_mapping = get_mapping(signature)
-        
+
         if existing_mapping:
             # Use existing mapping - but we need confidence scores
             # Re-score the existing mappings
             confidence_map = {}
             all_channels = list(provider.channels.values())
-            
+
             for canonical_name, channel_mapping in existing_mapping.channels.items():
                 # Find the channel by source_id
                 channel = provider.channels.get(channel_mapping.source_id)
                 if channel:
-                    from api.services.jetdrive_mapping import score_channel_for_canonical
-                    conf = score_channel_for_canonical(channel, canonical_name, all_channels)
+                    from api.services.jetdrive_mapping import (
+                        score_channel_for_canonical,
+                    )
+
+                    conf = score_channel_for_canonical(
+                        channel, canonical_name, all_channels
+                    )
                     conf.transform = channel_mapping.transform  # Use existing transform
                     confidence_map[canonical_name] = conf
-            
+
             unmapped_required = get_unmapped_required_channels(existing_mapping)
         else:
             # Auto-detect with confidence
             confidence_map = auto_map_channels_with_confidence(provider)
-            
+
             # Create temporary mapping to check for missing required
             temp_mapping = ProviderMapping(
                 provider_signature=signature,
@@ -3076,6 +3171,7 @@ def get_mapping_confidence():
             )
             # Convert confidence map to channel mappings
             from api.services.jetdrive_mapping import ChannelMapping
+
             for canonical_name, conf in confidence_map.items():
                 temp_mapping.channels[canonical_name] = ChannelMapping(
                     canonical_name=canonical_name,
@@ -3084,45 +3180,50 @@ def get_mapping_confidence():
                     transform=conf.transform,
                     enabled=True,
                 )
-            
+
             unmapped_required = get_unmapped_required_channels(temp_mapping)
-        
+
         # Calculate overall confidence
         if confidence_map:
-            overall_confidence = sum(c.confidence for c in confidence_map.values()) / len(confidence_map)
+            overall_confidence = sum(
+                c.confidence for c in confidence_map.values()
+            ) / len(confidence_map)
         else:
             overall_confidence = 0.0
-        
+
         # Get low confidence mappings
         low_confidence = get_low_confidence_mappings(confidence_map, threshold=0.7)
-        
+
         # Determine if ready for capture
         ready_for_capture = (
-            len(unmapped_required) == 0 and
-            overall_confidence >= 0.7 and
-            len(low_confidence) == 0
+            len(unmapped_required) == 0
+            and overall_confidence >= 0.7
+            and len(low_confidence) == 0
         )
-        
+
         # Get unmapped recommended channels
         from api.services.jetdrive_mapping import RECOMMENDED_CANONICAL
+
         mapped = set(confidence_map.keys())
         unmapped_recommended = [ch for ch in RECOMMENDED_CANONICAL if ch not in mapped]
-        
-        return jsonify({
-            "success": True,
-            "provider_signature": signature,
-            "provider_id": provider.provider_id,
-            "provider_name": provider.name,
-            "overall_confidence": round(overall_confidence, 2),
-            "ready_for_capture": ready_for_capture,
-            "mappings": [conf.to_dict() for conf in confidence_map.values()],
-            "unmapped_required": unmapped_required,
-            "unmapped_recommended": unmapped_recommended,
-            "low_confidence": [conf.to_dict() for conf in low_confidence],
-            "suspected_mislabels": [],  # Can integrate with preflight semantic checks
-            "has_existing_mapping": existing_mapping is not None,
-        })
-    
+
+        return jsonify(
+            {
+                "success": True,
+                "provider_signature": signature,
+                "provider_id": provider.provider_id,
+                "provider_name": provider.name,
+                "overall_confidence": round(overall_confidence, 2),
+                "ready_for_capture": ready_for_capture,
+                "mappings": [conf.to_dict() for conf in confidence_map.values()],
+                "unmapped_required": unmapped_required,
+                "unmapped_recommended": unmapped_recommended,
+                "low_confidence": [conf.to_dict() for conf in low_confidence],
+                "suspected_mislabels": [],  # Can integrate with preflight semantic checks
+                "has_existing_mapping": existing_mapping is not None,
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to get mapping confidence: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3132,24 +3233,26 @@ def get_mapping_confidence():
 def export_mapping(signature: str):
     """
     Export a mapping as downloadable JSON file.
-    
+
     Args:
         signature: Provider signature
-    
+
     Returns:
         JSON file download
     """
-    from api.services.jetdrive_mapping import get_mapping
-    from flask import send_file
     import io
     import json
-    
+
+    from flask import send_file
+
+    from api.services.jetdrive_mapping import get_mapping
+
     try:
         mapping = get_mapping(signature)
-        
+
         if not mapping:
             return jsonify({"error": f"Mapping not found: {signature}"}), 404
-        
+
         # Create export format
         export_data = {
             "version": "1.0",
@@ -3162,28 +3265,25 @@ def export_mapping(signature: str):
             "provider_id": mapping.provider_id,
             "provider_name": mapping.provider_name,
             "host": mapping.host,
-            "channels": {
-                name: ch.to_dict()
-                for name, ch in mapping.channels.items()
-            },
+            "channels": {name: ch.to_dict() for name, ch in mapping.channels.items()},
         }
-        
+
         # Create in-memory file
         json_str = json.dumps(export_data, indent=2)
-        file_obj = io.BytesIO(json_str.encode('utf-8'))
+        file_obj = io.BytesIO(json_str.encode("utf-8"))
         file_obj.seek(0)
-        
+
         # Generate filename
         safe_name = mapping.provider_name.replace(" ", "_").replace("/", "_")
         filename = f"jetdrive_mapping_{safe_name}_{signature[:8]}.json"
-        
+
         return send_file(
             file_obj,
-            mimetype='application/json',
+            mimetype="application/json",
             as_attachment=True,
-            download_name=filename
+            download_name=filename,
         )
-    
+
     except Exception as e:
         logger.error(f"Failed to export mapping: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3193,40 +3293,44 @@ def export_mapping(signature: str):
 def import_mapping():
     """
     Import a mapping from JSON file.
-    
+
     Request:
         Multipart form data with 'file' field containing JSON
         OR JSON body with mapping data
-    
+
     Returns:
         Imported mapping (saved to disk)
     """
+    import json
+
     from api.services.jetdrive_mapping import (
-        ProviderMapping,
         ChannelMapping,
+        ProviderMapping,
         save_mapping,
     )
-    import json
-    
+
     try:
         # Try to get JSON from file upload or request body
         mapping_data = None
-        
-        if 'file' in request.files:
-            file = request.files['file']
-            if file.filename and file.filename.endswith('.json'):
-                content = file.read().decode('utf-8')
+
+        if "file" in request.files:
+            file = request.files["file"]
+            if file.filename and file.filename.endswith(".json"):
+                content = file.read().decode("utf-8")
                 mapping_data = json.loads(content)
         elif request.is_json:
             mapping_data = request.get_json()
-        
+
         if not mapping_data:
             return jsonify({"error": "No mapping data provided"}), 400
-        
+
         # Validate import format
-        if mapping_data.get("type") not in ("dynoai_mapping_export", "dynoai_mapping_template"):
+        if mapping_data.get("type") not in (
+            "dynoai_mapping_export",
+            "dynoai_mapping_template",
+        ):
             return jsonify({"error": "Invalid mapping file format"}), 400
-        
+
         # Create ProviderMapping
         mapping = ProviderMapping(
             version=mapping_data.get("version", "1.0"),
@@ -3236,21 +3340,23 @@ def import_mapping():
             host=mapping_data.get("host", ""),
             created_at=mapping_data.get("created_at", datetime.now().isoformat()),
         )
-        
+
         # Import channels
         for name, ch_data in mapping_data.get("channels", {}).items():
             mapping.channels[name] = ChannelMapping.from_dict(name, ch_data)
-        
+
         # Save mapping
         if save_mapping(mapping):
-            return jsonify({
-                "success": True,
-                "mapping": mapping.to_dict(),
-                "message": f"Imported mapping for {mapping.provider_name}",
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "mapping": mapping.to_dict(),
+                    "message": f"Imported mapping for {mapping.provider_name}",
+                }
+            )
         else:
             return jsonify({"error": "Failed to save mapping"}), 500
-    
+
     except Exception as e:
         logger.error(f"Failed to import mapping: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3260,34 +3366,35 @@ def import_mapping():
 def export_as_template():
     """
     Export current mapping as a reusable template.
-    
+
     Request Body:
         {
             "signature": "provider_signature",
             "template_name": "My Shop Dyno",
             "description": "Custom template description"
         }
-    
+
     Returns:
         Success message with template ID
     """
-    from api.services.jetdrive_mapping import get_mapping, MAPPING_DIR
     import json
-    
+
+    from api.services.jetdrive_mapping import MAPPING_DIR, get_mapping
+
     try:
         data = request.get_json()
         signature = data.get("signature")
         template_name = data.get("template_name", "Custom Template")
         description = data.get("description", "")
-        
+
         if not signature:
             return jsonify({"error": "Missing signature"}), 400
-        
+
         # Load existing mapping
         mapping = get_mapping(signature)
         if not mapping:
             return jsonify({"error": f"Mapping not found: {signature}"}), 404
-        
+
         # Create template
         template_id = template_name.lower().replace(" ", "_")
         template_data = {
@@ -3296,26 +3403,25 @@ def export_as_template():
             "name": template_name,
             "description": description or f"Template based on {mapping.provider_name}",
             "created_at": datetime.now().isoformat(),
-            "channels": {
-                name: ch.to_dict()
-                for name, ch in mapping.channels.items()
-            },
+            "channels": {name: ch.to_dict() for name, ch in mapping.channels.items()},
         }
-        
+
         # Save template
         MAPPING_DIR.mkdir(parents=True, exist_ok=True)
         template_path = MAPPING_DIR / f"template_{template_id}.json"
-        
-        with open(template_path, 'w') as f:
+
+        with open(template_path, "w") as f:
             json.dump(template_data, f, indent=2)
-        
-        return jsonify({
-            "success": True,
-            "template_id": template_id,
-            "template_name": template_name,
-            "message": f"Template saved as {template_path.name}",
-        })
-    
+
+        return jsonify(
+            {
+                "success": True,
+                "template_id": template_id,
+                "template_name": template_name,
+                "message": f"Template saved as {template_path.name}",
+            }
+        )
+
     except Exception as e:
         logger.error(f"Failed to export template: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -3325,7 +3431,7 @@ def export_as_template():
 def get_queue_health():
     """
     Get live capture queue health and statistics.
-    
+
     Returns metrics for ingestion queue monitoring:
     - Samples received, aggregated, enqueued, dropped
     - Queue size and high watermark
@@ -3333,47 +3439,61 @@ def get_queue_health():
     - Persistence status and lag
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         stats = queue_mgr.get_stats()
-        
-        return jsonify({
-            "success": True,
-            "stats": stats,
-            "timestamp": time.time(),
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "stats": stats,
+                "timestamp": time.time(),
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to get queue health: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/queue/reset", methods=["POST"])
 def reset_queue():
     """
     Reset the live capture queue.
-    
+
     Clears all queued items and resets statistics.
     Useful for testing or after errors.
     """
     from api.services.jetdrive_live_queue import reset_live_queue_manager
-    
+
     try:
         reset_live_queue_manager()
-        
-        return jsonify({
-            "success": True,
-            "message": "Queue reset successfully",
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Queue reset successfully",
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to reset queue: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
@@ -3385,10 +3505,10 @@ def reset_queue():
 def get_realtime_analysis():
     """
     Get current real-time analysis state.
-    
+
     Returns coverage map, VE delta, quality metrics, and alerts.
     Analysis must be enabled via POST /realtime/enable first.
-    
+
     Returns:
         JSON with:
         - enabled: bool
@@ -3398,128 +3518,163 @@ def get_realtime_analysis():
         - alerts: [{type, severity, channel, message, timestamp}, ...]
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         analysis = queue_mgr.get_realtime_analysis()
-        
+
         if analysis is None:
-            return jsonify({
+            return jsonify(
+                {
+                    "success": True,
+                    "enabled": False,
+                    "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
+                }
+            )
+
+        return jsonify(
+            {
                 "success": True,
-                "enabled": False,
-                "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
-            })
-        
-        return jsonify({
-            "success": True,
-            **analysis,
-        })
+                **analysis,
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to get realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/enable", methods=["POST"])
 def enable_realtime_analysis():
     """
     Enable real-time analysis during capture.
-    
+
     Query params:
         target_afr: Target AFR for VE delta calculation (default 14.7)
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         # Parse target AFR from request
         target_afr = request.args.get("target_afr", 14.7, type=float)
-        
+
         queue_mgr = get_live_queue_manager()
         queue_mgr.enable_realtime_analysis(target_afr=target_afr)
-        
-        return jsonify({
-            "success": True,
-            "message": f"Realtime analysis enabled (target AFR: {target_afr})",
-            "target_afr": target_afr,
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Realtime analysis enabled (target AFR: {target_afr})",
+                "target_afr": target_afr,
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to enable realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/disable", methods=["POST"])
 def disable_realtime_analysis():
     """
     Disable real-time analysis.
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
-    
+
     try:
         queue_mgr = get_live_queue_manager()
         queue_mgr.disable_realtime_analysis()
-        
-        return jsonify({
-            "success": True,
-            "message": "Realtime analysis disabled",
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Realtime analysis disabled",
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to disable realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 @jetdrive_bp.route("/realtime/reset", methods=["POST"])
 def reset_realtime_analysis():
     """
     Reset real-time analysis state (clear coverage, alerts, etc).
-    
+
     Keeps analysis enabled but clears all accumulated data.
-    
+
     Returns:
         JSON with success status
     """
     from api.services.jetdrive_live_queue import get_live_queue_manager
     from api.services.jetdrive_realtime_analysis import reset_realtime_engine
-    
+
     try:
         queue_mgr = get_live_queue_manager()
-        
+
         if not queue_mgr.realtime_analysis_enabled:
-            return jsonify({
-                "success": False,
-                "error": "Realtime analysis not enabled",
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Realtime analysis not enabled",
+                    }
+                ),
+                400,
+            )
+
         # Reset the engine
         reset_realtime_engine()
-        
+
         # Re-enable with same settings
         target_afr = request.args.get("target_afr", 14.7, type=float)
         queue_mgr.enable_realtime_analysis(target_afr=target_afr)
-        
-        return jsonify({
-            "success": True,
-            "message": "Realtime analysis reset",
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Realtime analysis reset",
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to reset realtime analysis: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================

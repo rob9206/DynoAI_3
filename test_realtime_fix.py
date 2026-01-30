@@ -7,28 +7,28 @@ This script tests that the realtime analysis engine handles None and NaN values
 correctly without raising comparison errors.
 """
 
+import io
 import math
 import sys
-import io
 from pathlib import Path
 
+from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
+
 # Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
-
-from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
 
 
 def test_none_tps():
     """Test that None TPS values don't cause comparison errors."""
     print("Testing None TPS value handling...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     # First sample with valid TPS
     sample1 = {
         "rpm": 3000.0,
@@ -38,7 +38,7 @@ def test_none_tps():
     }
     engine.on_aggregated_sample(sample1)
     print("  ✓ Valid TPS sample processed")
-    
+
     # Second sample with None TPS (should not crash)
     sample2 = {
         "rpm": 3000.0,
@@ -52,7 +52,7 @@ def test_none_tps():
     except TypeError as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -60,12 +60,12 @@ def test_nan_afr():
     """Test that NaN AFR values don't cause comparison errors."""
     print("\nTesting NaN AFR value handling...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     # Sample with NaN AFR
     sample = {
         "rpm": 3000.0,
         "map_kpa": 50.0,
-        "afr": float('nan'),  # NaN should be handled
+        "afr": float("nan"),  # NaN should be handled
         "tps": 50.0,
     }
     try:
@@ -74,7 +74,7 @@ def test_nan_afr():
     except (TypeError, ValueError) as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -82,7 +82,7 @@ def test_all_none_values():
     """Test that samples with all None values don't crash."""
     print("\nTesting all None values...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     sample = {
         "rpm": None,
         "map_kpa": None,
@@ -95,7 +95,7 @@ def test_all_none_values():
     except TypeError as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -103,20 +103,20 @@ def test_mixed_valid_invalid():
     """Test mixed valid and invalid values."""
     print("\nTesting mixed valid/invalid values...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     samples = [
         # Valid sample
         {"rpm": 3000.0, "map_kpa": 50.0, "afr": 14.5, "tps": 50.0},
         # None TPS
         {"rpm": 3100.0, "map_kpa": 52.0, "afr": 14.6, "tps": None},
         # NaN AFR
-        {"rpm": 3200.0, "map_kpa": 54.0, "afr": float('nan'), "tps": 55.0},
+        {"rpm": 3200.0, "map_kpa": 54.0, "afr": float("nan"), "tps": 55.0},
         # None RPM (should skip coverage)
         {"rpm": None, "map_kpa": 56.0, "afr": 14.7, "tps": 60.0},
         # All None
         {"rpm": None, "map_kpa": None, "afr": None, "tps": None},
     ]
-    
+
     try:
         for i, sample in enumerate(samples):
             engine.on_aggregated_sample(sample)
@@ -124,7 +124,7 @@ def test_mixed_valid_invalid():
     except Exception as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -132,7 +132,7 @@ def test_edge_cases():
     """Test edge cases that could cause issues."""
     print("\nTesting edge cases...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     edge_cases = [
         # Zero values (valid but edge case)
         {"rpm": 0.0, "map_kpa": 0.0, "afr": 0.0, "tps": 0.0},
@@ -141,9 +141,9 @@ def test_edge_cases():
         # Very large values
         {"rpm": 99999.0, "map_kpa": 500.0, "afr": 50.0, "tps": 200.0},
         # Mixed None and NaN
-        {"rpm": None, "map_kpa": float('nan'), "afr": None, "tps": float('nan')},
+        {"rpm": None, "map_kpa": float("nan"), "afr": None, "tps": float("nan")},
     ]
-    
+
     try:
         for sample in edge_cases:
             engine.on_aggregated_sample(sample)
@@ -151,7 +151,7 @@ def test_edge_cases():
     except Exception as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -159,17 +159,17 @@ def test_state_retrieval():
     """Test that state retrieval works after processing samples."""
     print("\nTesting state retrieval...")
     engine = RealtimeAnalysisEngine(target_afr=14.7)
-    
+
     # Process some samples
     samples = [
         {"rpm": 3000.0, "map_kpa": 50.0, "afr": 14.5, "tps": 50.0},
         {"rpm": 3500.0, "map_kpa": 60.0, "afr": 14.6, "tps": 60.0},
         {"rpm": None, "map_kpa": None, "afr": None, "tps": None},
     ]
-    
+
     for sample in samples:
         engine.on_aggregated_sample(sample)
-    
+
     try:
         state = engine.get_state()
         print(f"  ✓ State retrieved successfully")
@@ -180,7 +180,7 @@ def test_state_retrieval():
     except Exception as e:
         print(f"  ✗ FAILED: {e}")
         return False
-    
+
     return True
 
 
@@ -189,7 +189,7 @@ def main():
     print("=" * 60)
     print("JetDrive Realtime Analysis - NoneType Fix Test Suite")
     print("=" * 60)
-    
+
     tests = [
         test_none_tps,
         test_nan_afr,
@@ -198,10 +198,10 @@ def main():
         test_edge_cases,
         test_state_retrieval,
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test in tests:
         try:
             if test():
@@ -211,7 +211,7 @@ def main():
         except Exception as e:
             print(f"  ✗ EXCEPTION: {e}")
             failed += 1
-    
+
     print("\n" + "=" * 60)
     print(f"Test Results: {passed}/{len(tests)} passed")
     if failed == 0:
@@ -219,7 +219,7 @@ def main():
     else:
         print(f"❌ {failed} test(s) failed")
     print("=" * 60)
-    
+
     return 0 if failed == 0 else 1
 
 

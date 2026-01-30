@@ -91,7 +91,6 @@ CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
     36: {"name": "Temperature 1", "category": "atmospheric", "units": "°C"},
     37: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
     38: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
-    
     # =========================================================================
     # DYNO CORE CHANNELS (Drum, Force, Power, Torque)
     # =========================================================================
@@ -100,24 +99,20 @@ CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
     11: {"name": "Digital RPM 2", "category": "dyno", "units": "rpm"},
     39: {"name": "Digital RPM 1", "category": "dyno", "units": "rpm"},
     40: {"name": "Digital RPM 2", "category": "dyno", "units": "rpm"},
-    
     # Force/Drum Channels
     12: {"name": "Force Drum 1", "category": "dyno", "units": "lbs"},
     19: {"name": "Force Drum 2", "category": "dyno", "units": "lbs"},
     32: {"name": "Force", "category": "dyno", "units": "lbs"},
     34: {"name": "Force 1", "category": "dyno", "units": "lbs"},
-    
     # Power/Torque Channels
     3: {"name": "Torque", "category": "dyno", "units": "ft-lb"},
     4: {"name": "Horsepower", "category": "dyno", "units": "HP"},
     5: {"name": "Power", "category": "dyno", "units": "HP"},
-    
     # Speed/Distance/Acceleration
     1: {"name": "Speed", "category": "dyno", "units": "mph"},
     2: {"name": "Distance", "category": "dyno", "units": "ft"},
     13: {"name": "Acceleration", "category": "dyno", "units": "g"},
     14: {"name": "Speed 1", "category": "dyno", "units": "mph"},
-    
     # =========================================================================
     # AIR/FUEL RATIO CHANNELS
     # =========================================================================
@@ -126,13 +121,11 @@ CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
     21: {"name": "User Analog 2", "category": "afr", "units": ":1"},  # AFR Rear
     22: {"name": "User Analog 3", "category": "afr", "units": "V"},
     23: {"name": "User Analog 4", "category": "afr", "units": "V"},
-    
     # Named AFR channels
     24: {"name": "Air/Fuel Ratio 1", "category": "afr", "units": ":1"},
     25: {"name": "Air/Fuel Ratio 2", "category": "afr", "units": ":1"},
     26: {"name": "Lambda 1", "category": "afr", "units": "λ"},
     27: {"name": "Lambda 2", "category": "afr", "units": "λ"},
-    
     # =========================================================================
     # ENGINE PARAMETER CHANNELS
     # =========================================================================
@@ -141,7 +134,6 @@ CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
     30: {"name": "IAT", "category": "engine", "units": "°F"},
     31: {"name": "ECT", "category": "engine", "units": "°F"},
     33: {"name": "VBatt", "category": "engine", "units": "V"},
-    
     # =========================================================================
     # SYSTEM/DIAGNOSTIC CHANNELS
     # =========================================================================
@@ -153,7 +145,9 @@ CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
 }
 
 # Legacy fallback for backwards compatibility
-FALLBACK_CHANNEL_NAMES = {chan_id: info["name"] for chan_id, info in CHANNEL_REGISTRY.items()}
+FALLBACK_CHANNEL_NAMES = {
+    chan_id: info["name"] for chan_id, info in CHANNEL_REGISTRY.items()
+}
 
 
 def get_channel_info_from_registry(chan_id: int) -> dict[str, str | int | float] | None:
@@ -260,8 +254,26 @@ def _resolve_iface_address(iface: str) -> str:
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     # #region agent log
-    import json as _json; _log_path = r"c:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\.cursor\debug.log"
-    with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:entry","message":"Creating socket","data":{"iface":cfg.iface,"multicast_group":cfg.multicast_group,"port":cfg.port},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+    import json as _json
+
+    _log_path = r"c:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\.cursor\debug.log"
+    with open(_log_path, "a") as _f:
+        _f.write(
+            _json.dumps(
+                {
+                    "location": "jetdrive_client.py:_make_socket:entry",
+                    "message": "Creating socket",
+                    "data": {
+                        "iface": cfg.iface,
+                        "multicast_group": cfg.multicast_group,
+                        "port": cfg.port,
+                    },
+                    "hypothesisId": "H5",
+                    "timestamp": __import__("time").time(),
+                }
+            )
+            + "\n"
+        )
     # #endregion
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -272,7 +284,19 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
 
     iface_ip = _resolve_iface_address(cfg.iface)
     # #region agent log
-    with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:resolved_iface","message":"Resolved interface","data":{"cfg_iface":cfg.iface,"resolved_ip":iface_ip},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+    with open(_log_path, "a") as _f:
+        _f.write(
+            _json.dumps(
+                {
+                    "location": "jetdrive_client.py:_make_socket:resolved_iface",
+                    "message": "Resolved interface",
+                    "data": {"cfg_iface": cfg.iface, "resolved_ip": iface_ip},
+                    "hypothesisId": "H5",
+                    "timestamp": __import__("time").time(),
+                }
+            )
+            + "\n"
+        )
     # #endregion
     # On Windows, bind to 0.0.0.0 but join multicast on the specific interface
     # This allows receiving from all sources while directing multicast traffic correctly
@@ -280,11 +304,45 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     try:
         sock.bind((bind_ip, cfg.port))
         # #region agent log
-        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:bind_success","message":"Socket bound successfully","data":{"bind_ip":bind_ip,"iface_ip":iface_ip,"port":cfg.port},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+        with open(_log_path, "a") as _f:
+            _f.write(
+                _json.dumps(
+                    {
+                        "location": "jetdrive_client.py:_make_socket:bind_success",
+                        "message": "Socket bound successfully",
+                        "data": {
+                            "bind_ip": bind_ip,
+                            "iface_ip": iface_ip,
+                            "port": cfg.port,
+                        },
+                        "hypothesisId": "H5",
+                        "timestamp": __import__("time").time(),
+                    }
+                )
+                + "\n"
+            )
         # #endregion
     except OSError as exc:
         # #region agent log
-        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:bind_failed","message":"BIND FAILED","data":{"bind_ip":bind_ip,"iface_ip":iface_ip,"port":cfg.port,"error":str(exc),"errno":exc.errno},"hypothesisId":"H5","timestamp":__import__("time").time()}) + "\n")
+        with open(_log_path, "a") as _f:
+            _f.write(
+                _json.dumps(
+                    {
+                        "location": "jetdrive_client.py:_make_socket:bind_failed",
+                        "message": "BIND FAILED",
+                        "data": {
+                            "bind_ip": bind_ip,
+                            "iface_ip": iface_ip,
+                            "port": cfg.port,
+                            "error": str(exc),
+                            "errno": exc.errno,
+                        },
+                        "hypothesisId": "H5",
+                        "timestamp": __import__("time").time(),
+                    }
+                )
+                + "\n"
+            )
         # #endregion
         sock.close()
         raise RuntimeError(
@@ -298,11 +356,44 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         # #region agent log
-        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:multicast_joined","message":"Joined multicast group","data":{"group":cfg.multicast_group,"multicast_iface":multicast_iface,"cfg_iface":iface_ip},"hypothesisId":"H6","timestamp":__import__("time").time()}) + "\n")
+        with open(_log_path, "a") as _f:
+            _f.write(
+                _json.dumps(
+                    {
+                        "location": "jetdrive_client.py:_make_socket:multicast_joined",
+                        "message": "Joined multicast group",
+                        "data": {
+                            "group": cfg.multicast_group,
+                            "multicast_iface": multicast_iface,
+                            "cfg_iface": iface_ip,
+                        },
+                        "hypothesisId": "H6",
+                        "timestamp": __import__("time").time(),
+                    }
+                )
+                + "\n"
+            )
         # #endregion
     except OSError as exc:
         # #region agent log
-        with open(_log_path, "a") as _f: _f.write(_json.dumps({"location":"jetdrive_client.py:_make_socket:multicast_failed","message":"MULTICAST JOIN FAILED","data":{"group":cfg.multicast_group,"multicast_iface":multicast_iface,"error":str(exc),"errno":exc.errno},"hypothesisId":"H6","timestamp":__import__("time").time()}) + "\n")
+        with open(_log_path, "a") as _f:
+            _f.write(
+                _json.dumps(
+                    {
+                        "location": "jetdrive_client.py:_make_socket:multicast_failed",
+                        "message": "MULTICAST JOIN FAILED",
+                        "data": {
+                            "group": cfg.multicast_group,
+                            "multicast_iface": multicast_iface,
+                            "error": str(exc),
+                            "errno": exc.errno,
+                        },
+                        "hypothesisId": "H6",
+                        "timestamp": __import__("time").time(),
+                    }
+                )
+                + "\n"
+            )
         # #endregion
         sock.close()
         raise RuntimeError(
@@ -355,7 +446,7 @@ def _parse_channel_values(
 ) -> list[JetDriveSample]:
     """
     Parse channel values from a JetDrive wire frame.
-    
+
     Name resolution priority:
     1. Hardware ChannelInfo metadata (if available)
     2. CHANNEL_REGISTRY by ID (comprehensive known channels)
@@ -373,23 +464,41 @@ def _parse_channel_values(
         except struct.error:
             break
         idx += 4
-        
+
         # Resolve channel name, category, and units
         chan = channel_lookup.get(chan_id)
         registry_info = get_channel_info_from_registry(chan_id)
-        
+
         if chan and chan.name:
             # Priority 1: Hardware ChannelInfo metadata has the name - TRUST IT
             name = chan.name
             # Infer category from channel name
             name_lower = name.lower()
-            if any(x in name_lower for x in ['humidity', 'temperature', 'pressure', 'atmospheric']):
+            if any(
+                x in name_lower
+                for x in ["humidity", "temperature", "pressure", "atmospheric"]
+            ):
                 category = "atmospheric"
-            elif any(x in name_lower for x in ['rpm', 'force', 'power', 'torque', 'speed', 'distance', 'acceleration']):
+            elif any(
+                x in name_lower
+                for x in [
+                    "rpm",
+                    "force",
+                    "power",
+                    "torque",
+                    "speed",
+                    "distance",
+                    "acceleration",
+                ]
+            ):
                 category = "dyno"
-            elif any(x in name_lower for x in ['afr', 'lambda', 'lc2', 'lc1', 'fuel', 'o2']):
+            elif any(
+                x in name_lower for x in ["afr", "lambda", "lc2", "lc1", "fuel", "o2"]
+            ):
                 category = "afr"
-            elif any(x in name_lower for x in ['map', 'tps', 'iat', 'ect', 'vbat', 'volt']):
+            elif any(
+                x in name_lower for x in ["map", "tps", "iat", "ect", "vbat", "volt"]
+            ):
                 category = "engine"
             else:
                 category = "misc"
@@ -404,7 +513,7 @@ def _parse_channel_values(
             name = f"Channel {chan_id}"
             category = "misc"
             units = ""
-        
+
         samples.append(
             JetDriveSample(
                 provider_id=provider_id,
@@ -476,14 +585,14 @@ def merge_all_providers(providers: list[JetDriveProviderInfo]) -> JetDriveProvid
             port=DEFAULT_PORT,
             channels={},
         )
-    
+
     if len(providers) == 1:
         return providers[0]
-    
+
     # Merge all channels, using unique IDs
     merged_channels: dict[int, ChannelInfo] = {}
     provider_names = []
-    
+
     for p in providers:
         provider_names.append(f"{p.name} (0x{p.provider_id:04X})")
         for chan_id, chan_info in p.channels.items():
@@ -499,7 +608,7 @@ def merge_all_providers(providers: list[JetDriveProviderInfo]) -> JetDriveProvid
                 )
             else:
                 merged_channels[chan_id] = chan_info
-    
+
     return JetDriveProviderInfo(
         provider_id=providers[0].provider_id,  # Use first provider's ID as primary
         name=" + ".join(provider_names),
@@ -524,18 +633,18 @@ def _discover_providers_sync(
     """
     Synchronous discovery using blocking sockets (works reliably on Windows).
     Caches provider info so channel names persist even if ChannelInfo isn't re-sent.
-    
+
     Note: Power Core sends multiple ChannelInfo packets (e.g., 39 channels + 3 channels).
     This function MERGES them instead of overwriting, ensuring all channels are captured.
     """
     global _provider_cache
     import time
-    
+
     # Create BLOCKING socket (don't call _make_socket which sets non-blocking)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", cfg.port))
-    
+
     # Join BOTH multicast groups on specific interface (Power Core may use either)
     for group in [cfg.multicast_group, "224.0.2.10"]:
         try:
@@ -543,19 +652,19 @@ def _discover_providers_sync(
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         except Exception:
             pass  # May fail if already joined
-    
+
     # Set timeout for blocking recv
     sock.settimeout(1.0)
-    
+
     # Send RequestChannelInfo to request ChannelInfo (Key=1) from providers
     seq = random.randint(1, 0xFF)
     host_id = random.randint(1, 0xFFFE)
     msg = _Wire.encode(KEY_REQUEST_CHANNEL_INFO, host_id, ALL_HOSTS, seq, b"")
     sock.sendto(msg, (cfg.multicast_group, cfg.port))
-    
+
     providers: dict[int, JetDriveProviderInfo] = {}
     deadline = time.time() + timeout
-    
+
     try:
         while time.time() < deadline:
             try:
@@ -564,7 +673,7 @@ def _discover_providers_sync(
                 if not decoded:
                     continue
                 key, _, host, _, _, value = decoded
-                
+
                 if key == KEY_CHANNEL_INFO:
                     try:
                         info = _parse_channel_info(host, addr[0], value, port=cfg.port)
@@ -575,7 +684,9 @@ def _discover_providers_sync(
                                 providers[host].channels.update(info.channels)
                             else:
                                 providers[host] = info
-                            _provider_cache[host] = providers[host]  # Cache the merged version
+                            _provider_cache[host] = providers[
+                                host
+                            ]  # Cache the merged version
                     except Exception:
                         continue
                 elif key == KEY_CHANNEL_VALUES and host not in providers:
@@ -595,7 +706,7 @@ def _discover_providers_sync(
                 continue
     finally:
         sock.close()
-    
+
     return list(providers.values())
 
 
@@ -624,18 +735,18 @@ def _subscribe_sync(
 ) -> dict[str, int]:
     """
     Synchronous subscribe using blocking sockets (works reliably on Windows).
-    
+
     Args:
         accept_all_providers: If True, accept ChannelValues from ANY provider on the network.
             This is necessary because Power Core CPU and Atmospheric Probe are separate providers.
     """
     global _provider_cache
-    
+
     # Create BLOCKING socket for Windows multicast compatibility
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", cfg.port))
-    
+
     # Join multicast on specific interface
     for group in [cfg.multicast_group, "224.0.2.10"]:
         try:
@@ -643,7 +754,7 @@ def _subscribe_sync(
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         except Exception:
             pass
-    
+
     sock.settimeout(recv_timeout)
 
     # Build channel lookup from provider AND cache (for multi-provider support)
@@ -652,7 +763,7 @@ def _subscribe_sync(
         for chan_id, chan_info in cached_provider.channels.items():
             if chan_id not in channel_lookup:
                 channel_lookup[chan_id] = chan_info
-    
+
     allowed_ids = set()
     if channel_names:
         names = {n.strip().lower() for n in channel_names}
@@ -678,7 +789,7 @@ def _subscribe_sync(
                 dropped_frames += 1
                 continue
             key, _, host, _, _, value = decoded
-            
+
             # Handle ChannelInfo packets - update cache dynamically
             if key == KEY_CHANNEL_INFO:
                 try:
@@ -692,24 +803,26 @@ def _subscribe_sync(
                 except Exception:
                     pass
                 continue
-            
+
             if key != KEY_CHANNEL_VALUES:
                 continue
-                
+
             # Accept data from specified provider OR all providers
             if not accept_all_providers and host != provider.provider_id:
                 non_provider_frames += 1
                 continue
-            
+
             accepted_providers.add(host)
-            
+
             # Get channel lookup for this specific provider if available
-            provider_channels = _provider_cache.get(host, provider).channels if host in _provider_cache else channel_lookup
-            
+            provider_channels = (
+                _provider_cache.get(host, provider).channels
+                if host in _provider_cache
+                else channel_lookup
+            )
+
             try:
-                samples = _parse_channel_values(
-                    host, provider_channels, value
-                )
+                samples = _parse_channel_values(host, provider_channels, value)
             except Exception:
                 dropped_frames += 1
                 continue
@@ -751,23 +864,29 @@ async def subscribe(
     Uses synchronous blocking socket in a thread (works reliably on Windows).
     """
     cfg = config or JetDriveConfig.from_env()
-    
+
     # Use a mutable list as a thread-safe stop flag
     stop_flag = [False]
-    
+
     async def monitor_stop():
         if stop_event:
             await stop_event.wait()
             stop_flag[0] = True
-    
+
     # Start stop monitor task
     monitor_task = asyncio.create_task(monitor_stop()) if stop_event else None
-    
+
     try:
         # Run sync subscribe in thread pool
         result = await asyncio.to_thread(
             _subscribe_sync,
-            provider, channel_names, on_sample, cfg, stop_flag, recv_timeout, debug
+            provider,
+            channel_names,
+            on_sample,
+            cfg,
+            stop_flag,
+            recv_timeout,
+            debug,
         )
         if return_stats:
             return result
