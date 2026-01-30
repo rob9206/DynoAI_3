@@ -13,7 +13,7 @@ import pytest
 import time
 from unittest.mock import MagicMock
 
-from api.services.jetdrive_realtime_analysis import (
+from api.services.jetdrive.jetdrive_realtime_analysis import (
     RealtimeAnalysisEngine,
     CoverageCell,
     VEDeltaCell,

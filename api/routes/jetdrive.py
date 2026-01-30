@@ -645,7 +645,7 @@ def analyze_run():
 
             import csv as csv_module
 
-            from api.services.dyno_simulator import get_simulator
+            from api.services.simulation.dyno_simulator import get_simulator
 
             sim = get_simulator()
             sim_state = sim.get_state()
@@ -1546,10 +1546,10 @@ def discover_providers():
         project_root = get_project_root()
         sys.path.insert(0, str(project_root))
 
-        from api.services.jetdrive_client import (
+        from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
         )
-        from api.services.jetdrive_client import discover_providers as async_discover
+        from api.services.jetdrive.jetdrive_client import discover_providers as async_discover
 
         config = JetDriveConfig(
             multicast_group=JETDRIVE_MCAST_GROUP,
@@ -1630,7 +1630,7 @@ def discover_providers_multi():
     results = {}
 
     try:
-        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
         for mcast_group in multicast_groups:
             try:
@@ -1749,10 +1749,10 @@ def _monitor_loop():
     project_root = get_project_root()
     sys.path.insert(0, str(project_root))
 
-    from api.services.jetdrive_client import (
+    from api.services.jetdrive.jetdrive_client import (
         JetDriveConfig,
     )
-    from api.services.jetdrive_client import discover_providers as async_discover
+    from api.services.jetdrive.jetdrive_client import discover_providers as async_discover
 
     config = JetDriveConfig(
         multicast_group=JETDRIVE_MCAST_GROUP,
@@ -1886,14 +1886,14 @@ def _live_capture_loop(requested_provider_id: int | None = None):
     """
     global _live_data
 
-    from api.services.jetdrive_client import (
+    from api.services.jetdrive.jetdrive_client import (
         JetDriveConfig,
         JetDriveSample,
         discover_providers,
         subscribe,
     )
-    from api.services.jetdrive_validation import get_validator
-    from api.services.jetdrive_live_queue import get_live_queue_manager, reset_live_queue_manager
+    from api.services.jetdrive.jetdrive_validation import get_validator
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager, reset_live_queue_manager
 
     config = JetDriveConfig.from_env()
     validator = get_validator()
@@ -1926,7 +1926,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
 
         # Merge ALL providers - Power Core CPU and Atmospheric Probe are separate providers
         # but we want data from both
-        from api.services.jetdrive_client import merge_all_providers
+        from api.services.jetdrive.jetdrive_client import merge_all_providers
         
         if requested_provider_id is not None:
             # Find specific provider if requested
@@ -2178,7 +2178,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
 
         # Wrap subscribe to capture stats
         async def subscribe_with_stats():
-            from api.services.jetdrive_client import subscribe
+            from api.services.jetdrive.jetdrive_client import subscribe
 
             try:
                 stats = await subscribe(
@@ -2352,7 +2352,7 @@ def stop_live_capture():
     """Stop live data capture and release the pinned provider."""
     global _live_data
 
-    from api.services.jetdrive_validation import get_validator
+    from api.services.jetdrive.jetdrive_validation import get_validator
 
     with _live_data_lock:
         _live_data["capturing"] = False
@@ -2382,7 +2382,7 @@ def get_live_data():
 
     # Check if simulator is active first
     if _is_simulator_active():
-        from api.services.dyno_simulator import get_simulator
+        from api.services.simulation.dyno_simulator import get_simulator
 
         sim = get_simulator()
         channels = sim.get_channels()
@@ -2490,7 +2490,7 @@ def get_live_debug():
     import asyncio
     import socket
 
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
     with _live_data_lock:
         capturing = _live_data.get("capturing", False)
@@ -2602,7 +2602,7 @@ def get_live_health():
     Query Parameters:
         provider_id: Optional provider ID to filter health for (hex or decimal)
     """
-    from api.services.jetdrive_validation import get_validator
+    from api.services.jetdrive.jetdrive_validation import get_validator
 
     global _live_data
 
@@ -2650,7 +2650,7 @@ def get_live_health_summary():
 
     Uses the JetDriveDataValidator for accurate provider-scoped metrics.
     """
-    from api.services.jetdrive_validation import get_validator
+    from api.services.jetdrive.jetdrive_validation import get_validator
 
     global _live_data
 
@@ -2700,7 +2700,7 @@ def run_preflight_check():
         PreflightResult with pass/fail status and detailed check results
     """
     import asyncio
-    from api.services.jetdrive_preflight import run_preflight
+    from api.services.jetdrive.jetdrive_preflight import run_preflight
 
     # Parse parameters
     provider_id_param = request.args.get("provider_id")
@@ -2773,7 +2773,7 @@ def get_preflight_status():
     Useful for quick status checks in the UI.
     """
     import asyncio
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
     config = JetDriveConfig.from_env()
 
@@ -2837,7 +2837,7 @@ def get_channel_mapping(signature: str):
     Returns:
         ProviderMapping JSON or 404 if not found
     """
-    from api.services.jetdrive_mapping import get_mapping
+    from api.services.jetdrive.jetdrive_mapping import get_mapping
 
     mapping = get_mapping(signature)
     if mapping is None:
@@ -2860,7 +2860,7 @@ def save_channel_mapping(signature: str):
     Returns:
         Saved mapping or error
     """
-    from api.services.jetdrive_mapping import ProviderMapping, save_mapping
+    from api.services.jetdrive.jetdrive_mapping import ProviderMapping, save_mapping
 
     try:
         data = request.get_json()
@@ -2884,7 +2884,7 @@ def save_channel_mapping(signature: str):
 @jetdrive_bp.route("/mapping/<signature>", methods=["DELETE"])
 def delete_channel_mapping(signature: str):
     """Delete a channel mapping."""
-    from api.services.jetdrive_mapping import delete_mapping
+    from api.services.jetdrive.jetdrive_mapping import delete_mapping
 
     if delete_mapping(signature):
         return jsonify({"status": "deleted", "signature": signature})
@@ -2895,7 +2895,7 @@ def delete_channel_mapping(signature: str):
 @jetdrive_bp.route("/mapping", methods=["GET"])
 def list_channel_mappings():
     """List all saved channel mappings."""
-    from api.services.jetdrive_mapping import list_mappings
+    from api.services.jetdrive.jetdrive_mapping import list_mappings
 
     mappings = list_mappings()
     return jsonify({
@@ -2907,7 +2907,7 @@ def list_channel_mappings():
 @jetdrive_bp.route("/mapping/templates", methods=["GET"])
 def get_mapping_templates():
     """Get list of available mapping templates."""
-    from api.services.jetdrive_mapping import get_templates
+    from api.services.jetdrive.jetdrive_mapping import get_templates
 
     templates = get_templates()
     return jsonify({
@@ -2919,7 +2919,7 @@ def get_mapping_templates():
 @jetdrive_bp.route("/mapping/templates/<template_id>", methods=["GET"])
 def get_mapping_template(template_id: str):
     """Get a specific mapping template by ID."""
-    from api.services.jetdrive_mapping import get_template
+    from api.services.jetdrive.jetdrive_mapping import get_template
 
     template = get_template(template_id)
     if template is None:
@@ -2943,8 +2943,8 @@ def create_mapping_from_template_endpoint():
         New ProviderMapping (not saved yet - client should review and PUT)
     """
     import asyncio
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
-    from api.services.jetdrive_mapping import (
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_mapping import (
         compute_provider_signature,
         create_mapping_from_template,
     )
@@ -3022,8 +3022,8 @@ def auto_detect_mapping():
         Auto-detected ProviderMapping (not saved - client should review and PUT)
     """
     import asyncio
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
-    from api.services.jetdrive_mapping import (
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_mapping import (
         compute_provider_signature,
         create_auto_mapping,
     )
@@ -3088,7 +3088,7 @@ def auto_detect_mapping():
 @jetdrive_bp.route("/mapping/transforms", methods=["GET"])
 def get_available_transforms():
     """Get list of available value transforms."""
-    from api.services.jetdrive_mapping import TRANSFORMS
+    from api.services.jetdrive.jetdrive_mapping import TRANSFORMS
 
     transforms = []
     for name in TRANSFORMS.keys():
@@ -3129,8 +3129,8 @@ def get_mapping_confidence():
         - suspected_mislabels
     """
     import asyncio
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
-    from api.services.jetdrive_mapping import (
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_mapping import (
         compute_provider_signature,
         get_mapping,
         auto_map_channels_with_confidence,
@@ -3186,7 +3186,7 @@ def get_mapping_confidence():
                 # Find the channel by source_id
                 channel = provider.channels.get(channel_mapping.source_id)
                 if channel:
-                    from api.services.jetdrive_mapping import score_channel_for_canonical
+                    from api.services.jetdrive.jetdrive_mapping import score_channel_for_canonical
                     conf = score_channel_for_canonical(channel, canonical_name, all_channels)
                     conf.transform = channel_mapping.transform  # Use existing transform
                     confidence_map[canonical_name] = conf
@@ -3204,7 +3204,7 @@ def get_mapping_confidence():
                 host=provider.host,
             )
             # Convert confidence map to channel mappings
-            from api.services.jetdrive_mapping import ChannelMapping
+            from api.services.jetdrive.jetdrive_mapping import ChannelMapping
             for canonical_name, conf in confidence_map.items():
                 temp_mapping.channels[canonical_name] = ChannelMapping(
                     canonical_name=canonical_name,
@@ -3233,7 +3233,7 @@ def get_mapping_confidence():
         )
         
         # Get unmapped recommended channels
-        from api.services.jetdrive_mapping import RECOMMENDED_CANONICAL
+        from api.services.jetdrive.jetdrive_mapping import RECOMMENDED_CANONICAL
         mapped = set(confidence_map.keys())
         unmapped_recommended = [ch for ch in RECOMMENDED_CANONICAL if ch not in mapped]
         
@@ -3268,7 +3268,7 @@ def export_mapping(signature: str):
     Returns:
         JSON file download
     """
-    from api.services.jetdrive_mapping import get_mapping
+    from api.services.jetdrive.jetdrive_mapping import get_mapping
     from flask import send_file
     import io
     import json
@@ -3330,7 +3330,7 @@ def import_mapping():
     Returns:
         Imported mapping (saved to disk)
     """
-    from api.services.jetdrive_mapping import (
+    from api.services.jetdrive.jetdrive_mapping import (
         ProviderMapping,
         ChannelMapping,
         save_mapping,
@@ -3400,7 +3400,7 @@ def export_as_template():
     Returns:
         Success message with template ID
     """
-    from api.services.jetdrive_mapping import get_mapping, MAPPING_DIR
+    from api.services.jetdrive.jetdrive_mapping import get_mapping, MAPPING_DIR
     import json
     
     try:
@@ -3461,7 +3461,7 @@ def get_queue_health():
     - Enqueue rate
     - Persistence status and lag
     """
-    from api.services.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
     
     try:
         queue_mgr = get_live_queue_manager()
@@ -3488,7 +3488,7 @@ def reset_queue():
     Clears all queued items and resets statistics.
     Useful for testing or after errors.
     """
-    from api.services.jetdrive_live_queue import reset_live_queue_manager
+    from api.services.jetdrive.jetdrive_live_queue import reset_live_queue_manager
     
     try:
         reset_live_queue_manager()
@@ -3526,7 +3526,7 @@ def get_realtime_analysis():
         - quality: {score, channel_freshness, missing_channels}
         - alerts: [{type, severity, channel, message, timestamp}, ...]
     """
-    from api.services.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
     
     try:
         queue_mgr = get_live_queue_manager()
@@ -3562,7 +3562,7 @@ def enable_realtime_analysis():
     Returns:
         JSON with success status
     """
-    from api.services.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
     
     try:
         # Parse target AFR from request
@@ -3592,7 +3592,7 @@ def disable_realtime_analysis():
     Returns:
         JSON with success status
     """
-    from api.services.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
     
     try:
         queue_mgr = get_live_queue_manager()
@@ -3620,8 +3620,8 @@ def reset_realtime_analysis():
     Returns:
         JSON with success status
     """
-    from api.services.jetdrive_live_queue import get_live_queue_manager
-    from api.services.jetdrive_realtime_analysis import reset_realtime_engine
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_realtime_analysis import reset_realtime_engine
     
     try:
         queue_mgr = get_live_queue_manager()
@@ -3953,7 +3953,7 @@ def validate_hardware():
     providers_info: list[dict[str, Any]] = []
     matched_provider = False
     try:
-        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
         cfg = JetDriveConfig.from_env()
         # Prefer reference port if set
@@ -4030,7 +4030,7 @@ def hardware_heartbeat():
       - Providers are actively broadcasting
     """
     try:
-        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
         cfg = JetDriveConfig.from_env()
         loop = asyncio.new_event_loop()
@@ -4071,7 +4071,7 @@ def hardware_heartbeat():
 def connect_hardware():
     """Attempt to discover JetDrive providers and mark connection state."""
     try:
-        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
         cfg = JetDriveConfig.from_env()
         loop = asyncio.new_event_loop()
@@ -4131,7 +4131,7 @@ def stop_hardware_stream():
 def hardware_status():
     """Composite status of live capture and a quick discovery snapshot."""
     try:
-        from api.services.jetdrive_client import JetDriveConfig, discover_providers
+        from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
         cfg = JetDriveConfig.from_env()
         loop = asyncio.new_event_loop()
@@ -4198,7 +4198,7 @@ def discover_channels():
     try:
         # Check if simulator is active first
         if _is_simulator_active():
-            from api.services.dyno_simulator import get_simulator
+            from api.services.simulation.dyno_simulator import get_simulator
 
             sim = get_simulator()
             channels_data = sim.get_channels()
@@ -4440,7 +4440,7 @@ def check_hardware_health():
 
         # Check if we can get live data
         if _is_simulator_active():
-            from api.services.dyno_simulator import get_simulator
+            from api.services.simulation.dyno_simulator import get_simulator
 
             sim = get_simulator()
             channels = sim.get_channels()
@@ -4533,7 +4533,7 @@ def start_simulator():
     }
     """
     try:
-        from api.services.dyno_simulator import (
+        from api.services.simulation.dyno_simulator import (
             EngineProfile,
             SimulatorConfig,
             reset_simulator,
@@ -4567,7 +4567,7 @@ def start_simulator():
         virtual_ecu = None
         ecu_config = data.get("virtual_ecu")
         if ecu_config and ecu_config.get("enabled", False):
-            from api.services.virtual_ecu import (
+            from api.services.simulation.virtual_ecu import (
                 VirtualECU,
                 create_afr_target_table,
                 create_baseline_ve_table,
@@ -4669,7 +4669,7 @@ def start_simulator():
 @jetdrive_bp.route("/simulator/stop", methods=["POST"])
 def stop_simulator():
     """Stop the dyno simulator."""
-    from api.services.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator
 
     sim = get_simulator()
     sim.stop()
@@ -4689,7 +4689,7 @@ def get_simulator_status():
             }
         )
 
-    from api.services.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator
 
     try:
         sim = get_simulator()
@@ -4735,7 +4735,7 @@ def trigger_pull():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import SimState, get_simulator
+    from api.services.simulation.dyno_simulator import SimState, get_simulator
 
     sim = get_simulator()
     current_state = sim.get_state()
@@ -4782,7 +4782,7 @@ def set_simulator_throttle():
     if not (0.0 <= tps <= 100.0):
         return jsonify({"error": "'tps' must be between 0 and 100"}), 400
 
-    from api.services.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator
 
     sim = get_simulator()
     # Only allow manual throttle while simulator is running.
@@ -4797,7 +4797,7 @@ def get_pull_data():
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
-    from api.services.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator
 
     sim = get_simulator()
     sim_state = sim.get_state()
@@ -4868,7 +4868,7 @@ def save_simulator_pull():
     import csv
     from datetime import datetime
 
-    from api.services.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator
 
     sim = get_simulator()
     data = sim.get_pull_data()
@@ -4949,7 +4949,7 @@ def save_simulator_pull():
 @jetdrive_bp.route("/simulator/profiles", methods=["GET"])
 def get_profiles():
     """Get available engine profiles for simulation."""
-    from api.services.dyno_simulator import EngineProfile
+    from api.services.simulation.dyno_simulator import EngineProfile
 
     profiles = {
         "m8_114": EngineProfile.m8_114(),

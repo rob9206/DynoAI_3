@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from typing import cast
 
-from api.services.jetdrive_client import (
+from api.services.jetdrive.jetdrive_client import (
     JetDriveProviderInfo,
     JetDriveSample,
     discover_providers,

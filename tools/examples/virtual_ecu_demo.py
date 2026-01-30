@@ -23,12 +23,12 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.services.dyno_simulator import (
+from api.services.simulation.dyno_simulator import (
     DynoSimulator,
     EngineProfile,
     SimulatorConfig,
 )
-from api.services.virtual_ecu import (
+from api.services.simulation.virtual_ecu import (
     VirtualECU,
     create_afr_target_table,
     create_baseline_ve_table,

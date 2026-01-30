@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from api.services.file_index import (
+from api.services.parsers.file_index import (
     FileIndex,
     FileType,
     get_file_index,

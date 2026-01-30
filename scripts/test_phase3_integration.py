@@ -1,5 +1,5 @@
-from api.services.jetdrive_live_queue import get_live_queue_manager
-from api.services.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
+from api.services.jetdrive.jetdrive_client import JetDriveSample
 
 # Test the full integration
 mgr = get_live_queue_manager()

@@ -20,7 +20,7 @@ Events:
 Usage:
     from flask import Flask
     from flask_socketio import SocketIO
-    from api.services.livelink_websocket import init_livelink_socketio
+    from api.services.livelink.livelink_websocket import init_livelink_socketio
 
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*")
@@ -39,7 +39,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-from api.services.livelink_client import LiveDataSample, LiveLinkClient
+from api.services.livelink.livelink_client import LiveDataSample, LiveLinkClient
 
 if TYPE_CHECKING:
     from flask_socketio import SocketIO

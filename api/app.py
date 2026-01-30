@@ -766,7 +766,7 @@ def get_ve_data(run_id):
             return jsonify({"error": "VE data not found"}), 404
 
         # Parse VE delta CSV
-        from api.services.csv_parser import parse_ve_delta_csv
+        from api.services.parsers.csv_parser import parse_ve_delta_csv
 
         rpm_points, load_points, corrections = parse_ve_delta_csv(ve_delta_file)
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from dataclasses import dataclass
 
-from api.services.jetdrive_mapping import (
+from api.services.jetdrive.jetdrive_mapping import (
     # Signature
     compute_provider_signature,
     parse_provider_signature,
@@ -307,7 +307,7 @@ class TestMappingPersistence:
 
     def test_save_and_load_mapping(self, mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             sig = "4097_192.168.1.100_abc123"
             mapping = ProviderMapping(
                 provider_signature=sig,
@@ -330,13 +330,13 @@ class TestMappingPersistence:
 
     def test_get_nonexistent_mapping(self, temp_mapping_dir):
         """Test loading a mapping that doesn't exist."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             mapping = get_mapping("nonexistent_signature")
             assert mapping is None
 
     def test_delete_mapping(self, temp_mapping_dir):
         """Test deleting a mapping file."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             sig = "to_delete"
             mapping = ProviderMapping(provider_signature=sig)
             save_mapping(mapping)
@@ -352,7 +352,7 @@ class TestMappingPersistence:
 
     def test_list_mappings(self, temp_mapping_dir):
         """Test listing all mappings."""
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             # Save a few mappings
             for i in range(3):
                 mapping = ProviderMapping(

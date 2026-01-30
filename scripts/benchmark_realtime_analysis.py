@@ -14,7 +14,7 @@ import gc
 # Add project root to path
 sys.path.insert(0, ".")
 
-from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
+from api.services.jetdrive.jetdrive_realtime_analysis import RealtimeAnalysisEngine
 
 
 def make_sample(i: int) -> dict:

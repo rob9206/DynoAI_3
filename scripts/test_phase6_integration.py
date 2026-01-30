@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, ".")
 
 from unittest.mock import MagicMock
-from api.services.jetdrive_mapping import (
+from api.services.jetdrive.jetdrive_mapping import (
     score_channel_for_canonical,
     auto_map_channels_with_confidence,
     get_unmapped_required_channels,
@@ -142,7 +142,7 @@ def test_low_confidence_detection():
     """Test low confidence detection."""
     print("\n=== Test 5: Low Confidence Detection ===")
     
-    from api.services.jetdrive_mapping import MappingConfidence
+    from api.services.jetdrive.jetdrive_mapping import MappingConfidence
     
     confidence_map = {
         "rpm": MappingConfidence("rpm", 10, "RPM", 0.95, [], []),

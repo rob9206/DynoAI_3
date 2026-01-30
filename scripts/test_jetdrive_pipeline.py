@@ -12,7 +12,7 @@ import struct
 import socket
 from pathlib import Path
 
-from api.services.jetdrive_client import (
+from api.services.jetdrive.jetdrive_client import (
     JetDriveProviderInfo,
     ChannelInfo,
     JDUnit,

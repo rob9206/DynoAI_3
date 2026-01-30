@@ -20,13 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from api.services.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_client import JetDriveSample
 from api.services.ingestion.adapters import JetDriveAdapter
 from api.services.ingestion.config import create_live_capture_queue_config
 from api.services.ingestion.queue import IngestionQueue, QueueItem, QueuePriority
 
 if TYPE_CHECKING:
-    from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
+    from api.services.jetdrive.jetdrive_realtime_analysis import RealtimeAnalysisEngine
 
 logger = logging.getLogger(__name__)
 
@@ -388,7 +388,7 @@ class LiveCaptureQueueManager:
         Args:
             target_afr: Target AFR for VE delta calculation (default stoich)
         """
-        from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
+        from api.services.jetdrive.jetdrive_realtime_analysis import RealtimeAnalysisEngine
         
         if self._realtime_engine is None:
             self._realtime_engine = RealtimeAnalysisEngine(target_afr=target_afr)

@@ -38,7 +38,7 @@ from typing import Optional
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.services.jetdrive_client import (
+from api.services.jetdrive.jetdrive_client import (
     JetDriveConfig,
     JetDriveProviderInfo,
     JetDriveSample,

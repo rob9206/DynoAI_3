@@ -307,7 +307,7 @@ def system_diagnostics() -> Response:
 
     # File index statistics
     try:
-        from api.services.file_index import get_file_index
+        from api.services.parsers.file_index import get_file_index
 
         file_index = get_file_index()
         diagnostics["file_index_entries"] = len(file_index._index)

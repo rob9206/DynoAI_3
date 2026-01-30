@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 # Add project root for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from api.services.jetdrive_client import (  # noqa: E402
+from api.services.jetdrive.jetdrive_client import (  # noqa: E402
     JDUnit,
     JetDriveConfig,
     JetDriveProviderInfo,

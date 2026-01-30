@@ -7,8 +7,8 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 
-from external_scrapers import get_stdout_logger
-from external_scrapers.dyno_models import DynoChartMeta, DynoCurveSpec
+from api.services.external_scrapers import get_stdout_logger
+from api.services.external_scrapers.dyno_models import DynoChartMeta, DynoCurveSpec
 from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)

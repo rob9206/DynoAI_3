@@ -21,8 +21,8 @@ import numpy as np
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.services.dyno_simulator import EngineProfile
-from api.services.virtual_tuning_session import (
+from api.services.simulation.dyno_simulator import EngineProfile
+from api.services.simulation.virtual_tuning_session import (
     TuningSessionConfig,
     VirtualTuningOrchestrator,
 )

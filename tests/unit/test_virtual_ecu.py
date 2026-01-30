@@ -13,7 +13,7 @@ Tests cover:
 import numpy as np
 import pytest
 
-from api.services.virtual_ecu import (
+from api.services.simulation.virtual_ecu import (
     VirtualECU,
     create_afr_target_table,
     create_baseline_ve_table,

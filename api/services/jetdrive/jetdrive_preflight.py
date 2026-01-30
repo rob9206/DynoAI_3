@@ -12,7 +12,7 @@ Preflight Checks:
 5. Semantic Validation: Detects mislabeled/swapped channels
 
 Usage:
-    from api.services.jetdrive_preflight import run_preflight, PreflightResult
+    from api.services.jetdrive.jetdrive_preflight import run_preflight, PreflightResult
     
     result = await run_preflight(
         provider_id=0x1234,  # Optional, auto-discover if not specified
@@ -198,7 +198,7 @@ async def _check_connectivity(
 
     Discovers providers and optionally filters to requested provider.
     """
-    from api.services.jetdrive_client import discover_providers
+    from api.services.jetdrive.jetdrive_client import discover_providers
 
     try:
         providers = await discover_providers(config, timeout=timeout)
@@ -593,8 +593,8 @@ async def run_preflight(
     Returns:
         PreflightResult with all check results
     """
-    from api.services.jetdrive_client import JetDriveConfig, subscribe
-    from api.services.jetdrive_validation import get_validator
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, subscribe
+    from api.services.jetdrive.jetdrive_validation import get_validator
 
     config = JetDriveConfig.from_env()
     validator = get_validator()

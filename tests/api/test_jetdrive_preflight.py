@@ -12,13 +12,13 @@ import pytest
 import time
 from unittest.mock import MagicMock, patch, AsyncMock
 
-from api.services.jetdrive_validation import (
+from api.services.jetdrive.jetdrive_validation import (
     JetDriveDataValidator,
     ChannelMetrics,
     ChannelHealth,
     FrameStats,
 )
-from api.services.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_client import JetDriveSample
 
 
 # =============================================================================
@@ -210,7 +210,7 @@ class TestSemanticValidation:
 
     def test_rpm_like_values_detected(self):
         """Test detection of AFR-like values in RPM channel."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate RPM channel with AFR-like values (10-15 instead of 500-12000)
         sample_buffer = {
@@ -225,7 +225,7 @@ class TestSemanticValidation:
 
     def test_afr_like_values_detected(self):
         """Test detection of RPM-like values in AFR channel."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate AFR channel with RPM-like values (3000-4000 instead of 10-20)
         sample_buffer = {
@@ -239,7 +239,7 @@ class TestSemanticValidation:
 
     def test_frozen_rpm_detected(self):
         """Test detection of frozen/stuck RPM sensor."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate frozen RPM (constant value)
         sample_buffer = {
@@ -253,7 +253,7 @@ class TestSemanticValidation:
 
     def test_lambda_instead_of_afr_detected(self):
         """Test detection of Lambda values where AFR expected."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate Lambda values (0.9-1.1) where AFR expected (10-20)
         sample_buffer = {
@@ -267,7 +267,7 @@ class TestSemanticValidation:
 
     def test_tps_out_of_range_detected(self):
         """Test detection of TPS values outside 0-100% range."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate TPS values outside valid range
         sample_buffer = {
@@ -281,7 +281,7 @@ class TestSemanticValidation:
 
     def test_valid_data_passes(self):
         """Test that valid data passes semantic checks."""
-        from api.services.jetdrive_preflight import _run_semantic_checks
+        from api.services.jetdrive.jetdrive_preflight import _run_semantic_checks
 
         # Simulate valid data
         sample_buffer = {
@@ -306,7 +306,7 @@ class TestRequiredChannels:
 
     def test_required_channels_found(self):
         """Test that required channels are detected when present."""
-        from api.services.jetdrive_preflight import _check_required_channels
+        from api.services.jetdrive.jetdrive_preflight import _check_required_channels
 
         available = {"Digital RPM 1", "Air/Fuel Ratio 1", "MAP kPa", "TPS"}
         check, missing = _check_required_channels(available)
@@ -316,7 +316,7 @@ class TestRequiredChannels:
 
     def test_missing_rpm_detected(self):
         """Test that missing RPM channel is detected."""
-        from api.services.jetdrive_preflight import _check_required_channels
+        from api.services.jetdrive.jetdrive_preflight import _check_required_channels
 
         available = {"Air/Fuel Ratio 1", "MAP kPa", "TPS"}  # No RPM
         check, missing = _check_required_channels(available)
@@ -326,7 +326,7 @@ class TestRequiredChannels:
 
     def test_missing_afr_detected(self):
         """Test that missing AFR channel is detected."""
-        from api.services.jetdrive_preflight import _check_required_channels
+        from api.services.jetdrive.jetdrive_preflight import _check_required_channels
 
         available = {"Digital RPM 1", "MAP kPa", "TPS"}  # No AFR
         check, missing = _check_required_channels(available)
@@ -344,7 +344,7 @@ class TestHealthThresholds:
 
     def test_healthy_data_passes(self):
         """Test that healthy data passes threshold checks."""
-        from api.services.jetdrive_preflight import _check_health_thresholds
+        from api.services.jetdrive.jetdrive_preflight import _check_health_thresholds
 
         health_data = {
             "overall_health": "healthy",
@@ -364,7 +364,7 @@ class TestHealthThresholds:
 
     def test_critical_health_fails(self):
         """Test that critical health fails threshold checks."""
-        from api.services.jetdrive_preflight import _check_health_thresholds
+        from api.services.jetdrive.jetdrive_preflight import _check_health_thresholds
 
         health_data = {
             "overall_health": "critical",
@@ -379,7 +379,7 @@ class TestHealthThresholds:
 
     def test_high_drop_rate_warns(self):
         """Test that high drop rate triggers warning."""
-        from api.services.jetdrive_preflight import _check_health_thresholds
+        from api.services.jetdrive.jetdrive_preflight import _check_health_thresholds
 
         health_data = {
             "overall_health": "healthy",
@@ -403,10 +403,10 @@ class TestPreflightIntegration:
     def test_preflight_with_no_providers(self):
         """Test preflight when no providers are found."""
         import asyncio
-        from api.services.jetdrive_preflight import run_preflight
+        from api.services.jetdrive.jetdrive_preflight import run_preflight
 
         # Patch at the jetdrive_client module level since it's imported inside the function
-        with patch("api.services.jetdrive_client.discover_providers", new_callable=AsyncMock) as mock_discover:
+        with patch("api.services.jetdrive.jetdrive_client.discover_providers", new_callable=AsyncMock) as mock_discover:
             mock_discover.return_value = []
 
             result = asyncio.run(run_preflight(sample_seconds=1))
@@ -420,8 +420,8 @@ class TestPreflightIntegration:
     def test_preflight_passes_with_good_data(self):
         """Test preflight passes with valid provider and data."""
         import asyncio
-        from api.services.jetdrive_preflight import run_preflight
-        from api.services.jetdrive_client import JetDriveProviderInfo, ChannelInfo
+        from api.services.jetdrive.jetdrive_preflight import run_preflight
+        from api.services.jetdrive.jetdrive_client import JetDriveProviderInfo, ChannelInfo
 
         # Mock provider with good channels
         mock_provider = JetDriveProviderInfo(
@@ -438,7 +438,7 @@ class TestPreflightIntegration:
         )
 
         # Patch at the jetdrive_client module level
-        with patch("api.services.jetdrive_client.discover_providers", new_callable=AsyncMock) as mock_discover:
+        with patch("api.services.jetdrive.jetdrive_client.discover_providers", new_callable=AsyncMock) as mock_discover:
             mock_discover.return_value = [mock_provider]
 
             # Mock subscribe to provide synthetic samples
@@ -448,7 +448,7 @@ class TestPreflightIntegration:
                     callback(make_sample(0x1001, 10, "Digital RPM 1", 3500))
                     callback(make_sample(0x1001, 15, "Air/Fuel Ratio 1", 13.5))
 
-            with patch("api.services.jetdrive_client.subscribe", side_effect=mock_subscribe):
+            with patch("api.services.jetdrive.jetdrive_client.subscribe", side_effect=mock_subscribe):
                 result = asyncio.run(run_preflight(sample_seconds=1))
 
             # Should pass connectivity and required channels

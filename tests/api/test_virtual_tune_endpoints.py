@@ -9,7 +9,7 @@ def test_virtual_tune_start_and_status_smoke(client, monkeypatch):
     the progress fields the frontend expects.
     """
 
-    from api.services.virtual_tuning_session import (
+    from api.services.simulation.virtual_tuning_session import (
         TuningStatus,
         VirtualTuningOrchestrator,
     )

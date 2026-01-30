@@ -14,8 +14,8 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from api.services.jetdrive_client import JetDriveSample
-from api.services.jetdrive_live_queue import (
+from api.services.jetdrive.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_live_queue import (
     LiveCaptureQueueManager,
     LiveCaptureQueueStats,
     AGGREGATION_WINDOW_MS,

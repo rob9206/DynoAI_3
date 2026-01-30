@@ -74,7 +74,7 @@ def main():
     print("Press Ctrl+C to stop")
     print("=" * 50)
 
-    from api.services.livelink_websocket import run_standalone
+    from api.services.livelink.livelink_websocket import run_standalone
 
     try:
         run_standalone(host=args.host, port=port, mode=args.mode)

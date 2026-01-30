@@ -9,7 +9,7 @@ import time
 import numpy as np
 import pytest
 
-from api.services.dyno_simulator import (
+from api.services.simulation.dyno_simulator import (
     DynoSimulator,
     EngineProfile,
     SimState,
@@ -633,7 +633,7 @@ class TestEnhancements:
 
     def test_constants_defined(self):
         """Test that physics constants are defined."""
-        from api.services.dyno_simulator import (
+        from api.services.simulation.dyno_simulator import (
             DRAG_COEFFICIENT,
             ENGINE_BRAKE_COEFFICIENT,
             KNOCK_AFR_LEAN_THRESHOLD,

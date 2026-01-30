@@ -154,7 +154,7 @@ class JetDriveTab(QWidget):
         """Start the simulator"""
         try:
             # Import simulator here to avoid loading it if not needed
-            from api.services.dyno_simulator import get_simulator
+            from api.services.simulation.dyno_simulator import get_simulator
             
             self.simulator = get_simulator()
             self.simulator.start()

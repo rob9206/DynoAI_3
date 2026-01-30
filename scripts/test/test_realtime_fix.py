@@ -21,7 +21,7 @@ if sys.platform == 'win32':
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from api.services.jetdrive_realtime_analysis import RealtimeAnalysisEngine
+from api.services.jetdrive.jetdrive_realtime_analysis import RealtimeAnalysisEngine
 
 
 def test_none_tps():

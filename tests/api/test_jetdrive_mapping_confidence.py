@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from api.services.jetdrive_mapping import (
+from api.services.jetdrive.jetdrive_mapping import (
     MappingConfidence,
     ChannelMapping,
     ProviderMapping,
@@ -461,7 +461,7 @@ class TestPersistence:
         )
         
         # Save (using real save_mapping function)
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", tmp_path):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", tmp_path):
             success = save_mapping(mapping)
             assert success
             

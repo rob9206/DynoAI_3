@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 
-from api.services.jetdrive_client import (
+from api.services.jetdrive.jetdrive_client import (
     JetDriveConfig,
     JetDriveSample,
     discover_providers,

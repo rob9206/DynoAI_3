@@ -158,7 +158,7 @@ async def health_check_jetdrive() -> dict[str, Any]:
     """
     import time
 
-    from api.services.jetdrive_client import JetDriveConfig, discover_providers
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
 
     start = time.time()
     try:

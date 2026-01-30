@@ -1,7 +1,7 @@
 """Debug test to see what's happening during a pull."""
 
 import time
-from api.services.dyno_simulator import (
+from api.services.simulation.dyno_simulator import (
     DynoSimulator,
     SimulatorConfig,
     EngineProfile,

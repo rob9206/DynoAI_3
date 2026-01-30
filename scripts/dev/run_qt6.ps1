@@ -8,4 +8,4 @@ if (Test-Path ".\.venv\Scripts\Activate.ps1") {
 }
 
 # Run the application
-python dynoai_qt6.py
+python scripts/dev/dynoai_qt6.py

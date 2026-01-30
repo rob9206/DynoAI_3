@@ -7,8 +7,8 @@ Quick tests to verify the system works without running full iterations.
 import numpy as np
 import pytest
 
-from api.services.dyno_simulator import EngineProfile
-from api.services.virtual_tuning_session import (
+from api.services.simulation.dyno_simulator import EngineProfile
+from api.services.simulation.virtual_tuning_session import (
     TuningSessionConfig,
     TuningStatus,
     VirtualTuningOrchestrator,

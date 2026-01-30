@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_module_imports():
     """Test that all WebSocket components can be imported."""
-    from api.services.livelink_websocket import (
+    from api.services.livelink.livelink_websocket import (
         ClientSubscription,
         LiveLinkSocketIOManager,
         create_livelink_app,
@@ -27,7 +27,7 @@ def test_module_imports():
 
 def test_create_app():
     """Test that the Flask app can be created."""
-    from api.services.livelink_websocket import create_livelink_app
+    from api.services.livelink.livelink_websocket import create_livelink_app
 
     app, socketio, manager = create_livelink_app(mode="simulation")
 
@@ -48,7 +48,7 @@ def test_websocket_manager():
     """Test the WebSocket manager."""
     from unittest.mock import MagicMock
 
-    from api.services.livelink_websocket import LiveLinkSocketIOManager
+    from api.services.livelink.livelink_websocket import LiveLinkSocketIOManager
 
     # Create mock SocketIO
     mock_socketio = MagicMock()

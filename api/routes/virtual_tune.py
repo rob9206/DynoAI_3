@@ -13,8 +13,8 @@ import time
 
 from flask import Blueprint, jsonify, request
 
-from api.services.dyno_simulator import EngineProfile
-from api.services.virtual_tuning_session import (
+from api.services.simulation.dyno_simulator import EngineProfile
+from api.services.simulation.virtual_tuning_session import (
     TuningSessionConfig,
     TuningStatus,
     get_orchestrator,
@@ -413,8 +413,8 @@ def health_check():
     from datetime import datetime
 
     from api.services.autotune_workflow import AutoTuneWorkflow
-    from api.services.dyno_simulator import DynoSimulator, SimulatorConfig
-    from api.services.virtual_ecu import (
+    from api.services.simulation.dyno_simulator import DynoSimulator, SimulatorConfig
+    from api.services.simulation.virtual_ecu import (
         VirtualECU,
         create_afr_target_table,
         create_baseline_ve_table,

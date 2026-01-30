@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import struct
 
-from synthetic import jetdrive_client as jc
+from api.services.jetdrive import jetdrive_client as jc
 
 
 def _channel_info_frame() -> bytes:
