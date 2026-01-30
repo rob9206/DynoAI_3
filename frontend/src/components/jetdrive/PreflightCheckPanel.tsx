@@ -362,15 +362,17 @@ export function PreflightCheckPanel({
     : null;
 
   return (
-    <Card className={cn("", className)}>
-      <CardHeader>
+    <Card className={cn("bg-gradient-to-br from-slate-900/80 to-slate-800/80 border-slate-700/50 shadow-xl", className)}>
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Gauge className="h-5 w-5 text-blue-500" />
+          <div className="space-y-1">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600/20 to-cyan-600/20">
+                <Gauge className="h-5 w-5 text-blue-400" />
+              </div>
               Preflight Check
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-slate-400">
               Validate dyno connection and data channels before starting
             </CardDescription>
           </div>
@@ -378,7 +380,7 @@ export function PreflightCheckPanel({
             onClick={runPreflight}
             disabled={isRunning}
             variant={result?.passed ? "outline" : "default"}
-            className="gap-2"
+            className="gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105"
           >
             {isRunning ? (
               <>
@@ -400,17 +402,34 @@ export function PreflightCheckPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Progress bar during run */}
+      <CardContent className="space-y-6">
+        {/* Enhanced Progress with Status Indicators */}
         {isRunning && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Sampling data for validation...
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 animate-pulse" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Activity className="h-4 w-4 text-blue-400 animate-bounce" />
+                  </div>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-200">Validating System Setup</p>
+                  <p className="text-sm text-slate-400">Sampling data for comprehensive validation</p>
+                </div>
+              </div>
+              <span className="text-sm font-mono text-slate-400 bg-slate-800/60 px-2 py-1 rounded">
+                {progress}%
               </span>
-              <span className="text-muted-foreground">{progress}%</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <div className="relative">
+              <Progress 
+                value={progress} 
+                className="h-3 rounded-full bg-slate-800/60 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-cyan-500 [&>div]:rounded-full"
+              />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500/10 to-cyan-500/10 animate-pulse" />
+            </div>
           </div>
         )}
 

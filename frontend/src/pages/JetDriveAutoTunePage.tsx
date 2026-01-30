@@ -50,7 +50,8 @@ import { exportToCSV, exportToJSON, exportToPVV, downloadFile } from '../utils/v
 import { parsePVV, extractAfrTargets } from '../utils/pvvParser';
 import { TuneImport, type TuneImportResult } from '../components/jetdrive/TuneImport';
 import { ApplyPreviewPanel } from '../components/jetdrive/ApplyPreviewPanel';
-import { VEBoundsPreset, DualCylinderVE, DualCylinderHits, DualCylinderCorrections, ApplyReport } from '../types/veApplyTypes';
+import { VEBoundsPreset, DualCylinderVE, DualCylinderHits, DualCylinderCorrections, ApplyReport, type CoverageReport } from '../types/veApplyTypes';
+import { calculateDualCylinderCoverage } from '../utils/veApply';
 import { downloadAppliedVEAllFormats } from '../utils/veExport';
 import { DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
 import { AudioCapturePanel } from '../components/jetdrive/AudioCapturePanel';
@@ -64,8 +65,14 @@ import { SettingsSheet } from '../components/jetdrive/SettingsSheet';
 import { StageConfigPanel } from '../components/jetdrive/StageConfigPanel';
 import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
-// import { useAIAssistant } from '../hooks/useAIAssistant';
+import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
+import { TuningWizard } from '../components/jetdrive/TuningWizard';
+import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
+import { SmartPromptBanner } from '../components/jetdrive/SmartPromptBanner';
+import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
+import { QuickActionsPanel } from '../components/jetdrive/QuickActionsPanel';
+import { useTuningWizard } from '../hooks/useTuningWizard';
 import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { getConfidenceReport } from '../lib/api';
@@ -603,6 +610,13 @@ export default function JetDriveAutoTunePage() {
     const [rpmThreshold, setRpmThreshold] = useState(2000);
     const [showSettings, setShowSettings] = useState(false);
     const [activeMainTab, setActiveMainTab] = useState('autotune');
+    const [isReducedMotion, setIsReducedMotion] = useState(false);
+    
+    // Wizard mode toggle (new simplified UI)
+    const [wizardMode, setWizardMode] = useState(false);
+    
+    // AI Voice Assistant (re-enabled for wizard)
+    const aiAssistant = useAIAssistant({ enabled: wizardMode });
     
     // VE Export modal state
     const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -635,6 +649,11 @@ export default function JetDriveAutoTunePage() {
     const [audioRecording, setAudioRecording] = useState(false);
     const [audioKnockDetected, setAudioKnockDetected] = useState(false);
 
+    // Auto-advance (wizard): collect → analyze when coverage ready
+    const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
+    const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+    const [secondsRemaining, setSecondsRemaining] = useState(0);
+
     // Transient Fuel Analysis state
     const [transientFuelEnabled, setTransientFuelEnabled] = useState(false);
 
@@ -644,20 +663,7 @@ export default function JetDriveAutoTunePage() {
     const [veErrorPct, setVeErrorPct] = useState(-10.0);
     const [veErrorStd, setVeErrorStd] = useState(5.0);
 
-    // AI Assistant - DISABLED (kept as stub to prevent errors)
-    const aiAssistant = {
-        state: { voiceName: null },
-        onPullStart: () => { },
-        onPullEnd: () => { },
-        onHighRpm: () => { },
-        onGoodPull: () => { },
-        onAfrLean: () => { },
-        onAfrRich: () => { },
-        onKnockDetected: () => { },
-        testVoice: () => { },
-    };
-
-    // Audio engine removed
+    // Audio engine removed (AI Assistant now used for wizard mode voice)
 
     // Workflow state
     const [workflowState, setWorkflowState] = useState<WorkflowState>('disconnected');
@@ -1298,6 +1304,28 @@ export default function JetDriveAutoTunePage() {
         },
     });
 
+    // Coverage from live export data (wizard auto-advance)
+    const coverageComputed = useMemo((): CoverageReport | null => {
+        if (!pendingExportData?.frontHitCounts || !pendingExportData?.rearHitCounts) return null;
+        return calculateDualCylinderCoverage(
+            pendingExportData.frontHitCounts,
+            pendingExportData.rearHitCounts,
+            pendingExportData.rpmBins,
+            pendingExportData.mapBins
+        );
+    }, [pendingExportData]);
+
+    const canProceedToAnalyze = useMemo(() => {
+        if (!coverageComputed) return false;
+        const totalHits = pendingExportData?.totalHits ?? 0;
+        return coverageComputed.weightedCoveragePct >= 60 && totalHits >= 500;
+    }, [coverageComputed, pendingExportData?.totalHits]);
+
+    const handleAnalyze = useCallback(async () => {
+        aiAssistant.onStepChange?.('analyze');
+        await analyzeMutation.mutateAsync({ mode: 'simulate' });
+    }, [aiAssistant, analyzeMutation]);
+
     // Start hardware monitor
     const handleStartMonitor = async () => {
         setIsStartingMonitor(true);
@@ -1314,15 +1342,64 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
-    // Fetch PVV
+    // Auto-advance effect: Collect → Analyze when coverage ready
     useEffect(() => {
-        if (selectedRun) {
-            fetch(`${API_BASE}/run/${selectedRun}/pvv`)
-                .then(r => r.json())
-                .then(d => setPvvContent(d.content))
-                .catch(() => { });
+        if (wizardMode && canProceedToAnalyze && !autoAdvancePaused && !autoAdvanceTimer) {
+            setSecondsRemaining(2);
+            const timer = setTimeout(() => {
+                handleAnalyze();
+                toast.success('Auto-advancing to analysis...');
+                aiAssistant.onCoverageReady?.();
+            }, 2000);
+            
+            setAutoAdvanceTimer(timer);
+            
+            // Countdown timer
+            let seconds = 2;
+            const countdown = setInterval(() => {
+                seconds -= 1;
+                setSecondsRemaining(seconds);
+                if (seconds <= 0) {
+                    clearInterval(countdown);
+                    setAutoAdvanceTimer(null);
+                    setSecondsRemaining(0);
+                }
+            }, 1000);
+
+            return () => {
+                clearTimeout(timer);
+                clearInterval(countdown);
+                setAutoAdvanceTimer(null);
+                setSecondsRemaining(0);
+            };
         }
-    }, [selectedRun]);
+    }, [wizardMode, canProceedToAnalyze, autoAdvancePaused, autoAdvanceTimer, handleAnalyze]);
+
+    // Cleanup auto-advance timer on dismount or mode change
+    useEffect(() => {
+        return () => {
+            if (autoAdvanceTimer) {
+                clearTimeout(autoAdvanceTimer);
+                setAutoAdvanceTimer(null);
+                setSecondsRemaining(0);
+            }
+        };
+    }, [autoAdvanceTimer]);
+
+    // Cancel auto-advance on user interaction
+    const handleCancelAutoAdvance = () => {
+        if (autoAdvanceTimer) {
+            clearTimeout(autoAdvanceTimer);
+            setAutoAdvanceTimer(null);
+            setAutoAdvancePaused(true);
+            setSecondsRemaining(0);
+            toast.info('Auto-advance canceled');
+            // Re-enable auto-advance after 30 seconds
+            setTimeout(() => {
+                setAutoAdvancePaused(false);
+            }, 30000);
+        }
+    };
 
     // Download PVV
     const downloadPvv = () => {
@@ -1335,6 +1412,130 @@ export default function JetDriveAutoTunePage() {
         a.click();
         URL.revokeObjectURL(url);
     };
+
+// Enhanced Smart Prompt Banner Component
+function SmartPromptBanner({ 
+    step, 
+    coverageReport, 
+    canProceedToAnalyze, 
+    onActionClick, 
+    onCancelAdvance,
+    secondsRemaining 
+}: {
+    step: 'setup' | 'collect' | 'analyze' | 'review' | 'apply';
+    coverageReport: CoverageReport | null;
+    canProceedToAnalyze: boolean;
+    onActionClick: (action: string) => void;
+    onCancelAdvance?: () => void;
+    secondsRemaining?: number;
+}) {
+    const aiAssistant = useAIAssistant();
+    
+    const getPrompt = () => {
+        switch (step) {
+            case 'setup':
+                return {
+                    title: "Ready to Start!",
+                    message: "Import a tune file or use simulator to begin data collection."
+                };
+            case 'collect':
+                if (canProceedToAnalyze) {
+                    return {
+                        title: "Coverage Target Reached!",
+                        message: "60% weighted coverage achieved. Ready to analyze."
+                    };
+                } else if (coverageReport) {
+                    return {
+                        title: `Coverage: ${Math.round(coverageReport.weightedCoveragePct)}%`,
+                        message: `Weighted coverage: ${Math.round(coverageReport.weightedCoveragePct)}%. Aim for 60% with at least 500 hits.`
+                    };
+                } else {
+                    return {
+                        title: "Start Collecting Data",
+                        message: "Run some pulls to build your VE correction table."
+                    };
+                }
+            case 'analyze':
+                return {
+                    title: "Analyzing Data...",
+                    message: "Processing your VE corrections and generating recommendations."
+                };
+            case 'review':
+                return {
+                    title: "Review Your Corrections",
+                    message: "Check the applied changes and coverage before proceeding."
+                };
+            case 'apply':
+                return {
+                    title: "Ready to Apply!",
+                    message: "Your corrections are ready. Download the tuned file."
+                };
+            default:
+                return { title: "Status Unknown", message: "" };
+        }
+    };
+
+    const { title, message } = getPrompt();
+    const coveragePercentage = coverageReport?.weightedCoveragePct ?? 0;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl"
+            role="status"
+            aria-live="polite"
+        >
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                        <Zap className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-white">{title}</h3>
+                        <p className="text-xs text-zinc-400">{message}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {step === 'collect' && coverageReport && (
+                        <div className="text-right">
+                            <Badge 
+                                variant="outline" 
+                                className={canProceedToAnalyze ? 'border-green-500/30 text-green-400' : 'border-cyan-500/30 text-cyan-400'}
+                            >
+                                {Math.round(coveragePercentage)}%
+                            </Badge>
+                            {canProceedToAnalyze && secondsRemaining !== undefined && secondsRemaining > 0 && (
+                                <div className="text-xs text-green-400 mt-1">
+                                    Auto-advancing in {secondsRemaining}s
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+            
+            {canProceedToAnalyze && secondsRemaining !== undefined && secondsRemaining > 0 && onCancelAdvance && (
+                <div className="flex items-center gap-2 mt-3 pl-11">
+                    <Badge variant="outline" className="border-green-500/30 text-green-400 text-xs">
+                        Ready for analysis
+                    </Badge>
+                    <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={onCancelAdvance}
+                        className="text-xs text-zinc-400 hover:text-zinc-300"
+                        aria-label="Cancel auto-advance"
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            )}
+        </motion.div>
+    );
+}
+
 
     const runs: RunInfo[] = statusData?.runs || [];
     const analysis = runData?.manifest?.analysis;
@@ -1517,8 +1718,137 @@ export default function JetDriveAutoTunePage() {
 
                     {/* Auto-Tune Tab */}
                     <TabsContent value="autotune" className="mt-6">
-                        {/* Main Content - State Aware */}
-                        {workflowState === 'disconnected' ? (
+                        {/* Wizard Mode Toggle */}
+                        <div className="flex items-center justify-end mb-4">
+                            <button
+                                onClick={() => setWizardMode(!wizardMode)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                                    wizardMode
+                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                        : 'bg-zinc-800/50 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
+                                }`}
+                            >
+                                <Zap className="w-4 h-4" />
+                                {wizardMode ? 'Wizard Mode' : 'Classic Mode'}
+                            </button>
+                        </div>
+
+                        {/* Wizard Mode - Simplified guided flow */}
+                        {wizardMode ? (
+                            <div className="space-y-4">
+                                {/* Smart Prompt Banner */}
+                                <SmartPromptBanner
+                                    step={isSimulatorActive || isCapturing ? 'collect' : 'setup'}
+                                    coverageReport={coverageComputed}
+                                    canProceedToAnalyze={canProceedToAnalyze}
+                                    onActionClick={(action) => {
+                                        if (action === 'wot') aiAssistant.onWotSuggestion();
+                                        if (action === 'cruise') aiAssistant.onCruiseSuggestion();
+                                    }}
+                                    onCancelAdvance={handleCancelAutoAdvance}
+                                    secondsRemaining={secondsRemaining}
+                                />
+
+                                {/* Tuning Wizard with hook integration */}
+                                <TuningWizard
+                                    isSimulatorActive={isSimulatorActive}
+                                    isCapturing={isCapturing}
+                                    importedTune={importedTune}
+                                    liveData={pendingExportData}
+                                    onStartSimulator={handleStartSimulator}
+                                    onStopSimulator={handleStopSimulator}
+                                    onStartCapture={startCapture}
+                                    onStopCapture={stopCapture}
+                                    onTriggerPull={handleTriggerPull}
+                                    onAnalyze={async () => {
+                                        aiAssistant.onStepChange('analyze');
+                                        await analyzeMutation.mutateAsync({ mode: 'simulate' });
+                                    }}
+                                    onApply={(report) => {
+                                        aiAssistant.onStepChange('complete');
+                                        // Handle apply - download all formats
+                                        if (pendingExportData && importedTune) {
+                                            downloadAppliedVEAllFormats({
+                                                sessionId: `session_${Date.now()}`,
+                                                timestamp: new Date().toISOString(),
+                                                enginePreset: pendingExportData.enginePreset,
+                                                veBoundsPreset,
+                                                sourceFile: importedTune.sourceName,
+                                                rpmAxis: pendingExportData.rpmBins,
+                                                mapAxis: pendingExportData.mapBins,
+                                                baseVE: {
+                                                    front: importedTune.veFront?.values ?? [],
+                                                    rear: importedTune.veRear?.values ?? [],
+                                                },
+                                                corrections: {
+                                                    front: pendingExportData.frontCorrections,
+                                                    rear: pendingExportData.rearCorrections,
+                                                },
+                                                hitCounts: {
+                                                    front: pendingExportData.frontHitCounts,
+                                                    rear: pendingExportData.rearHitCounts,
+                                                },
+                                                appliedVE: report.appliedVE,
+                                            });
+                                        }
+                                    }}
+                                    onReset={() => {
+                                        handleStopSimulator();
+                                        setPendingExportData(null);
+                                    }}
+                                    veBoundsPreset={veBoundsPreset}
+                                    onVeBoundsPresetChange={setVeBoundsPreset}
+                                    renderLiveTable={() => (
+                                        <LiveVETable
+                                            currentRpm={currentRpm}
+                                            currentMap={currentMap}
+                                            currentAfrFront={currentAfrFront}
+                                            currentAfrRear={currentAfrRear}
+                                            afrTargets={afrTargets}
+                                            isLive={isCapturing || isSimulatorActive}
+                                            customRpmBins={importedTune?.rpmBins}
+                                            customMapBins={importedTune?.mapBins}
+                                            onExport={(data) => {
+                                                setPendingExportData(data);
+                                            }}
+                                        />
+                                    )}
+                                    renderApplyPreview={(report) => (
+                                        <ApplyPreviewPanel
+                                            baseVE={{
+                                                front: importedTune?.veFront?.values ?? [],
+                                                rear: importedTune?.veRear?.values ?? [],
+                                            }}
+                                            corrections={{
+                                                front: pendingExportData?.frontCorrections ?? [],
+                                                rear: pendingExportData?.rearCorrections ?? [],
+                                            }}
+                                            hitCounts={{
+                                                front: pendingExportData?.frontHitCounts ?? [],
+                                                rear: pendingExportData?.rearHitCounts ?? [],
+                                            }}
+                                            rpmAxis={pendingExportData?.rpmBins ?? []}
+                                            mapAxis={pendingExportData?.mapBins ?? []}
+                                            boundsPreset={veBoundsPreset}
+                                            onBoundsPresetChange={setVeBoundsPreset}
+                                        />
+                                    )}
+                                />
+
+                                {/* Quick Actions - Floating */}
+                                {(isSimulatorActive || isCapturing) && (
+                                    <QuickActionsPanel
+                                        coverageReport={null}
+                                        onActionSelect={(action) => {
+                                            if (action.id === 'wot') aiAssistant.onWotSuggestion();
+                                            if (action.id === 'cruise') aiAssistant.onCruiseSuggestion();
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        ) : (
+                        /* Classic Mode - Original complex UI */
+                        workflowState === 'disconnected' ? (
                             /* DISCONNECTED STATE */
                             <div className="space-y-6">
                                 {/* Primary: Hardware Connection */}
@@ -2299,6 +2629,7 @@ export default function JetDriveAutoTunePage() {
                                     </Card>
                                 </div>
                             </div>
+                        )
                         )}
                     </TabsContent>
                 </Tabs>

@@ -26,7 +26,7 @@ import {
   SAFETY,
 } from './veApplyValidation';
 import { checkCylinderBalance } from './cylinderBalance';
-import { calculateCoverage } from './coverageCalculator';
+import { calculateCoverage, calculateDualCylinderCoverage } from './coverageCalculator';
 import { applyVEBounds, VE_BOUNDS_PRESETS } from './veBounds';
 
 /**
@@ -244,8 +244,13 @@ export function calculateApply(
     rearAppliedMultipliers
   );
 
-  // Calculate coverage (use front hitCounts as representative, or combine)
-  const coverageReport = calculateCoverage(hitCounts.front, rpmAxis, mapAxis);
+  // Calculate coverage using combined (min) hits from both cylinders
+  const coverageReport = calculateDualCylinderCoverage(
+    hitCounts.front,
+    hitCounts.rear,
+    rpmAxis,
+    mapAxis
+  );
 
   // Collect all warnings
   const warnings: string[] = [
