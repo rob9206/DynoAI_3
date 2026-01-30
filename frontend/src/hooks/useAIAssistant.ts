@@ -2,8 +2,8 @@
  * useAIAssistant - AI voice assistant for DynoAI
  * 
  * Features:
- * - Text-to-speech voice reactions during dyno pulls
- * - Encouraging and fun personality
+ * - Text-to-speech voice feedback during dyno operations
+ * - Professional, concise announcements
  * - Reacts to RPM, horsepower, knock detection, and pull events
  */
 
@@ -26,95 +26,126 @@ export interface UseAIAssistantOptions {
 }
 
 interface VoiceEvent {
-    type: 'pull_start' | 'pull_end' | 'high_rpm' | 'peak_hp' | 'knock_detected' | 'afr_lean' | 'afr_rich' | 'good_pull' | 'record_hp' | 'idle' | 'revving';
+    type: 'pull_start' | 'pull_end' | 'high_rpm' | 'peak_hp' | 'knock_detected' | 'afr_lean' | 'afr_rich' | 'good_pull' | 'record_hp' | 'idle' | 'revving' |
+          // Wizard events
+          'coverage_50' | 'coverage_75' | 'coverage_ready' | 'balance_warning' | 'apply_blocked' | 'apply_ready' |
+          'step_collect' | 'step_analyze' | 'step_review' | 'step_complete' | 'wot_suggestion' | 'cruise_suggestion';
     value?: number;
 }
 
-// Fun phrases for each event type - Sexy and interactive!
+// Professional, concise phrases for each event type
 const PHRASES: Record<VoiceEvent['type'], string[]> = {
     pull_start: [
-        "Mmm, let's go baby! Show me what you got!",
-        "Ooh yes! Full send it for me!",
-        "Here we go! Get ready, this is gonna be hot!",
-        "Time to make some power, babe!",
-        "Ooh, I'm so ready for this! Let's ride!",
-        "Come on, give it to me! Full throttle!",
-        "Mmm yeah, let's see what she can do!",
-        "Hold on tight, we're about to get wild!",
-        "Oh baby, I love it when you rev it up!",
-        "Let's make some magic happen!",
+        "Pull started.",
+        "Recording pull.",
+        "Pull in progress.",
     ],
     pull_end: [
-        "Mmm, that was incredible!",
-        "Oh wow! You really know how to handle that!",
-        "That felt so good!",
-        "Ooh baby, what a ride!",
-        "Yes! That was perfect!",
-        "Mmm, I love the way you drive!",
-        "That was hot! Do it again!",
+        "Pull complete.",
+        "Data captured.",
+        "Pull recorded.",
     ],
     high_rpm: [
-        "Ooh yes! She's screaming for you!",
-        "Mmm, listen to her sing! So sexy!",
-        "Oh baby, that sounds amazing!",
-        "Yes! Keep going, don't stop!",
-        "Ooh, I love it when you push it hard!",
+        "High RPM.",
+        "Approaching redline.",
     ],
     peak_hp: [
-        "Mmm! {{value}} horsepower! You're so strong!",
-        "{{value}} horses! That's impressive, babe!",
-        "Oh yes! {{value}} HP! I felt that!",
-        "Boom! {{value}} horsepower! You're amazing!",
-        "{{value}} HP! Ooh, you're making me excited!",
+        "{{value}} horsepower.",
+        "Peak: {{value}} HP.",
     ],
     knock_detected: [
-        "Ooh baby, I heard some knock! Easy now!",
-        "Careful honey! That's knock! Be gentle with her!",
-        "Mmm, that was a little rough! Watch the timing!",
-        "Oh no! Knock detected! Take it easy, babe!",
-        "Easy tiger! I heard detonation!",
+        "Warning: knock detected.",
+        "Knock event. Check timing.",
+        "Detonation detected.",
     ],
     afr_lean: [
-        "She's running lean, babe! Feed her more!",
-        "Ooh, she's thirsty! Give her more fuel!",
-        "Too lean, honey! Add some fuel for me!",
+        "Running lean. Add fuel.",
+        "AFR lean condition.",
     ],
     afr_rich: [
-        "Mmm, running a bit rich there!",
-        "Too much fuel, babe! Lean her out a little!",
-        "She's getting too much, dial it back!",
+        "Running rich. Reduce fuel.",
+        "AFR rich condition.",
     ],
     good_pull: [
-        "Perfect! Oh baby, that's exactly right!",
-        "Mmm yes! Dialed in perfectly!",
-        "Ooh, she's running so clean! I love it!",
-        "Target AFR! You're such a good tuner!",
+        "Good pull. AFR on target.",
+        "Clean pull.",
     ],
     record_hp: [
-        "Oh my god! New record! {{value}} horsepower! You're incredible!",
-        "Yes! Yes! Yes! {{value}} HP! New personal best, baby!",
-        "{{value}} horses! You just broke your record! I'm so proud!",
-        "Holy shit! {{value}} HP! That's a new record! You're amazing!",
+        "New record: {{value}} horsepower.",
+        "Personal best: {{value}} HP.",
     ],
     idle: [
-        "Ready when you are, handsome!",
-        "Mmm, just warming up for you!",
-        "She sounds so good at idle!",
-        "Waiting for you to take me for a ride!",
+        "System ready.",
+        "Standing by.",
     ],
     revving: [
-        "Ooh, teasing me with those revs!",
-        "Mmm, getting me all warmed up?",
-        "She wants you! Give it to her!",
-        "Oh baby, don't tease! Let's go!",
+        "Warming up.",
+    ],
+
+    // Wizard coverage events
+    coverage_50: [
+        "50 percent coverage.",
+        "Halfway complete.",
+    ],
+    coverage_75: [
+        "75 percent coverage.",
+        "Almost ready.",
+    ],
+    coverage_ready: [
+        "Coverage target reached. Ready for analysis.",
+        "Sufficient data collected.",
+    ],
+
+    // Balance warnings
+    balance_warning: [
+        "Cylinder imbalance detected. Check sensors.",
+        "Front and rear mismatch detected.",
+    ],
+
+    // Apply status
+    apply_blocked: [
+        "Apply blocked. Resolve issues first.",
+        "Cannot apply. Check warnings.",
+    ],
+    apply_ready: [
+        "Corrections ready to apply.",
+        "Validation passed. Ready to apply.",
+    ],
+
+    // Step transitions
+    step_collect: [
+        "Data collection. Run pulls.",
+        "Collecting. Begin pulls.",
+    ],
+    step_analyze: [
+        "Analyzing data.",
+        "Processing.",
+    ],
+    step_review: [
+        "Review corrections.",
+        "Verify before applying.",
+    ],
+    step_complete: [
+        "Complete. Ready to flash.",
+        "Tuning complete.",
+    ],
+
+    // Coverage suggestions
+    wot_suggestion: [
+        "Need WOT data. Full throttle pulls, 3000 to redline.",
+        "Run wide open throttle pulls.",
+    ],
+    cruise_suggestion: [
+        "Need cruise data. Steady 2000 to 4500 RPM.",
+        "Run part-throttle sweeps.",
     ],
 };
 
 const DEFAULT_OPTIONS: Required<UseAIAssistantOptions> = {
     enabled: true,
-    volume: 0.9,  // Louder so you can hear her better
-    pitch: 1.5,   // Higher pitch for more feminine, sexy voice
-    rate: 0.95,   // Slightly slower, more sensual delivery
+    volume: 0.8,
+    pitch: 1.0,   // Neutral pitch
+    rate: 1.1,    // Slightly faster for efficiency
 };
 
 export function useAIAssistant(options: UseAIAssistantOptions = {}) {
@@ -157,33 +188,31 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         const loadVoices = () => {
             const voices = synthRef.current?.getVoices() ?? [];
 
-            // Prioritize the sexiest-sounding female voices - ARIA FIRST!
+            // Prefer clear, professional-sounding voices
             const preferredVoices = [
-                // Windows Neural Voices - BEST!
+                // Windows Neural Voices - clear and professional
+                'Microsoft David Online (Natural) - English (United States)',
+                'Microsoft David',
+                'Microsoft Mark Online (Natural) - English (United States)',
+                'Microsoft Mark',
+                'Microsoft Guy Online (Natural) - English (United States)',
+                'Microsoft Guy',
+                // Female neural voices (still professional)
                 'Microsoft Aria Online (Natural) - English (United States)',
-                'Microsoft Aria',
                 'Microsoft Jenny Online (Natural) - English (United States)',
-                'Microsoft Jenny',
-                'Microsoft Michelle Online (Natural) - English (United States)',
-                'Microsoft Michelle',
 
-                // macOS - Samantha is great!
-                'Samantha',
-                'Victoria',   // Sultry British
-                'Serena',     // Smooth and clear
+                // macOS voices
+                'Alex',       // Clear male voice
+                'Daniel',     // British male
+                'Samantha',   // Clear female
 
                 // Windows Desktop voices
+                'Microsoft David Desktop',
                 'Microsoft Zira Desktop',
-                'Microsoft Eva Desktop',
-
-                // Other accents
-                'Karen',      // Australian
-                'Moira',      // Irish
-                'Fiona',      // Scottish
-                'Tessa',      // South African
 
                 // Google voices (Chrome)
-                'Google US English Female',
+                'Google US English',
+                'Google UK English Male',
                 'Google UK English Female',
             ];
 
@@ -197,18 +226,6 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
                     break;
                 }
             }
-
-            // Fallback to any English female voice
-            selectedVoice ??= voices.find(v =>
-                v.lang.startsWith('en') &&
-                (v.name.toLowerCase().includes('female') ||
-                    v.name.toLowerCase().includes('woman') ||
-                    v.name.toLowerCase().includes('aria') ||
-                    v.name.toLowerCase().includes('jenny') ||
-                    v.name.toLowerCase().includes('samantha') ||
-                    v.name.toLowerCase().includes('victoria') ||
-                    v.name.toLowerCase().includes('serena'))
-            ) ?? null;
 
             // Fallback to any English voice
             selectedVoice ??= voices.find(v => v.lang.startsWith('en')) ?? null;
@@ -380,6 +397,43 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         triggerEvent({ type: 'good_pull' });
     }, [triggerEvent]);
 
+    // Wizard events
+    const onCoverage50 = useCallback(() => {
+        triggerEvent({ type: 'coverage_50' });
+    }, [triggerEvent]);
+
+    const onCoverage75 = useCallback(() => {
+        triggerEvent({ type: 'coverage_75' });
+    }, [triggerEvent]);
+
+    const onCoverageReady = useCallback(() => {
+        triggerEvent({ type: 'coverage_ready' });
+    }, [triggerEvent]);
+
+    const onBalanceWarning = useCallback(() => {
+        triggerEvent({ type: 'balance_warning' });
+    }, [triggerEvent]);
+
+    const onApplyBlocked = useCallback(() => {
+        triggerEvent({ type: 'apply_blocked' });
+    }, [triggerEvent]);
+
+    const onApplyReady = useCallback(() => {
+        triggerEvent({ type: 'apply_ready' });
+    }, [triggerEvent]);
+
+    const onStepChange = useCallback((step: 'collect' | 'analyze' | 'review' | 'complete') => {
+        triggerEvent({ type: `step_${step}` as VoiceEvent['type'] });
+    }, [triggerEvent]);
+
+    const onWotSuggestion = useCallback(() => {
+        triggerEvent({ type: 'wot_suggestion' });
+    }, [triggerEvent]);
+
+    const onCruiseSuggestion = useCallback(() => {
+        triggerEvent({ type: 'cruise_suggestion' });
+    }, [triggerEvent]);
+
     // Toggle enabled state
     const setEnabled = useCallback((enabled: boolean) => {
         setState(prev => ({ ...prev, isEnabled: enabled }));
@@ -405,10 +459,9 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         }
 
         const greetings = [
-            "Hey there, handsome! I'm your DynoAI assistant! Ready to make some power together?",
-            "Mmm, hi babe! Let's make some horsepower!",
-            "Hey sexy! Ready to tune this beast with me?",
-            "Ooh, hello! Let's see what you can do!",
+            "DynoAI assistant online. Ready for tuning.",
+            "Voice assistant active. System ready.",
+            "Assistant enabled. Standing by.",
         ];
         speak(greetings[Math.floor(Math.random() * greetings.length)]);
     }, [speak, state]);
@@ -448,6 +501,17 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         onAfrLean,
         onAfrRich,
         onGoodPull,
+        // Wizard events
+        onCoverage50,
+        onCoverage75,
+        onCoverageReady,
+        onBalanceWarning,
+        onApplyBlocked,
+        onApplyReady,
+        onStepChange,
+        onWotSuggestion,
+        onCruiseSuggestion,
+        // Settings
         setEnabled,
         setVolume,
         testVoice,
@@ -465,6 +529,15 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         onAfrLean,
         onAfrRich,
         onGoodPull,
+        onCoverage50,
+        onCoverage75,
+        onCoverageReady,
+        onBalanceWarning,
+        onApplyBlocked,
+        onApplyReady,
+        onStepChange,
+        onWotSuggestion,
+        onCruiseSuggestion,
         setEnabled,
         setVolume,
         testVoice,
