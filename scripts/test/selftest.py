@@ -10,8 +10,8 @@ from typing import Any, Dict, List
 from dynoai.test_utils import make_synthetic_csv
 
 PY = sys.executable
-ROOT = Path(__file__).resolve().parent
-TOOL = ROOT / "ai_tuner_toolkit_dyno_v1_2.py"  # adjust if needed
+ROOT = Path(__file__).resolve().parent.parent.parent
+TOOL = ROOT / "tools" / "ai_tuner_toolkit_dyno_v1_2.py"  # adjust if needed
 
 REQUIRED_FILES = [
     ("Diagnostics_Report.txt", "text"),

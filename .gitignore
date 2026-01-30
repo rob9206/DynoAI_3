@@ -88,3 +88,6 @@ tmpclaude-*-cwd
 .claude/
 *.backup
 *.bak
+dynoai.db
+
+dynoai.db

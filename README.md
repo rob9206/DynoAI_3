@@ -380,32 +380,32 @@ A comprehensive test suite verifies all VE tuning math is deterministic and cons
 ## Explicit Boundaries
 
 ### What DynoAI3 IS
-✅ Deterministic post-processing VE calibration engine  
-✅ Dyno data analyzer (CSV input)  
-✅ VE correction factor generator  
-✅ Spark timing suggestion system  
-✅ Apply/rollback with hash verification  
-✅ Automation-first with headless CLI  
-✅ Batch processing and CI-ready  
+- [x] Deterministic post-processing VE calibration engine
+- [x] Dyno data analyzer (CSV input)
+- [x] VE correction factor generator
+- [x] Spark timing suggestion system
+- [x] Apply/rollback with hash verification
+- [x] Automation-first with headless CLI
+- [x] Batch processing and CI-ready
 
 ### What DynoAI3 is NOT
-❌ **NOT a dyno controller** - Does not control dynamometers  
-❌ **NOT an ECU communication tool** - Does not flash or read ECUs directly  
-❌ **NOT real-time** - Post-processing only, not closed-loop  
-❌ **NOT adaptive** - No learning across runs, deterministic only  
-❌ **NOT ML-based** - Core math is deterministic despite the "AI" name  
+- [ ] **NOT a dyno controller** - Does not control dynamometers
+- [ ] **NOT an ECU communication tool** - Does not flash or read ECUs directly
+- [ ] **NOT real-time** - Post-processing only, not closed-loop
+- [ ] **NOT adaptive** - No learning across runs, deterministic only
+- [ ] **NOT ML-based** - Core math is deterministic despite the "AI" name
 
 These boundaries are intentional and allow DynoAI3 to excel in its specific domain with world-class reliability.
 
 ## Comparison with OEM Systems
 
-| System | Deterministic Math | Automation | Formal Contracts | Domain |
-|--------|-------------------|------------|------------------|---------|
-| ETAS INCA | High | High (COM + MATLAB) | ASAM A2L/MDF | ECU calibration |
-| Vector CANape | High | High (API/COM/MATLAB) | ASAM A2L/MDF | ECU calibration |
-| MoTeC M1 | High (strategy-dependent) | In-ECU scripting | Package-defined | Motorsport ECU |
-| HP Tuners | Medium–High | Low–Medium | Tool-specific | Aftermarket tuning |
-| **DynoAI3** | **High (test-proven)** | **High (headless, batch)** | **High (dyno-domain)** | **Dyno post-processing** |
+| System | Deterministic Math | Automation | Formal Contracts | Provable Rollback | Domain |
+|--------|-------------------|------------|------------------|-------------------|---------|
+| ETAS INCA | High | High (COM + MATLAB) | ASAM A2L/MDF | No | ECU calibration |
+| Vector CANape | High | High (API/COM/MATLAB) | ASAM A2L/MDF | No | ECU calibration |
+| MoTeC M1 | High (strategy-dependent) | In-ECU scripting | Package-defined | No | Motorsport ECU |
+| HP Tuners | Medium–High | Low–Medium | Tool-specific | No | Aftermarket tuning |
+| **DynoAI3** | **High ([test-proven](docs/VE_MATH_VERIFICATION_REPORT.md))** | **High (headless, batch)** | **High (dyno-domain)** | **Yes (SHA-256)** | **Dyno post-processing** |
 
 **DynoAI3 achieves world-class status through discipline, not novelty.**
 

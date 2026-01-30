@@ -321,13 +321,13 @@ def run_dyno_analysis(
             project_root = Path(sys._MEIPASS)
         else:
             project_root = Path(__file__).parent.parent
-        script_path = project_root / "ai_tuner_toolkit_dyno_v1_2.py"
+        script_path = project_root / "tools" / "ai_tuner_toolkit_dyno_v1_2.py"
         python_exe = sys.executable
     else:
         # Development mode - use project root and venv
         project_root = Path(__file__).parent.parent
         os.chdir(project_root)
-        script_path = project_root / "ai_tuner_toolkit_dyno_v1_2.py"
+        script_path = project_root / "tools" / "ai_tuner_toolkit_dyno_v1_2.py"
 
         # Find Python executable
         venv_python = project_root / ".venv/Scripts/python.exe"

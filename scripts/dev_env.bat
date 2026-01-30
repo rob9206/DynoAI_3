@@ -24,18 +24,18 @@ if exist .pre-commit-config.yaml (
 
 REM Fix argparse help % signs and ensure --selftest support (idempotent)
 if exist fix_helppercents.py (
-  python fix_helppercents.py tool\ai_tuner_toolkit_dyno_v1_2.py
+  python fix_helppercents.py tools\ai_tuner_toolkit_dyno_v1_2.py
 )
 if exist patch_selftest.py (
-  python patch_selftest.py tool\ai_tuner_toolkit_dyno_v1_2.py
+  python patch_selftest.py tools\ai_tuner_toolkit_dyno_v1_2.py
 )
 
 REM Run built-in self-test (generates a synthetic CSV + outputs)
-python tool\ai_tuner_toolkit_dyno_v1_2.py --selftest --outdir outputs
+python tools\ai_tuner_toolkit_dyno_v1_2.py --selftest --outdir outputs
 
 REM If a dedicated selftest exists, run it too
-if exist selftest.py (
-  python selftest.py
+if exist scripts\test\selftest.py (
+  python scripts\test\selftest.py
 )
 
 echo.

@@ -65,7 +65,7 @@ def check_repo_structure() -> bool:
 
     required_paths: List[Tuple[Path, str]] = [
         # Core engine files
-        (REPO_ROOT / "ai_tuner_toolkit_dyno_v1_2.py", "file"),
+        (REPO_ROOT / "tools" / "ai_tuner_toolkit_dyno_v1_2.py", "file"),
         (REPO_ROOT / "dynoai" / "core" / "ve_operations.py", "file"),
         (REPO_ROOT / "dynoai" / "core" / "io_contracts.py", "file"),
         # Test infrastructure
@@ -128,7 +128,7 @@ def run_selftest(repo_root: Path) -> int:
         Exit code (0 for success, non-zero for failure)
     """
     selftest_runner = repo_root / "selftest_runner.py"
-    selftest_main = repo_root / "selftest.py"
+    selftest_main = repo_root / "scripts" / "test" / "selftest.py"
 
     if selftest_runner.exists():
         cmd = [sys.executable, str(selftest_runner)]

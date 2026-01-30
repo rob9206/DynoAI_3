@@ -20,7 +20,7 @@ set PROJECT_DIR=%~dp0..\..
 pushd "%PROJECT_DIR%"
 call .venv\Scripts\activate
 
-set CMD=python tool\ai_tuner_toolkit_dyno_v1_2.py --csv "%CSV%" --outdir "%OUTDIR%" --smooth_passes 2 --clamp 15 --rear_bias 2.5 --rear_rule_deg 2.0 --hot_extra -1.0
+set CMD=python tools\ai_tuner_toolkit_dyno_v1_2.py --csv "%CSV%" --outdir "%OUTDIR%" --smooth_passes 2 --clamp 15 --rear_bias 2.5 --rear_rule_deg 2.0 --hot_extra -1.0
 
 if NOT "%BASE_FRONT%"=="" set CMD=%CMD% --base_front "%BASE_FRONT%"
 if NOT "%BASE_REAR%"=="" set CMD=%CMD% --base_rear "%BASE_REAR%"
