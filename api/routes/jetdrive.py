@@ -1947,6 +1947,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             provider = merge_all_providers(providers)
             logger.info(f"Merged {len(providers)} providers: {[hex(p.provider_id) for p in providers]}")
 
+        # Provider lookup (used for metadata/unit resolution)
+        providers_by_id = {p.provider_id: p for p in providers}
+
         # Don't pin to a specific provider - accept samples from ALL providers
         # Power Core CPU and Atmospheric Probe are separate providers but we want both
         validator.set_active_provider(None)  # Accept all providers
@@ -1966,9 +1969,68 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         # Even without CSV writing, we need to process items to prevent queue overflow
         queue_mgr.start_processing()
 
-        # Channel values dictionary - updated continuously
-        # Keys include provider_id to prevent cross-contamination
+        # Channel values dictionary - updated continuously.
+        #
+        # IMPORTANT: This must stay simple/stable for the frontend.
+        # Keys should be human-friendly canonical names (e.g. "Pressure", "Digital RPM 1"),
+        # not provider-scoped composite strings. We still include a unique `key` field
+        # inside each entry for debugging/collision analysis.
         channel_values: dict[str, dict[str, Any]] = {}
+
+        # Canonical source locking to prevent accidental mis-binding when multiple
+        # similarly-named channels exist.
+        # canonical_name -> (provider_id, channel_id)
+        canonical_sources: dict[str, tuple[int, int]] = {}
+
+        def _unit_score_for_canonical(canonical: str, unit: int) -> int:
+            try:
+                u = int(unit)
+            except Exception:
+                u = -1
+
+            if canonical in ("Digital RPM 1", "Digital RPM 2", "Engine RPM", "RPM"):
+                return 100 if u == 8 else 0  # JDUnit.RPM
+            if canonical in ("Speed", "Speed 1"):
+                return 100 if u == 2 else 0  # JDUnit.Speed
+            if canonical.startswith("Force"):
+                return 100 if u == 3 else 0  # JDUnit.Force
+            if canonical.startswith("Power") or canonical == "Horsepower":
+                return 100 if u == 4 else 0  # JDUnit.Power
+            if canonical.startswith("Torque"):
+                return 100 if u == 5 else 0  # JDUnit.Torque
+            if canonical.startswith("Air/Fuel") or canonical in ("AFR", "AFR 1"):
+                return 100 if u == 11 else 0  # JDUnit.AFR
+            if canonical.startswith("Lambda"):
+                return 100 if u == 13 else 0  # JDUnit.Lambda
+            if canonical in ("MAP kPa", "Pressure"):
+                return 60 if u == 7 else 0  # JDUnit.Pressure
+
+            return 0
+
+        def _apply_deadband(name: str, unit: int, value: float) -> float:
+            """Clamp small 'no hardware / idle noise' to 0 for dyno channels."""
+            try:
+                u = int(unit)
+            except Exception:
+                u = -1
+
+            v = float(value)
+
+            if name in ("Digital RPM 1", "Digital RPM 2", "Engine RPM", "RPM") or u == 8:
+                return 0.0 if abs(v) < 25 else v
+            if name in ("Speed", "Speed 1") or u == 2:
+                return 0.0 if abs(v) < 0.5 else v
+            if name.startswith("Force") or u == 3:
+                return 0.0 if abs(v) < 2.0 else v
+            if name.startswith("Torque") or u == 5:
+                return 0.0 if abs(v) < 2.0 else v
+            if name.startswith("Power") or name == "Horsepower" or u == 4:
+                return 0.0 if abs(v) < 0.5 else v
+
+            return v
+
+        def _c_to_f(c: float) -> float:
+            return (float(c) * 9.0 / 5.0) + 32.0
 
         def on_sample(s: JetDriveSample):
             """Callback for each received sample - routes through queue manager."""
@@ -1979,27 +2041,94 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             # Route through queue manager for aggregation
             queue_mgr.on_sample(s)
 
-            # Update live data for UI (keep direct updates for 50ms responsiveness)
+            # Resolve ChannelInfo metadata to get unit codes
+            prov = providers_by_id.get(s.provider_id)
+            meta = (prov.channels or {}).get(s.channel_id) if prov else None
+            raw_unit = int(getattr(meta, "unit", -1)) if meta else -1
+
+            # Start from JetDriveSample (which may already include category/units hints)
+            canonical_name = s.channel_name
+            canonical_category = getattr(s, "category", "misc")
+            canonical_units = getattr(s, "units", "")
+            canonical_value = float(s.value)
+
+            # Normalize a common collision: Power Core may expose a channel named "Pressure"
+            # that is actually MAP (kPa). We only treat "Pressure" as Baro if it is the
+            # atmospheric probe channel (here, the probe is integrated in the same provider,
+            # so we use name+unit patterns).
+            if raw_unit == 7 and canonical_name.strip().lower() == "pressure":
+                # If we already have Temperature/Humidity channels in the stream, treat this
+                # as barometric; otherwise treat as MAP to prevent wrong binding.
+                has_atmo = any(k in channel_values for k in ("Humidity", "Temperature 1", "Temperature 2"))
+                if not has_atmo:
+                    canonical_name = "MAP kPa"
+                    canonical_category = "engine"
+                    canonical_units = "kPa"
+                else:
+                    canonical_units = "kPa"
+                    canonical_category = "atmospheric"
+
+            # Convert temperature channels to Fahrenheit to match WinPEP display.
+            # The JetDrive stream reports temps as Celsius (e.g. ~1.9C -> 35.4F).
+            if raw_unit == 6 and (
+                canonical_name.startswith("Internal Temp")
+                or canonical_name.startswith("Temperature ")
+            ):
+                canonical_value = _c_to_f(canonical_value)
+                canonical_units = "°F"
+
+            canonical_value = _apply_deadband(canonical_name, raw_unit, canonical_value)
+
+            # Unique identifier retained for debugging
+            channel_key = f"0x{s.provider_id:04X}:{s.channel_id}:{s.channel_name}"
+
             entry = {
+                "key": channel_key,
                 "provider_id": s.provider_id,
                 "id": s.channel_id,
-                "name": s.channel_name,
-                "value": s.value,
+                "name": canonical_name,
+                "value": canonical_value,
                 "timestamp": s.timestamp_ms,
                 "updated_at": datetime.now().isoformat(),
-                "category": getattr(s, "category", "misc"),  # Channel category for grouping
-                "units": getattr(s, "units", ""),  # Channel units
+                "category": canonical_category,
+                "units": canonical_units,
             }
 
-            # Use provider-scoped key for channel storage
-            # But also keep simple name for backwards compatibility
-            channel_values[s.channel_name] = entry
+            # Lock canonical source selection based on unit match.
+            # IMPORTANT: For atmospheric channels, ALWAYS prefer channel IDs 35-38
+            # (Atmospheric Probe) over 6-9 (Power Core internal sensors).
+            ATMO_PROBE_CHANNELS = {35, 36, 37, 38}
+            ATMO_CANONICAL_NAMES = {"Pressure", "Temperature 1", "Temperature 2", "Humidity"}
+            
+            current = canonical_sources.get(canonical_name)
+            candidate = (s.provider_id, s.channel_id)
+            
+            if current is None:
+                canonical_sources[canonical_name] = candidate
+            elif candidate != current:
+                cur_provider_id, cur_chan_id = current
+                
+                # Special rule: Atmospheric Probe (35-38) ALWAYS wins over Power Core (6-9)
+                if canonical_name in ATMO_CANONICAL_NAMES:
+                    candidate_is_probe = s.channel_id in ATMO_PROBE_CHANNELS
+                    current_is_probe = cur_chan_id in ATMO_PROBE_CHANNELS
+                    if candidate_is_probe and not current_is_probe:
+                        canonical_sources[canonical_name] = candidate
+                    # If both are probe or both are not, keep current (first wins)
+                else:
+                    # For non-atmospheric channels, use unit score as before
+                    cur_prov = providers_by_id.get(cur_provider_id)
+                    cur_meta = (cur_prov.channels or {}).get(cur_chan_id) if cur_prov else None
+                    cur_unit = int(getattr(cur_meta, "unit", -1)) if cur_meta else -1
+                    if _unit_score_for_canonical(canonical_name, raw_unit) > _unit_score_for_canonical(canonical_name, cur_unit):
+                        canonical_sources[canonical_name] = candidate
 
-            # Also add a stable chan_<id> alias so the frontend can fall back
-            # even if the provider's channel_name differs from expected.
-            chan_key = f"chan_{s.channel_id}"
-            if s.channel_name != chan_key and chan_key not in channel_values:
-                channel_values[chan_key] = entry
+            if canonical_sources.get(canonical_name) == candidate:
+                channel_values[canonical_name] = entry
+
+            # Also provide `chan_<id>` alias for robust frontend fallback.
+            chan_alias = f"chan_{s.channel_id}"
+            channel_values.setdefault(chan_alias, entry)
 
             # Update live data immediately (with lock for thread safety)
             with _live_data_lock:

@@ -113,11 +113,14 @@ const CATEGORY_COLORS: Record<ChannelCategory, string> = {
 
 // Preset channel groups (for gauge view filtering)
 const CHANNEL_PRESETS = {
+    // "Known" = only channels we have explicit config for (hides provider-scoped raw noise)
+    known: Object.keys(JETDRIVE_CHANNEL_CONFIG),
     atmospheric: ['Humidity', 'Pressure', 'Temperature 1', 'Temperature 2'],
     dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration', 'Horsepower', 'Torque'],
     performance: ['Horsepower', 'Torque', 'MAP kPa', 'TPS', 'IAT', 'VBatt'],
     afr: ['Air/Fuel Ratio 1', 'Air/Fuel Ratio 2', 'Lambda 1', 'Lambda 2'],
-    all: Object.keys(JETDRIVE_CHANNEL_CONFIG),
+    // "All" includes raw provider-scoped keys like `p17405:chan_39`
+    all: [] as string[],
 };
 
 interface JetDriveLiveDashboardProps {
@@ -132,7 +135,7 @@ export function JetDriveLiveDashboard({
     autoStart = false,
     onAudioRecorded,
 }: JetDriveLiveDashboardProps) {
-    const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('all');
+    const [selectedPreset, setSelectedPreset] = useState<keyof typeof CHANNEL_PRESETS>('known');
     const [chartChannel, setChartChannel] = useState<string>('');
     const [audioEnabled, setAudioEnabled] = useState(true);
     const [mappingReady, setMappingReady] = useState(true); // Assume ready unless confidence panel says otherwise
@@ -174,17 +177,46 @@ export function JetDriveLiveDashboard({
         pollInterval: 800,
     });
 
+    const visibleChannels = useMemo(() => {
+        const isProviderScoped = (name: string) => name.startsWith('p') && name.includes(':');
+
+        if (selectedPreset === 'all') {
+            return channels;
+        }
+
+        if (selectedPreset === 'known') {
+            // Always show configured channels (even if not present in the live stream yet).
+            // This prevents "missing" dyno channels when hardware isn't connected.
+            const out: typeof channels = {};
+            for (const [key, cfg] of Object.entries(JETDRIVE_CHANNEL_CONFIG)) {
+                const existing = channels[key];
+                out[key] =
+                    existing ?? ({
+                        name: key,
+                        value: 0,
+                        units: cfg.units,
+                        timestamp: 0,
+                        category: cfg.category,
+                    } as JetDriveChannel);
+            }
+            return out;
+        }
+
+        const allowed = new Set(CHANNEL_PRESETS[selectedPreset]);
+        return Object.fromEntries(
+            Object.entries(channels).filter(([name]) => !isProviderScoped(name) && allowed.has(name))
+        ) as typeof channels;
+    }, [channels, selectedPreset]);
+
     // Get channels to display based on preset and available data
     const displayedChannels = useMemo(() => {
-        const presetChannels = CHANNEL_PRESETS[selectedPreset];
-        return Object.entries(channels)
-            .filter(([name]) => selectedPreset === 'all' || presetChannels.includes(name))
+        return Object.entries(visibleChannels)
             .map(([name, data]) => ({
                 name,
                 data,
                 config: getChannelConfig(name),
             }));
-    }, [channels, selectedPreset]);
+    }, [visibleChannels]);
 
     // Chart data
     const chartData = useMemo(() => {
@@ -197,10 +229,10 @@ export function JetDriveLiveDashboard({
 
     // Set default chart channel
     useMemo(() => {
-        if (!chartChannel && Object.keys(channels).length > 0) {
-            setChartChannel(Object.keys(channels)[0]);
+        if (!chartChannel && Object.keys(visibleChannels).length > 0) {
+            setChartChannel(Object.keys(visibleChannels)[0]);
         }
-    }, [channels, chartChannel]);
+    }, [visibleChannels, chartChannel]);
 
     const handleToggleCapture = async () => {
         try {
@@ -314,7 +346,8 @@ export function JetDriveLiveDashboard({
                             <SelectValue placeholder="Channels" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Channels</SelectItem>
+                            <SelectItem value="known">Known Channels</SelectItem>
+                            <SelectItem value="all">All Channels (Raw)</SelectItem>
                             <SelectItem value="atmospheric">Atmospheric</SelectItem>
                             <SelectItem value="dyno">Dyno</SelectItem>
                             <SelectItem value="afr">AFR / Lambda</SelectItem>
@@ -609,14 +642,14 @@ export function JetDriveLiveDashboard({
                                 <div>
                                     <h3 className="text-lg font-medium">All Channels</h3>
                                     <p className="text-sm text-muted-foreground">
-                                        {Object.keys(channels).length} channels streaming
+                                        {Object.keys(channels).length} streaming
                                     </p>
                                 </div>
                             </div>
 
                             {/* Grouped channel tables */}
                             {(() => {
-                                const grouped = getChannelsByCategory(channels);
+                                const grouped = getChannelsByCategory(visibleChannels);
                                 const categoryOrder: ChannelCategory[] = ['atmospheric', 'dyno', 'afr', 'engine', 'misc'];
                                 
                                 return categoryOrder.map((category) => {
@@ -647,24 +680,24 @@ export function JetDriveLiveDashboard({
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-800">
-                                                            {categoryChannels.map(({ name, data, config }) => {
+                                                            {categoryChannels.map(({ key, name, data, config }) => {
                                                                 const displayLabel = config?.label || name;
                                                                 const displayUnits = config?.units || data.units || inferUnits(name, data.value);
                                                                 const decimals = config?.decimals ?? 2;
                                                                 const color = config?.color || '#888';
                                                                 
-                                                                // Only show raw name if it differs significantly from display label
-                                                                const showRawName = displayLabel.toLowerCase() !== name.toLowerCase() && 
-                                                                    !name.startsWith('chan_') && 
-                                                                    !displayLabel.toLowerCase().includes(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                                                                // Show provider info for disambiguation if needed
+                                                                const providerHex = data.providerId 
+                                                                    ? `0x${data.providerId.toString(16).toUpperCase().padStart(4, '0')}`
+                                                                    : null;
 
                                                                 return (
-                                                                    <tr key={name} className="hover:bg-gray-800/50 transition-colors">
+                                                                    <tr key={key} className="hover:bg-gray-800/50 transition-colors">
                                                                         <td className="py-2 px-3">
                                                                             <span className="font-medium">{displayLabel}</span>
-                                                                            {showRawName && (
-                                                                                <span className="text-xs text-muted-foreground ml-2">
-                                                                                    ({name})
+                                                                            {providerHex && (
+                                                                                <span className="text-xs text-muted-foreground ml-2" title={`Provider ${providerHex}, Channel ${data.id}`}>
+                                                                                    [{providerHex}]
                                                                                 </span>
                                                                             )}
                                                                         </td>
@@ -687,7 +720,7 @@ export function JetDriveLiveDashboard({
                             })()}
 
                             {/* Empty state */}
-                            {Object.keys(channels).length === 0 && (
+                            {Object.keys(visibleChannels).length === 0 && (
                                 <Card className="bg-gray-900/50 border-gray-700">
                                     <CardContent className="py-8 text-center text-muted-foreground">
                                         {isCapturing ? 'Waiting for channel data...' : 'Start capture to view channel data'}

@@ -176,32 +176,32 @@
     --radius-2xl: calc(16px * var(--radius-factor) * var(--size-scale));
     --radius-full: 9999px;
 
-    /* Neutral colors */
-    --color-neutral-1: var(--slate-1);
-    --color-neutral-2: var(--slate-2);
-    --color-neutral-3: var(--slate-3);
-    --color-neutral-4: var(--slate-4);
-    --color-neutral-5: var(--slate-5);
-    --color-neutral-6: var(--slate-6);
-    --color-neutral-7: var(--slate-7);
-    --color-neutral-8: var(--slate-8);
-    --color-neutral-9: var(--slate-9);
-    --color-neutral-10: var(--slate-10);
-    --color-neutral-11: var(--slate-11);
-    --color-neutral-12: var(--slate-12);
-    --color-neutral-a1: var(--slate-a1);
-    --color-neutral-a2: var(--slate-a2);
-    --color-neutral-a3: var(--slate-a3);
-    --color-neutral-a4: var(--slate-a4);
-    --color-neutral-a5: var(--slate-a5);
-    --color-neutral-a6: var(--slate-a6);
-    --color-neutral-a7: var(--slate-a7);
-    --color-neutral-a8: var(--slate-a8);
-    --color-neutral-a9: var(--slate-a9);
-    --color-neutral-a10: var(--slate-a10);
-    --color-neutral-a11: var(--slate-a11);
-    --color-neutral-a12: var(--slate-a12);
-    --color-neutral-contrast: var(--slate-contrast);
+    /* Neutral colors - Bronze palette for warm earth tones */
+    --color-neutral-1: var(--bronze-1);
+    --color-neutral-2: var(--bronze-2);
+    --color-neutral-3: var(--bronze-3);
+    --color-neutral-4: var(--bronze-4);
+    --color-neutral-5: var(--bronze-5);
+    --color-neutral-6: var(--bronze-6);
+    --color-neutral-7: var(--bronze-7);
+    --color-neutral-8: var(--bronze-8);
+    --color-neutral-9: var(--bronze-9);
+    --color-neutral-10: var(--bronze-10);
+    --color-neutral-11: var(--bronze-11);
+    --color-neutral-12: var(--bronze-12);
+    --color-neutral-a1: var(--bronze-a1);
+    --color-neutral-a2: var(--bronze-a2);
+    --color-neutral-a3: var(--bronze-a3);
+    --color-neutral-a4: var(--bronze-a4);
+    --color-neutral-a5: var(--bronze-a5);
+    --color-neutral-a6: var(--bronze-a6);
+    --color-neutral-a7: var(--bronze-a7);
+    --color-neutral-a8: var(--bronze-a8);
+    --color-neutral-a9: var(--bronze-a9);
+    --color-neutral-a10: var(--bronze-a10);
+    --color-neutral-a11: var(--bronze-a11);
+    --color-neutral-a12: var(--bronze-a12);
+    --color-neutral-contrast: var(--bronze-contrast);
 
     /* Accent colors */
     --color-accent-1: var(--blue-1);

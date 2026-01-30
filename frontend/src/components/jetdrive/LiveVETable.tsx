@@ -11,9 +11,24 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Target, Activity, Flame, Crosshair, RotateCcw, ChevronDown } from 'lucide-react';
+import { Target, Activity, Flame, Crosshair, RotateCcw, ChevronDown, Download } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+
+// Export data interface for external consumers
+export interface LiveVEExportData {
+    frontCorrections: number[][];   // LC1 wideband → Front Cylinder
+    rearCorrections: number[][];    // LC2 wideband → Rear Cylinder
+    hitCounts: number[][];          // Legacy combined hitCounts (for backward compat)
+    frontHitCounts: number[][];     // Per-cylinder hit counts (Front)
+    rearHitCounts: number[][];      // Per-cylinder hit counts (Rear)
+    rpmBins: number[];
+    mapBins: number[];
+    afrTargets: Record<number, number>;
+    enginePreset: string;
+    totalHits: number;
+    exportedAt: string;
+}
 
 // Engine type presets with appropriate RPM ranges
 export type EnginePreset = 'harley_m8' | 'harley_tc' | 'sportbike_600' | 'sportbike_1000' | 'custom';
@@ -62,7 +77,11 @@ interface LiveVETableProps {
     // Current live values
     currentRpm: number;
     currentMap: number;
-    currentAfr: number;
+    
+    // Dual-cylinder AFR tracking (LC1 = Front, LC2 = Rear)
+    currentAfrFront?: number;   // LC1 wideband → Front cylinder
+    currentAfrRear?: number;    // LC2 wideband → Rear cylinder
+    currentAfr?: number;        // @deprecated - use currentAfrFront/Rear instead (falls back to single value)
 
     // AFR targets - can be a single value (legacy) or a table keyed by MAP
     afrTargets?: Record<number, number>;
@@ -75,12 +94,19 @@ interface LiveVETableProps {
     enginePreset?: EnginePreset;
     onEnginePresetChange?: (preset: EnginePreset) => void;
 
+    // Custom bins - override preset bins (used when importing a PVV with different grid)
+    customRpmBins?: number[];
+    customMapBins?: number[];
+
     // Optional: Pre-loaded VE corrections from analysis
     veCorrections?: number[][];  // [rpm_idx][map_idx] - multipliers
     hitCounts?: number[][];
 
     // Callback when cell is clicked
     onCellClick?: (rpmIdx: number, mapIdx: number) => void;
+    
+    // Export callback - called when user clicks Export button
+    onExport?: (data: LiveVEExportData) => void;
 }
 
 // Calculate which cells are active and interpolation weights
@@ -202,16 +228,24 @@ function getTargetAfrForMap(mapKpa: number, targets: Record<number, number>): nu
 export function LiveVETable({
     currentRpm,
     currentMap,
-    currentAfr,
+    currentAfrFront,
+    currentAfrRear,
+    currentAfr,  // Legacy single AFR prop
     afrTargets,
     targetAfr,  // Legacy prop
     isLive,
     enginePreset = 'harley_m8',
     onEnginePresetChange,
+    customRpmBins,
+    customMapBins,
     veCorrections,
     hitCounts: externalHitCounts,
     onCellClick,
+    onExport,
 }: LiveVETableProps) {
+    // Resolve AFR values - prefer dual-cylinder, fall back to single
+    const resolvedAfrFront = currentAfrFront ?? currentAfr ?? 0;
+    const resolvedAfrRear = currentAfrRear ?? currentAfr ?? resolvedAfrFront;
     // Use afrTargets if provided, otherwise fall back to legacy targetAfr or defaults
     const resolvedAfrTargets = useMemo(() => {
         if (afrTargets) return afrTargets;
@@ -230,7 +264,10 @@ export function LiveVETable({
 
     const activePreset = onEnginePresetChange ? enginePreset : localPreset;
     const config = ENGINE_PRESETS[activePreset];
-    const { rpmBins, mapBins } = config;
+    
+    // Use custom bins if provided (from imported tune), otherwise use preset bins
+    const rpmBins = customRpmBins ?? config.rpmBins;
+    const mapBins = customMapBins ?? config.mapBins;
 
     const handlePresetChange = useCallback((preset: EnginePreset) => {
         if (onEnginePresetChange) {
@@ -242,25 +279,61 @@ export function LiveVETable({
     }, [onEnginePresetChange]);
 
     // Internal hit count tracking (accumulates during live session)
+    // Combined legacy hitCounts (for backward compat and display)
     const [liveHitCounts, setLiveHitCounts] = useState<number[][]>(() =>
         rpmBins.map(() => mapBins.map(() => 0))
     );
+    // Per-cylinder hit counts (Front = LC1, Rear = LC2)
+    const [frontHitCounts, setFrontHitCounts] = useState<number[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => 0))
+    );
+    const [rearHitCounts, setRearHitCounts] = useState<number[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => 0))
+    );
 
-    // AFR accumulator for live corrections
+    // AFR accumulators for live corrections - DUAL CYLINDER
+    // Front cylinder (LC1 wideband)
+    const [frontAfrAccumulator, setFrontAfrAccumulator] = useState<{ sum: number; count: number }[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })))
+    );
+    // Rear cylinder (LC2 wideband)
+    const [rearAfrAccumulator, setRearAfrAccumulator] = useState<{ sum: number; count: number }[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })))
+    );
+
+    // Legacy single-cylinder accumulator for backward compatibility
     const [afrAccumulator, setAfrAccumulator] = useState<{ sum: number; count: number }[][]>(() =>
         rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })))
     );
 
-    // Calculated live VE corrections
+    // Calculated live VE corrections - DUAL CYLINDER
+    const [frontVeCorrections, setFrontVeCorrections] = useState<number[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => 1.0))
+    );
+    const [rearVeCorrections, setRearVeCorrections] = useState<number[][]>(() =>
+        rpmBins.map(() => mapBins.map(() => 1.0))
+    );
+    
+    // Combined/display corrections (average of front and rear for UI)
     const [liveVeCorrections, setLiveVeCorrections] = useState<number[][]>(() =>
         rpmBins.map(() => mapBins.map(() => 1.0))
     );
 
     // Reset state when engine preset changes
     useEffect(() => {
-        setLiveHitCounts(rpmBins.map(() => mapBins.map(() => 0)));
-        setAfrAccumulator(rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 }))));
-        setLiveVeCorrections(rpmBins.map(() => mapBins.map(() => 1.0)));
+        const emptyHits = rpmBins.map(() => mapBins.map(() => 0));
+        const emptyAcc = rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })));
+        const emptyCorr = rpmBins.map(() => mapBins.map(() => 1.0));
+        
+        setLiveHitCounts(emptyHits);
+        setFrontHitCounts(emptyHits);
+        setRearHitCounts(emptyHits);
+        setAfrAccumulator(emptyAcc);
+        setFrontAfrAccumulator(emptyAcc);
+        setRearAfrAccumulator(emptyAcc);
+        setLiveVeCorrections(emptyCorr);
+        setFrontVeCorrections(emptyCorr);
+        setRearVeCorrections(emptyCorr);
     }, [activePreset, rpmBins, mapBins]);
 
     // Track which cells are currently active (using kPa directly)
@@ -269,11 +342,12 @@ export function LiveVETable({
         return calculateCellTrace(currentRpm, currentMap, rpmBins, mapBins);
     }, [currentRpm, currentMap, isLive, rpmBins, mapBins]);
 
-    // Update hit counts and AFR accumulator when operating point changes
+    // Update hit counts and AFR accumulators when operating point changes
+    // Tracks BOTH cylinders separately (Front=LC1, Rear=LC2)
     useEffect(() => {
         if (!isLive || !cellTrace || currentRpm < 800) return;
 
-        // Accumulate hits and AFR values for active cells
+        // Accumulate combined hits for active cells (legacy)
         setLiveHitCounts(prev => {
             const next = prev.map(row => [...row]);
             for (const cell of cellTrace.activeCells) {
@@ -284,49 +358,105 @@ export function LiveVETable({
             return next;
         });
 
-        // Accumulate AFR for corrections
-        if (currentAfr > 8 && currentAfr < 20) {  // Valid AFR range
-            setAfrAccumulator(prev => {
+        // Accumulate FRONT cylinder AFR (LC1 wideband) and per-cylinder hits
+        if (resolvedAfrFront > 8 && resolvedAfrFront < 20) {
+            // Track front cylinder hits
+            setFrontHitCounts(prev => {
+                const next = prev.map(row => [...row]);
+                for (const cell of cellTrace.activeCells) {
+                    if (cell.weight > 0.2) {
+                        next[cell.rpmIdx][cell.mapIdx]++;
+                    }
+                }
+                return next;
+            });
+            
+            setFrontAfrAccumulator(prev => {
                 const next = prev.map(row => row.map(cell => ({ ...cell })));
                 for (const cell of cellTrace.activeCells) {
                     if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx].sum += currentAfr * cell.weight;
+                        next[cell.rpmIdx][cell.mapIdx].sum += resolvedAfrFront * cell.weight;
                         next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
                     }
                 }
                 return next;
             });
         }
-    }, [cellTrace, currentAfr, isLive, currentRpm]);
+
+        // Accumulate REAR cylinder AFR (LC2 wideband) and per-cylinder hits
+        if (resolvedAfrRear > 8 && resolvedAfrRear < 20) {
+            // Track rear cylinder hits
+            setRearHitCounts(prev => {
+                const next = prev.map(row => [...row]);
+                for (const cell of cellTrace.activeCells) {
+                    if (cell.weight > 0.2) {
+                        next[cell.rpmIdx][cell.mapIdx]++;
+                    }
+                }
+                return next;
+            });
+            
+            setRearAfrAccumulator(prev => {
+                const next = prev.map(row => row.map(cell => ({ ...cell })));
+                for (const cell of cellTrace.activeCells) {
+                    if (cell.weight > 0.2) {
+                        next[cell.rpmIdx][cell.mapIdx].sum += resolvedAfrRear * cell.weight;
+                        next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
+                    }
+                }
+                return next;
+            });
+        }
+
+        // Legacy combined accumulator (average of front and rear for backward compat)
+        const avgAfr = (resolvedAfrFront + resolvedAfrRear) / 2;
+        if (avgAfr > 8 && avgAfr < 20) {
+            setAfrAccumulator(prev => {
+                const next = prev.map(row => row.map(cell => ({ ...cell })));
+                for (const cell of cellTrace.activeCells) {
+                    if (cell.weight > 0.2) {
+                        next[cell.rpmIdx][cell.mapIdx].sum += avgAfr * cell.weight;
+                        next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
+                    }
+                }
+                return next;
+            });
+        }
+    }, [cellTrace, resolvedAfrFront, resolvedAfrRear, isLive, currentRpm]);
 
     // Calculate live VE corrections from accumulated AFR data
     // Uses Math v2.0.0 ratio model: VE_correction = AFR_measured / AFR_target
     // This is physically accurate - the ratio directly represents the fuel error
+    // Calculates SEPARATE corrections for Front and Rear cylinders
     useEffect(() => {
-        setLiveVeCorrections(prev => {
-            const next = prev.map(row => [...row]);
+        // Helper to calculate corrections from an accumulator
+        const calcCorrections = (accumulator: { sum: number; count: number }[][]) => {
+            const result: number[][] = rpmBins.map(() => mapBins.map(() => 1.0));
             for (let i = 0; i < rpmBins.length; i++) {
                 for (let j = 0; j < mapBins.length; j++) {
-                    const acc = afrAccumulator[i]?.[j];
+                    const acc = accumulator[i]?.[j];
                     if (acc && acc.count >= 3) {  // Need at least 3 samples
                         const meanAfr = acc.sum / acc.count;
-                        // Use the per-MAP target AFR for this column
                         const cellTargetAfr = getTargetAfrForMap(mapBins[j], resolvedAfrTargets);
-
-                        // Math v2.0.0: Ratio model (physically accurate)
                         // VE_correction = AFR_measured / AFR_target
-                        // Lean (measured > target) -> correction > 1 -> add fuel
-                        // Rich (measured < target) -> correction < 1 -> remove fuel
                         const correction = meanAfr / cellTargetAfr;
-
                         // Clamp to ±15% for safety
-                        next[i][j] = Math.max(0.85, Math.min(1.15, correction));
+                        result[i][j] = Math.max(0.85, Math.min(1.15, correction));
                     }
                 }
             }
-            return next;
-        });
-    }, [afrAccumulator, resolvedAfrTargets, rpmBins, mapBins]);
+            return result;
+        };
+
+        // Calculate front cylinder corrections (LC1)
+        setFrontVeCorrections(calcCorrections(frontAfrAccumulator));
+        
+        // Calculate rear cylinder corrections (LC2)
+        setRearVeCorrections(calcCorrections(rearAfrAccumulator));
+        
+        // Combined/display corrections (average for UI display)
+        setLiveVeCorrections(calcCorrections(afrAccumulator));
+    }, [frontAfrAccumulator, rearAfrAccumulator, afrAccumulator, resolvedAfrTargets, rpmBins, mapBins]);
 
     // Use external corrections if provided, otherwise use live
     const displayCorrections = veCorrections ?? liveVeCorrections;
@@ -334,9 +464,19 @@ export function LiveVETable({
 
     // Reset live tracking
     const handleReset = useCallback(() => {
-        setLiveHitCounts(rpmBins.map(() => mapBins.map(() => 0)));
-        setAfrAccumulator(rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 }))));
-        setLiveVeCorrections(rpmBins.map(() => mapBins.map(() => 1.0)));
+        const emptyHits = rpmBins.map(() => mapBins.map(() => 0));
+        const emptyAcc = rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })));
+        const emptyCorr = rpmBins.map(() => mapBins.map(() => 1.0));
+        
+        setLiveHitCounts(emptyHits);
+        setFrontHitCounts(emptyHits);
+        setRearHitCounts(emptyHits);
+        setAfrAccumulator(emptyAcc);
+        setFrontAfrAccumulator(emptyAcc);
+        setRearAfrAccumulator(emptyAcc);
+        setLiveVeCorrections(emptyCorr);
+        setFrontVeCorrections(emptyCorr);
+        setRearVeCorrections(emptyCorr);
     }, [rpmBins, mapBins]);
 
     // Check if a cell is currently active
@@ -351,6 +491,27 @@ export function LiveVETable({
         displayHitCounts.flat().reduce((a, b) => a + b, 0),
         [displayHitCounts]
     );
+    
+    // Export handler - provides data for external export utilities
+    const handleExport = useCallback(() => {
+        if (!onExport) return;
+        
+        const exportData: LiveVEExportData = {
+            frontCorrections: frontVeCorrections,
+            rearCorrections: rearVeCorrections,
+            hitCounts: displayHitCounts,
+            frontHitCounts: frontHitCounts,
+            rearHitCounts: rearHitCounts,
+            rpmBins,
+            mapBins,
+            afrTargets: resolvedAfrTargets,
+            enginePreset: activePreset,
+            totalHits,
+            exportedAt: new Date().toISOString(),
+        };
+        
+        onExport(exportData);
+    }, [onExport, frontVeCorrections, rearVeCorrections, displayHitCounts, frontHitCounts, rearHitCounts, rpmBins, mapBins, resolvedAfrTargets, activePreset, totalHits]);
 
     return (
         <div className="space-y-3">
@@ -376,6 +537,17 @@ export function LiveVETable({
                     <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
                         {totalHits} hits
                     </Badge>
+                    {onExport && totalHits > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleExport}
+                            className="h-7 px-2 text-xs text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                        >
+                            <Download className="w-3 h-3 mr-1" />
+                            Export
+                        </Button>
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"
@@ -395,15 +567,24 @@ export function LiveVETable({
                         <Crosshair className="w-3 h-3 text-orange-400" />
                         <span className="text-zinc-500">Operating:</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-green-400 font-mono font-bold">{currentRpm.toFixed(0)}</span>
                         <span className="text-zinc-600">RPM</span>
                         <span className="text-zinc-700">•</span>
                         <span className="text-blue-400 font-mono font-bold">{currentMap.toFixed(0)}</span>
                         <span className="text-zinc-600">kPa</span>
                         <span className="text-zinc-700">→</span>
-                        <span className="text-orange-400 font-mono font-bold">{currentAfr.toFixed(1)}</span>
-                        <span className="text-zinc-500">AFR (target: {getTargetAfrForMap(currentMap, resolvedAfrTargets).toFixed(1)})</span>
+                        {/* Dual-cylinder AFR display */}
+                        <span className="text-orange-400 font-mono font-bold">{resolvedAfrFront.toFixed(1)}</span>
+                        <span className="text-zinc-600 text-[10px]">F</span>
+                        {resolvedAfrRear !== resolvedAfrFront && (
+                            <>
+                                <span className="text-zinc-700">/</span>
+                                <span className="text-amber-400 font-mono font-bold">{resolvedAfrRear.toFixed(1)}</span>
+                                <span className="text-zinc-600 text-[10px]">R</span>
+                            </>
+                        )}
+                        <span className="text-zinc-500">(target: {getTargetAfrForMap(currentMap, resolvedAfrTargets).toFixed(1)})</span>
                     </div>
                 </div>
             )}

@@ -40,9 +40,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger
 } from '../components/ui/sheet';
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
+} from '../components/ui/dialog';
 import { useJetDriveLive } from '../hooks/useJetDriveLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
-import { LiveVETable } from '../components/jetdrive/LiveVETable';
+import { LiveVETable, LiveVEExportData } from '../components/jetdrive/LiveVETable';
+import { exportToCSV, exportToJSON, exportToPVV, downloadFile } from '../utils/veExport';
+import { parsePVV, extractAfrTargets } from '../utils/pvvParser';
+import { TuneImport, type TuneImportResult } from '../components/jetdrive/TuneImport';
+import { ApplyPreviewPanel } from '../components/jetdrive/ApplyPreviewPanel';
+import { VEBoundsPreset, DualCylinderVE, DualCylinderHits, DualCylinderCorrections, ApplyReport } from '../types/veApplyTypes';
+import { downloadAppliedVEAllFormats } from '../utils/veExport';
 import { DEFAULT_AFR_TARGETS } from '../components/jetdrive/AFRTargetTable';
 import { AudioCapturePanel } from '../components/jetdrive/AudioCapturePanel';
 import { RunComparisonTable } from '../components/jetdrive/RunComparisonTable';
@@ -594,6 +603,18 @@ export default function JetDriveAutoTunePage() {
     const [rpmThreshold, setRpmThreshold] = useState(2000);
     const [showSettings, setShowSettings] = useState(false);
     const [activeMainTab, setActiveMainTab] = useState('autotune');
+    
+    // VE Export modal state
+    const [exportModalOpen, setExportModalOpen] = useState(false);
+    const [pendingExportData, setPendingExportData] = useState<LiveVEExportData | null>(null);
+    
+    // Imported tune state
+    const [importedTune, setImportedTune] = useState<TuneImportResult | null>(null);
+    const [tuneLoadError, setTuneLoadError] = useState<string | null>(null);
+    
+    // Apply workflow state (Phase 3)
+    const [applyPreviewOpen, setApplyPreviewOpen] = useState(false);
+    const [veBoundsPreset, setVeBoundsPreset] = useState<VEBoundsPreset>('na_harley');
 
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
@@ -658,7 +679,7 @@ export default function JetDriveAutoTunePage() {
         stopCapture,
     } = useJetDriveLive({
         apiUrl: API_BASE,
-        pollInterval: 250,  // 250ms (4Hz) - responsive and rate-limit friendly
+        pollInterval: 100,  // 100ms (10Hz) - fast updates for live tuning
     });
 
     // Extract channel values - memoized to avoid recalculation
@@ -667,10 +688,31 @@ export default function JetDriveAutoTunePage() {
         return ch?.value || 0;
     }, [channels]);
 
-    const currentAfr = useMemo(() => {
-        const ch = channels['Air/Fuel Ratio 1'] || channels['AFR 1'] || channels['AFR'] || channels['chan_23'];
+    // Dual-cylinder AFR extraction (LC1 = Front, LC2 = Rear)
+    const currentAfrFront = useMemo(() => {
+        const ch = channels['LC1 Volts Petrol AFR'] || 
+                   channels['Air/Fuel Ratio 1'] || 
+                   channels['AFR 1'] || 
+                   channels['AFR'] || 
+                   channels['chan_23'];
         return ch?.value || 0;
     }, [channels]);
+    
+    const currentAfrRear = useMemo(() => {
+        const ch = channels['LC2 Volts Petrol AFR2'] || 
+                   channels['Air/Fuel Ratio 2'] || 
+                   channels['AFR 2'];
+        // Fall back to front AFR if rear sensor not available
+        return ch?.value || currentAfrFront;
+    }, [channels, currentAfrFront]);
+    
+    // Legacy combined AFR (average of front and rear)
+    const currentAfr = useMemo(() => {
+        if (currentAfrRear !== currentAfrFront) {
+            return (currentAfrFront + currentAfrRear) / 2;
+        }
+        return currentAfrFront;
+    }, [currentAfrFront, currentAfrRear]);
 
     const currentForce = useMemo(() => {
         // Note: chan_39 is Atmospheric Pressure, NOT Force
@@ -791,6 +833,112 @@ export default function JetDriveAutoTunePage() {
             }
         }
     }, [simStatus?.active, simStatus?.current?.tps]);
+
+    // Auto-load tune from pvv_template.pvv if available
+    useEffect(() => {
+        const loadPvvTemplate = async () => {
+            try {
+                // Try to fetch the PVV template from the config folder
+                const response = await fetch('/config/pvv_template.pvv');
+                if (!response.ok) {
+                    console.log('[TuneImport] No pvv_template.pvv found, using defaults');
+                    return;
+                }
+                
+                const content = await response.text();
+                const parsed = parsePVV(content);
+                
+                if (parsed.parseErrors.length > 0 && !parsed.veFront && !parsed.afrTarget) {
+                    console.warn('[TuneImport] Failed to parse pvv_template.pvv:', parsed.parseErrors);
+                    setTuneLoadError('Failed to parse PVV template');
+                    return;
+                }
+                
+                // Extract AFR targets from the PVV
+                const newAfrTargets = parsed.afrTarget 
+                    ? extractAfrTargets(parsed.afrTarget)
+                    : null;
+                
+                if (newAfrTargets && Object.keys(newAfrTargets).length > 0) {
+                    setAfrTargets(newAfrTargets);
+                    console.log('[TuneImport] Loaded AFR targets from pvv_template.pvv:', newAfrTargets);
+                }
+                
+                setImportedTune({
+                    source: 'pvv',
+                    sourceName: parsed.sourceFile || 'pvv_template.pvv',
+                    veFront: parsed.veFront,
+                    veRear: parsed.veRear,
+                    afrTargets: newAfrTargets ?? DEFAULT_AFR_TARGETS,
+                    rpmBins: parsed.veFront?.rows ?? [],
+                    mapBins: parsed.veFront?.columns ?? [],
+                });
+                
+                console.log('[TuneImport] Auto-loaded tune from pvv_template.pvv');
+            } catch (e) {
+                console.log('[TuneImport] Could not auto-load pvv_template.pvv:', e);
+            }
+        };
+        
+        loadPvvTemplate();
+    }, []); // Run once on mount
+
+    // Handle tune import from TuneImport component
+    const handleTuneImport = useCallback((result: TuneImportResult) => {
+        setImportedTune(result);
+        setTuneLoadError(null);
+        
+        // Update AFR targets from imported tune
+        if (result.afrTargets && Object.keys(result.afrTargets).length > 0) {
+            setAfrTargets(result.afrTargets);
+        }
+        
+        console.log('[TuneImport] Imported tune:', result.sourceName);
+    }, []);
+
+    // Handle apply corrections (Phase 3)
+    const handleApplyCorrections = useCallback((report: ApplyReport) => {
+        if (!pendingExportData || !importedTune) {
+            toast.error('Missing data for apply');
+            return;
+        }
+        
+        // Export the applied VE tables
+        const exportData = {
+            sessionId: `session_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            enginePreset: pendingExportData.enginePreset,
+            veBoundsPreset: veBoundsPreset,
+            sourceFile: importedTune.sourceName,
+            rpmAxis: pendingExportData.rpmBins,
+            mapAxis: pendingExportData.mapBins,
+            baseVE: {
+                front: importedTune.veFront?.values ?? [],
+                rear: importedTune.veRear?.values ?? [],
+            },
+            corrections: {
+                front: pendingExportData.frontCorrections,
+                rear: pendingExportData.rearCorrections,
+            },
+            hitCounts: {
+                front: pendingExportData.frontHitCounts,
+                rear: pendingExportData.rearHitCounts,
+            },
+            appliedVE: report.appliedVE,
+        };
+        
+        // Download all formats
+        downloadAppliedVEAllFormats(exportData, 'Applied_VE');
+        
+        toast.success(`Applied corrections to ${report.totalCells - report.skippedCells} cells`);
+        setApplyPreviewOpen(false);
+        
+        console.log('[Apply] Corrections applied:', {
+            totalCells: report.totalCells,
+            skippedCells: report.skippedCells,
+            clampedCells: report.clampedCells,
+        });
+    }, [pendingExportData, importedTune, veBoundsPreset]);
 
     const sendSimThrottle = useCallback(async (tps: number) => {
         try {
@@ -1218,6 +1366,13 @@ export default function JetDriveAutoTunePage() {
 
                     <div className="flex items-center gap-3">
                         <WorkflowIndicator state={workflowState} rpmThreshold={rpmThreshold} />
+                        
+                        {/* Tune Import - Compact */}
+                        <TuneImport 
+                            onImport={handleTuneImport}
+                            currentPreset="harley_m8"
+                            compact={true}
+                        />
 
                         {/* Quick Decel Pop Fix Sheet */}
                         <Sheet>
@@ -1730,9 +1885,16 @@ export default function JetDriveAutoTunePage() {
                                                 <LiveVETable
                                                     currentRpm={currentRpm}
                                                     currentMap={currentMap}
-                                                    currentAfr={currentAfr}
+                                                    currentAfrFront={currentAfrFront}
+                                                    currentAfrRear={currentAfrRear}
                                                     afrTargets={afrTargets}
                                                     isLive={isCapturing || isSimulatorActive}
+                                                    customRpmBins={importedTune?.rpmBins}
+                                                    customMapBins={importedTune?.mapBins}
+                                                    onExport={(data) => {
+                                                        setPendingExportData(data);
+                                                        setExportModalOpen(true);
+                                                    }}
                                                 />
                                             </CardContent>
                                         </Card>
@@ -2141,6 +2303,155 @@ export default function JetDriveAutoTunePage() {
                     </TabsContent>
                 </Tabs>
             </div>
+            
+            {/* VE Export Modal */}
+            <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
+                <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-white">Export VE Corrections</DialogTitle>
+                        <DialogDescription className="text-zinc-400">
+                            Choose export format. Dual-cylinder corrections (Front/Rear) will be included.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {pendingExportData && (
+                        <div className="space-y-4">
+                            {/* Summary */}
+                            <div className="bg-zinc-800/50 rounded-lg p-3 text-xs">
+                                <div className="grid grid-cols-2 gap-2 text-zinc-400">
+                                    <div>Engine: <span className="text-white">{pendingExportData.enginePreset}</span></div>
+                                    <div>Total Hits: <span className="text-green-400">{pendingExportData.totalHits}</span></div>
+                                    <div>Grid: <span className="text-white">{pendingExportData.rpmBins.length}x{pendingExportData.mapBins.length}</span></div>
+                                    <div>Cylinders: <span className="text-orange-400">Front + Rear</span></div>
+                                </div>
+                            </div>
+                            
+                            {/* Export Buttons */}
+                            <div className="grid grid-cols-1 gap-2">
+                                <Button
+                                    onClick={() => {
+                                        const csv = exportToCSV(pendingExportData, 'front');
+                                        downloadFile(csv, `VE_Corrections_Front_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv');
+                                        toast.success('Front cylinder CSV exported');
+                                    }}
+                                    variant="outline"
+                                    className="justify-start border-zinc-700 hover:bg-zinc-800"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    CSV (Front Cylinder)
+                                </Button>
+                                
+                                <Button
+                                    onClick={() => {
+                                        const csv = exportToCSV(pendingExportData, 'rear');
+                                        downloadFile(csv, `VE_Corrections_Rear_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv');
+                                        toast.success('Rear cylinder CSV exported');
+                                    }}
+                                    variant="outline"
+                                    className="justify-start border-zinc-700 hover:bg-zinc-800"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    CSV (Rear Cylinder)
+                                </Button>
+                                
+                                <Button
+                                    onClick={() => {
+                                        const pvv = exportToPVV(pendingExportData);
+                                        downloadFile(pvv, `VE_Corrections_${new Date().toISOString().slice(0,10)}.pvv`, 'application/xml');
+                                        toast.success('Power Vision PVV exported');
+                                    }}
+                                    className="justify-start bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Power Vision (.pvv) - Both Cylinders
+                                </Button>
+                                
+                                <Button
+                                    onClick={() => {
+                                        const json = exportToJSON(pendingExportData);
+                                        downloadFile(json, `VE_Corrections_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+                                        toast.success('JSON exported');
+                                    }}
+                                    variant="outline"
+                                    className="justify-start border-zinc-700 hover:bg-zinc-800"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    JSON (Full Data)
+                                </Button>
+                            </div>
+                            
+                            <p className="text-xs text-zinc-500 text-center">
+                                PVV export uses partial bin matching for safety
+                            </p>
+                            
+                            {/* Apply Button - Opens ApplyPreviewPanel */}
+                            {importedTune && (
+                                <div className="pt-3 border-t border-zinc-800 mt-3">
+                                    <Button
+                                        onClick={() => {
+                                            setExportModalOpen(false);
+                                            setApplyPreviewOpen(true);
+                                        }}
+                                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500"
+                                    >
+                                        <Zap className="w-4 h-4 mr-2" />
+                                        Apply to Base Tune
+                                    </Button>
+                                    <p className="text-xs text-zinc-500 text-center mt-2">
+                                        Preview and apply corrections to your imported tune
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+            
+            {/* Apply Preview Dialog (Phase 3) */}
+            <Dialog open={applyPreviewOpen} onOpenChange={setApplyPreviewOpen}>
+                <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-white">Apply VE Corrections</DialogTitle>
+                        <DialogDescription className="text-zinc-400">
+                            Review corrections before applying to your base tune.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {pendingExportData && importedTune && (
+                        <ApplyPreviewPanel
+                            baseVE={{
+                                front: importedTune.veFront?.values ?? [],
+                                rear: importedTune.veRear?.values ?? [],
+                            }}
+                            corrections={{
+                                front: pendingExportData.frontCorrections,
+                                rear: pendingExportData.rearCorrections,
+                            }}
+                            hitCounts={{
+                                front: pendingExportData.frontHitCounts,
+                                rear: pendingExportData.rearHitCounts,
+                            }}
+                            rpmAxis={pendingExportData.rpmBins}
+                            mapAxis={pendingExportData.mapBins}
+                            boundsPreset={veBoundsPreset}
+                            onBoundsPresetChange={setVeBoundsPreset}
+                            onApply={handleApplyCorrections}
+                            onCancel={() => setApplyPreviewOpen(false)}
+                        />
+                    )}
+                    
+                    {(!pendingExportData || !importedTune) && (
+                        <div className="text-center py-8 text-zinc-500">
+                            <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
+                            <p>Missing data for apply preview.</p>
+                            <p className="text-xs mt-1">
+                                {!importedTune && 'Import a base tune first. '}
+                                {!pendingExportData && 'Collect some VE data first.'}
+                            </p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -1,133 +1,132 @@
 /**
- * ConfidenceBadge - Compact confidence score display for JetDrive Command Center
- * 
- * Shows letter grade and score in a compact format suitable for the
- * command center's dense layout.
+ * ConfidenceBadge - Multi-purpose confidence indicator
+ *
+ * Supports two interfaces:
+ * 1. VE Apply confidence (high/medium/low/skip) - used in ApplyPreviewPanel
+ * 2. Confidence Report - used in run results display
  */
 
-import { Award, Info } from 'lucide-react';
+import { Confidence } from '../../types/veApplyTypes';
+import { getConfidenceBadge as getVEConfidenceBadge } from '../../utils/veApply';
+import type { ConfidenceReport } from '../ConfidenceScoreCard';
 import { Badge } from '../ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import type { ConfidenceReport } from '../../lib/api';
 
-interface ConfidenceBadgeProps {
-    confidence: ConfidenceReport | null;
-    compact?: boolean;
-    className?: string;
+// Type guard to check if confidence is a ConfidenceReport
+function isConfidenceReport(
+  confidence: Confidence | ConfidenceReport | unknown
+): confidence is ConfidenceReport {
+  return (
+    typeof confidence === 'object' &&
+    confidence !== null &&
+    'letter_grade' in confidence
+  );
 }
 
-export function ConfidenceBadge({ confidence, compact = false, className = '' }: ConfidenceBadgeProps) {
-    if (!confidence) return null;
+export interface ConfidenceBadgeProps {
+  // Accepts either VE Apply Confidence string or full ConfidenceReport
+  confidence: Confidence | ConfidenceReport;
+  // For ConfidenceReport mode
+  compact?: boolean;
+  // For VE Apply mode
+  size?: 'sm' | 'md' | 'lg';
+  showTooltip?: boolean;
+}
 
+export function ConfidenceBadge({
+  confidence,
+  compact = false,
+  size = 'sm',
+  showTooltip = true,
+}: ConfidenceBadgeProps) {
+  // Handle ConfidenceReport type (original usage)
+  if (isConfidenceReport(confidence)) {
     const getGradeColor = (grade: string) => {
-        switch (grade) {
-            case 'A':
-                return 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30';
-            case 'B':
-                return 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30';
-            case 'C':
-                return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30';
-            case 'D':
-                return 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30';
-            default:
-                return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
-        }
-    };
-
-    const getScoreEmoji = (score: number) => {
-        if (score >= 85) return '🏆';
-        if (score >= 70) return '✨';
-        if (score >= 50) return '⚡';
-        return '⚠️';
+      switch (grade) {
+        case 'A':
+          return 'border-green-500/30 text-green-400 bg-green-500/10';
+        case 'B':
+          return 'border-blue-500/30 text-blue-400 bg-blue-500/10';
+        case 'C':
+          return 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10';
+        case 'D':
+          return 'border-red-500/30 text-red-400 bg-red-500/10';
+        default:
+          return 'border-zinc-500/30 text-zinc-400 bg-zinc-500/10';
+      }
     };
 
     if (compact) {
-        return (
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Badge className={`${getGradeColor(confidence.letter_grade)} ${className} cursor-help`}>
-                            <Award className="w-3 h-3 mr-1" />
-                            {confidence.letter_grade} {confidence.overall_score.toFixed(0)}%
-                        </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
-                        <div className="space-y-1 text-xs">
-                            <p className="font-semibold">{confidence.grade_description}</p>
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-2 text-[10px]">
-                                <span className="text-muted-foreground">Coverage:</span>
-                                <span className="font-mono">{confidence.component_scores.coverage.score.toFixed(0)}</span>
-                                <span className="text-muted-foreground">Consistency:</span>
-                                <span className="font-mono">{confidence.component_scores.consistency.score.toFixed(0)}</span>
-                                <span className="text-muted-foreground">Anomalies:</span>
-                                <span className="font-mono">{confidence.component_scores.anomalies.score.toFixed(0)}</span>
-                                <span className="text-muted-foreground">Clamping:</span>
-                                <span className="font-mono">{confidence.component_scores.clamping.score.toFixed(0)}</span>
-                            </div>
-                        </div>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-        );
+      return (
+        <Badge
+          variant="outline"
+          className={`text-[10px] ${getGradeColor(confidence.letter_grade)}`}
+          title={`${confidence.grade_description} (${confidence.overall_score.toFixed(0)}%)`}
+        >
+          {confidence.letter_grade}
+        </Badge>
+      );
     }
 
-    // Full display mode
     return (
-        <div className={`flex items-center gap-2 ${className}`}>
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div className="flex items-center gap-2 cursor-help">
-                            <span className="text-xl">{getScoreEmoji(confidence.overall_score)}</span>
-                            <Badge className={`${getGradeColor(confidence.letter_grade)} text-sm font-bold px-3 py-1`}>
-                                {confidence.letter_grade}
-                            </Badge>
-                            <div className="text-left">
-                                <div className="text-sm font-bold text-white">
-                                    {confidence.overall_score.toFixed(1)}%
-                                </div>
-                                <div className="text-[10px] text-zinc-500">
-                                    Confidence
-                                </div>
-                            </div>
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-sm">
-                        <div className="space-y-2 text-xs">
-                            <p className="font-semibold text-foreground">{confidence.grade_description}</p>
-
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-border">
-                                <div>
-                                    <span className="text-muted-foreground">Coverage:</span>
-                                    <span className="ml-2 font-mono font-semibold">{confidence.component_scores.coverage.score.toFixed(0)}</span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Consistency:</span>
-                                    <span className="ml-2 font-mono font-semibold">{confidence.component_scores.consistency.score.toFixed(0)}</span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Anomalies:</span>
-                                    <span className="ml-2 font-mono font-semibold">{confidence.component_scores.anomalies.score.toFixed(0)}</span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Clamping:</span>
-                                    <span className="ml-2 font-mono font-semibold">{confidence.component_scores.clamping.score.toFixed(0)}</span>
-                                </div>
-                            </div>
-
-                            {confidence.recommendations.length > 0 && (
-                                <div className="pt-2 border-t border-border">
-                                    <p className="text-muted-foreground mb-1">Top Recommendation:</p>
-                                    <p className="text-foreground text-[11px] leading-relaxed">
-                                        {confidence.recommendations[0]}
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-        </div>
+      <div className="flex items-center gap-2">
+        <Badge
+          variant="outline"
+          className={`${getGradeColor(confidence.letter_grade)}`}
+        >
+          Grade: {confidence.letter_grade}
+        </Badge>
+        <span className="text-xs text-zinc-400">
+          {confidence.overall_score.toFixed(0)}%
+        </span>
+      </div>
     );
+  }
+
+  // Handle VE Apply Confidence type (new usage)
+  const badge = getVEConfidenceBadge(confidence as Confidence);
+
+  const sizeClasses = {
+    sm: 'w-4 h-4 text-[10px]',
+    md: 'w-5 h-5 text-xs',
+    lg: 'w-6 h-6 text-sm',
+  };
+
+  return (
+    <span
+      className={`
+        inline-flex items-center justify-center
+        rounded font-bold
+        ${sizeClasses[size]}
+        ${badge.bgColor}
+        ${badge.color}
+      `}
+      title={showTooltip ? badge.description : undefined}
+    >
+      {badge.label}
+    </span>
+  );
 }
 
+/**
+ * Confidence legend for display in panels
+ */
+export function ConfidenceLegend() {
+  const levels: Confidence[] = ['high', 'medium', 'low', 'skip'];
+
+  return (
+    <div className="flex items-center gap-3 text-xs text-zinc-400">
+      <span className="text-zinc-500">Confidence:</span>
+      {levels.map((level) => {
+        const badge = getVEConfidenceBadge(level);
+        return (
+          <span key={level} className="flex items-center gap-1">
+            <ConfidenceBadge confidence={level} showTooltip={false} />
+            <span className={badge.color}>{badge.description.split(' ')[0]}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+export default ConfidenceBadge;

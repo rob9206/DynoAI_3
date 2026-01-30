@@ -38,12 +38,43 @@ export const CHANNEL_CATEGORIES: Record<ChannelCategory, { label: string; icon: 
 
 // Same types as useLiveLink for compatibility
 export interface JetDriveChannel {
+    /** Unique key: "0xPPPP:CC:Name" format */
+    key: string;
+    /** Display name (clean, human-readable) */
     name: string;
     value: number;
     units: string;
     timestamp: number;
+    /** Provider ID (hex) */
+    providerId?: number;
+    /** Channel ID within provider */
     id?: number;
     category?: ChannelCategory;
+}
+
+/**
+ * Parse a channel key into its components.
+ * Key format: "0xPPPP:CC:Name" where PPPP is provider ID (hex), CC is channel ID.
+ * 
+ * @returns { providerId, channelId, name } or null if invalid format
+ */
+export function parseChannelKey(key: string): { providerId: number; channelId: number; name: string } | null {
+    const match = key.match(/^0x([0-9A-Fa-f]{4}):(\d+):(.+)$/);
+    if (match) {
+        return {
+            providerId: parseInt(match[1], 16),
+            channelId: parseInt(match[2], 10),
+            name: match[3],
+        };
+    }
+    return null;
+}
+
+/**
+ * Create a channel key from components.
+ */
+export function createChannelKey(providerId: number, channelId: number, name: string): string {
+    return `0x${providerId.toString(16).toUpperCase().padStart(4, '0')}:${channelId}:${name}`;
 }
 
 export interface JetDriveSnapshot {
@@ -240,11 +271,18 @@ export function getChannelCategory(name: string, apiCategory?: string): ChannelC
 /**
  * Group channels by category for organized display.
  * Returns channels sorted by category order.
+ * 
+ * Channel keys use the format "0xPPPP:CC:Name" where:
+ * - PPPP = Provider ID (hex)
+ * - CC = Channel ID within provider
+ * - Name = Human-readable channel name
+ * 
+ * This ensures channels from different providers don't collide.
  */
 export function getChannelsByCategory(
     channels: Record<string, JetDriveChannel>
-): Record<ChannelCategory, Array<{ name: string; data: JetDriveChannel; config?: ChannelConfig }>> {
-    const grouped: Record<ChannelCategory, Array<{ name: string; data: JetDriveChannel; config?: ChannelConfig }>> = {
+): Record<ChannelCategory, Array<{ key: string; name: string; data: JetDriveChannel; config?: ChannelConfig }>> {
+    const grouped: Record<ChannelCategory, Array<{ key: string; name: string; data: JetDriveChannel; config?: ChannelConfig }>> = {
         atmospheric: [],
         dyno: [],
         afr: [],
@@ -252,10 +290,11 @@ export function getChannelsByCategory(
         misc: [],
     };
 
-    for (const [name, data] of Object.entries(channels)) {
-        const config = getChannelConfig(name);
+    for (const [key, data] of Object.entries(channels)) {
+        const displayName = data.name;
+        const config = getChannelConfig(displayName);
         const category = data.category ?? config?.category ?? 'misc';
-        grouped[category].push({ name, data, config });
+        grouped[category].push({ key, name: displayName, data, config });
     }
 
     // Sort each category by label
@@ -424,28 +463,39 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     units: {},
                 };
 
-                for (const [name, chRaw] of Object.entries(channelsRaw)) {
+                for (const [key, chRaw] of Object.entries(channelsRaw)) {
                     if (!isRecord(chRaw)) continue;
-                    const id = getNumber(chRaw.id) ?? undefined;
                     const value = getNumber(chRaw.value);
                     const timestamp = getNumber(chRaw.timestamp);
                     if (value === null || timestamp === null) continue;
                     
-                    const config = getChannelConfig(name);
+                    // Parse the channel key (format: "0xPPPP:CC:Name")
+                    // or fall back to legacy format for backwards compatibility
+                    const parsed = parseChannelKey(key);
+                    const channelKey = getString(chRaw.key) ?? key;
+                    const providerId = getNumber(chRaw.provider_id) ?? parsed?.providerId;
+                    const channelId = getNumber(chRaw.id) ?? parsed?.channelId;
+                    const displayName = getString(chRaw.name) ?? parsed?.name ?? key;
+                    
+                    const config = getChannelConfig(displayName);
                     const apiCategory = getString(chRaw.category);
-                    const category = getChannelCategory(name, apiCategory ?? undefined);
-
-                    newChannels[name] = {
-                        name,
+                    const category = getChannelCategory(displayName, apiCategory ?? undefined);
+                    
+                    // Store by DISPLAY NAME (not composite key) so dashboard lookups work.
+                    // The composite key is retained inside the object for debugging.
+                    newChannels[displayName] = {
+                        key: channelKey,
+                        name: displayName,
                         value,
                         units: config?.units ?? getString(chRaw.units) ?? '',
                         timestamp,
-                        id,
+                        providerId,
+                        id: channelId,
                         category,
                     };
 
-                    newSnapshot.channels[name] = value;
-                    newSnapshot.units[name] = config?.units ?? '';
+                    newSnapshot.channels[displayName] = value;
+                    newSnapshot.units[displayName] = config?.units ?? '';
                 }
                 if (opts.debug) {
                     // Keep any verbose logging behind a flag: logging inside a 20Hz polling loop

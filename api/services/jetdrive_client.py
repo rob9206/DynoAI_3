@@ -81,16 +81,26 @@ CHANNEL_CATEGORIES = {
 
 CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
     # =========================================================================
-    # ATMOSPHERIC PROBE CHANNELS (IDs 6-9, 35-38)
+    # POWER CORE INTERNAL CHANNELS (IDs 6-9) - NOT atmospheric!
+    # These are internal Power Core sensors, not the Atmospheric Probe.
     # =========================================================================
-    6: {"name": "Humidity", "category": "atmospheric", "units": "%"},
-    7: {"name": "Temperature 1", "category": "atmospheric", "units": "°C"},
-    8: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
-    9: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
-    35: {"name": "Humidity", "category": "atmospheric", "units": "%"},
+    6: {"name": "Internal Sensor 6", "category": "misc", "units": ""},
+    7: {"name": "Internal Temp 1", "category": "misc", "units": "°C"},
+    8: {"name": "Internal Temp 2", "category": "misc", "units": "°C"},
+    9: {"name": "Internal Pressure", "category": "misc", "units": "kPa"},
+    
+    # =========================================================================
+    # ATMOSPHERIC PROBE CHANNELS (IDs 35-38)
+    # Verified against WinPEP values:
+    #   - chan_36 ≈ 28.75°C (Temperature 1)
+    #   - chan_35 ≈ 29.33°C (Temperature 2)
+    #   - chan_37 = 100.58 kPa (Pressure) - EXACT match
+    #   - chan_38 ≈ 13.68% (Humidity)
+    # =========================================================================
+    35: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
     36: {"name": "Temperature 1", "category": "atmospheric", "units": "°C"},
-    37: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
-    38: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
+    37: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
+    38: {"name": "Humidity", "category": "atmospheric", "units": "%"},
     
     # =========================================================================
     # DYNO CORE CHANNELS (Drum, Force, Power, Torque)
@@ -205,6 +215,29 @@ class JetDriveSample:
     value: float
     category: str = "misc"  # Channel category (atmospheric, dyno, afr, engine, misc)
     units: str = ""  # Channel units
+    
+    @property
+    def channel_key(self) -> str:
+        """
+        Unique key for this channel across all providers.
+        Format: "0xPPPP:CC:Name" where PPPP is provider ID, CC is channel ID.
+        
+        This ensures channels from different providers don't collide,
+        even if they have the same channel ID or name.
+        """
+        return f"0x{self.provider_id:04X}:{self.channel_id}:{self.channel_name}"
+    
+    @staticmethod
+    def parse_channel_key(key: str) -> tuple[int, int, str] | None:
+        """
+        Parse a channel key back into (provider_id, channel_id, channel_name).
+        Returns None if the key doesn't match the expected format.
+        """
+        import re
+        match = re.match(r"^0x([0-9A-Fa-f]{4}):(\d+):(.+)$", key)
+        if match:
+            return int(match.group(1), 16), int(match.group(2)), match.group(3)
+        return None
 
 
 @dataclass
@@ -357,10 +390,19 @@ def _parse_channel_values(
     Parse channel values from a JetDrive wire frame.
     
     Name resolution priority:
-    1. Hardware ChannelInfo metadata (if available)
-    2. CHANNEL_REGISTRY by ID (comprehensive known channels)
-    3. Generic fallback name (chan_X)
+    1. CHANNEL_REGISTRY (for channels where hardware metadata is known to be WRONG)
+    2. Hardware ChannelInfo metadata (if available)
+    3. CHANNEL_REGISTRY by ID (comprehensive known channels)
+    4. Generic fallback name (Channel X)
+    
+    IMPORTANT: The channel_lookup should be provider-specific to avoid
+    channel ID collisions between Power Core CPU and Atmospheric Probe.
     """
+    # Channels where we FORCE the registry name because hardware sends wrong names.
+    # Atmospheric Probe channels 35-38: hardware mis-labels them (e.g. reports
+    # Pressure as "Temperature 2" and Humidity as "Pressure").
+    FORCE_REGISTRY_CHANNELS = {35, 36, 37, 38}
+    
     samples: list[JetDriveSample] = []
     idx = 0
     while idx + CHANNEL_VALUES_BLOCK <= len(value):
@@ -375,32 +417,47 @@ def _parse_channel_values(
         idx += 4
         
         # Resolve channel name, category, and units
-        chan = channel_lookup.get(chan_id)
-        registry_info = get_channel_info_from_registry(chan_id)
+        name: str = ""
+        category: str = "misc"
+        units: str = ""
         
-        if chan and chan.name:
-            # Priority 1: Hardware ChannelInfo metadata has the name - TRUST IT
-            name = chan.name
-            # Infer category from channel name
-            name_lower = name.lower()
-            if any(x in name_lower for x in ['humidity', 'temperature', 'pressure', 'atmospheric']):
-                category = "atmospheric"
-            elif any(x in name_lower for x in ['rpm', 'force', 'power', 'torque', 'speed', 'distance', 'acceleration']):
-                category = "dyno"
-            elif any(x in name_lower for x in ['afr', 'lambda', 'lc2', 'lc1', 'fuel', 'o2']):
-                category = "afr"
-            elif any(x in name_lower for x in ['map', 'tps', 'iat', 'ect', 'vbat', 'volt']):
-                category = "engine"
-            else:
-                category = "misc"
-            units = ""  # Let frontend handle units based on name
-        elif registry_info:
-            # Priority 2: Use CHANNEL_REGISTRY (fallback for channels without metadata)
-            name = str(registry_info["name"])
-            category = str(registry_info.get("category", "misc"))
-            units = str(registry_info.get("units", ""))
-        else:
-            # Priority 3: Generic fallback with channel ID
+        # Priority 1: FORCE registry for channels with known bad hardware metadata
+        if chan_id in FORCE_REGISTRY_CHANNELS:
+            registry_info = get_channel_info_from_registry(chan_id)
+            if registry_info:
+                name = str(registry_info["name"])
+                category = str(registry_info.get("category", "misc"))
+                units = str(registry_info.get("units", ""))
+        
+        # Priority 2: Use provider-specific channel_lookup (from ChannelInfo packets)
+        if not name:
+            chan = channel_lookup.get(chan_id)
+            if chan and chan.name:
+                name = chan.name
+                # Infer category from channel name
+                name_lower = name.lower()
+                if any(x in name_lower for x in ['humidity', 'temperature', 'pressure', 'atmospheric']):
+                    category = "atmospheric"
+                elif any(x in name_lower for x in ['rpm', 'force', 'power', 'torque', 'speed', 'distance', 'acceleration']):
+                    category = "dyno"
+                elif any(x in name_lower for x in ['afr', 'lambda', 'lc2', 'lc1', 'fuel', 'o2']):
+                    category = "afr"
+                elif any(x in name_lower for x in ['map', 'tps', 'iat', 'ect', 'vbat', 'volt']):
+                    category = "engine"
+                else:
+                    category = "misc"
+                units = ""  # Let frontend handle units based on name
+        
+        # Priority 3: Use CHANNEL_REGISTRY (fallback for channels without metadata)
+        if not name:
+            registry_info = get_channel_info_from_registry(chan_id)
+            if registry_info:
+                name = str(registry_info["name"])
+                category = str(registry_info.get("category", "misc"))
+                units = str(registry_info.get("units", ""))
+        
+        # Priority 4: Generic fallback with channel ID
+        if not name:
             name = f"Channel {chan_id}"
             category = "misc"
             units = ""
@@ -646,19 +703,18 @@ def _subscribe_sync(
     
     sock.settimeout(recv_timeout)
 
-    # Build channel lookup from provider AND cache (for multi-provider support)
-    channel_lookup = dict(provider.channels)
-    for cached_provider in _provider_cache.values():
-        for chan_id, chan_info in cached_provider.channels.items():
-            if chan_id not in channel_lookup:
-                channel_lookup[chan_id] = chan_info
+    # DON'T merge channel lookups - use provider-specific lookups to avoid ID collisions
+    # Power Core CPU and Atmospheric Probe may have same channel IDs with different meanings
+    # The _provider_cache stores each provider's channels separately
     
+    # Build allowed_ids from ALL cached providers if channel_names filter is specified
     allowed_ids = set()
     if channel_names:
         names = {n.strip().lower() for n in channel_names}
-        for chan_id, meta in channel_lookup.items():
-            if meta.name.lower() in names:
-                allowed_ids.add(chan_id)
+        for cached_provider in _provider_cache.values():
+            for chan_id, meta in cached_provider.channels.items():
+                if meta.name.lower() in names:
+                    allowed_ids.add(chan_id)
 
     dropped_frames = 0
     non_provider_frames = 0
@@ -684,11 +740,11 @@ def _subscribe_sync(
                 try:
                     info = _parse_channel_info(host, addr[0], value, port=cfg.port)
                     if info:
-                        _provider_cache[host] = info
-                        # Merge into our channel lookup
-                        for chan_id, chan_info in info.channels.items():
-                            if chan_id not in channel_lookup:
-                                channel_lookup[chan_id] = chan_info
+                        # Merge channels into existing cache entry for this provider
+                        if host in _provider_cache:
+                            _provider_cache[host].channels.update(info.channels)
+                        else:
+                            _provider_cache[host] = info
                 except Exception:
                     pass
                 continue
@@ -703,8 +759,13 @@ def _subscribe_sync(
             
             accepted_providers.add(host)
             
-            # Get channel lookup for this specific provider if available
-            provider_channels = _provider_cache.get(host, provider).channels if host in _provider_cache else channel_lookup
+            # CRITICAL: Use PROVIDER-SPECIFIC channel lookup to avoid ID collisions
+            # Power Core CPU and Atmospheric Probe have different channel IDs with same meanings
+            if host in _provider_cache:
+                provider_channels = _provider_cache[host].channels
+            else:
+                # Fallback to empty dict - will use CHANNEL_REGISTRY
+                provider_channels = {}
             
             try:
                 samples = _parse_channel_values(
