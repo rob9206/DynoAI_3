@@ -1,9 +1,10 @@
 #!/usr/bin/env pwsh
 # DynoAI + Dynoware RT-150 Quick Start
-# Supports custom IP address via parameter
+# Supports custom computer IP address via parameter
 
 param(
-    [string]$DynoIP = "239.255.60.60"  # Default, override with -DynoIP parameter
+    [string]$ComputerIP = "",  # Your computer's WiFi IP - UPDATE THIS
+    [string]$DynoIP = "239.255.60.60"      # Dyno multicast group (usually doesn't change)
 )
 
 Write-Host "======================================" -ForegroundColor Cyan
@@ -76,10 +77,10 @@ $env:DYNO_LOCATION = "Dawson Dynamics"
 $env:DYNO_IP = $DynoIP  # Use parameter value
 $env:DYNO_JETDRIVE_PORT = "22344"
 
-# JetDrive network configuration - use same interface as Dynoware RT
-# Dynoware is broadcasting on Ethernet 3 (10.0.0.100)
-$env:JETDRIVE_IFACE = "10.0.0.100"  # Ethernet 3 - matches Dynoware RT JetDrive setting
-$env:JETDRIVE_MCAST_GROUP = "239.255.60.60"  # Standard JetDrive multicast group
+# JetDrive network configuration - use WiFi interface for Dynoware RT
+# Your PC's WiFi IP must be on same subnet as dyno (192.168.1.x)
+$env:JETDRIVE_IFACE = $ComputerIP  # Use parameter value (your computer's IP)
+$env:JETDRIVE_MCAST_GROUP = $DynoIP  # JetDrive multicast group
 $env:JETDRIVE_PORT = "22344"
 
 # Drum 1 settings
@@ -114,10 +115,10 @@ Write-Host "======================================" -ForegroundColor Green
 Write-Host " Starting DynoAI" -ForegroundColor Green
 Write-Host "======================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Dyno IP:         $DynoIP" -ForegroundColor Cyan
-Write-Host "  Your IP:         $env:JETDRIVE_IFACE" -ForegroundColor Cyan
+Write-Host "  Dyno Multicast:  $DynoIP" -ForegroundColor Cyan
+Write-Host "  Your IP:         $ComputerIP" -ForegroundColor Cyan
 Write-Host "  JetDrive Port:   22344 (UDP multicast)" -ForegroundColor Cyan
-Write-Host "  Multicast Group: $env:JETDRIVE_MCAST_GROUP" -ForegroundColor Cyan
+Write-Host "  Multicast Group: $DynoIP" -ForegroundColor Cyan
 Write-Host "  API Server:      http://localhost:5001" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Test endpoints:" -ForegroundColor Yellow

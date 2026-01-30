@@ -357,7 +357,7 @@ class RealtimeAnalysisEngine:
                 self._last_rpm_time = current_time
             
             # Track TPS for frozen RPM detection context
-            if tps is not None:
+            if tps is not None and not math.isnan(tps):
                 self._last_tps = tps
     
     def _bin_rpm_map(self, rpm: float, map_kpa: float) -> tuple[int, int] | None:
@@ -441,13 +441,18 @@ class RealtimeAnalysisEngine:
         """Detect and emit alerts. O(1)."""
         rpm = data.get("rpm")
         afr = data.get("afr")
-        tps = data.get("tps", self._last_tps)
+        tps = data.get("tps")
+        
+        # Use fallback for None TPS values
+        if tps is None:
+            tps = self._last_tps
         
         # Frozen RPM detection
         if (
             self._last_rpm is not None and
             rpm is not None and
             abs(rpm - self._last_rpm) < 1.0 and  # RPM unchanged
+            tps is not None and
             tps > FROZEN_TPS_THRESHOLD and  # Engine should be running
             current_time - self._last_rpm_time > FROZEN_RPM_THRESHOLD_SEC
         ):
@@ -461,7 +466,7 @@ class RealtimeAnalysisEngine:
             ))
         
         # Implausible AFR detection
-        if afr is not None:
+        if afr is not None and not math.isnan(afr):
             if afr < AFR_MIN_PLAUSIBLE:
                 self._add_alert(Alert(
                     type=AlertType.IMPLAUSIBLE_AFR,
@@ -484,7 +489,7 @@ class RealtimeAnalysisEngine:
         # Stale channel detection
         freshness = self.quality.get_freshness(current_time)
         for channel, staleness in freshness.items():
-            if staleness > CHANNEL_STALE_THRESHOLD_SEC and channel in REQUIRED_CHANNELS:
+            if staleness is not None and staleness > CHANNEL_STALE_THRESHOLD_SEC and channel in REQUIRED_CHANNELS:
                 self._add_alert(Alert(
                     type=AlertType.STALE_CHANNEL,
                     severity=AlertSeverity.WARNING,

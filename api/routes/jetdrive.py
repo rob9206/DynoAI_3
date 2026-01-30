@@ -1924,10 +1924,13 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 _live_data["provider_host"] = None
             return
 
-        # Select provider - either requested one or first available
-        provider = None
+        # Merge ALL providers - Power Core CPU and Atmospheric Probe are separate providers
+        # but we want data from both
+        from api.services.jetdrive_client import merge_all_providers
+        
         if requested_provider_id is not None:
-            # Find the requested provider
+            # Find specific provider if requested
+            provider = None
             for p in providers:
                 if p.provider_id == requested_provider_id:
                     provider = p
@@ -1940,11 +1943,14 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     _live_data["error"] = f"Provider 0x{requested_provider_id:04X} not found"
                 return
         else:
-            provider = providers[0]
+            # Merge all providers into one for multi-provider support
+            provider = merge_all_providers(providers)
+            logger.info(f"Merged {len(providers)} providers: {[hex(p.provider_id) for p in providers]}")
 
-        # Pin the provider in the validator (reject samples from other providers)
-        validator.set_active_provider(provider.provider_id)
-        validator.reset(provider.provider_id)  # Clear old metrics for this provider
+        # Don't pin to a specific provider - accept samples from ALL providers
+        # Power Core CPU and Atmospheric Probe are separate providers but we want both
+        validator.set_active_provider(None)  # Accept all providers
+        validator.reset(provider.provider_id)  # Clear old metrics
 
         logger.info(
             f"Connected and pinned to provider: {provider.name} (ID: 0x{provider.provider_id:04X}, Host: {provider.host})"
@@ -1956,8 +1962,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             _live_data["provider_name"] = provider.name
             _live_data["provider_host"] = provider.host
 
-        # Start queue processing (no CSV writing - handled by separate capture endpoint)
-        # queue_mgr.start_processing()  # Uncomment when CSV writing is needed
+        # Start queue processing to drain the queue (prevents "Queue full" errors)
+        # Even without CSV writing, we need to process items to prevent queue overflow
+        queue_mgr.start_processing()
 
         # Channel values dictionary - updated continuously
         # Keys include provider_id to prevent cross-contamination
@@ -1965,11 +1972,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
 
         def on_sample(s: JetDriveSample):
             """Callback for each received sample - routes through queue manager."""
-            # Record sample in validator (this will filter by active provider)
-            was_recorded = validator.record_sample(s)
-            if not was_recorded:
-                # Sample was from wrong provider, ignore it
-                return
+            # Record sample in validator - now accepts samples from ALL providers
+            # Power Core CPU and Atmospheric Probe are separate providers but we want both
+            validator.record_sample(s)  # Don't filter - accept all samples
 
             # Route through queue manager for aggregation
             queue_mgr.on_sample(s)
@@ -1982,6 +1987,8 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 "value": s.value,
                 "timestamp": s.timestamp_ms,
                 "updated_at": datetime.now().isoformat(),
+                "category": getattr(s, "category", "misc"),  # Channel category for grouping
+                "units": getattr(s, "units", ""),  # Channel units
             }
 
             # Use provider-scoped key for channel storage
@@ -2113,8 +2120,8 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             # Flush any remaining aggregated samples
             queue_mgr.force_flush()
             
-            # Stop queue processing if it was started
-            # queue_mgr.stop_processing()  # Uncomment when CSV writing is active
+            # Stop queue processing
+            queue_mgr.stop_processing()
             
             check_task.cancel()
             try:

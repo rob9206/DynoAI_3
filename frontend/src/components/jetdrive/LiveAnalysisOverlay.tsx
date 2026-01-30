@@ -149,16 +149,26 @@ export function LiveAnalysisOverlay({
     const queryClient = useQueryClient();
     const [isAnalysisEnabled, setIsAnalysisEnabled] = useState(false);
 
-    // Fetch analysis state
+    // Fetch analysis state - graceful error handling
     const { data: analysis, isLoading, error, refetch } = useQuery<RealtimeAnalysisState>({
         queryKey: ['jetdrive-realtime-analysis', apiUrl],
         queryFn: async () => {
-            const res = await fetch(`${apiUrl}/realtime/analysis`);
-            if (!res.ok) throw new Error('Failed to fetch analysis');
-            return res.json();
+            try {
+                const res = await fetch(`${apiUrl}/realtime/analysis`);
+                if (!res.ok) {
+                    // Return disabled state on error rather than throwing
+                    return { success: false, enabled: false, message: 'Analysis unavailable' };
+                }
+                return res.json();
+            } catch (err) {
+                // Network error - return disabled state
+                return { success: false, enabled: false, message: 'Cannot reach analysis service' };
+            }
         },
         refetchInterval: enabled ? refreshInterval : false,
         enabled,
+        retry: false,
+        staleTime: 500,
     });
 
     // Enable analysis mutation
@@ -218,8 +228,10 @@ export function LiveAnalysisOverlay({
         onEnableChange?.(!isAnalysisEnabled);
     };
 
-    // Not enabled state
+    // Not enabled state or error state
     if (!analysis?.enabled) {
+        const hasError = analysis?.message && analysis?.success === false;
+        
         return (
             <Card className="bg-gray-900/80 backdrop-blur border-gray-700">
                 <CardHeader className="pb-3">
@@ -228,18 +240,20 @@ export function LiveAnalysisOverlay({
                             <BarChart3 className="h-5 w-5 text-blue-500" />
                             Live Analysis
                         </CardTitle>
-                        <Badge variant="outline" className="text-gray-400">
-                            Disabled
+                        <Badge variant="outline" className={hasError ? "text-yellow-400" : "text-gray-400"}>
+                            {hasError ? 'Unavailable' : 'Disabled'}
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Enable real-time analysis to see coverage, VE delta, and quality metrics during capture.
+                        {hasError 
+                            ? analysis.message 
+                            : 'Enable real-time analysis to see coverage, VE delta, and quality metrics during capture.'}
                     </p>
                     <Button 
                         onClick={() => enableMutation.mutate(14.7)}
-                        disabled={enableMutation.isPending}
+                        disabled={enableMutation.isPending || hasError}
                         className="w-full"
                     >
                         <Power className="h-4 w-4 mr-2" />

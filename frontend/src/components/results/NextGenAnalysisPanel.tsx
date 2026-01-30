@@ -8,25 +8,25 @@
  * - Spark/knock surface heatmaps
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Loader2,
   AlertCircle,
   Zap,
-  Target,
-  ClipboardList,
-  TrendingDown,
   ChevronDown,
   ChevronRight,
   AlertTriangle,
   CheckCircle2,
-  Info,
   RefreshCw,
   Copy,
   Check,
   Gauge,
   Car,
+  ClipboardList,
   MapPin,
+  TrendingDown,
+  Target,
+  Info,
   BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -65,14 +65,63 @@ export function NextGenAnalysisPanel({ runId, className }: NextGenAnalysisPanelP
     generateError,
   } = useNextGen(runId);
 
-  // Loading state
-  if (isLoading) {
+  // Track if we've attempted auto-generation for this runId
+  const autoGenerateAttempted = useRef<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Auto-generate analysis when data exists but analysis doesn't
+  // Only attempt once per runId to avoid infinite loops on error
+  useEffect(() => {
+    if (
+      runId &&
+      isNotGenerated &&
+      !isGenerating &&
+      !generateError &&
+      autoGenerateAttempted.current !== runId
+    ) {
+      autoGenerateAttempted.current = runId;
+      // Small delay to let the UI settle
+      const timer = setTimeout(() => {
+        generate({});
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [runId, isNotGenerated, isGenerating, generateError, generate]);
+
+  // Reset auto-generate tracker when runId changes
+  useEffect(() => {
+    if (autoGenerateAttempted.current && autoGenerateAttempted.current !== runId) {
+      autoGenerateAttempted.current = null;
+    }
+  }, [runId]);
+
+  // Loading state - more informative for operators
+  if (isLoading || (isGenerating && !data)) {
     return (
-      <Card className={className}>
-        <CardContent className="py-12">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading NextGen analysis...</p>
+      <Card className={cn("border-amber-500/30 bg-amber-500/5", className)}>
+        <CardContent className="py-8">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping opacity-20">
+                <Zap className="h-10 w-10 text-amber-500" />
+              </div>
+              <Zap className="h-10 w-10 text-amber-500" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="font-medium text-zinc-200">
+                {isGenerating ? 'Analyzing Dyno Data...' : 'Loading Analysis...'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isGenerating 
+                  ? 'Detecting modes, building surfaces, planning next tests'
+                  : 'Retrieving analysis results'}
+              </p>
+            </div>
+            {isGenerating && (
+              <div className="w-48">
+                <Progress value={undefined} className="h-1" />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -95,6 +144,40 @@ export function NextGenAnalysisPanel({ runId, className }: NextGenAnalysisPanelP
     );
   }
 
+  // Helper to parse error and provide user-friendly guidance
+  const getErrorGuidance = (err: Error | unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    
+    // 400 error typically means missing input data
+    if (message.includes('400') || message.toLowerCase().includes('bad request')) {
+      return {
+        title: 'Input Data Required',
+        message: 'This run does not have the required dyno log data for NextGen analysis.',
+        suggestions: [
+          'Select a run that has completed data capture (e.g., from a dyno pull)',
+          'Upload a CSV file with RPM, MAP, AFR, and spark timing channels',
+          'Runs from the JetStream simulator include sample data'
+        ],
+        isDataMissing: true,
+      };
+    }
+    
+    // 404 means analysis not generated yet (normal state)
+    if (message.includes('404')) {
+      return null; // Not an error, just not generated
+    }
+    
+    // Generic error
+    return {
+      title: 'Analysis Failed',
+      message: message,
+      suggestions: ['Check that the backend is running', 'Try refreshing the page'],
+      isDataMissing: false,
+    };
+  };
+
+  const errorGuidance = generateError ? getErrorGuidance(generateError) : null;
+
   // Not generated yet - show generate button
   if (isNotGenerated || !hasAnalysis || !data) {
     return (
@@ -110,123 +193,395 @@ export function NextGenAnalysisPanel({ runId, className }: NextGenAnalysisPanelP
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center gap-4 py-6">
-            <p className="text-sm text-muted-foreground text-center max-w-md">
-              Run NextGen analysis to detect spark timing valleys, generate causal hypotheses,
-              and receive intelligent next-test recommendations.
-            </p>
-            {generateError && (
-              <div className="text-sm text-destructive flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                {generateError instanceof Error ? generateError.message : 'Generation failed'}
+            {/* Show helpful error guidance if generation failed */}
+            {errorGuidance ? (
+              <div className="w-full max-w-md space-y-3">
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="font-medium text-amber-200">{errorGuidance.title}</p>
+                    <p className="text-sm text-muted-foreground">{errorGuidance.message}</p>
+                  </div>
+                </div>
+                
+                {errorGuidance.suggestions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      What to do:
+                    </p>
+                    <ul className="space-y-1.5">
+                      {errorGuidance.suggestions.map((suggestion, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                          <span>{suggestion}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!errorGuidance.isDataMissing && (
+                  <Button
+                    onClick={() => generate({})}
+                    disabled={isGenerating}
+                    variant="outline"
+                    className="gap-2 mt-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Retry Analysis
+                  </Button>
+                )}
               </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground text-center max-w-md">
+                  Run NextGen analysis to detect spark timing valleys, generate causal hypotheses,
+                  and receive intelligent next-test recommendations.
+                </p>
+                <Button
+                  onClick={() => generate({})}
+                  disabled={isGenerating}
+                  className="gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4" />
+                      Generate NextGen Analysis
+                    </>
+                  )}
+                </Button>
+              </>
             )}
-            <Button
-              onClick={() => generate({})}
-              disabled={isGenerating}
-              className="gap-2"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Zap className="h-4 w-4" />
-                  Generate NextGen Analysis
-                </>
-              )}
-            </Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  // Has data - render full panel (data is guaranteed to be non-null here)
+  // Extract the ONE most important action
+  const dynoPulls = data.next_tests?.steps?.filter(s => s.test_type === 'wot_pull') || [];
+  const nextDynoTest = dynoPulls[0];
+  const totalPulls = dynoPulls.length;
+  const coverageGaps = data.next_tests?.coverage_gaps_detailed || [];
+  const gapCount = coverageGaps.length;
+  const isComplete = gapCount === 0;
+
+  // Has data - render SIMPLE operator-focused panel
   return (
-    <Card className={cn("border-amber-500/30 bg-amber-500/5", className)}>
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-amber-500" />
-              NextGen Analysis
-            </CardTitle>
-            <CardDescription>
-              Generated {new Date(data.generated_at).toLocaleString()}
-            </CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => generate({ force: true })}
-            disabled={isGenerating}
-            className="gap-2"
-          >
-            <RefreshCw className={cn("h-4 w-4", isGenerating && "animate-spin")} />
-            Regenerate
-          </Button>
+    <Card className={cn("border-zinc-700 bg-zinc-900", className)}>
+      {/* Simple header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+        <div className="flex items-center gap-3">
+          <Zap className="h-6 w-6 text-amber-500" />
+          <span className="text-lg font-semibold text-white">Next Test</span>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Channel Readiness Checklist */}
-        {data.channel_readiness && (
-          <ChannelReadinessPanel readiness={data.channel_readiness} />
-        )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="text-sm text-zinc-400 hover:text-white flex items-center gap-1"
+        >
+          {isCollapsed ? 'Show Details' : 'Hide Details'}
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </div>
 
-        {/* Warnings */}
-        {data.notes_warnings.length > 0 && (
-          <WarningsSection warnings={data.notes_warnings} />
-        )}
-
-        {/* Mode Distribution Summary (compact) */}
-        <ModeDistributionSummary modeSummary={data.mode_summary} />
-
-        {/* Coverage Gaps Panel - PROMINENT */}
-        {data.next_tests.coverage_gaps_detailed && data.next_tests.coverage_gaps_detailed.length > 0 && (
-          <CoverageGapsPanel 
-            gaps={data.next_tests.coverage_gaps_detailed}
-            steps={data.next_tests.steps}
+      {/* MAIN ACTION - Big, clear, one thing */}
+      <div className="p-6">
+        {isComplete ? (
+          // All done state
+          <div className="text-center py-8">
+            <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Coverage Complete</h2>
+            <p className="text-zinc-400">All critical regions have sufficient data</p>
+          </div>
+        ) : nextDynoTest ? (
+          // Dyno pull needed
+          <DynoActionCard 
+            test={nextDynoTest} 
+            gapCount={gapCount} 
+            pullNumber={1} 
+            totalPulls={totalPulls}
           />
+        ) : (
+          // Street logging needed
+          <div className="text-center py-8">
+            <Car className="h-16 w-16 text-blue-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Street Logging Needed</h2>
+            <p className="text-zinc-400">{gapCount} coverage gaps to fill</p>
+          </div>
         )}
-        
-        {/* Test Planner Constraints */}
-        <PlannerConstraintsPanel vehicleId="default" className="mt-4" />
-        
-        {/* Cell Target Heatmap - Show which cells to hit next */}
-        {data.surfaces && Object.keys(data.surfaces).length > 0 && (
-          <CellTargetHeatmapSection surfaces={data.surfaces} />
-        )}
+      </div>
 
-        {/* Dyno Pull Script - PROMINENT */}
-        <DynoPullScriptSection steps={data.next_tests.steps} />
+      {/* Expandable details - hidden by default */}
+      {!isCollapsed && (
+        <div className="border-t border-zinc-800 p-6 space-y-6 bg-zinc-950/50">
+          {/* Coverage Gaps - simple list */}
+          {gapCount > 0 && (
+            <SimpleGapsList gaps={coverageGaps} />
+          )}
+          
+          {/* Additional pulls if any */}
+          {data.next_tests.steps.filter(s => s.test_type === 'wot_pull').length > 1 && (
+            <AdditionalPullsList steps={data.next_tests.steps.filter(s => s.test_type === 'wot_pull').slice(1)} />
+          )}
 
-        {/* Street Script - PROMINENT */}
-        <StreetScriptSection steps={data.next_tests.steps} />
-
-        {/* Spark Valley Findings (collapsed by default) */}
-        {data.spark_valley.length > 0 && (
-          <SparkValleySection findings={data.spark_valley} />
-        )}
-
-        {/* Heatmaps (simplified, 2-3 default) */}
-        <SurfacesSection surfaces={data.surfaces} />
-
-        {/* Cause Tree Hypotheses (collapsed by default, minimal) */}
-        {data.cause_tree.hypotheses.length > 0 && (
-          <HypothesesSection
-            hypotheses={data.cause_tree.hypotheses}
-            summary={data.cause_tree.summary}
-          />
-        )}
-
-        {/* ECU Model Notes (collapsed by default) */}
-        {data.ecu_model_notes && data.ecu_model_notes.length > 0 && (
-          <ECUModelNotesSection notes={data.ecu_model_notes} />
-        )}
-      </CardContent>
+          {/* Street tests */}
+          {data.next_tests.steps.filter(s => s.test_type !== 'wot_pull').length > 0 && (
+            <StreetTestsList steps={data.next_tests.steps.filter(s => s.test_type !== 'wot_pull')} />
+          )}
+        </div>
+      )}
     </Card>
+  );
+}
+
+// =============================================================================
+// SIMPLE OPERATOR-FOCUSED COMPONENTS
+// =============================================================================
+
+/** The ONE big action card - dyno pull with all operator features */
+function DynoActionCard({ test, gapCount, pullNumber = 1, totalPulls = 1 }: { 
+  test: NextGenTestStep; 
+  gapCount: number;
+  pullNumber?: number;
+  totalPulls?: number;
+}) {
+  const { copyToClipboard, copiedId } = useCopyToClipboard();
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [lastPullTime, setLastPullTime] = useState<Date | null>(null);
+  
+  const startRpm = test.rpm_range ? Math.max(1500, test.rpm_range[0] - 500) : 2000;
+  const endRpm = test.rpm_range ? test.rpm_range[1] + 500 : 6000;
+  
+  const scriptText = `${test.name}
+Start: ${startRpm} RPM
+End: ${endRpm} RPM  
+Gear: 4th or 5th
+${test.risk_notes ? `\nWARNING: ${test.risk_notes}` : ''}`;
+
+  // Cooldown timer effect
+  useEffect(() => {
+    if (cooldownSeconds > 0) {
+      const timer = setTimeout(() => setCooldownSeconds(cooldownSeconds - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldownSeconds]);
+
+  // Handle "Pull Complete" action
+  const handlePullComplete = () => {
+    setShowSuccess(true);
+    setLastPullTime(new Date());
+    setCooldownSeconds(45); // 45 second cooldown
+    
+    // Hide success after 3 seconds
+    setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  // Format time ago
+  const getTimeAgo = (date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m ago`;
+  };
+
+  // Success overlay
+  if (showSuccess) {
+    return (
+      <div className="text-center py-12 animate-pulse">
+        <CheckCircle2 className="h-24 w-24 text-emerald-500 mx-auto mb-4" />
+        <h2 className="text-3xl font-bold text-emerald-400 mb-2">Good Pull!</h2>
+        <p className="text-xl text-zinc-400">Data captured successfully</p>
+      </div>
+    );
+  }
+
+  // Cooling down state
+  if (cooldownSeconds > 0) {
+    return (
+      <div className="text-center py-8 space-y-6">
+        {/* Cooldown timer - big and obvious */}
+        <div className="relative w-32 h-32 mx-auto">
+          <svg className="w-32 h-32 transform -rotate-90">
+            <circle
+              cx="64"
+              cy="64"
+              r="56"
+              stroke="currentColor"
+              strokeWidth="8"
+              fill="none"
+              className="text-zinc-800"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r="56"
+              stroke="currentColor"
+              strokeWidth="8"
+              fill="none"
+              strokeDasharray={352}
+              strokeDashoffset={352 - (352 * cooldownSeconds) / 45}
+              className="text-amber-500 transition-all duration-1000"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-4xl font-bold text-amber-400">{cooldownSeconds}</span>
+          </div>
+        </div>
+        
+        <div>
+          <h2 className="text-2xl font-bold text-amber-400 mb-2">Cooling Down</h2>
+          <p className="text-zinc-400">Wait before next pull</p>
+        </div>
+
+        {/* Skip button */}
+        <Button
+          variant="outline"
+          onClick={() => setCooldownSeconds(0)}
+          className="text-zinc-400"
+        >
+          Skip Cooldown
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Pull counter - prominent */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-500/20 border border-cyan-500/30">
+          <span className="text-lg font-bold text-cyan-400">Pull {pullNumber}</span>
+          <span className="text-zinc-500">of</span>
+          <span className="text-lg font-bold text-cyan-400">{totalPulls}</span>
+        </div>
+      </div>
+
+      {/* Big RPM display - TAPPABLE for touch screens */}
+      <button
+        onClick={() => copyToClipboard(scriptText, 'main-action')}
+        className="w-full p-6 rounded-2xl bg-zinc-800/50 border-2 border-zinc-700 hover:border-cyan-500/50 transition-all active:scale-[0.98] cursor-pointer"
+      >
+        <div className="flex items-center justify-center gap-8">
+          <div className="text-center">
+            <div className="text-sm text-zinc-500 uppercase tracking-wider mb-1">Start</div>
+            <div className="text-6xl font-bold text-cyan-400">{startRpm}</div>
+            <div className="text-xl text-zinc-500">RPM</div>
+          </div>
+          
+          <div className="text-5xl text-zinc-600">→</div>
+          
+          <div className="text-center">
+            <div className="text-sm text-zinc-500 uppercase tracking-wider mb-1">End</div>
+            <div className="text-6xl font-bold text-cyan-400">{endRpm}</div>
+            <div className="text-xl text-zinc-500">RPM</div>
+          </div>
+        </div>
+
+        {/* Gear - inside tappable area */}
+        <div className="text-center mt-4">
+          <span className="text-2xl text-white">Gear: </span>
+          <span className="text-2xl font-bold text-white">4th or 5th</span>
+        </div>
+
+        {/* Tap hint */}
+        <div className="text-center mt-4 text-sm text-zinc-600">
+          {copiedId === 'main-action' ? (
+            <span className="text-emerald-400">✓ Copied to clipboard</span>
+          ) : (
+            <span>Tap to copy instructions</span>
+          )}
+        </div>
+      </button>
+
+      {/* Warning if any */}
+      {test.risk_notes && (
+        <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+          <AlertTriangle className="h-6 w-6 text-yellow-500 flex-shrink-0" />
+          <span className="text-lg text-yellow-200">{test.risk_notes}</span>
+        </div>
+      )}
+
+      {/* BIG "Pull Complete" button - for after the pull */}
+      <Button
+        size="lg"
+        onClick={handlePullComplete}
+        className="w-full gap-3 text-xl py-8 h-auto bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98]"
+      >
+        <CheckCircle2 className="h-8 w-8" />
+        Pull Complete
+      </Button>
+
+      {/* Last pull info */}
+      {lastPullTime && (
+        <p className="text-center text-zinc-500">
+          Last pull: {getTimeAgo(lastPullTime)}
+        </p>
+      )}
+
+      {/* Gap count - subtle */}
+      <p className="text-center text-zinc-500">
+        {gapCount} coverage gap{gapCount !== 1 ? 's' : ''} remaining
+      </p>
+    </div>
+  );
+}
+
+/** Simple gaps list */
+function SimpleGapsList({ gaps }: { gaps: NextGenCoverageGap[] }) {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold text-white mb-3">Coverage Gaps</h3>
+      <div className="space-y-2">
+        {gaps.slice(0, 4).map((gap, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+            <span className="text-white">{gap.rpm_range?.[0]}-{gap.rpm_range?.[1]} RPM @ {gap.map_range?.[0]}-{gap.map_range?.[1]} kPa</span>
+            <span className="text-zinc-400">{gap.coverage_pct?.toFixed(0)}% covered</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Additional pulls list */
+function AdditionalPullsList({ steps }: { steps: NextGenTestStep[] }) {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold text-white mb-3">Additional Pulls</h3>
+      <div className="space-y-2">
+        {steps.slice(0, 3).map((step, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+            <span className="text-white">{step.name}</span>
+            <span className="text-cyan-400 font-mono">
+              {step.rpm_range?.[0]}-{step.rpm_range?.[1]} RPM
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Street tests list */
+function StreetTestsList({ steps }: { steps: NextGenTestStep[] }) {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold text-white mb-3">Street Logging</h3>
+      <div className="space-y-2">
+        {steps.slice(0, 3).map((step, idx) => (
+          <div key={idx} className="p-3 bg-zinc-800 rounded-lg">
+            <div className="text-white font-medium">{step.name}</div>
+            <div className="text-zinc-400 text-sm mt-1">{step.goal}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -688,30 +1043,30 @@ function DynoPullScriptSection({ steps }: { steps: NextGenTestStep[] }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors text-left"
+          className="flex items-center gap-3 text-base font-semibold hover:text-primary transition-colors text-left"
         >
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          <Gauge className="h-4 w-4 text-orange-500" />
-          Dyno Pull Script ({dynoSteps.length} pulls)
+          {expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          <Gauge className="h-5 w-5 text-orange-500" />
+          <span>Dyno Pull Script ({dynoSteps.length} pulls)</span>
         </button>
         <Button
           variant="outline"
-          size="sm"
+          size="default"
           onClick={() => copyToClipboard(generateAllPullsScript(), 'all-pulls')}
-          className="text-xs h-7 gap-1"
+          className="gap-2"
         >
           {copiedId === 'all-pulls' ? (
             <>
-              <Check className="h-3 w-3 text-green-500" />
+              <Check className="h-4 w-4 text-green-500" />
               Copied!
             </>
           ) : (
             <>
-              <Copy className="h-3 w-3" />
+              <Copy className="h-4 w-4" />
               Copy All
             </>
           )}
@@ -719,75 +1074,82 @@ function DynoPullScriptSection({ steps }: { steps: NextGenTestStep[] }) {
       </div>
 
       {expanded && (
-        <div className="space-y-3 pl-6">
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-xs">
-            <p className="font-medium text-orange-600 dark:text-orange-400 mb-1">
+        <div className="space-y-4 pl-2">
+          {/* Tips box - larger text */}
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+            <p className="font-semibold text-orange-400 text-base mb-2">
               Inertia Dyno Tips:
             </p>
-            <ul className="text-muted-foreground space-y-0.5">
+            <ul className="text-zinc-300 space-y-1 text-sm">
               <li>• Keep gear consistent across all pulls</li>
               <li>• Allow 30-60s cool-down between pulls</li>
               <li>• Monitor knock and abort if excessive</li>
             </ul>
           </div>
 
-          <div className="space-y-2">
+          {/* Pull cards - much larger and clearer */}
+          <div className="space-y-4">
             {dynoSteps.map((step, idx) => (
               <div
                 key={idx}
-                className="bg-muted/50 rounded-lg p-3 space-y-2"
+                className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-5 space-y-4"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-orange-500">#{idx + 1}</span>
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl font-bold text-orange-400">#{idx + 1}</span>
+                    </div>
                     <div>
-                      <h5 className="font-medium text-sm">{step.name}</h5>
-                      <p className="text-xs text-muted-foreground">{step.goal}</p>
+                      <h5 className="font-semibold text-lg text-zinc-100">{step.name}</h5>
+                      <p className="text-sm text-zinc-400 mt-1">{step.goal}</p>
                     </div>
                   </div>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => copyToClipboard(generatePullScript(step, idx), `pull-${idx}`)}
-                    className="text-xs h-7 px-2"
+                    className="h-10 w-10"
                   >
                     {copiedId === `pull-${idx}` ? (
-                      <Check className="h-3 w-3 text-green-500" />
+                      <Check className="h-5 w-5 text-green-500" />
                     ) : (
-                      <Copy className="h-3 w-3" />
+                      <Copy className="h-5 w-5" />
                     )}
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                {/* RPM and Gear info - large and clear */}
+                <div className="grid grid-cols-3 gap-4">
                   {step.rpm_range && (
                     <>
-                      <div>
-                        <span className="text-muted-foreground">Start:</span>
-                        <span className="ml-1 font-medium">{Math.max(1500, step.rpm_range[0] - 500)} RPM</span>
+                      <div className="bg-zinc-900/50 rounded-lg p-3">
+                        <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-1">Start</span>
+                        <span className="text-xl font-bold text-cyan-400">{Math.max(1500, step.rpm_range[0] - 500)} RPM</span>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">End:</span>
-                        <span className="ml-1 font-medium">{step.rpm_range[1] + 500} RPM</span>
+                      <div className="bg-zinc-900/50 rounded-lg p-3">
+                        <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-1">End</span>
+                        <span className="text-xl font-bold text-cyan-400">{step.rpm_range[1] + 500} RPM</span>
                       </div>
                     </>
                   )}
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Gear:</span>
-                    <span className="ml-1 font-medium">
+                  <div className="bg-zinc-900/50 rounded-lg p-3">
+                    <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-1">Gear</span>
+                    <span className="text-xl font-bold text-white">
                       {step.rpm_range && step.rpm_range[1] <= 4000 
-                        ? '3rd or 4th' 
+                        ? '4th or 5th' 
                         : step.rpm_range && step.rpm_range[1] <= 5500 
                           ? '4th or 5th' 
-                          : '5th or 6th'}
+                          : '4th or 5th'}
                     </span>
                   </div>
                 </div>
 
+                {/* Warning - prominent */}
                 {step.risk_notes && (
-                  <div className="flex items-center gap-1 text-xs text-yellow-500">
-                    <AlertTriangle className="h-3 w-3" />
-                    <span>{step.risk_notes}</span>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                    <span className="text-sm text-yellow-200">{step.risk_notes}</span>
                   </div>
                 )}
               </div>
@@ -862,30 +1224,30 @@ function StreetScriptSection({ steps }: { steps: NextGenTestStep[] }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors text-left"
+          className="flex items-center gap-3 text-base font-semibold hover:text-primary transition-colors text-left"
         >
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          <Car className="h-4 w-4 text-blue-500" />
-          Street Logging Script ({streetSteps.length} segments)
+          {expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          <Car className="h-5 w-5 text-blue-500" />
+          <span>Street Logging Script ({streetSteps.length} segments)</span>
         </button>
         <Button
           variant="outline"
-          size="sm"
+          size="default"
           onClick={() => copyToClipboard(generateStreetScript(), 'all-street')}
-          className="text-xs h-7 gap-1"
+          className="gap-2"
         >
           {copiedId === 'all-street' ? (
             <>
-              <Check className="h-3 w-3 text-green-500" />
+              <Check className="h-4 w-4 text-green-500" />
               Copied!
             </>
           ) : (
             <>
-              <Copy className="h-3 w-3" />
+              <Copy className="h-4 w-4" />
               Copy All
             </>
           )}
@@ -893,69 +1255,83 @@ function StreetScriptSection({ steps }: { steps: NextGenTestStep[] }) {
       </div>
 
       {expanded && (
-        <div className="space-y-3 pl-6">
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-xs">
-            <p className="font-medium text-blue-600 dark:text-blue-400 mb-1">
+        <div className="space-y-4 pl-2">
+          {/* Tips box - larger text */}
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <p className="font-semibold text-blue-400 text-base mb-2">
               Street Logging Tips:
             </p>
-            <ul className="text-muted-foreground space-y-0.5">
+            <ul className="text-zinc-300 space-y-1 text-sm">
               <li>• Find a safe route with minimal traffic</li>
               <li>• Engine should be at operating temperature</li>
               <li>• Consistent throttle rates for tip-in/out</li>
             </ul>
           </div>
 
-          <div className="space-y-2">
+          {/* Street segment cards - larger and clearer */}
+          <div className="space-y-4">
             {streetSteps.map((step, idx) => (
               <div
                 key={idx}
-                className="bg-muted/50 rounded-lg p-3 space-y-2"
+                className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-5 space-y-4"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-blue-500">#{idx + 1}</span>
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl font-bold text-blue-400">#{idx + 1}</span>
+                    </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h5 className="font-medium text-sm">{step.name}</h5>
-                        <Badge variant="secondary" className="text-xs">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h5 className="font-semibold text-lg text-zinc-100">{step.name}</h5>
+                        <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-sm px-3">
                           {getStepIcon(step.test_type)}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">{step.goal}</p>
+                      <p className="text-sm text-zinc-400 mt-1">{step.goal}</p>
                     </div>
                   </div>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => copyToClipboard(
                       `${step.name}\n${step.goal}\n\n${step.constraints}\n\nSuccess: ${step.success_criteria}`,
                       `street-${idx}`
                     )}
-                    className="text-xs h-7 px-2"
+                    className="h-10 w-10"
                   >
                     {copiedId === `street-${idx}` ? (
-                      <Check className="h-3 w-3 text-green-500" />
+                      <Check className="h-5 w-5 text-green-500" />
                     ) : (
-                      <Copy className="h-3 w-3" />
+                      <Copy className="h-5 w-5" />
                     )}
                   </Button>
                 </div>
 
-                <div className="text-xs text-muted-foreground bg-background/50 rounded p-2">
+                {/* Instructions - prominent */}
+                <div className="text-base text-zinc-200 bg-zinc-900/70 rounded-lg p-4 border border-zinc-700/50">
                   {step.constraints}
                 </div>
 
+                {/* RPM/MAP info */}
                 {step.rpm_range && step.map_range && (
-                  <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span>RPM: {step.rpm_range[0]}-{step.rpm_range[1]}</span>
-                    <span>MAP: {step.map_range[0]}-{step.map_range[1]} kPa</span>
+                  <div className="flex gap-6 text-sm">
+                    <div>
+                      <span className="text-zinc-500">RPM:</span>
+                      <span className="ml-2 font-semibold text-cyan-400">{step.rpm_range[0]}-{step.rpm_range[1]}</span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500">MAP:</span>
+                      <span className="ml-2 font-semibold text-cyan-400">{step.map_range[0]}-{step.map_range[1]} kPa</span>
+                    </div>
                   </div>
                 )}
 
+                {/* Warning - prominent */}
                 {step.risk_notes && (
-                  <div className="flex items-center gap-1 text-xs text-yellow-500">
-                    <AlertTriangle className="h-3 w-3" />
-                    <span>{step.risk_notes}</span>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                    <span className="text-sm text-yellow-200">{step.risk_notes}</span>
                   </div>
                 )}
               </div>

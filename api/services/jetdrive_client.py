@@ -57,20 +57,111 @@ class JDUnit(IntEnum):
     NoUnit = 255
 
 
-# Fallback channel name mapping for common Dynojet RT module channels
-# Used when RT module broadcasts values without channel info metadata
-FALLBACK_CHANNEL_NAMES = {
-    3: "Torque",
-    4: "Horsepower",
-    7: "Speed",
-    8: "Distance",
-    9: "Acceleration",
-    10: "Digital RPM 1",
-    11: "Digital RPM 2",
-    12: "Force Drum 1",
-    19: "Force Drum 2",
-    38: "Pressure",
+# =============================================================================
+# Comprehensive Channel Registry
+# =============================================================================
+# Single source of truth for channel ID -> canonical name + metadata mapping.
+# Used when RT module broadcasts values without channel info metadata.
+#
+# Categories:
+#   - atmospheric: Environmental sensors (humidity, temp, pressure)
+#   - dyno: Dyno core measurements (RPM, force, power, torque, speed)
+#   - afr: Air/fuel ratio sensors
+#   - engine: Engine parameters (MAP, TPS, IAT, etc.)
+#   - misc: System/diagnostic channels
+# =============================================================================
+
+CHANNEL_CATEGORIES = {
+    "atmospheric": {"label": "Atmospheric", "icon": "Cloud", "order": 1},
+    "dyno": {"label": "Dyno", "icon": "Gauge", "order": 2},
+    "afr": {"label": "Air/Fuel", "icon": "Flame", "order": 3},
+    "engine": {"label": "Engine", "icon": "Zap", "order": 4},
+    "misc": {"label": "System", "icon": "Activity", "order": 5},
 }
+
+CHANNEL_REGISTRY: dict[int, dict[str, str | int | float]] = {
+    # =========================================================================
+    # ATMOSPHERIC PROBE CHANNELS (IDs 6-9, 35-38)
+    # =========================================================================
+    6: {"name": "Humidity", "category": "atmospheric", "units": "%"},
+    7: {"name": "Temperature 1", "category": "atmospheric", "units": "°C"},
+    8: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
+    9: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
+    35: {"name": "Humidity", "category": "atmospheric", "units": "%"},
+    36: {"name": "Temperature 1", "category": "atmospheric", "units": "°C"},
+    37: {"name": "Temperature 2", "category": "atmospheric", "units": "°C"},
+    38: {"name": "Pressure", "category": "atmospheric", "units": "kPa"},
+    
+    # =========================================================================
+    # DYNO CORE CHANNELS (Drum, Force, Power, Torque)
+    # =========================================================================
+    # RPM Channels
+    10: {"name": "Digital RPM 1", "category": "dyno", "units": "rpm"},
+    11: {"name": "Digital RPM 2", "category": "dyno", "units": "rpm"},
+    39: {"name": "Digital RPM 1", "category": "dyno", "units": "rpm"},
+    40: {"name": "Digital RPM 2", "category": "dyno", "units": "rpm"},
+    
+    # Force/Drum Channels
+    12: {"name": "Force Drum 1", "category": "dyno", "units": "lbs"},
+    19: {"name": "Force Drum 2", "category": "dyno", "units": "lbs"},
+    32: {"name": "Force", "category": "dyno", "units": "lbs"},
+    34: {"name": "Force 1", "category": "dyno", "units": "lbs"},
+    
+    # Power/Torque Channels
+    3: {"name": "Torque", "category": "dyno", "units": "ft-lb"},
+    4: {"name": "Horsepower", "category": "dyno", "units": "HP"},
+    5: {"name": "Power", "category": "dyno", "units": "HP"},
+    
+    # Speed/Distance/Acceleration
+    1: {"name": "Speed", "category": "dyno", "units": "mph"},
+    2: {"name": "Distance", "category": "dyno", "units": "ft"},
+    13: {"name": "Acceleration", "category": "dyno", "units": "g"},
+    14: {"name": "Speed 1", "category": "dyno", "units": "mph"},
+    
+    # =========================================================================
+    # AIR/FUEL RATIO CHANNELS
+    # =========================================================================
+    # User Analog inputs (typically LC-2 Wideband sensors)
+    20: {"name": "User Analog 1", "category": "afr", "units": ":1"},  # AFR Front
+    21: {"name": "User Analog 2", "category": "afr", "units": ":1"},  # AFR Rear
+    22: {"name": "User Analog 3", "category": "afr", "units": "V"},
+    23: {"name": "User Analog 4", "category": "afr", "units": "V"},
+    
+    # Named AFR channels
+    24: {"name": "Air/Fuel Ratio 1", "category": "afr", "units": ":1"},
+    25: {"name": "Air/Fuel Ratio 2", "category": "afr", "units": ":1"},
+    26: {"name": "Lambda 1", "category": "afr", "units": "λ"},
+    27: {"name": "Lambda 2", "category": "afr", "units": "λ"},
+    
+    # =========================================================================
+    # ENGINE PARAMETER CHANNELS
+    # =========================================================================
+    28: {"name": "MAP", "category": "engine", "units": "kPa"},
+    29: {"name": "TPS", "category": "engine", "units": "%"},
+    30: {"name": "IAT", "category": "engine", "units": "°F"},
+    31: {"name": "ECT", "category": "engine", "units": "°F"},
+    33: {"name": "VBatt", "category": "engine", "units": "V"},
+    
+    # =========================================================================
+    # SYSTEM/DIAGNOSTIC CHANNELS
+    # =========================================================================
+    0: {"name": "Sampling", "category": "misc", "units": ""},
+    15: {"name": "Correction Factor", "category": "misc", "units": ""},
+    16: {"name": "Gear Ratio", "category": "misc", "units": ""},
+    17: {"name": "Internal Temp 1", "category": "misc", "units": "°C"},
+    18: {"name": "Internal Temp 2", "category": "misc", "units": "°C"},
+}
+
+# Legacy fallback for backwards compatibility
+FALLBACK_CHANNEL_NAMES = {chan_id: info["name"] for chan_id, info in CHANNEL_REGISTRY.items()}
+
+
+def get_channel_info_from_registry(chan_id: int) -> dict[str, str | int | float] | None:
+    """
+    Get channel info from the registry by ID.
+    Returns dict with name, category, units or None if not found.
+    """
+    return CHANNEL_REGISTRY.get(chan_id)
 
 
 @dataclass
@@ -112,6 +203,8 @@ class JetDriveSample:
     channel_name: str
     timestamp_ms: int
     value: float
+    category: str = "misc"  # Channel category (atmospheric, dyno, afr, engine, misc)
+    units: str = ""  # Channel units
 
 
 @dataclass
@@ -260,6 +353,14 @@ def _parse_channel_info(
 def _parse_channel_values(
     provider_id: int, channel_lookup: dict[int, ChannelInfo], value: bytes
 ) -> list[JetDriveSample]:
+    """
+    Parse channel values from a JetDrive wire frame.
+    
+    Name resolution priority:
+    1. Hardware ChannelInfo metadata (if available)
+    2. CHANNEL_REGISTRY by ID (comprehensive known channels)
+    3. Generic fallback name (chan_X)
+    """
     samples: list[JetDriveSample] = []
     idx = 0
     while idx + CHANNEL_VALUES_BLOCK <= len(value):
@@ -272,14 +373,38 @@ def _parse_channel_values(
         except struct.error:
             break
         idx += 4
+        
+        # Resolve channel name, category, and units
         chan = channel_lookup.get(chan_id)
-        # Use channel metadata name, fallback to known dyno channels, or generic name
-        if chan:
+        registry_info = get_channel_info_from_registry(chan_id)
+        
+        if chan and chan.name:
+            # Priority 1: Hardware ChannelInfo metadata has the name - TRUST IT
             name = chan.name
-        elif chan_id in FALLBACK_CHANNEL_NAMES:
-            name = FALLBACK_CHANNEL_NAMES[chan_id]
+            # Infer category from channel name
+            name_lower = name.lower()
+            if any(x in name_lower for x in ['humidity', 'temperature', 'pressure', 'atmospheric']):
+                category = "atmospheric"
+            elif any(x in name_lower for x in ['rpm', 'force', 'power', 'torque', 'speed', 'distance', 'acceleration']):
+                category = "dyno"
+            elif any(x in name_lower for x in ['afr', 'lambda', 'lc2', 'lc1', 'fuel', 'o2']):
+                category = "afr"
+            elif any(x in name_lower for x in ['map', 'tps', 'iat', 'ect', 'vbat', 'volt']):
+                category = "engine"
+            else:
+                category = "misc"
+            units = ""  # Let frontend handle units based on name
+        elif registry_info:
+            # Priority 2: Use CHANNEL_REGISTRY (fallback for channels without metadata)
+            name = str(registry_info["name"])
+            category = str(registry_info.get("category", "misc"))
+            units = str(registry_info.get("units", ""))
         else:
-            name = f"chan_{chan_id}"
+            # Priority 3: Generic fallback with channel ID
+            name = f"Channel {chan_id}"
+            category = "misc"
+            units = ""
+        
         samples.append(
             JetDriveSample(
                 provider_id=provider_id,
@@ -287,6 +412,8 @@ def _parse_channel_values(
                 channel_name=name,
                 timestamp_ms=ts,
                 value=float(val),
+                category=category,
+                units=units,
             )
         )
     return samples
@@ -333,6 +460,61 @@ async def send_request_channel_info(
 
 # Cache provider info across discoveries so we don't lose channel names
 _provider_cache: dict[int, JetDriveProviderInfo] = {}
+
+
+def merge_all_providers(providers: list[JetDriveProviderInfo]) -> JetDriveProviderInfo:
+    """
+    Merge all discovered providers into a single "virtual" provider.
+    This is useful because Power Core CPU and Atmospheric Probe are separate providers
+    but we want to treat them as one for the UI.
+    """
+    if not providers:
+        return JetDriveProviderInfo(
+            provider_id=0,
+            name="No Providers",
+            host="",
+            port=DEFAULT_PORT,
+            channels={},
+        )
+    
+    if len(providers) == 1:
+        return providers[0]
+    
+    # Merge all channels, using unique IDs
+    merged_channels: dict[int, ChannelInfo] = {}
+    provider_names = []
+    
+    for p in providers:
+        provider_names.append(f"{p.name} (0x{p.provider_id:04X})")
+        for chan_id, chan_info in p.channels.items():
+            # If channel ID already exists, use provider-prefixed ID to avoid collision
+            if chan_id in merged_channels:
+                # Create a unique ID by combining provider ID and channel ID
+                unique_id = (p.provider_id << 16) | chan_id
+                merged_channels[unique_id] = ChannelInfo(
+                    chan_id=unique_id,
+                    name=chan_info.name,
+                    unit=chan_info.unit,
+                    vendor=chan_info.vendor,
+                )
+            else:
+                merged_channels[chan_id] = chan_info
+    
+    return JetDriveProviderInfo(
+        provider_id=providers[0].provider_id,  # Use first provider's ID as primary
+        name=" + ".join(provider_names),
+        host=providers[0].host,
+        port=providers[0].port,
+        channels=merged_channels,
+    )
+
+
+def get_all_cached_channels() -> dict[int, ChannelInfo]:
+    """Get all channels from all cached providers."""
+    all_channels: dict[int, ChannelInfo] = {}
+    for provider in _provider_cache.values():
+        all_channels.update(provider.channels)
+    return all_channels
 
 
 def _discover_providers_sync(
@@ -438,10 +620,17 @@ def _subscribe_sync(
     stop_flag: list,  # Use mutable list as thread-safe flag [False]
     recv_timeout: float = 0.5,
     debug: bool = False,
+    accept_all_providers: bool = True,  # NEW: Accept data from ALL providers
 ) -> dict[str, int]:
     """
     Synchronous subscribe using blocking sockets (works reliably on Windows).
+    
+    Args:
+        accept_all_providers: If True, accept ChannelValues from ANY provider on the network.
+            This is necessary because Power Core CPU and Atmospheric Probe are separate providers.
     """
+    global _provider_cache
+    
     # Create BLOCKING socket for Windows multicast compatibility
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -457,7 +646,13 @@ def _subscribe_sync(
     
     sock.settimeout(recv_timeout)
 
-    channel_lookup = provider.channels
+    # Build channel lookup from provider AND cache (for multi-provider support)
+    channel_lookup = dict(provider.channels)
+    for cached_provider in _provider_cache.values():
+        for chan_id, chan_info in cached_provider.channels.items():
+            if chan_id not in channel_lookup:
+                channel_lookup[chan_id] = chan_info
+    
     allowed_ids = set()
     if channel_names:
         names = {n.strip().lower() for n in channel_names}
@@ -468,11 +663,12 @@ def _subscribe_sync(
     dropped_frames = 0
     non_provider_frames = 0
     total_frames = 0
+    accepted_providers: set[int] = set()
 
     try:
         while not stop_flag[0]:
             try:
-                data, _ = sock.recvfrom(4096)
+                data, addr = sock.recvfrom(4096)
             except socket.timeout:
                 continue
 
@@ -482,12 +678,37 @@ def _subscribe_sync(
                 dropped_frames += 1
                 continue
             key, _, host, _, _, value = decoded
-            if key != KEY_CHANNEL_VALUES or host != provider.provider_id:
+            
+            # Handle ChannelInfo packets - update cache dynamically
+            if key == KEY_CHANNEL_INFO:
+                try:
+                    info = _parse_channel_info(host, addr[0], value, port=cfg.port)
+                    if info:
+                        _provider_cache[host] = info
+                        # Merge into our channel lookup
+                        for chan_id, chan_info in info.channels.items():
+                            if chan_id not in channel_lookup:
+                                channel_lookup[chan_id] = chan_info
+                except Exception:
+                    pass
+                continue
+            
+            if key != KEY_CHANNEL_VALUES:
+                continue
+                
+            # Accept data from specified provider OR all providers
+            if not accept_all_providers and host != provider.provider_id:
                 non_provider_frames += 1
                 continue
+            
+            accepted_providers.add(host)
+            
+            # Get channel lookup for this specific provider if available
+            provider_channels = _provider_cache.get(host, provider).channels if host in _provider_cache else channel_lookup
+            
             try:
                 samples = _parse_channel_values(
-                    provider.provider_id, channel_lookup, value
+                    host, provider_channels, value
                 )
             except Exception:
                 dropped_frames += 1
@@ -501,7 +722,8 @@ def _subscribe_sync(
         if debug:
             print(
                 f"[jetdrive_client._subscribe_sync] dropped_frames={dropped_frames}, "
-                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}",
+                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}, "
+                f"accepted_providers={[hex(p) for p in accepted_providers]}",
                 flush=True,
             )
 
@@ -509,6 +731,7 @@ def _subscribe_sync(
         "dropped_frames": dropped_frames,
         "non_provider_frames": non_provider_frames,
         "total_frames": total_frames,
+        "accepted_providers": list(accepted_providers),
     }
 
 

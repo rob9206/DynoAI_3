@@ -64,7 +64,7 @@ class SettingsTab(QWidget):
         jetdrive_layout = QFormLayout(jetdrive_group)
         
         self.jetdrive_ip = QLineEdit()
-        self.jetdrive_ip.setText("169.254.61.240")
+        self.jetdrive_ip.setText("192.168.1.115")
         jetdrive_layout.addRow("DynowareRT IP:", self.jetdrive_ip)
         
         self.jetdrive_port = QSpinBox()
@@ -109,7 +109,7 @@ class SettingsTab(QWidget):
             self.settings.value("analysis/clamp", 15.0, type=float)
         )
         self.jetdrive_ip.setText(
-            self.settings.value("jetdrive/ip", "169.254.61.240")
+            self.settings.value("jetdrive/ip", "192.168.1.115")
         )
         self.jetdrive_port.setValue(
             self.settings.value("jetdrive/port", 63391, type=int)

@@ -62,6 +62,7 @@ import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { getConfidenceReport } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
+import { NextGenAnalysisPanel } from '../components/results/NextGenAnalysisPanel';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
@@ -672,11 +673,11 @@ export default function JetDriveAutoTunePage() {
     }, [channels]);
 
     const currentForce = useMemo(() => {
+        // Note: chan_39 is Atmospheric Pressure, NOT Force
         const ch =
             channels['Force Drum 1'] ||
             channels['Force'] ||
-            channels['Load'] ||
-            channels['chan_39'];
+            channels['Load'];
         if (ch && typeof ch.value === 'number') return ch.value;
 
         // Fallback: find any channel containing "force" (handles name mismatches like
@@ -1889,6 +1890,11 @@ export default function JetDriveAutoTunePage() {
                                                 )}
                                             </CardContent>
                                         </Card>
+                                    )}
+
+                                    {/* NextGen Analysis - Physics-informed ECU reasoning */}
+                                    {selectedRun && (
+                                        <NextGenAnalysisPanel runId={selectedRun} />
                                     )}
 
                                     {/* Power Opportunities Panel */}

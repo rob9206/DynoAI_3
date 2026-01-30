@@ -1,179 +1,197 @@
-# 🚀 DynoAI Quick Start Guide
+# Quick Start Reference - DynoAI
 
-## What is DynoAI?
+This document provides quick commands for starting DynoAI in different modes.
 
-DynoAI is a modern web application that analyzes dyno tuning logs and generates VE corrections, spark timing suggestions, and comprehensive diagnostics. Upload your CSV file and get instant results!
+## JetDrive Live Capture Mode
+
+### Option 1: Batch File (No Admin/Policy Changes Required)
+```batch
+start-jetdrive.bat
+```
+✅ **Recommended** - No execution policy issues
+
+### Option 2: PowerShell with Bypass
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-jetdrive.ps1
+```
+✅ Works without changing system settings
+
+### Option 3: Direct PowerShell (After Fixing Execution Policy)
+```powershell
+.\start-jetdrive.ps1
+```
+⚠️ Requires: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ---
 
-## ⚡ 3-Step Quick Start
+## Standard Development Mode
 
-### Step 1: Start the Application
-
-**Linux/Mac:**
-```bash
-cd /vercel/sandbox
-./start-dev.sh
-```
-
-**Windows:**
-```cmd
-cd \vercel\sandbox
+### Windows
+```batch
 start-dev.bat
 ```
 
-### Step 2: Open Your Browser
-
-Navigate to: **http://localhost:5173**
-
-### Step 3: Upload & Analyze
-
-1. Drag & drop your CSV file (or click to browse)
-2. Click "Start Analysis"
-3. Wait for results (30-60 seconds)
-4. Download your corrections!
-
----
-
-## 📋 What You Need
-
-- **Python 3.8+** - [Download](https://www.python.org/downloads/)
-- **Node.js 18+** - [Download](https://nodejs.org/)
-- **Your dyno log** - WinPEP, PowerVision, or generic CSV format
-
----
-
-## 🎯 What You Get
-
-After analysis, you'll receive:
-
-### VE Corrections
-- ✅ Percentage corrections for each RPM/MAP cell
-- ✅ Paste-ready format for your ECU software
-- ✅ Updated VE tables (if you provide base tables)
-
-### Spark Timing
-- ✅ Front and rear cylinder suggestions
-- ✅ Knock-aware recommendations
-- ✅ Temperature-compensated adjustments
-
-### Diagnostics
-- ✅ AFR error maps
-- ✅ Data coverage analysis
-- ✅ Anomaly detection
-- ✅ Quality metrics
-
----
-
-## 🖥️ User Interface
-
-### Dashboard (Upload Page)
-```
-┌─────────────────────────────────────────┐
-│  DynoAI                    Dashboard    │
-├─────────────────────────────────────────┤
-│                                         │
-│      Welcome to DynoAI                  │
-│   Upload your dyno log to generate     │
-│        VE corrections                   │
-│                                         │
-│  ┌───────────────────────────────┐    │
-│  │                                │    │
-│  │   📁 Drop CSV file here        │    │
-│  │      or click to browse        │    │
-│  │                                │    │
-│  └───────────────────────────────┘    │
-│                                         │
-│      [Start Analysis]                   │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-### Results Page
-```
-┌─────────────────────────────────────────┐
-│  ← Back              [Download All]     │
-├─────────────────────────────────────────┤
-│                                         │
-│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐      │
-│  │1,234│ │ 156 │ │2.5% │ │7.0% │      │
-│  │Rows │ │Fixes│ │ Avg │ │ Max │      │
-│  └─────┘ └─────┘ └─────┘ └─────┘      │
-│                                         │
-│  Output Files:                          │
-│  📊 VE_Correction_Delta.csv [Download]  │
-│  📊 Spark_Suggestions.csv   [Download]  │
-│  📄 Diagnostics_Report.txt  [Download]  │
-│                                         │
-└─────────────────────────────────────────┘
+### With Network Interface Selection
+```batch
+start-dev-ziggle.bat
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## Docker Mode
 
-### "Port already in use"
-```bash
-# Kill the process
-lsof -ti:5001 | xargs kill -9  # Backend
-lsof -ti:5173 | xargs kill -9  # Frontend
+### Production
+```batch
+docker-start-prod.bat
 ```
 
-### "Module not found"
-```bash
-# Reinstall dependencies
-pip install -r requirements.txt
-cd frontend && npm install
+### Development
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-docker-dev.ps1
 ```
 
-### "Can't connect to API"
-1. Check backend is running on port 5001
-2. Check frontend is running on port 5173
-3. Restart both servers
-
----
-
-## 📚 More Information
-
-- **Full User Guide**: See `WEB_APP_README.md`
-- **Deployment Guide**: See `DEPLOYMENT_GUIDE.md`
-- **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md`
-
----
-
-## 🎓 Tips
-
-### For Best Results
-- ✅ Use steady-state dyno pulls
-- ✅ Ensure good data coverage across RPM/MAP range
-- ✅ Check for sensor errors before uploading
-- ✅ Review diagnostics for anomalies
-
-### File Requirements
-- **Format**: CSV or TXT
-- **Size**: Up to 50MB
-- **Types**: WinPEP, PowerVision, Generic
-- **Columns**: Must include RPM, MAP, Torque, AFR
-
----
-
-## 🆘 Need Help?
-
-1. Check the troubleshooting section above
-2. Review the full documentation in `WEB_APP_README.md`
-3. Check browser console for errors (F12)
-4. Check backend logs at `/tmp/dynoai_backend.log`
-
----
-
-## 🎉 That's It!
-
-You're ready to start tuning with AI assistance!
-
-```bash
-./start-dev.sh  # Start the app
+### Rebuild After Changes
+```powershell
+powershell -ExecutionPolicy Bypass -File .\docker-rebuild.ps1
 ```
 
-Then open **http://localhost:5173** and upload your first log!
+Or using batch:
+```batch
+docker-rebuild.bat
+```
 
-**Happy Tuning! 🏁**
+---
+
+## Fix PowerShell Execution Policy (One-Time Setup)
+
+If you want to use `.ps1` scripts directly without bypass:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+Then verify:
+```powershell
+Get-ExecutionPolicy
+```
+
+Should show: `RemoteSigned`
+
+---
+
+## Troubleshooting
+
+### "Cannot be loaded because running scripts is disabled"
+
+**Quick Fix:**
+- Use the `.bat` file instead: `start-jetdrive.bat`
+- Or use bypass: `powershell -ExecutionPolicy Bypass -File .\start-jetdrive.ps1`
+
+**Permanent Fix:**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### "Docker container failed to start"
+
+See: `DOCKER_FIX_INSTRUCTIONS.md`
+
+### "Realtime analysis error"
+
+Fixed in: `JETDRIVE_REALTIME_FIX.md` (auto-reloads in dev mode)
+
+### Port Already in Use
+
+Check what's using the port:
+```powershell
+netstat -ano | findstr :5001
+```
+
+Stop conflicting process or change port in `.env`:
+```
+API_PORT=5002
+```
+
+---
+
+## Environment Files
+
+### Development
+- `.env` - Main environment configuration
+
+### Docker
+- `.env.docker` - Docker-specific settings
+
+### JetDrive WiFi Mode
+See: `START_JETDRIVE_WIFI.md`
+
+---
+
+## Verification Commands
+
+### Check if API is running
+```powershell
+curl http://localhost:5001/api/health/ready
+```
+
+### Check JetDrive listener
+```powershell
+curl http://localhost:5001/api/jetdrive/hardware/monitor/status
+```
+
+### View logs
+```powershell
+# In PowerShell terminal where server is running
+# Press Ctrl+C to stop
+```
+
+---
+
+## Quick Command Summary
+
+| Task | Command |
+|------|---------|
+| Start JetDrive (easiest) | `start-jetdrive.bat` |
+| Start Development | `start-dev.bat` |
+| Docker Production | `docker-start-prod.bat` |
+| Docker Development | `powershell -ExecutionPolicy Bypass -File .\start-docker-dev.ps1` |
+| Rebuild Docker | `docker-rebuild.bat` |
+| Fix PowerShell Policy | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| Test Realtime Fix | `python test_realtime_fix.py` |
+
+---
+
+## Documentation Index
+
+- `README.md` - Main project documentation
+- `DOCKER_FIX_INSTRUCTIONS.md` - Docker troubleshooting
+- `JETDRIVE_REALTIME_FIX.md` - Realtime analysis fix details
+- `POWERSHELL_EXECUTION_POLICY_FIX.md` - PowerShell policy help
+- `START_JETDRIVE_WIFI.md` - WiFi mode configuration
+- `VIEWING_RESULTS.md` - How to view analysis results
+
+---
+
+## Current Status (Based on Your Session)
+
+✅ **Fixed Issues:**
+- Docker Flask application startup (Dockerfile CMD fixed)
+- Realtime analysis NoneType comparison error (jetdrive_realtime_analysis.py)
+- PowerShell execution policy (created .bat wrapper)
+
+🔧 **Ready to Use:**
+- `start-jetdrive.bat` - Start JetDrive without policy issues
+- `docker-rebuild.bat` - Rebuild Docker containers
+- `test_realtime_fix.py` - Test realtime analysis (all tests passed)
+
+📝 **Next Steps:**
+1. Run `start-jetdrive.bat` to start JetDrive capture
+2. Open http://localhost:5001/admin in browser
+3. Monitor for the realtime analysis errors (should be gone)
+4. Test dyno capture with live bike/dyno connection
+
+---
+
+## Support
+
+For issues not covered here, check the `docs/` folder or the specific fix documentation files listed above.

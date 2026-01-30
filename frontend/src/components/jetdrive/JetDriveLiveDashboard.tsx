@@ -7,10 +7,9 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import {
-    Activity, Gauge, Flame, Thermometer, Zap, Wind, Battery,
-    Droplets, Radio, Play, Square, RefreshCw, Settings2, Mic, Search, BarChart3, AlertTriangle
+    Activity, Gauge, Flame, Zap, Cloud,
+    Radio, Play, Square, RefreshCw, Mic, Search, BarChart3, AlertTriangle, Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
@@ -30,7 +29,15 @@ import {
 } from '../ui/alert-dialog';
 import { LiveLinkGauge } from '../livelink/LiveLinkGauge';
 import { LiveLinkChart } from '../livelink/LiveLinkChart';
-import { useJetDriveLive, JETDRIVE_CHANNEL_CONFIG, getChannelConfig, type JetDriveChannel } from '../../hooks/useJetDriveLive';
+import { 
+    useJetDriveLive, 
+    JETDRIVE_CHANNEL_CONFIG, 
+    CHANNEL_CATEGORIES,
+    getChannelConfig, 
+    getChannelsByCategory,
+    type JetDriveChannel,
+    type ChannelCategory 
+} from '../../hooks/useJetDriveLive';
 import { AudioCapturePanel } from './AudioCapturePanel';
 import { InnovateAFRPanel } from './InnovateAFRPanel';
 import { LiveAnalysisOverlay } from './LiveAnalysisOverlay';
@@ -83,25 +90,28 @@ function inferUnits(name: string, value: number): string {
     return '';
 }
 
-// Channel icons
-const CHANNEL_ICONS: Record<string, typeof Activity> = {
-    'Humidity': Droplets,
-    'Pressure': Wind,
-    'Temperature 1': Thermometer,
-    'Temperature 2': Thermometer,
-    'Force Drum 1': Zap,
-    'Acceleration': Activity,
-    'Digital RPM 1': Gauge,
-    'Digital RPM 2': Gauge,
-    'Air/Fuel Ratio 1': Flame,
-    'Air/Fuel Ratio 2': Flame,
-    'Lambda 1': Flame,
-    'Lambda 2': Flame,
-    'AFR 1': Flame,
-    'AFR': Flame,
+// Category icon component
+const CategoryIcon = ({ category, className }: { category: ChannelCategory; className?: string }) => {
+    const iconProps = { className: cn("h-4 w-4", className) };
+    switch (category) {
+        case 'atmospheric': return <Cloud {...iconProps} />;
+        case 'dyno': return <Gauge {...iconProps} />;
+        case 'afr': return <Flame {...iconProps} />;
+        case 'engine': return <Zap {...iconProps} />;
+        default: return <Activity {...iconProps} />;
+    }
 };
 
-// Preset channel groups
+// Category colors for headers
+const CATEGORY_COLORS: Record<ChannelCategory, string> = {
+    atmospheric: 'text-blue-400',
+    dyno: 'text-green-400',
+    afr: 'text-orange-400',
+    engine: 'text-yellow-400',
+    misc: 'text-gray-400',
+};
+
+// Preset channel groups (for gauge view filtering)
 const CHANNEL_PRESETS = {
     atmospheric: ['Humidity', 'Pressure', 'Temperature 1', 'Temperature 2'],
     dyno: ['Digital RPM 1', 'Digital RPM 2', 'Force Drum 1', 'Acceleration', 'Horsepower', 'Torque'],
@@ -129,16 +139,21 @@ export function JetDriveLiveDashboard({
     const [showConfidenceWarning, setShowConfidenceWarning] = useState(false);
     const [pendingCaptureStart, setPendingCaptureStart] = useState(false);
 
-    // Health monitoring
+    // Health monitoring - silent failure, no error display
     const { data: health } = useQuery({
         queryKey: ['jetdrive-health', apiUrl],
         queryFn: async () => {
-            const res = await fetch(`${apiUrl}/hardware/health`);
-            if (!res.ok) throw new Error('Health check failed');
-            return res.json();
+            try {
+                const res = await fetch(`${apiUrl}/hardware/health`);
+                if (!res.ok) return null; // Silent failure
+                return res.json();
+            } catch {
+                return null; // Silent failure for health checks
+            }
         },
         refetchInterval: 5000, // Check every 5 seconds
         retry: false,
+        staleTime: 4000, // Prevent unnecessary refetches
     });
 
     const {
@@ -152,6 +167,7 @@ export function JetDriveLiveDashboard({
         startCapture,
         stopCapture,
         clearHistory,
+        clearChannels,
     } = useJetDriveLive({
         apiUrl,
         autoConnect: autoStart,
@@ -321,6 +337,20 @@ export function JetDriveLiveDashboard({
                         title="Clear history"
                     >
                         <RefreshCw className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                            await clearChannels();
+                            toast.success('Channels cleared');
+                        }}
+                        title="Clear all channels (removes stale data)"
+                        className="text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
+                    >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Clear
                     </Button>
 
                     <Button
@@ -572,57 +602,99 @@ export function JetDriveLiveDashboard({
                         />
                     </TabsContent>
 
-                    {/* Table View */}
+                    {/* Table View - Grouped by Category */}
                     <TabsContent value="table">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>All Channels</CardTitle>
-                                <CardDescription>
-                                    {Object.keys(channels).length} channels streaming
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-border">
-                                                <th className="text-left p-3 font-medium">Channel</th>
-                                                <th className="text-right p-3 font-medium">Value</th>
-                                                <th className="text-left p-3 font-medium">Units</th>
-                                                <th className="text-right p-3 font-medium">Last Update</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {Object.entries(channels).map(([name, ch]) => {
-                                                const config = getChannelConfig(name);
-                                                const displayLabel = config?.label || name.replace('chan_', 'Channel ').replace(/_/g, ' ');
-                                                const displayUnits = config?.units || inferUnits(name, ch.value);
-                                                const decimals = config?.decimals ?? 2;
-                                                const color = config?.color || '#888';
-
-                                                return (
-                                                    <tr key={name} className="hover:bg-muted/30">
-                                                        <td className="p-3 font-medium">
-                                                            {displayLabel}
-                                                            <span className="text-xs text-muted-foreground ml-2">({name})</span>
-                                                        </td>
-                                                        <td className="p-3 text-right font-mono text-lg" style={{ color }}>
-                                                            {ch.value.toFixed(decimals)}
-                                                        </td>
-                                                        <td className="p-3 text-muted-foreground">
-                                                            {displayUnits}
-                                                        </td>
-                                                        <td className="p-3 text-right text-muted-foreground text-xs">
-                                                            {new Date(ch.timestamp).toLocaleTimeString()}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-medium">All Channels</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        {Object.keys(channels).length} channels streaming
+                                    </p>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+
+                            {/* Grouped channel tables */}
+                            {(() => {
+                                const grouped = getChannelsByCategory(channels);
+                                const categoryOrder: ChannelCategory[] = ['atmospheric', 'dyno', 'afr', 'engine', 'misc'];
+                                
+                                return categoryOrder.map((category) => {
+                                    const categoryChannels = grouped[category];
+                                    if (categoryChannels.length === 0) return null;
+                                    
+                                    const categoryInfo = CHANNEL_CATEGORIES[category];
+                                    
+                                    return (
+                                        <Card key={category} className="bg-gray-900/50 border-gray-700">
+                                            <CardHeader className="pb-2">
+                                                <CardTitle className={cn("text-base flex items-center gap-2", CATEGORY_COLORS[category])}>
+                                                    <CategoryIcon category={category} />
+                                                    {categoryInfo.label}
+                                                    <Badge variant="secondary" className="ml-2 text-xs">
+                                                        {categoryChannels.length}
+                                                    </Badge>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="pt-0">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead>
+                                                            <tr className="border-b border-gray-700 text-muted-foreground">
+                                                                <th className="text-left py-2 px-3 font-medium">Channel</th>
+                                                                <th className="text-right py-2 px-3 font-medium w-32">Value</th>
+                                                                <th className="text-left py-2 px-3 font-medium w-20">Units</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-800">
+                                                            {categoryChannels.map(({ name, data, config }) => {
+                                                                const displayLabel = config?.label || name;
+                                                                const displayUnits = config?.units || data.units || inferUnits(name, data.value);
+                                                                const decimals = config?.decimals ?? 2;
+                                                                const color = config?.color || '#888';
+                                                                
+                                                                // Only show raw name if it differs significantly from display label
+                                                                const showRawName = displayLabel.toLowerCase() !== name.toLowerCase() && 
+                                                                    !name.startsWith('chan_') && 
+                                                                    !displayLabel.toLowerCase().includes(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+                                                                return (
+                                                                    <tr key={name} className="hover:bg-gray-800/50 transition-colors">
+                                                                        <td className="py-2 px-3">
+                                                                            <span className="font-medium">{displayLabel}</span>
+                                                                            {showRawName && (
+                                                                                <span className="text-xs text-muted-foreground ml-2">
+                                                                                    ({name})
+                                                                                </span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="py-2 px-3 text-right font-mono" style={{ color }}>
+                                                                            {data.value.toFixed(decimals)}
+                                                                        </td>
+                                                                        <td className="py-2 px-3 text-muted-foreground">
+                                                                            {displayUnits}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                });
+                            })()}
+
+                            {/* Empty state */}
+                            {Object.keys(channels).length === 0 && (
+                                <Card className="bg-gray-900/50 border-gray-700">
+                                    <CardContent className="py-8 text-center text-muted-foreground">
+                                        {isCapturing ? 'Waiting for channel data...' : 'Start capture to view channel data'}
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
                     </TabsContent>
                 </Tabs>
             )}

@@ -73,6 +73,7 @@ RUN mkdir -p uploads outputs runs public_export data && \
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     DYNOAI_HOST=0.0.0.0 \
     DYNOAI_PORT=5001 \
     DYNOAI_DEBUG=false \
@@ -92,7 +93,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Switch to non-root user
 USER dynoai
 
-# Run the application
+# Run the application using module syntax for proper import resolution
 CMD ["python", "-m", "api.app"]
 
 # =============================================================================

@@ -61,7 +61,13 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 CONSTRAINTS_DIR = Path("config/planner_constraints")
-CONSTRAINTS_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    CONSTRAINTS_DIR.mkdir(parents=True, exist_ok=True)
+except (PermissionError, OSError) as e:
+    # Fall back to /tmp in Docker or other restricted environments
+    logger.warning(f"Cannot create {CONSTRAINTS_DIR}: {e}. Using /tmp fallback.")
+    CONSTRAINTS_DIR = Path("/tmp/planner_constraints")
+    CONSTRAINTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass

@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 # Storage location for coverage trackers
 TRACKER_DIR = Path("config/coverage_tracker")
-TRACKER_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    TRACKER_DIR.mkdir(parents=True, exist_ok=True)
+except (PermissionError, OSError) as e:
+    # Fall back to /tmp in Docker or other restricted environments
+    logger.warning(f"Cannot create {TRACKER_DIR}: {e}. Using /tmp fallback.")
+    TRACKER_DIR = Path("/tmp/coverage_tracker")
+    TRACKER_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
