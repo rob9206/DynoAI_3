@@ -5,8 +5,8 @@ REM DynoAI Clean Restart Script
 REM Stops all services, clears caches, and restarts everything fresh
 REM ======================================================================
 
-REM Change to the script's directory (ensures we're in the project root)
-cd /d "%~dp0"
+REM Change to the project root directory
+cd /d "%~dp0..\.."
 
 REM Disable Ctrl+C interruption prompt
 if not defined IN_PARENT ( 
@@ -146,7 +146,7 @@ if not exist "frontend\package.json" (
     pause
     exit /b 1
 )
-pushd "%~dp0frontend"
+pushd "frontend"
 call npm install --silent
 if errorlevel 1 (
     color 0E
@@ -165,7 +165,7 @@ echo.
 
 REM Start Flask backend in a new window
 echo [*] Starting Flask backend on http://localhost:5001
-start "DynoAI Backend (Clean)" cmd /k "cd /d %~dp0 && color 0B && python -m api.app"
+start "DynoAI Backend (Clean)" cmd /k "color 0B && python -m api.app"
 
 REM Wait for backend to initialize
 echo [*] Waiting for backend to initialize...
@@ -173,7 +173,7 @@ timeout /t 4 /nobreak >nul
 
 REM Start Vite frontend in a new window
 echo [*] Starting Vite frontend on http://localhost:5173
-start "DynoAI Frontend (Clean)" cmd /k "cd /d %~dp0frontend && color 0D && npm run dev"
+start "DynoAI Frontend (Clean)" cmd /k "cd frontend && color 0D && npm run dev"
 
 REM Wait for frontend to initialize
 timeout /t 3 /nobreak >nul

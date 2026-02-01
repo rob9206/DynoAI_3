@@ -6,9 +6,17 @@ echo DynoAI Quick Start
 echo ======================================
 echo.
 
+REM Change to the project root directory
+cd /d "%~dp0..\.."
+
+echo ======================================
+echo DynoAI Quick Start
+echo ======================================
+echo.
+
 REM Start Flask backend in a new window
 echo Starting Flask backend on http://localhost:5001
-start "DynoAI Backend" cmd /k "cd /d %~dp0 && python -m api.app"
+start "DynoAI Backend" cmd /k "python -m api.app"
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul

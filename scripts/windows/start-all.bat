@@ -10,17 +10,17 @@ echo.
 
 REM Set script directory
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%"
+set "PROJECT_ROOT=%SCRIPT_DIR%..\..\"
 
 REM === PREREQUISITES CHECK ===
 echo [1/10] Checking prerequisites...
 
 REM Check Python installation
 set "PYTHON_EXE=python"
-if exist "%PROJECT_ROOT%\.venv-reorg\Scripts\python.exe" (
-    "%PROJECT_ROOT%\.venv-reorg\Scripts\python.exe" -c "import sys; sys.exit(0)" >nul 2>&1
+if exist "%PROJECT_ROOT%.venv-reorg\Scripts\python.exe" (
+    "%PROJECT_ROOT%.venv-reorg\Scripts\python.exe" -c "import sys; sys.exit(0)" >nul 2>&1
     if not errorlevel 1 (
-        set "PYTHON_EXE=%PROJECT_ROOT%\.venv-reorg\Scripts\python.exe"
+        set "PYTHON_EXE=%PROJECT_ROOT%.venv-reorg\Scripts\python.exe"
         echo Found Python in virtual environment
     )
 )

@@ -1,11 +1,15 @@
 # Start DynoAI with Jetstream Stub Data Mode
 # This script starts both backend and frontend with stub data enabled
 
+# Change to the project root directory
+Set-Location "$PSScriptRoot\..\.."
+
 Write-Host "[*] Starting DynoAI in Stub Mode..." -ForegroundColor Cyan
 Write-Host ""
 
 # Set environment variables
-$env:PYTHONPATH = "C:\Dev\DynoAI_3;C:\Dev\DynoAI_3\api"
+$root = (Get-Item .).FullName
+$env:PYTHONPATH = "$root;$root\api"
 $env:JETSTREAM_STUB_DATA = "true"
 $env:JETSTREAM_ENABLED = "false"
 $env:FLASK_APP = "api.app"
@@ -16,12 +20,12 @@ Write-Host "   JETSTREAM_ENABLED=false" -ForegroundColor Gray
 Write-Host ""
 
 Write-Host "[>] Starting Flask backend on port 5100..." -ForegroundColor Yellow
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd '$PWD'; `$env:PYTHONPATH='C:\Dev\DynoAI_3;C:\Dev\DynoAI_3\api'; `$env:JETSTREAM_STUB_DATA='true'; `$env:JETSTREAM_ENABLED='false'; `$env:FLASK_APP='api.app'; python -m flask run --port 5100 --debug"
+Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd '$root'; `$env:PYTHONPATH='$root;$root\api'; `$env:JETSTREAM_STUB_DATA='true'; `$env:JETSTREAM_ENABLED='false'; `$env:FLASK_APP='api.app'; python -m flask run --port 5100 --debug"
 
 Start-Sleep -Seconds 5
 
 Write-Host "[>] Starting Vite frontend..." -ForegroundColor Yellow
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd '$PWD\frontend'; `$env:VITE_API_BASE_URL='http://127.0.0.1:5100'; npm run dev"
+Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd '$root\frontend'; `$env:VITE_API_BASE_URL='http://127.0.0.1:5100'; npm run dev"
 
 Start-Sleep -Seconds 3
 

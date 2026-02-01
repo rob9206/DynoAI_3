@@ -16,6 +16,7 @@ const RunDetailPage = lazy(() => import('./pages/RunDetailPage'));
 const TimeMachinePage = lazy(() => import('./pages/TimeMachinePage'));
 const TuningWizardsPage = lazy(() => import('./pages/TuningWizardsPage'));
 const JetDriveAutoTunePage = lazy(() => import('./pages/JetDriveAutoTunePage'));
+const OperatorTrainingPage = lazy(() => import('./pages/OperatorTrainingPage'));
 const AutoTuneDemo = lazy(() => import('./pages/AutoTuneDemo'));
 
 const queryClient = new QueryClient({
@@ -44,6 +45,7 @@ function App() {
                 <Route path="/time-machine/:runId" element={<TimeMachinePage />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/wizards" element={<TuningWizardsPage />} />
+                <Route path="/training" element={<OperatorTrainingPage />} />
                 <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
                 <Route path="/autotune-demo" element={<AutoTuneDemo />} />
                 <Route path="*" element={<Navigate to="/jetdrive" replace />} />

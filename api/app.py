@@ -241,6 +241,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Virtual Tuning: {e}")
 
+# Operator Training Simulator
+try:
+    from api.routes.training import training_bp
+
+    app.register_blueprint(training_bp)
+    print("[+] Operator Training Simulator registered at /api/training")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Operator Training: {e}")
+
 # Register Power Core Integration blueprint
 try:
     from api.routes.powercore import powercore_bp

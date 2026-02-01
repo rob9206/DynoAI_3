@@ -12,10 +12,10 @@ Write-Host " DynoAI + Dynoware RT-150" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Navigate to script directory
+# Navigate to project root
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $scriptDir
+Set-Location "$scriptDir\..\.."
 
 # Test connectivity
 Write-Host "[*] Testing Dynoware RT-150 at $DynoIP..." -ForegroundColor Yellow
@@ -35,27 +35,32 @@ $pythonCheck = python --version 2>&1
 Write-Host "  [OK] $pythonCheck" -ForegroundColor Green
 Write-Host ""
 
-# Create venv if needed
+# Check virtual environment
 if (-not (Test-Path ".venv")) {
-    Write-Host "[*] Creating virtual environment..." -ForegroundColor Yellow
-    python -m venv .venv
-    Write-Host "  [OK] Created" -ForegroundColor Green
-}
-else {
-    Write-Host "[*] Virtual environment exists" -ForegroundColor Green
+    if (Test-Path ".venv-reorg") {
+        $venv = ".venv-reorg"
+    } else {
+        Write-Host "[*] Creating virtual environment..." -ForegroundColor Yellow
+        python -m venv .venv
+        $venv = ".venv"
+        Write-Host "  [OK] Created" -ForegroundColor Green
+    }
+} else {
+    $venv = ".venv"
+    Write-Host "[*] Virtual environment exists ($venv)" -ForegroundColor Green
 }
 Write-Host ""
 
 # Activate
 Write-Host "[*] Activating environment..." -ForegroundColor Yellow
-& .\.venv\Scripts\Activate.ps1
+& ".\$venv\Scripts\Activate.ps1"
 Write-Host "  [OK] Activated" -ForegroundColor Green
 Write-Host ""
 
 # Install deps
 Write-Host "[*] Installing dependencies (may take a minute)..." -ForegroundColor Yellow
 python -m pip install --quiet --upgrade pip 2>&1 | Out-Null
-pip install --quiet -r api\requirements.txt 2>&1 | Out-Null
+pip install --quiet -r requirements.txt 2>&1 | Out-Null
 Write-Host "  [OK] Installed" -ForegroundColor Green
 Write-Host ""
 

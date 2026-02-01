@@ -1,6 +1,6 @@
 import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX } from 'lucide-react';
+import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
@@ -116,6 +116,16 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <History className="h-4 w-4" />
                 <span>History</span>
+              </Link>
+              <Link
+                to="/training"
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/training')
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-amber-500/10 hover:text-amber-300'
+                  }`}
+              >
+                <Shield className="h-4 w-4" />
+                <span>Training</span>
               </Link>
 
               <div className="w-px h-6 bg-border mx-2" />

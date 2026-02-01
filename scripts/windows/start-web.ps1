@@ -2,21 +2,30 @@
 # DynoAI Web Application Startup Script
 # Starts both Flask API backend and React frontend
 
+# Change to the project root directory
+Set-Location "$PSScriptRoot\..\.."
+
 Write-Host "[*] Starting DynoAI Web Application..." -ForegroundColor Cyan
 
 # Check if virtual environment exists
 if (-not (Test-Path ".venv")) {
-    Write-Host "[-] Virtual environment not found. Please run: python -m venv .venv" -ForegroundColor Red
-    exit 1
+    if (Test-Path ".venv-reorg") {
+        $venv = ".venv-reorg"
+    } else {
+        Write-Host "[-] Virtual environment not found. Please run: python -m venv .venv" -ForegroundColor Red
+        exit 1
+    }
+} else {
+    $venv = ".venv"
 }
 
 # Activate virtual environment
-Write-Host "[>] Activating Python virtual environment..." -ForegroundColor Yellow
-& .venv\Scripts\Activate.ps1
+Write-Host "[>] Activating Python virtual environment ($venv)..." -ForegroundColor Yellow
+& "$venv\Scripts\Activate.ps1"
 
 # Install API dependencies if needed
-Write-Host "[>] Installing API dependencies..." -ForegroundColor Yellow
-pip install -q -r api\requirements.txt
+Write-Host "[>] Checking API dependencies..." -ForegroundColor Yellow
+pip install -q -r requirements.txt
 
 # Check if frontend dependencies are installed
 if (-not (Test-Path "frontend\node_modules")) {
@@ -41,7 +50,7 @@ Write-Host ""
 
 # Start backend in background
 Write-Host "[>] Starting Flask API backend..." -ForegroundColor Yellow
-$backend = Start-Process python -ArgumentList "api\app.py" -PassThru -NoNewWindow
+$backend = Start-Process python -ArgumentList "-m api.app" -PassThru -NoNewWindow
 
 # Wait a moment for backend to start
 Start-Sleep -Seconds 2
