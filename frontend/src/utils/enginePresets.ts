@@ -5,6 +5,17 @@
  * Based on typical factory tunes for each engine type.
  */
 
+// Grid-only configuration for LiveVETable (no VE/AFR data)
+export type EnginePreset = 'harley_m8' | 'harley_tc' | 'sportbike_600' | 'sportbike_1000' | 'custom';
+
+export interface EngineConfig {
+    name: string;
+    rpmBins: number[];
+    mapBins: number[];
+    maxRpm: number;
+}
+
+// Full preset data with VE tables and AFR targets
 export interface EnginePresetData {
     name: string;
     description: string;
@@ -195,6 +206,43 @@ export const ENGINE_PRESETS: Record<string, EnginePresetData> = {
     harley_tc: HARLEY_TC,
     sportbike_600: SPORTBIKE_600,
     sportbike_1000: SPORTBIKE_1000,
+};
+
+/**
+ * Grid-only engine configurations (for LiveVETable)
+ * Extracted from full presets for components that only need bins/maxRpm
+ */
+export const ENGINE_GRID_CONFIGS: Record<EnginePreset, EngineConfig> = {
+    harley_m8: {
+        name: 'Harley M8',
+        rpmBins: HARLEY_M8.rpmBins,
+        mapBins: HARLEY_M8.mapBins,
+        maxRpm: HARLEY_M8.maxRpm,
+    },
+    harley_tc: {
+        name: 'Harley Twin Cam',
+        rpmBins: HARLEY_TC.rpmBins,
+        mapBins: HARLEY_TC.mapBins,
+        maxRpm: HARLEY_TC.maxRpm,
+    },
+    sportbike_600: {
+        name: 'Sportbike 600cc',
+        rpmBins: SPORTBIKE_600.rpmBins,
+        mapBins: SPORTBIKE_600.mapBins,
+        maxRpm: SPORTBIKE_600.maxRpm,
+    },
+    sportbike_1000: {
+        name: 'Sportbike 1000cc',
+        rpmBins: SPORTBIKE_1000.rpmBins,
+        mapBins: SPORTBIKE_1000.mapBins,
+        maxRpm: SPORTBIKE_1000.maxRpm,
+    },
+    custom: {
+        name: 'Custom',
+        rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000],
+        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+        maxRpm: 10000,
+    },
 };
 
 /**

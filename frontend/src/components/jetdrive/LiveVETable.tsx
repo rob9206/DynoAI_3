@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Target, Activity, Flame, Crosshair, RotateCcw, ChevronDown, Download } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { ENGINE_GRID_CONFIGS, type EnginePreset, type EngineConfig } from '../../utils/enginePresets';
 
 // Export data interface for external consumers
 export interface LiveVEExportData {
@@ -29,49 +30,6 @@ export interface LiveVEExportData {
     totalHits: number;
     exportedAt: string;
 }
-
-// Engine type presets with appropriate RPM ranges
-export type EnginePreset = 'harley_m8' | 'harley_tc' | 'sportbike_600' | 'sportbike_1000' | 'custom';
-
-export interface EngineConfig {
-    name: string;
-    rpmBins: number[];
-    mapBins: number[];
-    maxRpm: number;
-}
-
-export const ENGINE_PRESETS: Record<EnginePreset, EngineConfig> = {
-    harley_m8: {
-        name: 'Harley M8',
-        rpmBins: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
-        maxRpm: 6500,
-    },
-    harley_tc: {
-        name: 'Harley Twin Cam',
-        rpmBins: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
-        maxRpm: 6000,
-    },
-    sportbike_600: {
-        name: 'Sportbike 600cc',
-        rpmBins: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
-        maxRpm: 15000,
-    },
-    sportbike_1000: {
-        name: 'Sportbike 1000cc',
-        rpmBins: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
-        maxRpm: 13000,
-    },
-    custom: {
-        name: 'Custom',
-        rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
-        maxRpm: 10000,
-    },
-};
 
 interface LiveVETableProps {
     // Current live values
@@ -267,7 +225,7 @@ export function LiveVETable({
     const [showPresetMenu, setShowPresetMenu] = useState(false);
 
     const activePreset = onEnginePresetChange ? enginePreset : localPreset;
-    const config = ENGINE_PRESETS[activePreset];
+    const config = ENGINE_GRID_CONFIGS[activePreset];
     
     // Use custom bins if provided (from imported tune), otherwise use preset bins
     const rpmBins = customRpmBins ?? config.rpmBins;
@@ -731,7 +689,7 @@ export function LiveVETable({
 
                     {showPresetMenu && (
                         <div className="absolute right-0 bottom-full mb-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[160px] z-50">
-                            {Object.entries(ENGINE_PRESETS).map(([key, preset]) => (
+                            {Object.entries(ENGINE_GRID_CONFIGS).map(([key, preset]) => (
                                 <button
                                     key={key}
                                     onClick={() => handlePresetChange(key as EnginePreset)}
