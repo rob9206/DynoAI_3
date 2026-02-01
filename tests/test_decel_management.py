@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 import pytest
 
+from dynoai.constants import KPA_BINS, RPM_BINS
 from dynoai.core.decel_management import (
     BASE_ENRICHMENT,
     DECEL_KPA_MAX,
@@ -34,7 +35,6 @@ from dynoai.core.decel_management import (
     write_decel_analysis_report,
     write_decel_overlay_csv,
 )
-from dynoai.constants import KPA_BINS, RPM_BINS
 
 # ============================================================================
 # Test Fixtures
@@ -48,9 +48,9 @@ def create_test_records(
 ) -> List[Dict[str, Optional[float]]]:
     """Create test records with given RPM and TPS profiles."""
     records = []
-    for i in range(len(rpm_values)):
+    for i, item in enumerate(rpm_values):
         record: Dict[str, Optional[float]] = {
-            "rpm": rpm_values[i],
+            "rpm": item,
             "tps": tps_values[i],
         }
         if afr_values and i < len(afr_values):

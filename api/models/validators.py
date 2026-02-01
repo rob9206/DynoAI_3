@@ -262,9 +262,9 @@ class PhysicsValidator:
         extreme_changes = []
         unrealistic_values = []
 
-        for r in range(len(initial)):
+        for r, item in enumerate(initial):
             for k in range(len(initial[0])):
-                initial_val = initial[r][k]
+                initial_val = item[k]
                 final_val = final[r][k]
 
                 # Skip empty cells

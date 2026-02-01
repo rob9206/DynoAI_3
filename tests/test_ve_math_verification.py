@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import pytest
+
 from ve_operations import (
     DEFAULT_MAX_ADJUST_PCT,
     VEApply,
@@ -127,9 +128,9 @@ class TestVEApplyRollbackInverse:
         assert restored_kpa == base_kpa, "kPa bins must match after rollback"
 
         # Verify each cell matches to full precision
-        for r in range(len(base_ve)):
+        for r, item in enumerate(base_ve):
             for c in range(len(base_ve[0])):
-                original = base_ve[r][c]
+                original = item[c]
                 restored = restored_ve[r][c]
                 # Allow for floating point rounding (4 decimal precision)
                 assert abs(original - restored) < 1e-3, (
@@ -179,11 +180,11 @@ class TestVEApplyRollbackInverse:
         _, _, ve1 = read_ve_table(output1_path)
         _, _, ve2 = read_ve_table(output2_path)
 
-        for r in range(len(ve1)):
+        for r, item in enumerate(ve1):
             for c in range(len(ve1[0])):
-                assert ve1[r][c] == ve2[r][c], (
+                assert item[c] == ve2[r][c], (
                     f"Cell [{r},{c}] differs between runs: "
-                    f"run1={ve1[r][c]}, run2={ve2[r][c]}"
+                    f"run1={item[c]}, run2={ve2[r][c]}"
                 )
 
 
@@ -390,10 +391,10 @@ class TestPrecisionAndRounding:
 
         # Verify precision within tolerance
         _, _, restored_ve = read_ve_table(restored_path)
-        for r in range(len(base_ve)):
+        for r, item in enumerate(base_ve):
             for c in range(len(base_ve[0])):
                 # Due to 4-decimal rounding, allow small error
-                assert abs(base_ve[r][c] - restored_ve[r][c]) < 1e-3
+                assert abs(item[c] - restored_ve[r][c]) < 1e-3
 
 
 class TestBinningRules:
