@@ -235,3 +235,117 @@ export function listEnginePresets(): { key: string; name: string; description: s
         description: preset.description,
     }));
 }
+
+/**
+ * BikeConfig type import for preset conversion
+ */
+import type { BikeConfig, EngineType } from '../types/bikeConfig';
+
+/**
+ * Preset to bike configuration mapping
+ * Maps engine preset keys to bike configuration defaults
+ */
+interface PresetBikeMapping {
+    make: string;
+    engineType: EngineType;
+    cylinders: number;
+    displacementUnit: 'cc' | 'ci';
+    defaultDisplacement: number;
+}
+
+const PRESET_BIKE_MAPPINGS: Record<string, PresetBikeMapping> = {
+    harley_m8: {
+        make: 'Harley-Davidson',
+        engineType: 'v-twin',
+        cylinders: 2,
+        displacementUnit: 'ci',
+        defaultDisplacement: 114,
+    },
+    harley_tc: {
+        make: 'Harley-Davidson',
+        engineType: 'v-twin',
+        cylinders: 2,
+        displacementUnit: 'ci',
+        defaultDisplacement: 103,
+    },
+    sportbike_600: {
+        make: 'Honda',
+        engineType: 'inline-4',
+        cylinders: 4,
+        displacementUnit: 'cc',
+        defaultDisplacement: 600,
+    },
+    sportbike_1000: {
+        make: 'Honda',
+        engineType: 'inline-4',
+        cylinders: 4,
+        displacementUnit: 'cc',
+        defaultDisplacement: 1000,
+    },
+};
+
+/**
+ * Convert an engine preset to a BikeConfig object
+ * 
+ * @param presetKey - The engine preset key (e.g., 'harley_m8')
+ * @returns BikeConfig object with preset defaults, or undefined if preset not found
+ */
+export function bikeConfigFromPreset(presetKey: string): BikeConfig | undefined {
+    const preset = ENGINE_PRESETS[presetKey];
+    const mapping = PRESET_BIKE_MAPPINGS[presetKey];
+    
+    if (!preset || !mapping) {
+        return undefined;
+    }
+
+    const minRpm = Math.min(...preset.rpmBins);
+    const maxRpm = preset.maxRpm;
+    const minMap = Math.min(...preset.mapBins);
+    const maxMap = Math.max(...preset.mapBins);
+
+    return {
+        make: mapping.make,
+        model: '',
+        year: new Date().getFullYear(),
+        displacement: mapping.defaultDisplacement,
+        displacementUnit: mapping.displacementUnit,
+        engineType: mapping.engineType,
+        cylinders: mapping.cylinders,
+        rpmRange: { min: minRpm, max: maxRpm },
+        mapRange: { min: minMap, max: maxMap },
+        customRpmBins: preset.rpmBins,
+        customMapBins: preset.mapBins,
+    };
+}
+
+/**
+ * Get the best matching preset key for a given bike configuration
+ * 
+ * @param config - BikeConfig to match
+ * @returns The best matching preset key, or 'harley_m8' as default
+ */
+export function getPresetForBikeConfig(config: BikeConfig): string {
+    // Match by engine type and displacement
+    if (config.engineType === 'v-twin') {
+        if (config.make.toLowerCase().includes('harley')) {
+            // Check displacement to differentiate M8 vs TC
+            const ciDisplacement = config.displacementUnit === 'ci' 
+                ? config.displacement 
+                : config.displacement / 16.387;
+            
+            // M8 engines are typically 107+ ci
+            return ciDisplacement >= 107 ? 'harley_m8' : 'harley_tc';
+        }
+    }
+    
+    if (config.engineType === 'inline-4') {
+        const ccDisplacement = config.displacementUnit === 'cc'
+            ? config.displacement
+            : config.displacement * 16.387;
+        
+        return ccDisplacement <= 750 ? 'sportbike_600' : 'sportbike_1000';
+    }
+    
+    // Default fallback
+    return 'harley_m8';
+}

@@ -68,7 +68,9 @@ import { SessionReplayViewer } from '../components/session-replay';
 import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
 import { TuningWizard } from '../components/jetdrive/TuningWizard';
+import { SetupWizard } from '../components/jetdrive/SetupWizard';
 import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
+import type { BikeConfig, DynoConnectionConfig } from '../types/bikeConfig';
 import { SmartPromptBanner } from '../components/jetdrive/SmartPromptBanner';
 import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
 import { QuickActionsPanel } from '../components/jetdrive/QuickActionsPanel';
@@ -664,6 +666,50 @@ export default function JetDriveAutoTunePage() {
     const [veErrorStd, setVeErrorStd] = useState(5.0);
 
     // Audio engine removed (AI Assistant now used for wizard mode voice)
+
+    // Setup Wizard state (persisted to localStorage)
+    const SETUP_STORAGE_KEY = 'dynoai_setup_complete';
+    const [showSetupWizard, setShowSetupWizard] = useState(() => {
+        try {
+            const saved = localStorage.getItem(SETUP_STORAGE_KEY);
+            return saved !== 'true';
+        } catch {
+            return true;
+        }
+    });
+    const [bikeConfig, setBikeConfig] = useState<BikeConfig | null>(null);
+    const [dynoConfig, setDynoConfig] = useState<DynoConnectionConfig | null>(null);
+
+    // Handle setup wizard completion
+    const handleSetupComplete = useCallback((setupResult: {
+        dynoConfig: DynoConnectionConfig;
+        bikeConfig: BikeConfig;
+        tuneImport: TuneImportResult | null;
+    }) => {
+        setDynoConfig(setupResult.dynoConfig);
+        setBikeConfig(setupResult.bikeConfig);
+        if (setupResult.tuneImport) {
+            setImportedTune(setupResult.tuneImport);
+            setAfrTargets(setupResult.tuneImport.afrTargets);
+        }
+        setShowSetupWizard(false);
+        try {
+            localStorage.setItem(SETUP_STORAGE_KEY, 'true');
+        } catch {
+            // Ignore storage errors
+        }
+        toast.success('Setup complete! Ready to tune.');
+    }, []);
+
+    // Re-run setup wizard
+    const handleRerunSetup = useCallback(() => {
+        setShowSetupWizard(true);
+        try {
+            localStorage.removeItem(SETUP_STORAGE_KEY);
+        } catch {
+            // Ignore storage errors
+        }
+    }, []);
 
     // Workflow state
     const [workflowState, setWorkflowState] = useState<WorkflowState>('disconnected');
@@ -1544,6 +1590,18 @@ function SmartPromptBanner({
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900/95 to-zinc-950 relative">
+            {/* Setup Wizard Modal */}
+            <AnimatePresence>
+                {showSetupWizard && (
+                    <SetupWizard
+                        onComplete={handleSetupComplete}
+                        onDismiss={() => setShowSetupWizard(false)}
+                        apiUrl={API_BASE}
+                        isModal={true}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* Subtle grid pattern */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,transparent_49.5%,rgba(34,211,238,0.015)_49.5%,rgba(34,211,238,0.015)_50.5%,transparent_50.5%)] bg-[length:60px_60px] pointer-events-none" />
             <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_49.5%,rgba(34,211,238,0.015)_49.5%,rgba(34,211,238,0.015)_50.5%,transparent_50.5%)] bg-[length:60px_60px] pointer-events-none" />
@@ -1648,6 +1706,18 @@ function SmartPromptBanner({
                                 />
                             </SheetContent>
                         </Sheet>
+
+                        {/* Re-run Setup Button */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRerunSetup}
+                            className="text-zinc-400 hover:text-white gap-1.5"
+                            title="Re-run setup wizard"
+                        >
+                            <Wrench className="w-4 h-4" />
+                            <span className="hidden lg:inline text-xs">Setup</span>
+                        </Button>
 
                         <Button
                             variant="ghost"
