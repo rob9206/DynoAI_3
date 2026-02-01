@@ -1,7 +1,7 @@
 import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
 interface LayoutProps {

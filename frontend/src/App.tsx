@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from 'next-themes';
 import { lazy, Suspense } from 'react';
-import Layout from './components/Layout';
-import LoadingSpinner from './components/LoadingSpinner';
+import Layout from './components/common/Layout';
+import LoadingSpinner from './components/common/LoadingSpinner';
 
 // Code-split routes for better initial load performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));

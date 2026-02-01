@@ -360,6 +360,11 @@ export function TuningWizard({
         return (
           <div className="space-y-4">
             <Button
+              onClick={() => {
+                if (applyReport) {
+                  onApply(applyReport);
+                }
+              }}
               size="lg"
               className="w-64 h-20 text-xl font-bold rounded-2xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 shadow-lg shadow-green-500/25"
             >
