@@ -48,9 +48,9 @@ def create_test_records(
 ) -> List[Dict[str, Optional[float]]]:
     """Create test records with given RPM and TPS profiles."""
     records = []
-    for i in range(len(rpm_values)):
+    for i, item in enumerate(rpm_values):
         record: Dict[str, Optional[float]] = {
-            "rpm": rpm_values[i],
+            "rpm": item,
             "tps": tps_values[i],
         }
         if afr_values and i < len(afr_values):

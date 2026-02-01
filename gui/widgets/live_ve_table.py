@@ -361,9 +361,9 @@ class LiveVETable(QWidget):
 
     def _reset_table(self) -> None:
         """Reset the table to default values."""
-        for row in range(len(self._ve_data)):
-            for col in range(len(self._ve_data[row])):
-                self._ve_data[row][col] = 100.0
+        for row, item in enumerate(self._ve_data):
+            for col in range(len(item)):
+                item[col] = 100.0
                 self._hit_counts[row][col] = 0
 
                 item = self.table.item(row, col)

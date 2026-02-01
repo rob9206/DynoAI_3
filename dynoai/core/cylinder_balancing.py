@@ -254,8 +254,8 @@ def analyze_imbalance(
     max_delta = 0.0
     cells_analyzed = 0
 
-    for r_idx in range(len(RPM_BINS)):
-        for k_idx in range(len(KPA_BINS)):
+    for r_idx, _ in enumerate(RPM_BINS):
+        for k_idx, item in enumerate(KPA_BINS):
             front_afr = front_data.afr_grid[r_idx][k_idx]
             rear_afr = rear_data.afr_grid[r_idx][k_idx]
             front_count = front_data.sample_counts[r_idx][k_idx]
@@ -280,7 +280,7 @@ def analyze_imbalance(
                         rpm_idx=r_idx,
                         kpa_idx=k_idx,
                         rpm=RPM_BINS[r_idx],
-                        kpa=KPA_BINS[k_idx],
+                        kpa=item,
                         front_afr=front_afr,
                         rear_afr=rear_afr,
                         delta=delta,

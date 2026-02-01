@@ -244,8 +244,8 @@ def detect_decel_events(
     in_event = False
     event_start = 0
 
-    for i in range(len(records)):
-        rpm = records[i].get("rpm")
+    for i, item in enumerate(records):
+        rpm = item.get("rpm")
         tps_val = tps_values[i]
         rate = tps_rate[i]
 
