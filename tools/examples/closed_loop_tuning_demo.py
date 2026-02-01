@@ -18,14 +18,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from api.services.simulation.dyno_simulator import EngineProfile
 from api.services.simulation.virtual_tuning_session import (
     TuningSessionConfig,
     VirtualTuningOrchestrator,
 )
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def run_closed_loop_demo():
@@ -113,7 +113,7 @@ def run_closed_loop_demo():
         print(f"  Mean AFR Error: {last_iteration.mean_afr_error:.3f} AFR points")
         print(f"  RMS AFR Error: {last_iteration.rms_afr_error:.3f} AFR points")
         print(
-            f"  Cells Converged: {last_iteration.cells_converged} / {11*9} ({last_iteration.cells_converged/(11*9)*100:.1f}%)"
+            f"  Cells Converged: {last_iteration.cells_converged} / {11 * 9} ({last_iteration.cells_converged / (11 * 9) * 100:.1f}%)"
         )
         print(f"  Peak HP: {last_iteration.peak_hp:.1f} HP")
         print(f"  Peak Torque: {last_iteration.peak_tq:.1f} ft-lb")
@@ -125,7 +125,9 @@ def run_closed_loop_demo():
             convergence_rate = (
                 "fast"
                 if session.current_iteration <= 3
-                else "normal" if session.current_iteration <= 6 else "slow"
+                else "normal"
+                if session.current_iteration <= 6
+                else "slow"
             )
             print(f"   Convergence rate: {convergence_rate.upper()}")
         elif session.status.value == "max_iterations":

@@ -14,11 +14,11 @@ Usage:
         save_mapping,
         apply_mapping,
     )
-    
+
     # Get/create mapping for a provider
     signature = compute_provider_signature(provider)
     mapping = get_mapping(signature)
-    
+
     # Apply mapping to a sample
     canonical_name, transformed_value = apply_mapping(mapping, sample)
 """
@@ -35,7 +35,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
-
 
 # =============================================================================
 # Constants
@@ -66,10 +65,10 @@ CANONICAL_CHANNELS = {
 REQUIRED_CANONICAL = ["rpm", "afr_front"]  # At least one AFR
 RECOMMENDED_CANONICAL = ["map_kpa", "tps", "torque", "power"]
 
-
 # =============================================================================
 # Transform Functions
 # =============================================================================
+
 
 def lambda_to_afr(value: float) -> float:
     """Convert Lambda to AFR (gasoline stoich = 14.7)."""
@@ -129,14 +128,15 @@ TRANSFORMS: dict[str, Callable[[float], float]] = {
     "identity": identity,
 }
 
-
 # =============================================================================
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class ChannelMapping:
     """Mapping for a single channel."""
+
     canonical_name: str  # What DynoAI calls it (e.g., "rpm")
     source_id: int  # Channel ID from provider
     source_name: str  # Channel name from provider
@@ -165,6 +165,7 @@ class ChannelMapping:
 @dataclass
 class MappingConfidence:
     """Confidence score for an auto-detected mapping."""
+
     canonical_name: str
     source_id: int
     source_name: str
@@ -172,7 +173,7 @@ class MappingConfidence:
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     transform: str = "identity"
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "canonical_name": self.canonical_name,
@@ -188,6 +189,7 @@ class MappingConfidence:
 @dataclass
 class ProviderMapping:
     """Complete mapping configuration for a provider."""
+
     version: str = "1.0"
     provider_signature: str = ""
     provider_id: int = 0
@@ -207,8 +209,7 @@ class ProviderMapping:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "channels": {
-                name: mapping.to_dict()
-                for name, mapping in self.channels.items()
+                name: mapping.to_dict() for name, mapping in self.channels.items()
             },
         }
 
@@ -232,9 +233,7 @@ class ProviderMapping:
     def get_source_to_canonical_map(self) -> dict[int, str]:
         """Get mapping from source channel ID to canonical name."""
         return {
-            m.source_id: m.canonical_name
-            for m in self.channels.values()
-            if m.enabled
+            m.source_id: m.canonical_name for m in self.channels.values() if m.enabled
         }
 
     def get_missing_required(self) -> list[str]:
@@ -242,8 +241,7 @@ class ProviderMapping:
         mapped = set(self.channels.keys())
         # Need at least one AFR channel
         has_afr = any(
-            name.startswith("afr_") or name.startswith("lambda_")
-            for name in mapped
+            name.startswith("afr_") or name.startswith("lambda_") for name in mapped
         )
         missing = []
         if "rpm" not in mapped:
@@ -261,6 +259,7 @@ class ProviderMapping:
 # =============================================================================
 # Provider Signature
 # =============================================================================
+
 
 def compute_provider_signature(provider: Any) -> str:
     """
@@ -281,14 +280,17 @@ def compute_provider_signature(provider: Any) -> str:
         Signature string like "4097_192.168.1.50_a1b2c3d4e5f6"
     """
     # Build sorted list of channel info for consistent hashing
-    channel_info = sorted([
-        {
-            "id": c.chan_id,
-            "name": c.name,
-            "unit": c.unit if isinstance(c.unit, int) else int(c.unit),
-        }
-        for c in provider.channels.values()
-    ], key=lambda x: x["id"])
+    channel_info = sorted(
+        [
+            {
+                "id": c.chan_id,
+                "name": c.name,
+                "unit": c.unit if isinstance(c.unit, int) else int(c.unit),
+            }
+            for c in provider.channels.values()
+        ],
+        key=lambda x: x["id"],
+    )
 
     # Hash the channel configuration
     channel_json = json.dumps(channel_info, sort_keys=True)
@@ -319,6 +321,7 @@ def parse_provider_signature(signature: str) -> tuple[int, str, str]:
 # =============================================================================
 # Mapping Persistence
 # =============================================================================
+
 
 def get_mapping_path(signature: str) -> Path:
     """Get the file path for a mapping file."""
@@ -434,7 +437,11 @@ BUILTIN_TEMPLATES: dict[str, dict[str, Any]] = {
         "description": "Dynojet 424 load-control dyno channel mapping",
         "channels": {
             "rpm": {"source_id": 10, "source_name": "Digital RPM 1"},
-            "torque": {"source_id": 3, "source_name": "Torque", "transform": "nm_to_ftlb"},
+            "torque": {
+                "source_id": 3,
+                "source_name": "Torque",
+                "transform": "nm_to_ftlb",
+            },
             "power": {"source_id": 4, "source_name": "Power", "transform": "kw_to_hp"},
             "afr_front": {"source_id": 15, "source_name": "Air/Fuel Ratio 1"},
             "afr_rear": {"source_id": 16, "source_name": "Air/Fuel Ratio 2"},
@@ -460,13 +467,15 @@ def get_templates() -> list[dict[str, Any]]:
 
     # Built-in templates
     for template_id, template in BUILTIN_TEMPLATES.items():
-        templates.append({
-            "id": template_id,
-            "name": template["name"],
-            "description": template["description"],
-            "builtin": True,
-            "channel_count": len(template["channels"]),
-        })
+        templates.append(
+            {
+                "id": template_id,
+                "name": template["name"],
+                "description": template["description"],
+                "builtin": True,
+                "channel_count": len(template["channels"]),
+            }
+        )
 
     # Custom templates from disk
     ensure_mapping_dir()
@@ -474,13 +483,15 @@ def get_templates() -> list[dict[str, Any]]:
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-            templates.append({
-                "id": path.stem,
-                "name": data.get("name", path.stem),
-                "description": data.get("description", ""),
-                "builtin": False,
-                "channel_count": len(data.get("channels", {})),
-            })
+            templates.append(
+                {
+                    "id": path.stem,
+                    "name": data.get("name", path.stem),
+                    "description": data.get("description", ""),
+                    "builtin": False,
+                    "channel_count": len(data.get("channels", {})),
+                }
+            )
         except Exception as e:
             logger.warning(f"Failed to load template {path}: {e}")
 
@@ -551,6 +562,7 @@ def create_mapping_from_template(
 # =============================================================================
 # Mapping Application
 # =============================================================================
+
 
 def apply_transform(value: float, transform_name: str) -> float:
     """
@@ -645,17 +657,17 @@ def score_channel_for_canonical(
 ) -> MappingConfidence:
     """
     Score how well a channel matches a canonical name.
-    
+
     Uses:
     - Unit type matching (JDUnit enum): +0.5
     - Name pattern matching: +0.3
     - Disambiguation bonus (if no better match exists): +0.2
-    
+
     Args:
         channel: ChannelInfo instance
         canonical_name: Target canonical name (e.g., "rpm")
         all_channels: All available channels for disambiguation
-    
+
     Returns:
         MappingConfidence with score and reasoning
     """
@@ -663,26 +675,27 @@ def score_channel_for_canonical(
     reasons = []
     warnings = []
     transform = "identity"
-    
+
     # Get channel unit (handle both int and IntEnum)
-    channel_unit = int(channel.unit) if hasattr(channel, 'unit') else 255
-    
+    channel_unit = int(channel.unit) if hasattr(channel, "unit") else 255
+
     # 1. Unit type match (+0.5)
     expected_units = CANONICAL_UNIT_TYPES.get(canonical_name, [])
     if expected_units and channel_unit in expected_units:
         score += 0.5
         from api.services.jetdrive.jetdrive_client import JDUnit
+
         try:
             unit_name = JDUnit(channel_unit).name
             reasons.append(f"Unit match ({unit_name})")
         except ValueError:
             reasons.append(f"Unit match (unit={channel_unit})")
-        
+
         # Special handling for lambda channels - needs transform
         if canonical_name.startswith("lambda_"):
             transform = "lambda_to_afr"
             warnings.append("Lambda channel - auto-converting to AFR")
-    
+
     # 2. Name pattern match (+0.3)
     patterns = AUTO_MAP_PATTERNS.get(canonical_name, [])
     channel_name_lower = channel.name.lower()
@@ -691,48 +704,48 @@ def score_channel_for_canonical(
         if pattern in channel_name_lower:
             matched_pattern = pattern
             break
-    
+
     if matched_pattern:
         score += 0.3
         reasons.append(f"Name pattern match ('{matched_pattern}')")
-    
+
     # 3. Disambiguation check (+0.2 if this is the best match)
     # Check if any other channel has a higher score for this canonical
     better_match_exists = False
     for other_channel in all_channels:
         if other_channel.chan_id == channel.chan_id:
             continue
-        
+
         # Quick check: does other channel have better unit match?
-        other_unit = int(other_channel.unit) if hasattr(other_channel, 'unit') else 255
+        other_unit = int(other_channel.unit) if hasattr(other_channel, "unit") else 255
         other_name_lower = other_channel.name.lower()
-        
+
         other_score = 0.0
         if expected_units and other_unit in expected_units:
             other_score += 0.5
-        
+
         for pattern in patterns:
             if pattern in other_name_lower:
                 other_score += 0.3
                 break
-        
+
         if other_score > score:
             better_match_exists = True
             break
-    
+
     if not better_match_exists and score > 0:
         score += 0.2
         reasons.append("Best match among available channels")
-    
+
     # Cap at 1.0
     score = min(score, 1.0)
-    
+
     # Add warnings based on confidence level
     if score < 0.5:
         warnings.append("Low confidence - manual verification recommended")
     elif score < 0.7:
         warnings.append("Medium confidence - verify before use")
-    
+
     return MappingConfidence(
         canonical_name=canonical_name,
         source_id=channel.chan_id,
@@ -747,7 +760,7 @@ def score_channel_for_canonical(
 def auto_map_channels(provider: Any) -> dict[str, ChannelMapping]:
     """
     Attempt to auto-map channels based on name patterns.
-    
+
     Legacy function - prefer auto_map_channels_with_confidence() for new code.
 
     Args:
@@ -758,7 +771,7 @@ def auto_map_channels(provider: Any) -> dict[str, ChannelMapping]:
     """
     # Use new confidence-based function and convert results
     confidence_mappings = auto_map_channels_with_confidence(provider)
-    
+
     mappings = {}
     for canonical_name, conf in confidence_mappings.items():
         mappings[canonical_name] = ChannelMapping(
@@ -768,43 +781,46 @@ def auto_map_channels(provider: Any) -> dict[str, ChannelMapping]:
             transform=conf.transform,
             enabled=True,
         )
-    
+
     return mappings
 
 
 def auto_map_channels_with_confidence(provider: Any) -> dict[str, MappingConfidence]:
     """
     Auto-map channels with confidence scoring.
-    
+
     Uses unit-based inference + name pattern matching to detect mappings.
-    
+
     Args:
         provider: JetDriveProviderInfo instance
-    
+
     Returns:
         Dict of canonical_name -> MappingConfidence for detected mappings
     """
     all_channels = list(provider.channels.values())
     mappings: dict[str, MappingConfidence] = {}
     used_channel_ids: set[int] = set()
-    
+
     # Try to map each canonical channel
     for canonical_name in CANONICAL_CHANNELS.keys():
         best_confidence: MappingConfidence | None = None
-        
+
         # Score all available channels for this canonical name
         for channel in all_channels:
             if channel.chan_id in used_channel_ids:
                 continue
-            
-            confidence = score_channel_for_canonical(channel, canonical_name, all_channels)
-            
+
+            confidence = score_channel_for_canonical(
+                channel, canonical_name, all_channels
+            )
+
             # Keep the best scoring match
             if confidence.confidence > 0 and (
-                best_confidence is None or confidence.confidence > best_confidence.confidence
+                best_confidence is None
+                or confidence.confidence > best_confidence.confidence
             ):
                 best_confidence = confidence
-        
+
         # Accept mapping if confidence > 0.5 (at least unit match OR name match + disambig)
         if best_confidence and best_confidence.confidence >= 0.5:
             mappings[canonical_name] = best_confidence
@@ -813,7 +829,7 @@ def auto_map_channels_with_confidence(provider: Any) -> dict[str, MappingConfide
                 f"Auto-mapped {canonical_name} -> {best_confidence.source_name} "
                 f"(confidence: {best_confidence.confidence:.2f})"
             )
-    
+
     return mappings
 
 
@@ -821,31 +837,26 @@ def get_unmapped_required_channels(mapping: ProviderMapping) -> list[str]:
     """Get list of required canonical channels that are not mapped."""
     mapped = set(mapping.channels.keys())
     unmapped = []
-    
+
     # Check RPM (always required)
     if "rpm" not in mapped:
         unmapped.append("rpm")
-    
+
     # Check AFR (need at least one AFR or Lambda channel)
     has_afr = any(
-        name.startswith("afr_") or name.startswith("lambda_")
-        for name in mapped
+        name.startswith("afr_") or name.startswith("lambda_") for name in mapped
     )
     if not has_afr:
         unmapped.append("afr (any)")
-    
+
     return unmapped
 
 
 def get_low_confidence_mappings(
-    confidence_map: dict[str, MappingConfidence],
-    threshold: float = 0.7
+    confidence_map: dict[str, MappingConfidence], threshold: float = 0.7
 ) -> list[MappingConfidence]:
     """Get mappings with confidence below threshold."""
-    return [
-        conf for conf in confidence_map.values()
-        if conf.confidence < threshold
-    ]
+    return [conf for conf in confidence_map.values() if conf.confidence < threshold]
 
 
 def create_auto_mapping(provider: Any, signature: str) -> ProviderMapping:

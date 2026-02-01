@@ -3,6 +3,7 @@
 JetDrive listener specifically for the 10.0.0.x network
 where Dynoware RT is broadcasting
 """
+
 import socket
 import struct
 import time
@@ -53,21 +54,25 @@ while time.time() - start_time < timeout:
         data, addr = sock.recvfrom(4096)
         packet_count += 1
         source_ip = addr[0]
-        
+
         if source_ip not in sources:
             sources[source_ip] = 0
         sources[source_ip] += 1
-        
+
         # Show all packets
         if len(data) >= 8:
             key = data[0]
-            print(f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - Key={key}, {len(data)} bytes")
+            print(
+                f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - Key={key}, {len(data)} bytes"
+            )
         else:
-            print(f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - {len(data)} bytes")
-            
+            print(
+                f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - {len(data)} bytes"
+            )
+
         if packet_count >= 50:
             break
-            
+
     except socket.timeout:
         elapsed = int(time.time() - start_time)
         print(f"  ... waiting on 10.0.0.100 ({elapsed}s / {timeout}s)", end="\r")

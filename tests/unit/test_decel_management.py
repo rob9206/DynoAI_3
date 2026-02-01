@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 import pytest
 
+from dynoai.constants import KPA_BINS, RPM_BINS
 from dynoai.core.decel_management import (
     BASE_ENRICHMENT,
     DECEL_KPA_MAX,
@@ -34,7 +35,6 @@ from dynoai.core.decel_management import (
     write_decel_analysis_report,
     write_decel_overlay_csv,
 )
-from dynoai.constants import KPA_BINS, RPM_BINS
 
 # ============================================================================
 # Test Fixtures

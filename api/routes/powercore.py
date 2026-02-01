@@ -20,8 +20,13 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 from api.services.autotune_workflow import AutoTuneWorkflow
-from api.services.parsers.file_index import FileType, get_file_index
 from api.services.livelink.livelink_client import LiveLinkClient
+from api.services.parsers.file_index import FileType, get_file_index
+from api.services.parsers.wp8_parser import (
+    find_wp8_files,
+    list_wp8_channels,
+    parse_wp8_file,
+)
 from api.services.powercore_integration import (
     check_powercore_running,
     find_log_files,
@@ -32,7 +37,6 @@ from api.services.powercore_integration import (
     parse_pvv_tune,
     powervision_log_to_dynoai_format,
 )
-from api.services.parsers.wp8_parser import find_wp8_files, list_wp8_channels, parse_wp8_file
 from dynoai.core.weighted_binning import LogarithmicWeighting
 
 powercore_bp = Blueprint("powercore", __name__, url_prefix="/api/powercore")
@@ -361,6 +365,7 @@ def parse_wp8():
     try:
         # Extra defense-in-depth: ensure resolved path is within allowed Power Core dirs
         from pathlib import Path
+
         try:
             from api.services.powercore_integration import find_powercore_data_dirs
 
@@ -377,9 +382,13 @@ def parse_wp8():
             except ValueError:
                 return False
 
-        if allowed_roots and not any(_is_within(resolved, root) for root in allowed_roots):
+        if allowed_roots and not any(
+            _is_within(resolved, root) for root in allowed_roots
+        ):
             return (
-                jsonify({"error": "WP8 path is outside allowed Power Core data directories"}),
+                jsonify(
+                    {"error": "WP8 path is outside allowed Power Core data directories"}
+                ),
                 400,
             )
 

@@ -2,6 +2,7 @@
 """
 Simplified JetDrive listener - just listen for ANY UDP on port 22344
 """
+
 import socket
 import struct
 import time
@@ -31,10 +32,7 @@ print(f"[OK] Bound to 0.0.0.0:{JETDRIVE_PORT}")
 # Also join multicast groups
 for group in ["239.255.60.60", "224.0.2.10"]:
     try:
-        mreq = struct.pack("4s4s", 
-            socket.inet_aton(group),
-            socket.inet_aton("0.0.0.0")
-        )
+        mreq = struct.pack("4s4s", socket.inet_aton(group), socket.inet_aton("0.0.0.0"))
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         print(f"[OK] Joined multicast {group}")
     except Exception as e:
@@ -58,33 +56,40 @@ while time.time() - start_time < timeout:
         data, addr = sock.recvfrom(4096)
         packet_count += 1
         source_ip = addr[0]
-        
+
         # Track sources
         if source_ip not in sources:
             sources[source_ip] = 0
         sources[source_ip] += 1
-        
+
         # Skip our own packets (from local IPs)
         local_ips = ["192.168.1.86", "10.0.0.100", "169.254.22.100", "192.168.0.100"]
         if source_ip in local_ips:
             print(f"  [SELF] Packet from {addr} (our own broadcast)")
             continue
-        
+
         # Parse and show external packets
         if len(data) >= 8:
             key = data[0]
-            print(f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - Key={key}, {len(data)} bytes")
+            print(
+                f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - Key={key}, {len(data)} bytes"
+            )
             if key == 2:  # ChannelInfo
                 print(f"         ^ This is a ChannelInfo response from the dyno!")
         else:
-            print(f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - {len(data)} bytes")
-            
+            print(
+                f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - {len(data)} bytes"
+            )
+
         if packet_count >= 50:
             break
-            
+
     except socket.timeout:
         elapsed = int(time.time() - start_time)
-        print(f"  ... listening ({elapsed}s / {timeout}s) - {packet_count} packets so far", end="\r")
+        print(
+            f"  ... listening ({elapsed}s / {timeout}s) - {packet_count} packets so far",
+            end="\r",
+        )
 
 sock.close()
 
@@ -94,10 +99,17 @@ print("=" * 60)
 print(f"Total packets: {packet_count}")
 print(f"Sources:")
 for ip, count in sources.items():
-    label = "(LOCAL)" if ip in ["192.168.1.86", "10.0.0.100", "169.254.22.100", "192.168.0.100"] else "(EXTERNAL/DYNO)"
+    label = (
+        "(LOCAL)"
+        if ip in ["192.168.1.86", "10.0.0.100", "169.254.22.100", "192.168.0.100"]
+        else "(EXTERNAL/DYNO)"
+    )
     print(f"  {ip}: {count} packets {label}")
 
-if not any(ip not in ["192.168.1.86", "10.0.0.100", "169.254.22.100", "192.168.0.100"] for ip in sources):
+if not any(
+    ip not in ["192.168.1.86", "10.0.0.100", "169.254.22.100", "192.168.0.100"]
+    for ip in sources
+):
     print("\n[WARN] No packets from external sources (dyno)!")
     print("\nCheck in Dynoware RT:")
     print("  1. Go to Settings > JETDRIVE")

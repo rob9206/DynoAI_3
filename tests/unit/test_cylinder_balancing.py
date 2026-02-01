@@ -16,6 +16,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
+from dynoai.constants import KPA_BINS, RPM_BINS
 from dynoai.core.cylinder_balancing import (
     BalanceMode,
     CylinderData,
@@ -29,7 +30,6 @@ from dynoai.core.cylinder_balancing import (
     process_cylinder_balancing,
     write_correction_csv,
 )
-from dynoai.constants import KPA_BINS, RPM_BINS
 
 # ============================================================================
 # Test Data Helpers

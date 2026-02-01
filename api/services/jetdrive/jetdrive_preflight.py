@@ -13,13 +13,13 @@ Preflight Checks:
 
 Usage:
     from api.services.jetdrive.jetdrive_preflight import run_preflight, PreflightResult
-    
+
     result = await run_preflight(
         provider_id=0x1234,  # Optional, auto-discover if not specified
         sample_seconds=15,
         mode="blocking"  # or "advisory"
     )
-    
+
     if not result.passed:
         print("Preflight failed:", result.get_failure_summary())
 """
@@ -36,17 +36,30 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-
 # =============================================================================
 # Constants
 # =============================================================================
 
 # Required channels (must have at least one from each group)
 REQUIRED_CHANNEL_GROUPS = {
-    "rpm": ["Engine RPM", "Digital RPM 1", "Digital RPM 2", "RPM", "chan_10", "chan_11"],
+    "rpm": [
+        "Engine RPM",
+        "Digital RPM 1",
+        "Digital RPM 2",
+        "RPM",
+        "chan_10",
+        "chan_11",
+    ],
     "afr": [
-        "Air/Fuel Ratio 1", "Air/Fuel Ratio 2", "AFR", "AFR Meas F", "AFR Meas R",
-        "Lambda 1", "Lambda 2", "chan_15", "chan_16"
+        "Air/Fuel Ratio 1",
+        "Air/Fuel Ratio 2",
+        "AFR",
+        "AFR Meas F",
+        "AFR Meas R",
+        "Lambda 1",
+        "Lambda 2",
+        "chan_15",
+        "chan_16",
     ],
 }
 
@@ -75,13 +88,14 @@ SEMANTIC_RANGES = {
 # Power/Torque/RPM relationship constant (HP = Torque * RPM / 5252)
 POWER_CONSTANT = 5252
 
-
 # =============================================================================
 # Data Classes
 # =============================================================================
 
+
 class CheckStatus(Enum):
     """Status of a preflight check."""
+
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"
@@ -91,6 +105,7 @@ class CheckStatus(Enum):
 @dataclass
 class PreflightCheck:
     """Result of a single preflight check."""
+
     name: str
     status: CheckStatus
     message: str
@@ -110,6 +125,7 @@ class PreflightCheck:
 @dataclass
 class MislabelSuspicion:
     """Suspected channel mislabeling."""
+
     channel_name: str
     expected_type: str  # What we expected (e.g., "rpm")
     observed_behavior: str  # What we observed (e.g., "values 12-15, AFR-like")
@@ -129,6 +145,7 @@ class MislabelSuspicion:
 @dataclass
 class PreflightResult:
     """Result of the complete preflight check."""
+
     passed: bool
     provider_id: int | None
     provider_name: str | None
@@ -188,10 +205,9 @@ class PreflightResult:
 # Preflight Check Functions
 # =============================================================================
 
+
 async def _check_connectivity(
-    config: Any,
-    requested_provider_id: int | None,
-    timeout: float = 10.0
+    config: Any, requested_provider_id: int | None, timeout: float = 10.0
 ) -> tuple[PreflightCheck, Any]:
     """
     Check 1: Provider connectivity.
@@ -204,17 +220,20 @@ async def _check_connectivity(
         providers = await discover_providers(config, timeout=timeout)
 
         if not providers:
-            return PreflightCheck(
-                name="connectivity",
-                status=CheckStatus.FAILED,
-                message="No JetDrive providers found on network",
-                fix_suggestion=(
-                    "1. Verify DynoWare RT is powered on and connected\n"
-                    "2. Check that JetDrive is enabled in Power Core\n"
-                    "3. Verify network cable and multicast routing"
+            return (
+                PreflightCheck(
+                    name="connectivity",
+                    status=CheckStatus.FAILED,
+                    message="No JetDrive providers found on network",
+                    fix_suggestion=(
+                        "1. Verify DynoWare RT is powered on and connected\n"
+                        "2. Check that JetDrive is enabled in Power Core\n"
+                        "3. Verify network cable and multicast routing"
+                    ),
+                    details={"providers_found": 0},
                 ),
-                details={"providers_found": 0},
-            ), None
+                None,
+            )
 
         # Find requested provider or use first
         provider = None
@@ -225,40 +244,49 @@ async def _check_connectivity(
                     break
             if provider is None:
                 available = [f"0x{p.provider_id:04X}" for p in providers]
-                return PreflightCheck(
-                    name="connectivity",
-                    status=CheckStatus.FAILED,
-                    message=f"Requested provider 0x{requested_provider_id:04X} not found",
-                    fix_suggestion=f"Available providers: {', '.join(available)}",
-                    details={
-                        "requested_provider_id": requested_provider_id,
-                        "available_providers": available,
-                    },
-                ), None
+                return (
+                    PreflightCheck(
+                        name="connectivity",
+                        status=CheckStatus.FAILED,
+                        message=f"Requested provider 0x{requested_provider_id:04X} not found",
+                        fix_suggestion=f"Available providers: {', '.join(available)}",
+                        details={
+                            "requested_provider_id": requested_provider_id,
+                            "available_providers": available,
+                        },
+                    ),
+                    None,
+                )
         else:
             provider = providers[0]
 
-        return PreflightCheck(
-            name="connectivity",
-            status=CheckStatus.PASSED,
-            message=f"Connected to {provider.name} (0x{provider.provider_id:04X})",
-            details={
-                "provider_id": provider.provider_id,
-                "provider_name": provider.name,
-                "provider_host": provider.host,
-                "channel_count": len(provider.channels),
-            },
-        ), provider
+        return (
+            PreflightCheck(
+                name="connectivity",
+                status=CheckStatus.PASSED,
+                message=f"Connected to {provider.name} (0x{provider.provider_id:04X})",
+                details={
+                    "provider_id": provider.provider_id,
+                    "provider_name": provider.name,
+                    "provider_host": provider.host,
+                    "channel_count": len(provider.channels),
+                },
+            ),
+            provider,
+        )
 
     except Exception as e:
         logger.error(f"Connectivity check failed: {e}", exc_info=True)
-        return PreflightCheck(
-            name="connectivity",
-            status=CheckStatus.FAILED,
-            message=f"Network error: {str(e)}",
-            fix_suggestion="Check network configuration and firewall settings",
-            details={"error": str(e)},
-        ), None
+        return (
+            PreflightCheck(
+                name="connectivity",
+                status=CheckStatus.FAILED,
+                message=f"Network error: {str(e)}",
+                fix_suggestion="Check network configuration and firewall settings",
+                details={"error": str(e)},
+            ),
+            None,
+        )
 
 
 def _check_required_channels(
@@ -291,23 +319,29 @@ def _check_required_channels(
         if "afr" in missing_groups:
             fix_parts.append("Enable AFR/Lambda channel in Power Core")
 
-        return PreflightCheck(
-            name="required_channels",
-            status=CheckStatus.FAILED,
-            message=f"Missing required channel groups: {', '.join(missing_groups)}",
-            fix_suggestion="\n".join(fix_parts),
-            details={
-                "missing_groups": missing_groups,
-                "found_channels": found_channels,
-            },
-        ), missing_groups
+        return (
+            PreflightCheck(
+                name="required_channels",
+                status=CheckStatus.FAILED,
+                message=f"Missing required channel groups: {', '.join(missing_groups)}",
+                fix_suggestion="\n".join(fix_parts),
+                details={
+                    "missing_groups": missing_groups,
+                    "found_channels": found_channels,
+                },
+            ),
+            missing_groups,
+        )
 
-    return PreflightCheck(
-        name="required_channels",
-        status=CheckStatus.PASSED,
-        message=f"Required channels found: {', '.join(found_channels.values())}",
-        details={"found_channels": found_channels},
-    ), []
+    return (
+        PreflightCheck(
+            name="required_channels",
+            status=CheckStatus.PASSED,
+            message=f"Required channels found: {', '.join(found_channels.values())}",
+            details={"found_channels": found_channels},
+        ),
+        [],
+    )
 
 
 def _check_recommended_channels(
@@ -438,33 +472,39 @@ def _run_semantic_checks(
         if rpm_max < SEMANTIC_RANGES["rpm"][0] or rpm_min > SEMANTIC_RANGES["rpm"][1]:
             # Values look completely wrong
             if SEMANTIC_RANGES["afr"][0] <= rpm_mean <= SEMANTIC_RANGES["afr"][1]:
-                suspicions.append(MislabelSuspicion(
-                    channel_name=rpm_name,
-                    expected_type="rpm",
-                    observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} look like AFR (expected 500-12000)",
-                    confidence=0.9,
-                    fix_suggestion=f"Remap RPM in Power Core - current channel has AFR-like values",
-                ))
+                suspicions.append(
+                    MislabelSuspicion(
+                        channel_name=rpm_name,
+                        expected_type="rpm",
+                        observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} look like AFR (expected 500-12000)",
+                        confidence=0.9,
+                        fix_suggestion=f"Remap RPM in Power Core - current channel has AFR-like values",
+                    )
+                )
             else:
-                suspicions.append(MislabelSuspicion(
-                    channel_name=rpm_name,
-                    expected_type="rpm",
-                    observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} outside plausible range",
-                    confidence=0.7,
-                    fix_suggestion=f"Verify RPM channel mapping in Power Core",
-                ))
+                suspicions.append(
+                    MislabelSuspicion(
+                        channel_name=rpm_name,
+                        expected_type="rpm",
+                        observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} outside plausible range",
+                        confidence=0.7,
+                        fix_suggestion=f"Verify RPM channel mapping in Power Core",
+                    )
+                )
 
         # RPM should not be constant (frozen sensor)
         if len(rpm_data) > 10:
             rpm_stddev = statistics.stdev(rpm_data)
             if rpm_stddev < 1.0:  # Essentially constant
-                suspicions.append(MislabelSuspicion(
-                    channel_name=rpm_name,
-                    expected_type="rpm",
-                    observed_behavior=f"RPM appears frozen at {rpm_mean:.0f}",
-                    confidence=0.8,
-                    fix_suggestion="Check RPM sensor connection",
-                ))
+                suspicions.append(
+                    MislabelSuspicion(
+                        channel_name=rpm_name,
+                        expected_type="rpm",
+                        observed_behavior=f"RPM appears frozen at {rpm_mean:.0f}",
+                        confidence=0.8,
+                        fix_suggestion="Check RPM sensor connection",
+                    )
+                )
 
     # Check AFR channel
     afr_name, afr_data = get_channel_data(REQUIRED_CHANNEL_GROUPS["afr"])
@@ -476,23 +516,27 @@ def _run_semantic_checks(
         # Check if values look like lambda instead of AFR
         if SEMANTIC_RANGES["lambda"][0] <= afr_mean <= SEMANTIC_RANGES["lambda"][1]:
             # Looks like lambda, not AFR
-            suspicions.append(MislabelSuspicion(
-                channel_name=afr_name,
-                expected_type="afr",
-                observed_behavior=f"Values {afr_min:.2f}-{afr_max:.2f} look like Lambda (expected 10-20 for AFR)",
-                confidence=0.85,
-                fix_suggestion="Enable Lambda-to-AFR conversion or use AFR channel",
-            ))
+            suspicions.append(
+                MislabelSuspicion(
+                    channel_name=afr_name,
+                    expected_type="afr",
+                    observed_behavior=f"Values {afr_min:.2f}-{afr_max:.2f} look like Lambda (expected 10-20 for AFR)",
+                    confidence=0.85,
+                    fix_suggestion="Enable Lambda-to-AFR conversion or use AFR channel",
+                )
+            )
         elif afr_max < SEMANTIC_RANGES["afr"][0] or afr_min > SEMANTIC_RANGES["afr"][1]:
             # Values outside AFR range
             if SEMANTIC_RANGES["rpm"][0] <= afr_mean <= SEMANTIC_RANGES["rpm"][1]:
-                suspicions.append(MislabelSuspicion(
-                    channel_name=afr_name,
-                    expected_type="afr",
-                    observed_behavior=f"Values {afr_min:.1f}-{afr_max:.1f} look like RPM (expected 10-20)",
-                    confidence=0.9,
-                    fix_suggestion=f"Remap AFR in Power Core - current channel has RPM-like values",
-                ))
+                suspicions.append(
+                    MislabelSuspicion(
+                        channel_name=afr_name,
+                        expected_type="afr",
+                        observed_behavior=f"Values {afr_min:.1f}-{afr_max:.1f} look like RPM (expected 10-20)",
+                        confidence=0.9,
+                        fix_suggestion=f"Remap AFR in Power Core - current channel has RPM-like values",
+                    )
+                )
 
     # Check TPS channel (if present)
     tps_channels = RECOMMENDED_CHANNELS.get("tps", [])
@@ -502,13 +546,15 @@ def _run_semantic_checks(
         tps_min, tps_max = min(tps_data), max(tps_data)
 
         if tps_max > 100 or tps_min < 0:
-            suspicions.append(MislabelSuspicion(
-                channel_name=tps_name,
-                expected_type="tps",
-                observed_behavior=f"Values {tps_min:.1f}-{tps_max:.1f} outside 0-100% range",
-                confidence=0.8,
-                fix_suggestion="Verify TPS channel mapping - values should be 0-100%",
-            ))
+            suspicions.append(
+                MislabelSuspicion(
+                    channel_name=tps_name,
+                    expected_type="tps",
+                    observed_behavior=f"Values {tps_min:.1f}-{tps_max:.1f} outside 0-100% range",
+                    confidence=0.8,
+                    fix_suggestion="Verify TPS channel mapping - values should be 0-100%",
+                )
+            )
 
     # Check Power/Torque/RPM relationship (if all three present)
     power_name, power_data = get_channel_data(RECOMMENDED_CHANNELS.get("power", []))
@@ -525,57 +571,71 @@ def _run_semantic_checks(
 
         if mean_rpm > 100 and mean_torque > 0:
             expected_power = mean_torque * mean_rpm / POWER_CONSTANT
-            power_diff_pct = abs(mean_power - expected_power) / max(expected_power, 1) * 100
+            power_diff_pct = (
+                abs(mean_power - expected_power) / max(expected_power, 1) * 100
+            )
 
             if power_diff_pct > 50:  # More than 50% off
-                suspicions.append(MislabelSuspicion(
-                    channel_name=f"{power_name}/{torque_name}",
-                    expected_type="power_torque_relationship",
-                    observed_behavior=(
-                        f"Power ({mean_power:.1f}) doesn't match Torque*RPM/5252 "
-                        f"({expected_power:.1f}), {power_diff_pct:.0f}% difference"
-                    ),
-                    confidence=0.7,
-                    fix_suggestion="Verify Power and Torque channel mappings and units",
-                ))
+                suspicions.append(
+                    MislabelSuspicion(
+                        channel_name=f"{power_name}/{torque_name}",
+                        expected_type="power_torque_relationship",
+                        observed_behavior=(
+                            f"Power ({mean_power:.1f}) doesn't match Torque*RPM/5252 "
+                            f"({expected_power:.1f}), {power_diff_pct:.0f}% difference"
+                        ),
+                        confidence=0.7,
+                        fix_suggestion="Verify Power and Torque channel mappings and units",
+                    )
+                )
 
     # Build result
     if suspicions:
         high_confidence = [s for s in suspicions if s.confidence >= 0.8]
         if high_confidence:
-            return PreflightCheck(
-                name="semantic_validation",
-                status=CheckStatus.FAILED,
-                message=f"Detected {len(suspicions)} suspected channel mislabel(s)",
-                fix_suggestion="Review channel mappings in Power Core",
-                details={
-                    "checks_performed": checks_performed,
-                    "suspicion_count": len(suspicions),
-                },
-            ), suspicions
+            return (
+                PreflightCheck(
+                    name="semantic_validation",
+                    status=CheckStatus.FAILED,
+                    message=f"Detected {len(suspicions)} suspected channel mislabel(s)",
+                    fix_suggestion="Review channel mappings in Power Core",
+                    details={
+                        "checks_performed": checks_performed,
+                        "suspicion_count": len(suspicions),
+                    },
+                ),
+                suspicions,
+            )
         else:
-            return PreflightCheck(
-                name="semantic_validation",
-                status=CheckStatus.WARNING,
-                message=f"Possible channel issues detected (low confidence)",
-                fix_suggestion="Review channel mappings if data looks wrong",
-                details={
-                    "checks_performed": checks_performed,
-                    "suspicion_count": len(suspicions),
-                },
-            ), suspicions
+            return (
+                PreflightCheck(
+                    name="semantic_validation",
+                    status=CheckStatus.WARNING,
+                    message=f"Possible channel issues detected (low confidence)",
+                    fix_suggestion="Review channel mappings if data looks wrong",
+                    details={
+                        "checks_performed": checks_performed,
+                        "suspicion_count": len(suspicions),
+                    },
+                ),
+                suspicions,
+            )
 
-    return PreflightCheck(
-        name="semantic_validation",
-        status=CheckStatus.PASSED,
-        message=f"Semantic checks passed ({len(checks_performed)} checks)",
-        details={"checks_performed": checks_performed},
-    ), []
+    return (
+        PreflightCheck(
+            name="semantic_validation",
+            status=CheckStatus.PASSED,
+            message=f"Semantic checks passed ({len(checks_performed)} checks)",
+            details={"checks_performed": checks_performed},
+        ),
+        [],
+    )
 
 
 # =============================================================================
 # Main Preflight Function
 # =============================================================================
+
 
 async def run_preflight(
     provider_id: int | None = None,

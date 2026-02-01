@@ -9,22 +9,23 @@ Tests:
 5. No unbounded growth under load
 """
 
-import pytest
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from api.services.jetdrive.jetdrive_client import JetDriveSample
 from api.services.jetdrive.jetdrive_live_queue import (
+    AGGREGATION_WINDOW_MS,
     LiveCaptureQueueManager,
     LiveCaptureQueueStats,
-    AGGREGATION_WINDOW_MS,
 )
-
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def queue_manager():
@@ -67,15 +68,22 @@ def make_sample(
 # Aggregation Tests
 # =============================================================================
 
+
 class TestSampleAggregation:
     """Test 50ms aggregation window."""
 
     def test_samples_buffered_within_window(self, queue_manager):
         """Samples within 50ms should be buffered together."""
         # Send samples within same window
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
-        queue_manager.on_sample(make_sample(timestamp_ms=1010, channel_name="Digital RPM 1"))
-        queue_manager.on_sample(make_sample(timestamp_ms=1020, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1010, channel_name="Digital RPM 1")
+        )
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1020, channel_name="Digital RPM 1")
+        )
 
         # Should be buffered, not yet enqueued
         assert queue_manager.stats.samples_received == 3
@@ -84,11 +92,17 @@ class TestSampleAggregation:
     def test_samples_across_windows_flush_automatically(self, queue_manager):
         """Samples crossing window boundary should trigger flush."""
         # First window
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
-        queue_manager.on_sample(make_sample(timestamp_ms=1020, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1020, channel_name="Digital RPM 1")
+        )
 
         # Second window (>50ms later) - should trigger flush
-        queue_manager.on_sample(make_sample(timestamp_ms=1100, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1100, channel_name="Digital RPM 1")
+        )
 
         # Should have triggered aggregation
         assert queue_manager.stats.aggregation_windows >= 1
@@ -100,8 +114,12 @@ class TestSampleAggregation:
     def test_force_flush_empties_buffer(self, queue_manager):
         """Force flush should empty the sample buffer."""
         # Buffer some samples
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
-        queue_manager.on_sample(make_sample(timestamp_ms=1010, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1010, channel_name="Digital RPM 1")
+        )
 
         # Stats should show received samples
         assert queue_manager.stats.samples_received == 2
@@ -110,6 +128,7 @@ class TestSampleAggregation:
 # =============================================================================
 # Queue Bounds Tests
 # =============================================================================
+
 
 class TestQueueBounds:
     """Test bounded queue behavior and graceful degradation."""
@@ -133,7 +152,9 @@ class TestQueueBounds:
         # This should complete quickly even with full queue
         start = time.time()
         for i in range(20):
-            queue_manager.on_sample(make_sample(timestamp_ms=i * 100, channel_name="Digital RPM 1"))
+            queue_manager.on_sample(
+                make_sample(timestamp_ms=i * 100, channel_name="Digital RPM 1")
+            )
         elapsed = time.time() - start
 
         # Should complete in under 0.5 second (no blocking)
@@ -143,7 +164,9 @@ class TestQueueBounds:
         """Queue high watermark should be tracked."""
         # Send a few samples
         for i in range(5):
-            queue_manager.on_sample(make_sample(timestamp_ms=i * 100, channel_name="Digital RPM 1"))
+            queue_manager.on_sample(
+                make_sample(timestamp_ms=i * 100, channel_name="Digital RPM 1")
+            )
 
         # Stats should track metrics
         assert queue_manager.stats.samples_received >= 5
@@ -152,6 +175,7 @@ class TestQueueBounds:
 # =============================================================================
 # Health Metrics Tests
 # =============================================================================
+
 
 class TestHealthMetrics:
     """Test health metrics tracking."""
@@ -177,8 +201,10 @@ class TestHealthMetrics:
     def test_get_stats_returns_dict(self, queue_manager):
         """get_stats() should return serializable dict."""
         # Send a sample to initialize
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
-        
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
+
         stats = queue_manager.get_stats()
 
         assert isinstance(stats, dict)
@@ -189,7 +215,9 @@ class TestHealthMetrics:
 
     def test_stats_include_queue_info(self, queue_manager):
         """Stats should include underlying queue stats."""
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
 
         stats = queue_manager.get_stats()
         queue_stats = stats.get("queue", {})
@@ -201,6 +229,7 @@ class TestHealthMetrics:
 # =============================================================================
 # Persistence Tests
 # =============================================================================
+
 
 class TestPersistence:
     """Test optional persistence for crash recovery."""
@@ -219,6 +248,7 @@ class TestPersistence:
 # =============================================================================
 # No Unbounded Growth Tests
 # =============================================================================
+
 
 class TestNoUnboundedGrowth:
     """Test that queue doesn't grow unbounded under load."""
@@ -265,7 +295,9 @@ class TestNoUnboundedGrowth:
     def test_reset_clears_state(self, queue_manager):
         """Reset should clear all state."""
         # Add some data
-        queue_manager.on_sample(make_sample(timestamp_ms=1000, channel_name="Digital RPM 1"))
+        queue_manager.on_sample(
+            make_sample(timestamp_ms=1000, channel_name="Digital RPM 1")
+        )
 
         # Reset
         queue_manager.reset()
