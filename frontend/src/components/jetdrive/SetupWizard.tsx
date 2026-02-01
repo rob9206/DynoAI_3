@@ -9,7 +9,7 @@
  * Persists configuration to localStorage for session continuity.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wifi, Bike, Upload, Check, ArrowRight, ArrowLeft, X, RotateCcw,
@@ -94,6 +94,12 @@ export function SetupWizard({
 
   const [tuneImport, setTuneImport] = useState<TuneImportResult | null>(null);
   const [dynoConnected, setDynoConnected] = useState(false);
+  
+  // Use ref to always have latest tuneImport value in callbacks
+  const tuneImportRef = useRef<TuneImportResult | null>(null);
+  useEffect(() => {
+    tuneImportRef.current = tuneImport;
+  }, [tuneImport]);
 
   // Save state to localStorage on changes
   useEffect(() => {
@@ -128,7 +134,18 @@ export function SetupWizard({
   }, []);
 
   const handleTuneImport = useCallback((result: TuneImportResult) => {
+    console.log('[SetupWizard] Tune imported:', {
+      sourceName: result.sourceName,
+      source: result.source,
+      hasVeFront: !!result.veFront,
+      hasVeRear: !!result.veRear,
+      veFrontRows: result.veFront?.rows?.length,
+      veFrontCols: result.veFront?.columns?.length,
+      rpmBins: result.rpmBins,
+      mapBins: result.mapBins,
+    });
     setTuneImport(result);
+    tuneImportRef.current = result; // Update ref immediately
   }, []);
 
   const goToStep = useCallback((step: WizardStep) => {
@@ -140,12 +157,23 @@ export function SetupWizard({
     if (nextIndex < STEPS.length) {
       goToStep(STEPS[nextIndex].id);
     } else {
-      // Complete
+      // Complete - use ref to get latest tuneImport value
+      const currentTuneImport = tuneImportRef.current;
+      console.log('[SetupWizard] Completing setup with tuneImport:', {
+        hasTuneImport: !!currentTuneImport,
+        tuneImportFromRef: !!tuneImportRef.current,
+        tuneImportFromState: !!tuneImport,
+        sourceName: currentTuneImport?.sourceName,
+        hasVeFront: !!currentTuneImport?.veFront,
+        hasVeRear: !!currentTuneImport?.veRear,
+        veFrontRows: currentTuneImport?.veFront?.rows?.length,
+        veFrontValues: currentTuneImport?.veFront?.values?.length,
+      });
       setState(prev => ({ ...prev, currentStep: 'complete', setupComplete: true }));
       onComplete({
         dynoConfig: state.dynoConfig,
         bikeConfig: state.bikeConfig,
-        tuneImport,
+        tuneImport: currentTuneImport,
       });
     }
   }, [currentStepIndex, goToStep, onComplete, state.dynoConfig, state.bikeConfig, tuneImport]);

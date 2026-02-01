@@ -9,12 +9,147 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Upload, FileCheck, Settings, AlertTriangle, Check, X } from 'lucide-react';
+import { Upload, FileCheck, Settings, AlertTriangle, Check, X, ChevronDown, ChevronUp, Table } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 import { parsePVV, getPVVSummary, extractAfrTargets, type ParsedPVV, type PVVTable } from '../../utils/pvvParser';
-import { listEnginePresets, getEnginePreset, type EnginePresetData } from '../../utils/enginePresets';
+import { listEnginePresets, getEnginePreset } from '../../utils/enginePresets';
+
+// ==================== VE Preview Table Component ====================
+
+interface VEPreviewTableProps {
+    table: PVVTable;
+    title: string;
+    maxRows?: number;
+    maxCols?: number;
+}
+
+/**
+ * Compact preview table for VE data with color-coded cells
+ */
+function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
+    const { rows, columns, values } = table;
+    
+    // Sample rows and columns for preview
+    const displayRows = rows.slice(0, maxRows);
+    const displayCols = columns.slice(0, maxCols);
+    const hasMoreRows = rows.length > maxRows;
+    const hasMoreCols = columns.length > maxCols;
+    
+    // Get color for VE value (green = high efficiency, yellow = mid, red = low)
+    const getVEColor = (value: number): string => {
+        if (value >= 100) return 'bg-green-500/30 text-green-300';
+        if (value >= 90) return 'bg-emerald-500/20 text-emerald-300';
+        if (value >= 80) return 'bg-yellow-500/20 text-yellow-300';
+        if (value >= 70) return 'bg-orange-500/20 text-orange-300';
+        return 'bg-red-500/20 text-red-300';
+    };
+    
+    return (
+        <div className="space-y-2">
+            <div className="text-xs font-medium text-zinc-300">{title}</div>
+            <div className="overflow-x-auto">
+                <table className="text-[10px] border-collapse">
+                    <thead>
+                        <tr>
+                            <th className="px-1.5 py-1 text-zinc-500 font-normal text-left border-b border-zinc-700">
+                                RPM↓ / MAP→
+                            </th>
+                            {displayCols.map((col, i) => (
+                                <th key={i} className="px-1.5 py-1 text-zinc-400 font-medium text-center border-b border-zinc-700 min-w-[36px]">
+                                    {Math.round(col)}
+                                </th>
+                            ))}
+                            {hasMoreCols && (
+                                <th className="px-1.5 py-1 text-zinc-500 text-center border-b border-zinc-700">...</th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {displayRows.map((rpm, rowIdx) => (
+                            <tr key={rowIdx}>
+                                <td className="px-1.5 py-0.5 text-zinc-400 font-medium border-r border-zinc-700">
+                                    {Math.round(rpm)}
+                                </td>
+                                {displayCols.map((_, colIdx) => {
+                                    const value = values[rowIdx]?.[colIdx] ?? 0;
+                                    return (
+                                        <td 
+                                            key={colIdx} 
+                                            className={`px-1.5 py-0.5 text-center font-mono ${getVEColor(value)}`}
+                                        >
+                                            {value.toFixed(1)}
+                                        </td>
+                                    );
+                                })}
+                                {hasMoreCols && (
+                                    <td className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>
+                                )}
+                            </tr>
+                        ))}
+                        {hasMoreRows && (
+                            <tr>
+                                <td className="px-1.5 py-0.5 text-zinc-500 border-r border-zinc-700">...</td>
+                                {displayCols.map((_, i) => (
+                                    <td key={i} className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>
+                                ))}
+                                {hasMoreCols && <td className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>}
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            <div className="text-[10px] text-zinc-500">
+                Showing {displayRows.length} of {rows.length} RPM bins × {displayCols.length} of {columns.length} MAP bins
+            </div>
+        </div>
+    );
+}
+
+/**
+ * AFR targets preview as a simple row
+ */
+function AFRPreviewTable({ table }: { table: PVVTable }) {
+    const { columns, values } = table;
+    
+    // Use middle row for AFR targets (typical operating RPM)
+    const midRowIdx = Math.floor(values.length / 2);
+    const afrRow = values[midRowIdx] || values[0] || [];
+    
+    // Show first 8 MAP bins
+    const displayCols = columns.slice(0, 8);
+    const displayValues = afrRow.slice(0, 8);
+    
+    const getAFRColor = (value: number): string => {
+        if (value >= 14.5) return 'text-blue-300'; // Lean
+        if (value >= 13.5) return 'text-green-300'; // Stoich/slightly rich
+        if (value >= 12.5) return 'text-yellow-300'; // Rich
+        return 'text-orange-300'; // Very rich
+    };
+    
+    return (
+        <div className="space-y-2">
+            <div className="text-xs font-medium text-zinc-300">AFR Targets (at {Math.round(table.rows[midRowIdx] || 0)} RPM)</div>
+            <div className="flex flex-wrap gap-2">
+                {displayCols.map((map, i) => (
+                    <div key={i} className="text-center">
+                        <div className="text-[10px] text-zinc-500">{Math.round(map)} kPa</div>
+                        <div className={`text-xs font-mono font-medium ${getAFRColor(displayValues[i] || 0)}`}>
+                            {(displayValues[i] || 0).toFixed(2)}
+                        </div>
+                    </div>
+                ))}
+                {columns.length > 8 && (
+                    <div className="text-center">
+                        <div className="text-[10px] text-zinc-500">...</div>
+                        <div className="text-xs text-zinc-500">+{columns.length - 8}</div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export interface TuneImportResult {
     source: 'pvv' | 'preset';
@@ -37,6 +172,7 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
     const [importedPVV, setImportedPVV] = useState<ParsedPVV | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
     const [showPresets, setShowPresets] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFile = useCallback(async (file: File) => {
@@ -50,6 +186,28 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
         try {
             const content = await file.text();
             const parsed = parsePVV(content);
+            
+            console.log('[TuneImport] Parsed PVV file:', {
+                sourceFile: parsed.sourceFile,
+                veFront: parsed.veFront ? {
+                    name: parsed.veFront.name,
+                    rows: parsed.veFront.rows.length,
+                    columns: parsed.veFront.columns.length,
+                    sampleValues: parsed.veFront.values[0]?.slice(0, 3),
+                } : null,
+                veRear: parsed.veRear ? {
+                    name: parsed.veRear.name,
+                    rows: parsed.veRear.rows.length,
+                    columns: parsed.veRear.columns.length,
+                } : null,
+                afrTarget: parsed.afrTarget ? {
+                    name: parsed.afrTarget.name,
+                    rows: parsed.afrTarget.rows.length,
+                    columns: parsed.afrTarget.columns.length,
+                } : null,
+                allTables: Array.from(parsed.allTables.keys()),
+                parseErrors: parsed.parseErrors,
+            });
             
             if (parsed.parseErrors.length > 0 && !parsed.veFront && !parsed.afrTarget) {
                 setImportError(`Parse errors: ${parsed.parseErrors.join(', ')}`);
@@ -73,8 +231,19 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                 mapBins: parsed.veFront?.columns ?? getEnginePreset(currentPreset)?.mapBins ?? [],
             };
 
+            console.log('[TuneImport] Sending result to parent:', {
+                source: result.source,
+                sourceName: result.sourceName,
+                hasVeFront: !!result.veFront,
+                hasVeRear: !!result.veRear,
+                rpmBins: result.rpmBins,
+                mapBins: result.mapBins,
+                afrTargetKeys: Object.keys(result.afrTargets),
+            });
+
             onImport(result);
         } catch (e) {
+            console.error('[TuneImport] Error parsing file:', e);
             setImportError(`Failed to read file: ${e}`);
         }
     }, [currentPreset, onImport]);
@@ -207,18 +376,60 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
 
                     {/* Import Status */}
                     {importedPVV ? (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                            <div className="flex items-start gap-2">
-                                <Check className="w-4 h-4 text-green-400 mt-0.5" />
-                                <div className="text-xs">
-                                    <div className="text-green-400 font-medium">
-                                        {importedPVV.sourceFile || 'PVV File Loaded'}
-                                    </div>
-                                    <div className="text-zinc-400 mt-1 whitespace-pre-line">
-                                        {getPVVSummary(importedPVV)}
+                        <div className="space-y-3">
+                            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                <div className="flex items-start gap-2">
+                                    <Check className="w-4 h-4 text-green-400 mt-0.5" />
+                                    <div className="text-xs flex-1">
+                                        <div className="text-green-400 font-medium">
+                                            {importedPVV.sourceFile || 'PVV File Loaded'}
+                                        </div>
+                                        <div className="text-zinc-400 mt-1 whitespace-pre-line">
+                                            {getPVVSummary(importedPVV)}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                            
+                            {/* Preview Data Toggle */}
+                            {(importedPVV.veFront || importedPVV.veRear || importedPVV.afrTarget) && (
+                                <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                                    <button
+                                        onClick={() => setShowPreview(!showPreview)}
+                                        className="w-full flex items-center justify-between px-3 py-2 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                                    >
+                                        <span className="flex items-center gap-2 text-xs text-zinc-300">
+                                            <Table className="w-3.5 h-3.5" />
+                                            Preview Data
+                                        </span>
+                                        {showPreview ? (
+                                            <ChevronUp className="w-4 h-4 text-zinc-400" />
+                                        ) : (
+                                            <ChevronDown className="w-4 h-4 text-zinc-400" />
+                                        )}
+                                    </button>
+                                    
+                                    {showPreview && (
+                                        <div className="p-3 space-y-4 bg-zinc-900/50">
+                                            {importedPVV.veFront && (
+                                                <VEPreviewTable 
+                                                    table={importedPVV.veFront} 
+                                                    title="Front Cylinder VE (%)"
+                                                />
+                                            )}
+                                            {importedPVV.veRear && (
+                                                <VEPreviewTable 
+                                                    table={importedPVV.veRear} 
+                                                    title="Rear Cylinder VE (%)"
+                                                />
+                                            )}
+                                            {importedPVV.afrTarget && (
+                                                <AFRPreviewTable table={importedPVV.afrTarget} />
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ) : importError ? (
                         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">

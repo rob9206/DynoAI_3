@@ -686,11 +686,33 @@ export default function JetDriveAutoTunePage() {
         bikeConfig: BikeConfig;
         tuneImport: TuneImportResult | null;
     }) => {
+        console.log('[JetDriveAutoTunePage] Setup complete:', {
+            hasDynoConfig: !!setupResult.dynoConfig,
+            hasBikeConfig: !!setupResult.bikeConfig,
+            hasTuneImport: !!setupResult.tuneImport,
+        });
         setDynoConfig(setupResult.dynoConfig);
         setBikeConfig(setupResult.bikeConfig);
         if (setupResult.tuneImport) {
+            console.log('[JetDriveAutoTunePage] Setting imported tune:', {
+                sourceName: setupResult.tuneImport.sourceName,
+                source: setupResult.tuneImport.source,
+                hasVeFront: !!setupResult.tuneImport.veFront,
+                hasVeRear: !!setupResult.tuneImport.veRear,
+                veFrontRows: setupResult.tuneImport.veFront?.rows?.length,
+                veFrontCols: setupResult.tuneImport.veFront?.columns?.length,
+                veFrontSampleValues: setupResult.tuneImport.veFront?.values?.[0]?.slice(0, 3),
+                rpmBins: setupResult.tuneImport.rpmBins,
+                mapBins: setupResult.tuneImport.mapBins,
+                afrTargetKeys: Object.keys(setupResult.tuneImport.afrTargets || {}),
+            });
             setImportedTune(setupResult.tuneImport);
-            setAfrTargets(setupResult.tuneImport.afrTargets);
+            if (setupResult.tuneImport.afrTargets && Object.keys(setupResult.tuneImport.afrTargets).length > 0) {
+                setAfrTargets(setupResult.tuneImport.afrTargets);
+            }
+            toast.success(`Tune loaded: ${setupResult.tuneImport.sourceName}`);
+        } else {
+            console.log('[JetDriveAutoTunePage] No tune imported');
         }
         setShowSetupWizard(false);
         try {
@@ -1879,6 +1901,9 @@ function SmartPromptBanner({
                                             customRpmBins={importedTune?.rpmBins}
                                             customMapBins={importedTune?.mapBins}
                                             onExport={(data) => {
+                                                setPendingExportData(data);
+                                            }}
+                                            onLiveDataUpdate={(data) => {
                                                 setPendingExportData(data);
                                             }}
                                         />

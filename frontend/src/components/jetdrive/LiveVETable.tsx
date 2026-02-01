@@ -10,7 +10,7 @@
  * Based on Power Vision table format with configurable bins for different engine types.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Target, Activity, Flame, Crosshair, RotateCcw, ChevronDown, Download } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -107,6 +107,9 @@ interface LiveVETableProps {
     
     // Export callback - called when user clicks Export button
     onExport?: (data: LiveVEExportData) => void;
+    
+    // Live data callback - called continuously during data collection for real-time coverage updates
+    onLiveDataUpdate?: (data: LiveVEExportData) => void;
 }
 
 // Calculate which cells are active and interpolation weights
@@ -242,6 +245,7 @@ export function LiveVETable({
     hitCounts: externalHitCounts,
     onCellClick,
     onExport,
+    onLiveDataUpdate,
 }: LiveVETableProps) {
     // Resolve AFR values - prefer dual-cylinder, fall back to single
     const resolvedAfrFront = currentAfrFront ?? currentAfr ?? 0;
@@ -491,6 +495,36 @@ export function LiveVETable({
         displayHitCounts.flat().reduce((a, b) => a + b, 0),
         [displayHitCounts]
     );
+    
+    // Ref for throttling live data updates
+    const lastLiveUpdateRef = useRef<number>(0);
+    
+    // Live data update effect - push data to parent for real-time coverage tracking
+    // Throttled to avoid excessive updates (every ~500ms when data changes)
+    useEffect(() => {
+        if (!onLiveDataUpdate || !isLive || totalHits === 0) return;
+        
+        const now = Date.now();
+        // Throttle updates to every 500ms
+        if (now - lastLiveUpdateRef.current < 500) return;
+        lastLiveUpdateRef.current = now;
+        
+        const liveData: LiveVEExportData = {
+            frontCorrections: frontVeCorrections,
+            rearCorrections: rearVeCorrections,
+            hitCounts: displayHitCounts,
+            frontHitCounts: frontHitCounts,
+            rearHitCounts: rearHitCounts,
+            rpmBins,
+            mapBins,
+            afrTargets: resolvedAfrTargets,
+            enginePreset: activePreset,
+            totalHits,
+            exportedAt: new Date().toISOString(),
+        };
+        
+        onLiveDataUpdate(liveData);
+    }, [onLiveDataUpdate, isLive, totalHits, frontVeCorrections, rearVeCorrections, displayHitCounts, frontHitCounts, rearHitCounts, rpmBins, mapBins, resolvedAfrTargets, activePreset]);
     
     // Export handler - provides data for external export utilities
     const handleExport = useCallback(() => {

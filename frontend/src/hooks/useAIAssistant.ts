@@ -230,17 +230,12 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
             // Fallback to any English voice
             selectedVoice ??= voices.find(v => v.lang.startsWith('en')) ?? null;
 
-            // Log all available voices for debugging
-            console.log('[AI Assistant] Total voices available:', voices.length);
-            console.log('[AI Assistant] All voices:', voices.map(v => `"${v.name}" (${v.lang})`).join('\n'));
-
             if (selectedVoice) {
                 voiceRef.current = selectedVoice;
                 setState(prev => ({ ...prev, voiceName: selectedVoice.name }));
-                console.log('[AI Assistant] ✅ Selected voice:', selectedVoice.name, '(', selectedVoice.lang, ')');
+                console.log('[AI Assistant] ✅ Selected voice:', selectedVoice.name);
             } else {
-                console.warn('[AI Assistant] ❌ No suitable voice found!');
-                console.warn('[AI Assistant] Available voices:', voices.map(v => v.name));
+                console.warn('[AI Assistant] ❌ No suitable voice found! Total voices available:', voices.length);
             }
         };
 
