@@ -19,6 +19,9 @@ def get_resource_path(relative_path):
         base_path = Path(sys._MEIPASS)
     else:
         base_path = Path(__file__).parent
+        # If running from scripts/ directory, move up to root
+        if base_path.name == 'scripts':
+            base_path = base_path.parent
     return base_path / relative_path
 
 
@@ -28,7 +31,12 @@ def setup_environment():
     if hasattr(sys, '_MEIPASS'):
         os.chdir(sys._MEIPASS)
     else:
-        os.chdir(Path(__file__).parent)
+        # If running from source, assume we are in scripts/ and want to be in root
+        script_dir = Path(__file__).parent
+        if script_dir.name == 'scripts':
+             os.chdir(script_dir.parent)
+        else:
+             os.chdir(script_dir)
     
     # Add current directory to path for imports
     if str(Path.cwd()) not in sys.path:
