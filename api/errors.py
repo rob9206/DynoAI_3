@@ -78,7 +78,10 @@ class NotFoundError(APIError):
             message=message,
             status_code=404,
             error_code="NOT_FOUND",
-            details=details or {"resource": resource, "identifier": identifier},
+            details=details or {
+                "resource": resource,
+                "identifier": identifier
+            },
         )
 
 
@@ -237,9 +240,9 @@ class AuthenticationError(APIError):
 class PermissionError(APIError):
     """Raised when user lacks permission for an operation."""
 
-    def __init__(
-        self, message: str = "Permission denied", resource: Optional[str] = None
-    ):
+    def __init__(self,
+                 message: str = "Permission denied",
+                 resource: Optional[str] = None):
         super().__init__(
             message=message,
             status_code=403,
@@ -308,9 +311,8 @@ def handle_exception(error: Exception) -> Tuple[Response, int]:
     import sys
 
     # Always print to stderr for debugging
-    print(
-        f"[ERROR] Unhandled exception: {type(error).__name__}: {error}", file=sys.stderr
-    )
+    print(f"[ERROR] Unhandled exception: {type(error).__name__}: {error}",
+          file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
 
     logger.error(
@@ -343,11 +345,8 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(400)
     def bad_request_handler(error: Exception) -> Tuple[Response, int]:
         return error_response(
-            message=(
-                str(error.description)
-                if hasattr(error, "description")
-                else "Bad request"
-            ),
+            message=(str(error.description)
+                     if hasattr(error, "description") else "Bad request"),
             status_code=400,
             error_code="BAD_REQUEST",
         )
@@ -417,7 +416,8 @@ def with_error_handling(f: F) -> F:
         except ValueError as e:
             raise ValidationError(message=str(e))
         except Exception as e:
-            logger.error(f"Unexpected error in {f.__name__}: {e}", exc_info=True)
+            logger.error(f"Unexpected error in {f.__name__}: {e}",
+                         exc_info=True)
             raise APIError(
                 message=str(e),
                 status_code=500,
