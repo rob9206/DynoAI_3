@@ -268,6 +268,14 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Report generation: {e}")
 
+# Register Engine Analyzer blueprint
+try:
+    from api.routes.engine_analyzer import engine_analyzer_bp
+    app.register_blueprint(engine_analyzer_bp)
+    print("[+] Engine Analyzer registered at /api/ea")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Engine Analyzer: {e}")
+
 # Register NextGen Analysis blueprint (physics-informed ECU reasoning)
 try:
     from api.routes.nextgen import nextgen_bp
