@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QAction, QFont, QIcon
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
