@@ -3727,13 +3727,13 @@ def enable_realtime_analysis():
             }
         )
     except Exception as e:
-        logger.error(f"Failed to enable realtime analysis: {e}")
-        return (
+    except Exception:
+        logger.exception("Failed to enable realtime analysis")
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to enable realtime analysis",
             ),
             500,
         )
@@ -3760,13 +3760,13 @@ def disable_realtime_analysis():
             }
         )
     except Exception as e:
-        logger.error(f"Failed to disable realtime analysis: {e}")
-        return (
+    except Exception:
+        logger.exception("Failed to disable realtime analysis")
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to disable realtime analysis",
             ),
             500,
         )
