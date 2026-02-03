@@ -3693,7 +3693,7 @@ def get_realtime_analysis():
                     "success": True,
                     "enabled": False,
                     "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
-                }
+                    "error": "Failed to get realtime analysis.",
             )
 
         return jsonify(
@@ -3733,7 +3733,7 @@ def enable_realtime_analysis():
         target_afr = request.args.get("target_afr", 14.7, type=float)
 
         queue_mgr = get_live_queue_manager()
-        queue_mgr.enable_realtime_analysis(target_afr=target_afr)
+                    "error": "Failed to enable realtime analysis.",
 
         return jsonify(
             {
