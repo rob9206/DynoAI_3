@@ -40,6 +40,22 @@ logger = logging.getLogger(__name__)
 
 jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
 
+
+def _safe_template_id(template_name: str) -> str:
+    """
+    Convert a user-provided template name into a filesystem-safe identifier.
+
+    Only allow letters, numbers, underscore and dash. If the result is empty,
+    fall back to a safe default.
+    """
+    # Preserve existing behavior of lowercasing and replacing spaces
+    base = (template_name or "").lower().replace(" ", "_")
+    # Remove any character that is not alphanumeric, underscore, or dash
+    safe = re.sub(r"[^a-z0-9_-]", "", base)
+    if not safe:
+        safe = "template"
+    return safe
+
 # Singleton workflow instance for unified analysis
 _workflow: "AutoTuneWorkflow" | None = None
 
@@ -3545,7 +3561,7 @@ def export_as_template():
 
         # Create template
         template_id = template_name.lower().replace(" ", "_")
-        template_data = {
+        template_id = _safe_template_id(template_name)
             "version": "1.0",
             "type": "dynoai_mapping_template",
             "name": template_name,
