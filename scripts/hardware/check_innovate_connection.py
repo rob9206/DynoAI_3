@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Quick script to check Innovate device connection and data."""
 
-import json
-import sys
-
 import requests
 
 base_url = "http://localhost:5001"
@@ -78,6 +75,6 @@ except Exception as e:
 
 print("\n" + "=" * 60)
 print("To connect your device:")
-print(f"  POST /api/jetdrive/innovate/connect")
-print(f"  Body: {{'port': 'COM5', 'device_type': 'LC-2'}}")
+print("  POST /api/jetdrive/innovate/connect")
+print("  Body: {{'port': 'COM5', 'device_type': 'LC-2'}}")
 print("=" * 60)

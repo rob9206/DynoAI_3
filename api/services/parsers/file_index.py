@@ -219,7 +219,8 @@ class FileIndex:
             self._index.clear()
             self._path_to_id.clear()
 
-    def _generate_id(self, path: Path) -> str:
+    @staticmethod
+    def _generate_id(path: Path) -> str:
         """Generate a unique, non-guessable file ID."""
         # Use random component + hash of path for uniqueness
         random_part = secrets.token_hex(8)

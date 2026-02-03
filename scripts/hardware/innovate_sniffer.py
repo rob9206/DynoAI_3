@@ -27,8 +27,6 @@ Protocol Notes:
 """
 
 import argparse
-import queue
-import sys
 import threading
 import time
 

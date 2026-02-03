@@ -2,7 +2,6 @@
 """Debug script to check Innovate data flow."""
 
 import json
-import time
 
 import requests
 
@@ -40,7 +39,7 @@ try:
     print(f"  Total Channels: {data.get('channel_count', 0)}")
 
     channels = data.get("channels", {})
-    print(f"\n  All Channel Names:")
+    print("\n  All Channel Names:")
     for name in sorted(channels.keys())[:20]:
         ch_data = channels[name]
         value = ch_data.get("value", "N/A")
@@ -50,13 +49,13 @@ try:
         k: v for k, v in channels.items() if "Innovate" in k or "innovate" in k.lower()
     }
     if innovate_channels:
-        print(f"\n  Innovate Channels Found:")
+        print("\n  Innovate Channels Found:")
         for name, ch_data in innovate_channels.items():
             print(f"    {name}: {ch_data.get('value', 'N/A')}")
     else:
-        print(f"\n  [No Innovate channels found]")
+        print("\n  [No Innovate channels found]")
         print(
-            f"  This means the integration may not be working, or device isn't sending data yet."
+            "  This means the integration may not be working, or device isn't sending data yet."
         )
 
 except Exception as e:

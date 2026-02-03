@@ -247,7 +247,7 @@ def main():
             print(
                 f"\n{Colors.YELLOW}Calibration cancelled. No changes made.{Colors.RESET}"
             )
-            print(f"\nTo manually apply offsets, edit: config/afr_calibration.json")
+            print("\nTo manually apply offsets, edit: config/afr_calibration.json")
             for ch, data in results.items():
                 if not data["calibrated"]:
                     print(f'  Channel {ch}: "offset_afr": {data["offset"]:.2f}')
@@ -290,9 +290,9 @@ def main():
             print(f"  Channel {ch}: {data['offset']:+.2f} AFR")
 
         print(f"\n{Colors.CYAN}{Colors.BOLD}Next Steps:{Colors.RESET}")
-        print(f"  1. Reinstall sensors in exhaust")
-        print(f"  2. Restart DynoAI to load new calibration")
-        print(f"  3. Verify readings with calibration_monitor.py")
+        print("  1. Reinstall sensors in exhaust")
+        print("  2. Restart DynoAI to load new calibration")
+        print("  3. Verify readings with calibration_monitor.py")
         print()
 
         return 0

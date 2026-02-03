@@ -366,7 +366,6 @@ def parse_wp8():
         from pathlib import Path
 
         try:
-            from api.services.powercore_integration import find_powercore_data_dirs
 
             allowed_roots = [p.resolve() for p in find_powercore_data_dirs()]
         except Exception:

@@ -15,8 +15,8 @@ print("=" * 60)
 print(f"\nPacket: {packet_hex}")
 print(f"Bytes: {' '.join(f'{b:02x}' for b in packet)}")
 print(f"Decimal: {' '.join(f'{b:3d}' for b in packet)}")
-print(f"\nExpected: Sensor A = 22.4 AFR (224 as int/10)")
-print(f"          Lambda = 1.52 (22.4/14.7)")
+print("\nExpected: Sensor A = 22.4 AFR (224 as int/10)")
+print("          Lambda = 1.52 (22.4/14.7)")
 
 # MTS format is typically: [word1][word2][word3]...
 # where each word is 2 bytes

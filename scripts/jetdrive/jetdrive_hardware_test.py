@@ -276,7 +276,7 @@ def save_samples_to_csv(samples: list[JetDriveSample], path: Path) -> None:
         timestamps[s.timestamp_ms][s.channel_name] = s.value
 
     # Get all channel names
-    all_channels = sorted(set(s.channel_name for s in samples))
+    all_channels = sorted({s.channel_name for s in samples})
 
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)

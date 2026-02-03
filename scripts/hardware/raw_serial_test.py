@@ -78,7 +78,7 @@ try:
 
                 # Show as integers
                 if len(data) <= 20:
-                    ints = [b for b in data]
+                    ints = list(data)
                     print(f"  Integers: {ints}")
             else:
                 time.sleep(0.1)

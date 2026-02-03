@@ -9,7 +9,7 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from api.errors import CSVParsingError, ValidationError
+from api.errors import CSVParsingError
 
 
 def parse_ve_delta_csv(

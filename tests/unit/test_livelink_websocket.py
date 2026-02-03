@@ -12,9 +12,7 @@ def test_module_imports():
         ClientSubscription,
         LiveLinkSocketIOManager,
         create_livelink_app,
-        get_manager,
-        init_livelink_socketio,
-    )
+        )
 
     print("✓ All imports successful")
 

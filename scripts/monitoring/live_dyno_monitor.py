@@ -118,7 +118,7 @@ async def display_loop(provider_name: str, stop_event: asyncio.Event):
 
         # Other channels
         known_ids = set(atmo_ids + dyno_ids + afr_ids + [41, 44])
-        other_ids = [k for k in latest_values.keys() if k not in known_ids]
+        other_ids = [k for k in latest_values if k not in known_ids]
         if other_ids:
             print("  OTHER CHANNELS:")
             for ch_id in sorted(other_ids)[:8]:

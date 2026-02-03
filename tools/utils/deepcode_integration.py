@@ -28,7 +28,7 @@ try:
     )
     from utils.simple_llm_logger import SimpleLLMLogger
 except ImportError as e:
-    print(f"❌ Error: Could not import DeepCode modules.")
+    print("❌ Error: Could not import DeepCode modules.")
     print(f"   Make sure DeepCode is installed at: {DEEPCODE_PATH}")
     print(f"   Error details: {e}")
     sys.exit(1)
@@ -43,7 +43,7 @@ class DynoAI3DeepCodeIntegration:
     """
 
     def __init__(self, output_base_dir: Optional[str] = None):
-        """
+        r"""
         Initialize the integration.
 
         Args:
@@ -69,7 +69,8 @@ class DynoAI3DeepCodeIntegration:
         print(f"🧠 DeepCode path: {DEEPCODE_PATH}")
         print()
 
-    def _setup_config_files(self):
+    @staticmethod
+    def _setup_config_files():
         """Ensure DeepCode config files are available in the working directory."""
         import shutil
 
@@ -89,7 +90,8 @@ class DynoAI3DeepCodeIntegration:
             shutil.copy(deepcode_config, local_config)
             print(f"✅ Copied config: {local_config}")
 
-    def _build_dynoai3_context(self) -> str:
+    @staticmethod
+    def _build_dynoai3_context() -> str:
         """Build context about DynoAI_3 for better code generation."""
         return """
 Project: DynoAI_3 - Deterministic Dyno Tuning Platform

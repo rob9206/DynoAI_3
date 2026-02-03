@@ -47,7 +47,7 @@ try:
             print(f"  [RESPONSE] {len(data)} bytes: {data!r}")
             print(f"  Hex: {data.hex()}")
         else:
-            print(f"  [No response]")
+            print("  [No response]")
 
     # Final check - just listen for a bit
     print("\n[Final check] Listening for 5 seconds...")

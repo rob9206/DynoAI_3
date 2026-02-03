@@ -698,7 +698,6 @@ def _discover_providers_sync(
     Note: Power Core sends multiple ChannelInfo packets (e.g., 39 channels + 3 channels).
     This function MERGES them instead of overwriting, ensuring all channels are captured.
     """
-    global _provider_cache
     import time
 
     # Create BLOCKING socket (don't call _make_socket which sets non-blocking)
@@ -801,7 +800,6 @@ def _subscribe_sync(
         accept_all_providers: If True, accept ChannelValues from ANY provider on the network.
             This is necessary because Power Core CPU and Atmospheric Probe are separate providers.
     """
-    global _provider_cache
 
     # Create BLOCKING socket for Windows multicast compatibility
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)

@@ -3,9 +3,6 @@
 Innovate DLG-1 MTS Protocol Decoder
 Based on observed binary stream: b2 84 47 13 01 51...
 """
-
-import struct
-import threading
 import time
 
 import serial

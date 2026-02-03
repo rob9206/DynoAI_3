@@ -20,7 +20,6 @@ import pytest
 
 from api.services.jetdrive.jetdrive_mapping import (  # Signature; Transforms; Data classes; Persistence; Templates; Auto-mapping; Application
     BUILTIN_TEMPLATES,
-    MAPPING_DIR,
     TRANSFORMS,
     ChannelMapping,
     ProviderMapping,

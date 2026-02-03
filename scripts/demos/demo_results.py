@@ -21,7 +21,7 @@ print(f"  TOTAL:   {total} samples analyzed")
 print("\n[PHASE 2: SPARK VALLEY ANALYSIS]")
 if data.get("spark_valley"):
     sv = data["spark_valley"]
-    print(f"  Status: DETECTED")
+    print("  Status: DETECTED")
     print(f"  Valley center: {sv.get('valley_center_deg', 'N/A')} degrees")
     print(f"  Strength: {sv.get('valley_strength', 'N/A')}")
 else:
@@ -53,6 +53,6 @@ if nt.get("coverage_gaps"):
 
 print("\n" + "=" * 60)
 print("[OK] ALL PHASE 1-7 FEATURES WORKING!")
-print(f"\nView in browser:")
+print("\nView in browser:")
 print(f"  http://localhost:5174/runs/{run_id}")
 print("=" * 60 + "\n")

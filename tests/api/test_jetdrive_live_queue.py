@@ -19,8 +19,7 @@ from api.services.jetdrive.jetdrive_client import JetDriveSample
 from api.services.jetdrive.jetdrive_live_queue import (
     AGGREGATION_WINDOW_MS,
     LiveCaptureQueueManager,
-    LiveCaptureQueueStats,
-)
+    )
 
 # =============================================================================
 # Fixtures

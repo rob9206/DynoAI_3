@@ -413,9 +413,8 @@ def health_check():
     from datetime import datetime
 
     from api.services.autotune_workflow import AutoTuneWorkflow
-    from api.services.simulation.dyno_simulator import DynoSimulator, SimulatorConfig
+    from api.services.simulation.dyno_simulator import SimulatorConfig
     from api.services.simulation.virtual_ecu import (
-        VirtualECU,
         create_afr_target_table,
         create_baseline_ve_table,
     )

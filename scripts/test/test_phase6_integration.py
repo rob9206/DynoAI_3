@@ -67,7 +67,7 @@ def test_confidence_scoring():
 
     conf = score_channel_for_canonical(channel, "rpm", all_channels)
 
-    print(f"High confidence case:")
+    print("High confidence case:")
     print(f"  Channel: {channel.name} (unit={channel.unit})")
     print(f"  Confidence: {conf.confidence:.2f}")
     print(f"  Reasons: {conf.reasons}")
@@ -78,7 +78,7 @@ def test_confidence_scoring():
     bad_channel = mock_channel(99, "Unknown Channel", 255)
     bad_conf = score_channel_for_canonical(bad_channel, "rpm", [bad_channel])
 
-    print(f"\nLow confidence case:")
+    print("\nLow confidence case:")
     print(f"  Channel: {bad_channel.name} (unit={bad_channel.unit})")
     print(f"  Confidence: {bad_conf.confidence:.2f}")
 

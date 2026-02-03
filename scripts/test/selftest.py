@@ -42,8 +42,8 @@ def run_tool(csv_path: Path, outdir: Path, extra_args: List[str] | None = None):
     if extra_args:
         args += extra_args
     return subprocess.run(
-        args, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
+        args, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, 
+    check=True)
 
 
 def must_exist(path: Path, kind: str = "file"):

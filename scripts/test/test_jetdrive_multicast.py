@@ -6,7 +6,6 @@ Tests raw UDP multicast connectivity to Dynoware RT-150
 
 import socket
 import struct
-import sys
 import time
 
 # JetDrive protocol constants

@@ -139,18 +139,7 @@ def main():
     engine = RealtimeAnalysisEngine(target_afr=14.7)
 
     # Run benchmarks
-    results = []
-
-    # Test 1: on_aggregated_sample performance
-    results.append(
-        ("on_aggregated_sample", benchmark_on_aggregated_sample(engine, 1000))
-    )
-
-    # Test 2: get_state performance (with data)
-    results.append(("get_state", benchmark_get_state(engine, 100)))
-
-    # Test 3: Sustained load
-    results.append(("sustained_load", benchmark_sustained_load(10000)))
+    results = [("on_aggregated_sample", benchmark_on_aggregated_sample(engine, 1000)), ("get_state", benchmark_get_state(engine, 100)), ("sustained_load", benchmark_sustained_load(10000))]
 
     # Summary
     print("\n" + "=" * 60)

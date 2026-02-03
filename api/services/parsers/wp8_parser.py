@@ -258,9 +258,6 @@ def parse_wp8_file(wp8_path: str) -> WP8Run:
     for scan_pos in range(float_scan_start, len(content) - 4, 4):
         try:
             val = struct.unpack("<f", content[scan_pos: scan_pos + 4])[0]
-            # Check if it's a reasonable value (not NaN, not extreme)
-            if not np.isnan(val) and not np.isinf(val) and abs(val) < 100000:
-                pass  # Could collect these for pattern analysis
         except (struct.error, ValueError):
             pass
 

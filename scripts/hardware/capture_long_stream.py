@@ -37,8 +37,7 @@ while time.time() - start < 5:
         all_data += chunk
 
         # Look for potential packet headers
-        for i in range(len(chunk)):
-            b = chunk[i]
+        for i, b in enumerate(chunk):
             if b >= 0xA0 and b <= 0xBF:  # Common MTS header range
                 packet_headers.append(b)
                 # Capture 10-byte pattern after header

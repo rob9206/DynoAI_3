@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from api.services.jetdrive.jetdrive_mapping import (
-    MAPPING_DIR,
     ChannelMapping,
     MappingConfidence,
     ProviderMapping,

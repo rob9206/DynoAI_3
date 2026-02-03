@@ -108,7 +108,7 @@ def run_pytest(repo_root: Path) -> int:
         Exit code (0 for success, non-zero for failure)
     """
     print("[VERIFY] Running pytest...")
-    result = subprocess.run([sys.executable, "-m", "pytest"], cwd=str(repo_root))
+    result = subprocess.run([sys.executable, "-m", "pytest"], cwd=str(repo_root), check=True)
     if result.returncode == 0:
         print("[VERIFY] pytest PASSED")
     else:
@@ -140,7 +140,7 @@ def run_selftest(repo_root: Path) -> int:
         return 0
 
     print(f"[VERIFY] Running {label}...")
-    result = subprocess.run(cmd, cwd=str(repo_root))
+    result = subprocess.run(cmd, cwd=str(repo_root), check=True)
     if result.returncode == 0:
         print(f"[VERIFY] {label} PASSED")
     else:
@@ -171,7 +171,7 @@ def check_api_health() -> bool:
 
         if response.status_code == 200:
             data = response.json()
-            print(f"[+] API health check: PASS")
+            print("[+] API health check: PASS")
             print(f"    Status: {data.get('status')}")
             print(f"    Version: {data.get('version')}")
             return True

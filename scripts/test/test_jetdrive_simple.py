@@ -75,7 +75,7 @@ while time.time() - start_time < timeout:
                 f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - Key={key}, {len(data)} bytes"
             )
             if key == 2:  # ChannelInfo
-                print(f"         ^ This is a ChannelInfo response from the dyno!")
+                print("         ^ This is a ChannelInfo response from the dyno!")
         else:
             print(
                 f"  [RECV] #{packet_count} from {addr[0]}:{addr[1]} - {len(data)} bytes"
@@ -97,7 +97,7 @@ print("\n\n" + "=" * 60)
 print(" RESULTS")
 print("=" * 60)
 print(f"Total packets: {packet_count}")
-print(f"Sources:")
+print("Sources:")
 for ip, count in sources.items():
     label = (
         "(LOCAL)"

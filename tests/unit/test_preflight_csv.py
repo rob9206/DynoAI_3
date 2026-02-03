@@ -149,7 +149,7 @@ class TestPreflightCLI(unittest.TestCase):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
-            )
+            check=True)
 
             # Should output valid JSON
             if result.stdout:
@@ -178,7 +178,7 @@ class TestPreflightCLI(unittest.TestCase):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
-            )
+            check=True)
 
             # Should create output file
             self.assertTrue(temp_output.exists())

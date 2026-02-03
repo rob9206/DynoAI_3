@@ -368,7 +368,8 @@ class RealtimeAnalysisEngine:
             if tps is not None and not math.isnan(tps):
                 self._last_tps = tps
 
-    def _bin_rpm_map(self, rpm: float, map_kpa: float) -> tuple[int, int] | None:
+    @staticmethod
+    def _bin_rpm_map(rpm: float, map_kpa: float) -> tuple[int, int] | None:
         """
         Convert RPM and MAP to bin indices.
 
@@ -628,7 +629,6 @@ def get_realtime_engine(target_afr: float = 14.7) -> RealtimeAnalysisEngine:
 
 def reset_realtime_engine() -> None:
     """Reset the global engine."""
-    global _realtime_engine
     with _engine_lock:
         if _realtime_engine is not None:
             _realtime_engine.reset()

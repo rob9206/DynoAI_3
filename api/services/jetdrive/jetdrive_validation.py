@@ -258,12 +258,14 @@ class JetDriveDataValidator:
             True if sample was recorded, False if rejected (wrong provider)
         """
         # Filter by active provider if set
-        if self._active_provider_id is not None:
-            if sample.provider_id != self._active_provider_id:
-                # Track as non-provider frame but don't record metrics
-                with self._frame_stats_lock:
-                    self._frame_stats[sample.provider_id].non_provider_frames += 1
-                return False
+        if (
+            self._active_provider_id is not None
+            and sample.provider_id != self._active_provider_id
+        ):
+            # Track as non-provider frame but don't record metrics
+            with self._frame_stats_lock:
+                self._frame_stats[sample.provider_id].non_provider_frames += 1
+            return False
 
         current_time = time.time()
         key = (sample.provider_id, sample.channel_id)
@@ -462,7 +464,7 @@ class JetDriveDataValidator:
             if provider_id is not None:
                 # Remove only metrics for this provider
                 keys_to_remove = [
-                    k for k in self._metrics.keys() if k[0] == provider_id
+                    k for k in self._metrics if k[0] == provider_id
                 ]
                 for key in keys_to_remove:
                     del self._metrics[key]

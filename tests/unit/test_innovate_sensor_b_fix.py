@@ -44,22 +44,22 @@ def test_mts_packet_parsing():
     print("-" * 60)
 
     if sample_a:
-        print(f"Channel A (Sensor A):")
+        print("Channel A (Sensor A):")
         print(f"  AFR:    {sample_a.afr:.2f}")
         print(f"  Lambda: {sample_a.lambda_value:.3f}")
-        print(f"  [PASS]" if 22.0 <= sample_a.afr <= 22.8 else f"  [FAIL]")
+        print("  [PASS]" if 22.0 <= sample_a.afr <= 22.8 else "  [FAIL]")
     else:
-        print(f"Channel A: [FAIL] (no sample)")
+        print("Channel A: [FAIL] (no sample)")
 
     print()
 
     if sample_b:
-        print(f"Channel B (Sensor B):")
+        print("Channel B (Sensor B):")
         print(f"  AFR:    {sample_b.afr:.2f}")
         print(f"  Lambda: {sample_b.lambda_value:.3f}")
-        print(f"  [PASS]" if 22.0 <= sample_b.afr <= 22.8 else f"  [FAIL]")
+        print("  [PASS]" if 22.0 <= sample_b.afr <= 22.8 else "  [FAIL]")
     else:
-        print(f"Channel B: [FAIL] (no sample)")
+        print("Channel B: [FAIL] (no sample)")
 
     print("\n" + "=" * 60)
 

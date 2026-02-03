@@ -1782,11 +1782,14 @@ def main() -> int:
         if abs(args.rear_bias) > 0.0:
             for ri, rpm in enumerate(RPM_BINS):
                 for ki, kpa in enumerate(KPA_BINS):
-                    if 2500 <= rpm <= 3800 and 65 <= kpa <= 95:
-                        if afr_err_r[ri][ki] is not None:
-                            afr_err_r[ri][ki] = (
-                                afr_err_r[ri][ki] or 0.0
-                            ) + args.rear_bias
+                    if (
+                        2500 <= rpm <= 3800
+                        and 65 <= kpa <= 95
+                        and afr_err_r[ri][ki] is not None
+                    ):
+                        afr_err_r[ri][ki] = (
+                            afr_err_r[ri][ki] or 0.0
+                        ) + args.rear_bias
 
         print("PROGRESS:70:Smoothing and clamping VE corrections...")
         sys.stdout.flush()

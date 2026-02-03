@@ -13,10 +13,8 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMenuBar,
     QMessageBox,
     QProgressBar,
     QStatusBar,
@@ -26,7 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 # Import our backend services
-from api.services.autotune_workflow import AutoTuneWorkflow, DataSource
+from api.services.autotune_workflow import AutoTuneWorkflow
 from dynoai.core.weighted_binning import LogarithmicWeighting
 
 

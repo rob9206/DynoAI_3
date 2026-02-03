@@ -359,7 +359,7 @@ def create_comprehensive_timeline(run_id: str = None) -> Path:
     for i, event in enumerate(timeline, 1):
         print(f"  {i}. [{event['type'].upper()}] {event['description']}")
 
-    print(f"\n📁 Files created:")
+    print("\n📁 Files created:")
     print(f"  - Session log: {run_dir / 'session_log.json'}")
     print(
         f"  - Snapshots: {run_dir / 'snapshots'} ({len(list((run_dir / 'snapshots').glob('*.csv')))} files)"

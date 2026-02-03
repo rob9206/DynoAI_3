@@ -21,10 +21,6 @@ For Lambda/AFR:
 - AFR = Lambda * 14.7 (for gasoline)
 """
 
-import time
-
-import serial
-
 
 def decode_mts_word(word_bytes):
     """
@@ -117,7 +113,7 @@ packet_hex = "b2844713015147130151"
 packet = bytes.fromhex(packet_hex)
 
 print(f"\nPacket: {packet_hex}")
-print(f"Expected: Both sensors = 22.4 AFR (Lambda 1.52)")
+print("Expected: Both sensors = 22.4 AFR (Lambda 1.52)")
 
 print("\n[Decoding as MTS multiplexed format...]")
 results = decode_mts_packet(packet)
@@ -131,7 +127,7 @@ for i, result in enumerate(results):
         print(f"  Lambda: {result['lambda']:.3f}")
         print(f"  AFR: {result['afr']:.1f}")
         if 21.0 <= result["afr"] <= 24.0:
-            print(f"  >>> MATCH! Close to 22.4")
+            print("  >>> MATCH! Close to 22.4")
 
 print("\n" + "=" * 60)
 print("Analysis:")

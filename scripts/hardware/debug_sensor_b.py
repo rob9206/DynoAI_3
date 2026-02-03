@@ -7,7 +7,6 @@ This script will capture raw MTS packets and decode both channels to identify th
 import os
 import sys
 import time
-from datetime import datetime
 
 import serial
 
@@ -38,7 +37,7 @@ def decode_mts_packet_debug(data: bytes):
     print(f"  Binary:  {' '.join(f'{b:08b}' for b in ch_b_data)}")
 
     # Try different byte combinations for Channel B
-    print(f"\n  Interpretation attempts for Channel B:")
+    print("\n  Interpretation attempts for Channel B:")
 
     # Current implementation (bytes 2 and 3 of ch_data = bytes 4 and 5 of packet)
     low_byte_current = ch_b_data[2] & 0x7F
@@ -84,7 +83,7 @@ def decode_mts_packet_debug(data: bytes):
     raw_a = (high_byte_a << 7) | low_byte_a
     lambda_a = raw_a / 10000.0 + 0.5
     afr_a = lambda_a * 14.7
-    print(f"\n  Interpretation for Channel A:")
+    print("\n  Interpretation for Channel A:")
     print(
         f"    Current code (bytes [2],[3]): raw={raw_a}, lambda={lambda_a:.3f}, AFR={afr_a:.1f}"
     )
