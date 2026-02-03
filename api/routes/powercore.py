@@ -24,7 +24,6 @@ from api.services.livelink.livelink_client import LiveLinkClient
 from api.services.parsers.file_index import FileType, get_file_index
 from api.services.parsers.wp8_parser import (
     find_wp8_files,
-    list_wp8_channels,
     parse_wp8_file,
 )
 from api.services.powercore_integration import (
