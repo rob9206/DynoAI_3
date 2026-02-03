@@ -3733,7 +3733,7 @@ def enable_realtime_analysis():
                 {
                     "success": False,
                     "error": str(e),
-                    "error": "Failed to enable realtime analysis",
+                    "error": "Failed to enable realtime analysis.",
             ),
             500,
         )
@@ -3766,7 +3766,7 @@ def disable_realtime_analysis():
                 {
                     "success": False,
                     "error": str(e),
-                    "error": "Failed to disable realtime analysis",
+                    "error": "Failed to disable realtime analysis.",
             ),
             500,
         )
@@ -3819,7 +3819,7 @@ def reset_realtime_analysis():
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to reset realtime analysis.",
             ),
             500,
         )
