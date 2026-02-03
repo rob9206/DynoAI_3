@@ -13,6 +13,7 @@ from typing import Any
 from dynoai.constants import KPA_BINS, RPM_BINS
 
 from api.services.engine_analyzer.schemas import CompleteEngineSpec, HeadSpec
+from api.services.engine_analyzer import thermo_nasa
 
 
 @dataclass
@@ -43,13 +44,13 @@ def predict_performance(build: CompleteEngineSpec) -> PredictionResult:
 
     # Use enhanced physics-based models instead of simplified displacement×0.55
     displacement_ci = _estimate_displacement_ci(build)
-    peak_rpm = _estimate_peak_rpm_from_cam(build)  # Use real cam duration
-    peak_hp = _estimate_peak_hp_from_components(build)  # Use flow curves, compression ratio
+    peak_rpm = _estimate_peak_rpm(build)
+    peak_hp = _estimate_peak_hp_with_thermo(build, displacement_ci)
     peak_tq = _estimate_peak_torque(peak_hp, peak_rpm)
 
-    ve_table = _build_ve_table_from_flow_curves(build.heads, rpm_bins, map_bins)
-    power_curve = _build_power_curve_from_valve_events(rpm_bins, peak_rpm, peak_hp, build)
-    torque_curve = _build_torque_curve_from_cam_timing(rpm_bins, peak_rpm, peak_tq, build)
+    ve_table = _build_ve_table(build.heads, rpm_bins, map_bins)
+    power_curve = _build_power_curve(rpm_bins, peak_rpm, peak_hp)
+    torque_curve = _build_torque_curve(rpm_bins, peak_rpm, peak_tq)
 
     metadata = {
         "buildName": build.name,
@@ -103,6 +104,20 @@ def _estimate_peak_hp(build: CompleteEngineSpec, displacement_ci: float) -> floa
     base_hp = max(50.0, displacement_ci * 0.55)
     head_bonus = _head_flow_bonus(build.heads)
     return round(base_hp * (1.0 + head_bonus), 1)
+
+
+def _estimate_peak_hp_with_thermo(build: CompleteEngineSpec, displacement_ci: float) -> float:
+    """Peak HP using displacement, head flow, and expansion efficiency from combustion_toolbox thermo (gamma(T))."""
+    base_hp = max(50.0, displacement_ci * 0.55)
+    head_bonus = _head_flow_bonus(build.heads)
+    cr = (build.short_block.compression_ratio or 9.0) if build.short_block else 9.0
+    # Temperature-dependent gamma from NASA polynomials (combustion_toolbox thermo_NASA.inp)
+    T_peak_K = thermo_nasa.estimated_peak_cylinder_T_K(300.0, cr, "burned")
+    gamma = thermo_nasa.gamma_burned(T_peak_K)
+    eff = thermo_nasa.expansion_efficiency_otto(gamma, cr)
+    # Normalize so ~10:1 CR with gamma~1.28 gives ~0.58; scale base so result is reasonable
+    eff_factor = eff / 0.58 if eff > 0 else 1.0
+    return round(base_hp * (1.0 + head_bonus) * min(1.15, max(0.85, eff_factor)), 1)
 
 
 def _estimate_peak_torque(peak_hp: float, peak_rpm: int) -> float:
