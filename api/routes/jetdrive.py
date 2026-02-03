@@ -3450,7 +3450,6 @@ def import_mapping():
     Returns:
         Imported mapping (saved to disk)
     """
-    import json
 
     from api.services.jetdrive.jetdrive_mapping import (
         ChannelMapping,
