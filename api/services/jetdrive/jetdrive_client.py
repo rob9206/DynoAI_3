@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Callable
 
+__all__ = ["FALLBACK_CHANNEL_NAMES"]
+
 # KLHDV transport defaults (overridable via env vars)
 # 224.0.2.10 = Official Dynojet/JetDrive vendor multicast address
 DEFAULT_MCAST_GROUP = os.getenv("JETDRIVE_MCAST_GROUP", "224.0.2.10")
