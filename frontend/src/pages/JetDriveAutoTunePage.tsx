@@ -73,7 +73,6 @@ import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
 import type { BikeConfig, DynoConnectionConfig } from '../types/bikeConfig';
 import { SmartPromptBanner } from '../components/jetdrive/SmartPromptBanner';
 import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
-import { QuickActionsPanel } from '../components/jetdrive/QuickActionsPanel';
 import { useTuningWizard } from '../hooks/useTuningWizard';
 import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
@@ -1851,7 +1850,6 @@ function SmartPromptBanner({
                                     onStopSimulator={handleStopSimulator}
                                     onStartCapture={startCapture}
                                     onStopCapture={stopCapture}
-                                    onTriggerPull={handleTriggerPull}
                                     onAnalyze={async () => {
                                         aiAssistant.onStepChange('analyze');
                                         await analyzeMutation.mutateAsync({ mode: 'simulate' });
@@ -1888,6 +1886,7 @@ function SmartPromptBanner({
                                         handleStopSimulator();
                                         setPendingExportData(null);
                                     }}
+                                    runId={runId}
                                     veBoundsPreset={veBoundsPreset}
                                     onVeBoundsPresetChange={setVeBoundsPreset}
                                     renderLiveTable={() => (
@@ -1930,16 +1929,6 @@ function SmartPromptBanner({
                                     )}
                                 />
 
-                                {/* Quick Actions - Floating */}
-                                {(isSimulatorActive || isCapturing) && (
-                                    <QuickActionsPanel
-                                        coverageReport={null}
-                                        onActionSelect={(action) => {
-                                            if (action.id === 'wot') aiAssistant.onWotSuggestion();
-                                            if (action.id === 'cruise') aiAssistant.onCruiseSuggestion();
-                                        }}
-                                    />
-                                )}
                             </div>
                         ) : (
                         /* Classic Mode - Original complex UI */
