@@ -107,9 +107,19 @@ npm run dev
 The JetDrive page provides a complete auto-tuning workflow:
 
 1. **Navigate to JetDrive** tab in the web UI
-2. **Run Simulation** or upload a CSV from a real dyno run
-3. **View Results** - 2D VE correction grid, AFR analysis, diagnostics
-4. **Export** - Download results in multiple formats:
+2. **Connect or Simulate** - Connect to dyno or start simulator
+3. **Import** - Load a base tune or Engine Analyzer prediction
+4. **Collect** - Passive monitoring of pulls with live coverage progress
+5. **Analyze** - Run NextGen analysis for test planning and hypotheses
+6. **Review** - Validate coverage gaps and recommended pulls
+7. **Apply** - Download corrected tune
+
+**NextGen Review Highlights:**
+- **Coverage Gaps** - What zones need more data
+- **Test Plan** - Recommended pulls and priorities
+- **Hypotheses** - AI-generated tuning insights
+
+**Export** - Download results in multiple formats:
    - **PVV XML** for Power Vision/Power Core import
    - **Text Export** for sharing with AI assistants (ChatGPT, Claude, etc.)
    - **CSV** for manual analysis
@@ -142,13 +152,13 @@ Before connecting to real Dynojet hardware:
 
 ```bash
 # Simulate a dyno run (no hardware needed)
-python scripts/jetdrive_autotune.py --simulate --run-id test_run
+python scripts/jetdrive/jetdrive_autotune.py --simulate --run-id test_run
 
 # Analyze existing CSV
-python scripts/jetdrive_autotune.py --csv runs/my_run/data.csv --run-id my_analysis
+python scripts/jetdrive/jetdrive_autotune.py --csv runs/my_run/data.csv --run-id my_analysis
 
 # Live capture from JetDrive (requires hardware)
-python scripts/jetdrive_autotune.py --live --duration 60 --run-id dyno_pull
+python scripts/jetdrive/jetdrive_autotune.py --live --duration 60 --run-id dyno_pull
 ```
 
 #### Standard Analysis
