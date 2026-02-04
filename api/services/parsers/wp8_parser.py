@@ -16,8 +16,6 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import BinaryIO, Optional
-
-import numpy as np
 import pandas as pd
 
 # WP8 Magic header
