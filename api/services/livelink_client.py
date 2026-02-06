@@ -167,7 +167,8 @@ class LiveLinkClient:
         with self._lock:
             return list(self._sample_buffer)[-count:]
 
-    def _check_powercore_running(self) -> bool:
+    @staticmethod
+    def _check_powercore_running() -> bool:
         """Check if Power Core is running."""
         try:
             result = subprocess.run(
@@ -180,7 +181,8 @@ class LiveLinkClient:
         except Exception:
             return False
 
-    def _find_powershell(self) -> str:
+    @staticmethod
+    def _find_powershell() -> str:
         """Find available PowerShell executable."""
         import shutil
 
@@ -360,11 +362,13 @@ class LiveLinkClient:
         except json.JSONDecodeError:
             pass
 
-    def _get_bridge_script_path(self) -> Path:
+    @staticmethod
+    def _get_bridge_script_path() -> Path:
         """Get the path to the PowerShell bridge script."""
         return Path(__file__).parent / "livelink_bridge.ps1"
 
-    def _create_bridge_script(self, path: Path) -> None:
+    @staticmethod
+    def _create_bridge_script(path: Path) -> None:
         """Create the PowerShell WCF bridge script."""
         script = r"""
 # LiveLink WCF Bridge for DynoAI

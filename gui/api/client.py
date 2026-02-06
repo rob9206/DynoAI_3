@@ -401,7 +401,8 @@ class APIClient(QObject):
             self.stop_polling()
             self.analysis_error.emit(status.error or "Analysis failed")
 
-    def _on_status_error(self, error: str) -> None:
+    @staticmethod
+    def _on_status_error(error: str) -> None:
         """Handle status poll error."""
         # Don't stop polling on transient errors, just log
         print(f"Status poll error: {error}")

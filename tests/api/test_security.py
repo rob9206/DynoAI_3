@@ -10,41 +10,46 @@ import pytest
 class TestPathTraversalPreventionDownload:
     """Tests for path traversal vulnerability prevention in download endpoint."""
 
-    def test_download_rejects_path_traversal_in_run_id(self, client):
+    @staticmethod
+    def test_download_rejects_path_traversal_in_run_id(client):
         """Download rejects ../.. in run_id."""
         response = client.get("/api/download/../../../etc/passwd/file.csv")
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_path_traversal_in_filename(
-        self, client, mock_output_folder
-    ):
+    @staticmethod
+    def test_download_rejects_path_traversal_in_filename(client, mock_output_folder):
         """Download rejects ../.. in filename."""
         run_id = mock_output_folder["run_id"]
         response = client.get(f"/api/download/{run_id}/../../../etc/passwd")
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_backslash_traversal_run_id(self, client):
+    @staticmethod
+    def test_download_rejects_backslash_traversal_run_id(client):
         """Download rejects backslash traversal in run_id."""
         response = client.get("/api/download/..\\..\\..\\windows\\system32/file.csv")
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_encoded_traversal_run_id(self, client):
+    @staticmethod
+    def test_download_rejects_encoded_traversal_run_id(client):
         """Download handles URL-encoded traversal attempts in run_id."""
         response = client.get("/api/download/%2e%2e%2f%2e%2e%2f/file.csv")
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_null_byte_run_id(self, client):
+    @staticmethod
+    def test_download_rejects_null_byte_run_id(client):
         """Download rejects null byte injection in run_id."""
         response = client.get("/api/download/valid-run%00.csv/file.csv")
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_dots_only_run_id(self, client):
+    @staticmethod
+    def test_download_rejects_dots_only_run_id(client):
         """Download handles run_id containing only dots safely."""
         response = client.get("/api/download/.../file.csv")
         # API sanitizes and returns 404 if not found
         assert response.status_code in (400, 404)
 
-    def test_download_rejects_dots_only_filename(self, client, mock_output_folder):
+    @staticmethod
+    def test_download_rejects_dots_only_filename(client, mock_output_folder):
         """Download handles filename containing only dots safely."""
         run_id = mock_output_folder["run_id"]
         response = client.get(f"/api/download/{run_id}/...")
@@ -55,18 +60,21 @@ class TestPathTraversalPreventionDownload:
 class TestPathTraversalPreventionVEData:
     """Tests for path traversal prevention in VE data endpoint."""
 
-    def test_ve_data_rejects_path_traversal(self, client):
+    @staticmethod
+    def test_ve_data_rejects_path_traversal(client):
         """VE data rejects ../.. in run_id."""
         response = client.get("/api/ve-data/../../../etc/passwd")
         assert response.status_code in (400, 404)
 
-    def test_ve_data_rejects_dots_only(self, client):
+    @staticmethod
+    def test_ve_data_rejects_dots_only(client):
         """VE data handles run_id that sanitizes to empty string safely."""
         response = client.get("/api/ve-data/...")
         # API sanitizes and returns 404 if not found
         assert response.status_code in (400, 404)
 
-    def test_ve_data_rejects_backslash_traversal(self, client):
+    @staticmethod
+    def test_ve_data_rejects_backslash_traversal(client):
         """VE data rejects backslash traversal."""
         response = client.get("/api/ve-data/..\\..\\..\\windows\\system32")
         assert response.status_code in (400, 404)
@@ -75,18 +83,21 @@ class TestPathTraversalPreventionVEData:
 class TestPathTraversalPreventionDiagnostics:
     """Tests for path traversal prevention in diagnostics endpoint."""
 
-    def test_diagnostics_rejects_path_traversal(self, client):
+    @staticmethod
+    def test_diagnostics_rejects_path_traversal(client):
         """Diagnostics rejects ../.. in run_id."""
         response = client.get("/api/diagnostics/../../../etc")
         assert response.status_code in (400, 404)
 
-    def test_diagnostics_rejects_dots_only(self, client):
+    @staticmethod
+    def test_diagnostics_rejects_dots_only(client):
         """Diagnostics handles run_id that sanitizes to empty string safely."""
         response = client.get("/api/diagnostics/...")
         # API sanitizes and returns 404 if not found
         assert response.status_code in (400, 404)
 
-    def test_diagnostics_rejects_double_dots_many(self, client):
+    @staticmethod
+    def test_diagnostics_rejects_double_dots_many(client):
         """Diagnostics handles multiple dot sequences safely."""
         response = client.get("/api/diagnostics/.......")
         assert response.status_code in (400, 404)
@@ -95,12 +106,14 @@ class TestPathTraversalPreventionDiagnostics:
 class TestPathTraversalPreventionCoverage:
     """Tests for path traversal prevention in coverage endpoint."""
 
-    def test_coverage_rejects_path_traversal(self, client):
+    @staticmethod
+    def test_coverage_rejects_path_traversal(client):
         """Coverage rejects ../.. in run_id."""
         response = client.get("/api/coverage/../../../etc")
         assert response.status_code in (400, 404)
 
-    def test_coverage_rejects_dots_only(self, client):
+    @staticmethod
+    def test_coverage_rejects_dots_only(client):
         """Coverage handles run_id that sanitizes to empty string safely."""
         response = client.get("/api/coverage/...")
         # API sanitizes and returns 404 if not found
@@ -110,7 +123,8 @@ class TestPathTraversalPreventionCoverage:
 class TestInputValidation:
     """Tests for general input validation across endpoints."""
 
-    def test_analyze_rejects_special_characters_in_filename(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_rejects_special_characters_in_filename(client, tmp_path):
         """Analyze handles special characters in filename safely."""
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("timestamp,rpm\n0,1000")
@@ -125,7 +139,8 @@ class TestInputValidation:
         # Should either sanitize and accept or reject - but NOT traverse
         assert response.status_code in (202, 400)
 
-    def test_analyze_sanitizes_unicode_filename(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_sanitizes_unicode_filename(client, tmp_path):
         """Analyze handles unicode characters in filename."""
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("timestamp,rpm\n0,1000")
@@ -143,7 +158,8 @@ class TestInputValidation:
 class TestFileTypeValidation:
     """Tests for file type validation security."""
 
-    def test_analyze_rejects_script_files(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_rejects_script_files(client, tmp_path):
         """Analyze rejects script file types."""
         script_file = tmp_path / "malicious.sh"
         script_file.write_text("#!/bin/bash\nrm -rf /")
@@ -156,7 +172,8 @@ class TestFileTypeValidation:
             )
         assert response.status_code == 400
 
-    def test_analyze_rejects_html_files(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_rejects_html_files(client, tmp_path):
         """Analyze rejects HTML file types."""
         html_file = tmp_path / "xss.html"
         html_file.write_text("<script>alert('xss')</script>")
@@ -169,7 +186,8 @@ class TestFileTypeValidation:
             )
         assert response.status_code == 400
 
-    def test_analyze_rejects_json_files(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_rejects_json_files(client, tmp_path):
         """Analyze rejects JSON file types (not in allowed list)."""
         json_file = tmp_path / "data.json"
         json_file.write_text('{"malicious": true}')
@@ -182,7 +200,8 @@ class TestFileTypeValidation:
             )
         assert response.status_code == 400
 
-    def test_analyze_rejects_python_files(self, client, tmp_path):
+    @staticmethod
+    def test_analyze_rejects_python_files(client, tmp_path):
         """Analyze rejects Python file types."""
         py_file = tmp_path / "exploit.py"
         py_file.write_text("import os; os.system('whoami')")
@@ -199,7 +218,8 @@ class TestFileTypeValidation:
 class TestErrorResponseSecurity:
     """Tests for secure error responses."""
 
-    def test_404_does_not_reveal_file_paths(self, client):
+    @staticmethod
+    def test_404_does_not_reveal_file_paths(client):
         """404 errors do not reveal internal file system paths."""
         response = client.get("/api/download/nonexistent/file.csv")
         data = response.get_json()
@@ -210,7 +230,8 @@ class TestErrorResponseSecurity:
         assert "/home/" not in error_str
         assert "/var/" not in error_str
 
-    def test_400_does_not_reveal_internal_details(self, client):
+    @staticmethod
+    def test_400_does_not_reveal_internal_details(client):
         """400 errors do not reveal internal implementation details."""
         response = client.get("/api/ve-data/...")
         data = response.get_json()
@@ -224,7 +245,8 @@ class TestErrorResponseSecurity:
 class TestHTTPMethodSecurity:
     """Tests for HTTP method restrictions."""
 
-    def test_health_only_allows_get(self, client):
+    @staticmethod
+    def test_health_only_allows_get(client):
         """Health endpoint only allows GET method."""
         assert client.get("/api/health").status_code == 200
         assert client.post("/api/health").status_code == 405
@@ -232,14 +254,16 @@ class TestHTTPMethodSecurity:
         assert client.delete("/api/health").status_code == 405
         assert client.patch("/api/health").status_code == 405
 
-    def test_runs_only_allows_get(self, client):
+    @staticmethod
+    def test_runs_only_allows_get(client):
         """Runs endpoint only allows GET method."""
         assert client.get("/api/runs").status_code == 200
         assert client.post("/api/runs").status_code == 405
         assert client.put("/api/runs").status_code == 405
         assert client.delete("/api/runs").status_code == 405
 
-    def test_analyze_only_allows_post(self, client):
+    @staticmethod
+    def test_analyze_only_allows_post(client):
         """Analyze endpoint only allows POST method."""
         assert client.get("/api/analyze").status_code == 405
         assert client.put("/api/analyze").status_code == 405
@@ -249,12 +273,14 @@ class TestHTTPMethodSecurity:
 class TestContentTypeHeaders:
     """Tests for proper content type headers in responses."""
 
-    def test_json_responses_have_correct_content_type(self, client):
+    @staticmethod
+    def test_json_responses_have_correct_content_type(client):
         """JSON responses have application/json content type."""
         response = client.get("/api/health")
         assert "application/json" in response.content_type
 
-    def test_error_responses_have_correct_content_type(self, client):
+    @staticmethod
+    def test_error_responses_have_correct_content_type(client):
         """Error responses should return JSON for known API endpoints."""
         # Use an actual API endpoint that returns JSON errors
         response = client.get("/api/diagnostics/nonexistent-run")

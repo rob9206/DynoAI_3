@@ -254,7 +254,8 @@ class TrainingDataValidator:
             if self.verbose:
                 self.warnings.append(f"{prefix}: Physics validation error - {str(e)}")
 
-    def _calculate_stats(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _calculate_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate statistics for the dataset."""
         stats = {
             "total_sessions": 0,

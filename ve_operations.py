@@ -316,8 +316,8 @@ class VERollback:
     - Restoring the original VE table
     """
 
+    @staticmethod
     def rollback(
-        self,
         current_ve_path: Path,
         metadata_path: Path,
         output_path: Path,

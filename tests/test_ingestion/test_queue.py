@@ -35,7 +35,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 class TestQueueItem:
     """Tests for QueueItem class."""
 
-    def test_create_item(self):
+    @staticmethod
+    def test_create_item():
         """Test creating a queue item."""
         item = QueueItem(
             id="test-1",
@@ -46,7 +47,8 @@ class TestQueueItem:
         assert item.source == "jetdrive"
         assert item.priority == QueuePriority.NORMAL
 
-    def test_item_ordering(self):
+    @staticmethod
+    def test_item_ordering():
         """Test items are ordered by priority then timestamp."""
         item1 = QueueItem(
             id="1", source="test", data={}, priority=QueuePriority.HIGH, timestamp=100
@@ -64,7 +66,8 @@ class TestQueueItem:
         # Same priority, earlier timestamp comes first
         assert item3 < item1  # Same priority, earlier timestamp
 
-    def test_can_retry(self):
+    @staticmethod
+    def test_can_retry():
         """Test retry logic."""
         item = QueueItem(id="1", source="test", data={}, max_retries=3)
 
@@ -74,7 +77,8 @@ class TestQueueItem:
         item.retry_count = 3
         assert not item.can_retry()
 
-    def test_to_dict(self):
+    @staticmethod
+    def test_to_dict():
         """Test serialization to dict."""
         item = QueueItem(
             id="test-1",
@@ -88,7 +92,8 @@ class TestQueueItem:
         assert d["data"]["rpm"] == 3500
         assert d["priority"] == QueuePriority.HIGH
 
-    def test_from_dict(self):
+    @staticmethod
+    def test_from_dict():
         """Test deserialization from dict."""
         data = {
             "id": "test-1",
@@ -105,13 +110,15 @@ class TestQueueItem:
 class TestIngestionQueue:
     """Tests for IngestionQueue class."""
 
-    def test_create_queue(self):
+    @staticmethod
+    def test_create_queue():
         """Test creating a queue."""
         queue = IngestionQueue()
         assert len(queue) == 0
         assert not queue
 
-    def test_enqueue_dequeue(self):
+    @staticmethod
+    def test_enqueue_dequeue():
         """Test basic enqueue/dequeue."""
         queue = IngestionQueue()
 
@@ -124,7 +131,8 @@ class TestIngestionQueue:
         assert item.data["value"] == 1
         assert len(queue) == 0
 
-    def test_priority_ordering(self):
+    @staticmethod
+    def test_priority_ordering():
         """Test items are dequeued by priority."""
         queue = IngestionQueue()
 
@@ -144,7 +152,8 @@ class TestIngestionQueue:
         item = queue.dequeue()
         assert item.data["priority"] == "low"
 
-    def test_queue_full_drop_oldest(self):
+    @staticmethod
+    def test_queue_full_drop_oldest():
         """Test dropping oldest when queue is full."""
         settings = QueueSettings(max_size=3, drop_on_full=True, drop_oldest=True)
         queue = IngestionQueue(settings)
@@ -162,7 +171,8 @@ class TestIngestionQueue:
         stats = queue.get_stats()
         assert stats.total_dropped == 1
 
-    def test_dequeue_timeout(self):
+    @staticmethod
+    def test_dequeue_timeout():
         """Test dequeue with timeout."""
         queue = IngestionQueue()
 
@@ -174,7 +184,8 @@ class TestIngestionQueue:
         assert item is None
         assert elapsed >= 0.09  # Allow some tolerance
 
-    def test_peek(self):
+    @staticmethod
+    def test_peek():
         """Test peeking at queue."""
         queue = IngestionQueue()
 
@@ -189,7 +200,8 @@ class TestIngestionQueue:
         item2 = queue.dequeue()
         assert item2.id == item.id
 
-    def test_process_batch(self):
+    @staticmethod
+    def test_process_batch():
         """Test batch processing."""
         queue = IngestionQueue()
 
@@ -208,7 +220,8 @@ class TestIngestionQueue:
         assert len(processed_values) == 5
         assert len(queue) == 5
 
-    def test_process_batch_with_failures(self):
+    @staticmethod
+    def test_process_batch_with_failures():
         """Test batch processing with some failures."""
         queue = IngestionQueue()
 
@@ -227,7 +240,8 @@ class TestIngestionQueue:
         stats = queue.get_stats()
         assert stats.total_processed == 4
 
-    def test_dead_letter_queue(self):
+    @staticmethod
+    def test_dead_letter_queue():
         """Test dead letter queue for failed items."""
         settings = QueueSettings(max_size=100)
         queue = IngestionQueue(settings)
@@ -252,7 +266,8 @@ class TestIngestionQueue:
         dead_items = queue.get_dead_letter_items()
         assert len(dead_items) >= 1
 
-    def test_retry_dead_letter(self):
+    @staticmethod
+    def test_retry_dead_letter():
         """Test retrying a dead letter item."""
         queue = IngestionQueue()
 
@@ -267,7 +282,8 @@ class TestIngestionQueue:
         assert len(queue.get_dead_letter_items()) == 0
         assert len(queue) == 1
 
-    def test_statistics(self):
+    @staticmethod
+    def test_statistics():
         """Test statistics tracking."""
         queue = IngestionQueue()
 
@@ -286,7 +302,8 @@ class TestIngestionQueue:
         assert stats.total_processed == 5
         assert stats.current_size == 5
 
-    def test_clear_queue(self):
+    @staticmethod
+    def test_clear_queue():
         """Test clearing the queue."""
         queue = IngestionQueue()
 
@@ -298,7 +315,8 @@ class TestIngestionQueue:
         assert count == 10
         assert len(queue) == 0
 
-    def test_background_processing(self):
+    @staticmethod
+    def test_background_processing():
         """Test background processing thread."""
         queue = IngestionQueue()
         processed = []
@@ -324,7 +342,8 @@ class TestIngestionQueue:
 class TestQueueBatchOperations:
     """Tests for batch operations."""
 
-    def test_enqueue_batch(self):
+    @staticmethod
+    def test_enqueue_batch():
         """Test batch enqueue."""
         queue = IngestionQueue()
 
@@ -335,7 +354,8 @@ class TestQueueBatchOperations:
         assert all(id is not None for id in ids)
         assert len(queue) == 10
 
-    def test_drain_queue(self):
+    @staticmethod
+    def test_drain_queue():
         """Test draining entire queue."""
         queue = IngestionQueue()
 
@@ -358,12 +378,14 @@ class TestQueueBatchOperations:
 class TestQueuePersistence:
     """Tests for queue persistence (when enabled)."""
 
-    def test_persistence_disabled_by_default(self):
+    @staticmethod
+    def test_persistence_disabled_by_default():
         """Test persistence is disabled by default."""
         settings = QueueSettings()
         assert not settings.persist_to_disk
 
-    def test_persistence_enabled(self, tmp_path):
+    @staticmethod
+    def test_persistence_enabled(tmp_path):
         """Test persistence when enabled."""
         settings = QueueSettings(
             persist_to_disk=True,
@@ -379,7 +401,8 @@ class TestQueuePersistence:
         assert persist_path.exists()
         assert len(list(persist_path.glob("*.json"))) == 1
 
-    def test_persistence_load_on_startup(self, tmp_path):
+    @staticmethod
+    def test_persistence_load_on_startup(tmp_path):
         """Test items are loaded from disk on startup."""
         settings = QueueSettings(
             persist_to_disk=True,
@@ -401,7 +424,8 @@ class TestQueuePersistence:
 class TestQueueThreadSafety:
     """Tests for thread safety."""
 
-    def test_concurrent_enqueue(self):
+    @staticmethod
+    def test_concurrent_enqueue():
         """Test concurrent enqueue from multiple threads."""
         queue = IngestionQueue(QueueSettings(max_size=10000))
 
@@ -418,7 +442,8 @@ class TestQueueThreadSafety:
 
         assert len(queue) == 1000
 
-    def test_concurrent_process(self):
+    @staticmethod
+    def test_concurrent_process():
         """Test concurrent processing."""
         queue = IngestionQueue()
 

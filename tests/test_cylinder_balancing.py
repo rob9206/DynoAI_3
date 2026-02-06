@@ -16,6 +16,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
+from dynoai.constants import KPA_BINS, RPM_BINS
 from dynoai.core.cylinder_balancing import (
     BalanceMode,
     CylinderData,
@@ -29,7 +30,6 @@ from dynoai.core.cylinder_balancing import (
     process_cylinder_balancing,
     write_correction_csv,
 )
-from dynoai.constants import KPA_BINS, RPM_BINS
 
 # ============================================================================
 # Test Data Helpers
@@ -89,7 +89,8 @@ def create_imbalanced_records(
 
 
 class TestAFRAggregation:
-    def test_aggregate_front_cylinder(self):
+    @staticmethod
+    def test_aggregate_front_cylinder():
         """Test aggregation of front cylinder AFR data."""
         records = create_balanced_records(50)
 
@@ -106,7 +107,8 @@ class TestAFRAggregation:
         total_samples = sum(sum(row) for row in front_data.sample_counts)
         assert total_samples > 0
 
-    def test_aggregate_rear_cylinder(self):
+    @staticmethod
+    def test_aggregate_rear_cylinder():
         """Test aggregation of rear cylinder AFR data."""
         records = create_balanced_records(50)
 
@@ -118,7 +120,8 @@ class TestAFRAggregation:
         total_samples = sum(sum(row) for row in rear_data.sample_counts)
         assert total_samples > 0
 
-    def test_insufficient_samples_filtered(self):
+    @staticmethod
+    def test_insufficient_samples_filtered():
         """Test that cells with too few samples are zeroed out."""
         # Only 2 records, but min_samples=3
         records = create_balanced_records(2)
@@ -131,7 +134,8 @@ class TestAFRAggregation:
             zero_cells > len(RPM_BINS) * len(KPA_BINS) * 0.8
         )  # At least 80% should be zero
 
-    def test_bad_afr_readings_filtered(self):
+    @staticmethod
+    def test_bad_afr_readings_filtered():
         """Test that obviously bad AFR readings are filtered out."""
         records = create_balanced_records(50)
 
@@ -147,7 +151,8 @@ class TestAFRAggregation:
         assert total_samples > 0  # Good data was aggregated
         assert total_samples < 50  # Bad data was filtered
 
-    def test_afr_cmd_grid_calculated(self):
+    @staticmethod
+    def test_afr_cmd_grid_calculated():
         """Test that commanded AFR grid is calculated correctly."""
         records = create_balanced_records(50)
 
@@ -168,7 +173,8 @@ class TestAFRAggregation:
 
 
 class TestImbalanceAnalysis:
-    def test_analyze_balanced_cylinders(self):
+    @staticmethod
+    def test_analyze_balanced_cylinders():
         """Test that balanced cylinders show no imbalance."""
         records = create_balanced_records(100)
 
@@ -184,7 +190,8 @@ class TestImbalanceAnalysis:
         )  # Less than 20%
         assert analysis.max_delta < 0.6  # Small natural variation
 
-    def test_analyze_imbalanced_cylinders(self):
+    @staticmethod
+    def test_analyze_imbalanced_cylinders():
         """Test that imbalanced cylinders are detected."""
         records = create_imbalanced_records(100)  # Rear 0.8 AFR leaner
 
@@ -197,7 +204,8 @@ class TestImbalanceAnalysis:
         assert analysis.max_delta >= 0.7  # Should detect the 0.8 AFR bias
         assert len(analysis.imbalanced_cells) > 0
 
-    def test_imbalance_cell_severity(self):
+    @staticmethod
+    def test_imbalance_cell_severity():
         """Test severity classification of imbalance cells."""
         # Create high severity imbalance
         cell_high = ImbalanceCell(
@@ -241,7 +249,8 @@ class TestImbalanceAnalysis:
         )
         assert cell_low.severity() == "low"
 
-    def test_analysis_summary(self):
+    @staticmethod
+    def test_analysis_summary():
         """Test that analysis summary statistics are correct."""
         records = create_imbalanced_records(100)
 
@@ -265,7 +274,8 @@ class TestImbalanceAnalysis:
 
 
 class TestCorrectionCalculation:
-    def test_afr_error_to_ve_correction(self):
+    @staticmethod
+    def test_afr_error_to_ve_correction():
         """Test AFR error to VE correction conversion."""
         # Lean (+1.0 AFR) needs more fuel = +VE
         correction = _afr_error_to_ve_correction(1.0)
@@ -279,7 +289,8 @@ class TestCorrectionCalculation:
         correction = _afr_error_to_ve_correction(0.0)
         assert correction == 0.0
 
-    def test_clamp_correction_within_limits(self):
+    @staticmethod
+    def test_clamp_correction_within_limits():
         """Test that corrections within limits pass through."""
         max_pct = 3.0
 
@@ -287,7 +298,8 @@ class TestCorrectionCalculation:
         assert _clamp_correction(0.02, max_pct) == pytest.approx(0.02)  # 2%
         assert _clamp_correction(-0.025, max_pct) == pytest.approx(-0.025)  # -2.5%
 
-    def test_clamp_correction_exceeds_max(self):
+    @staticmethod
+    def test_clamp_correction_exceeds_max():
         """Test that excessive corrections are clamped."""
         max_pct = 3.0
 
@@ -297,14 +309,16 @@ class TestCorrectionCalculation:
             -0.03
         )  # Clamped to -3%
 
-    def test_clamp_correction_absolute_maximum(self):
+    @staticmethod
+    def test_clamp_correction_absolute_maximum():
         """Test that absolute maximum is enforced even if max_pct is higher."""
         max_pct = 10.0  # Allow 10%, but absolute max is 5%
 
         assert _clamp_correction(0.08, max_pct) == pytest.approx(0.05)  # Absolute max
         assert _clamp_correction(-0.12, max_pct) == pytest.approx(-0.05)  # Absolute max
 
-    def test_calculate_corrections_equalize_mode(self):
+    @staticmethod
+    def test_calculate_corrections_equalize_mode():
         """Test correction calculation in equalize mode."""
         records = create_imbalanced_records(100)
 
@@ -325,7 +339,8 @@ class TestCorrectionCalculation:
 
         assert front_corrections > 0 or rear_corrections > 0
 
-    def test_calculate_corrections_match_front_mode(self):
+    @staticmethod
+    def test_calculate_corrections_match_front_mode():
         """Test correction calculation in match_front mode."""
         records = create_imbalanced_records(100)
 
@@ -344,7 +359,8 @@ class TestCorrectionCalculation:
         assert front_corrections == 0
         assert rear_corrections > 0
 
-    def test_calculate_corrections_match_rear_mode(self):
+    @staticmethod
+    def test_calculate_corrections_match_rear_mode():
         """Test correction calculation in match_rear mode."""
         records = create_imbalanced_records(100)
 
@@ -401,7 +417,8 @@ class TestOutputGeneration:
         assert "1.03" in written_content or "1.0300" in written_content  # 0.03 → 1.03
         assert "0.98" in written_content or "0.9800" in written_content  # -0.02 → 0.98
 
-    def test_generate_balance_report(self):
+    @staticmethod
+    def test_generate_balance_report():
         """Test balance report generation."""
         records = create_imbalanced_records(100)
 

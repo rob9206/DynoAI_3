@@ -294,7 +294,8 @@ class LiveVETable(QWidget):
 
         layout.addLayout(legend)
 
-    def _add_legend_item(self, layout: QHBoxLayout, text: str, color: QColor) -> None:
+    @staticmethod
+    def _add_legend_item(layout: QHBoxLayout, text: str, color: QColor) -> None:
         """Add a legend item."""
         container = QHBoxLayout()
         container.setSpacing(4)

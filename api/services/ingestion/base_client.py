@@ -652,7 +652,8 @@ class BaseIngestionClient(ABC, Generic[T]):
         """Validate a received sample."""
         pass
 
-    def _sample_to_dict(self, sample: T) -> dict[str, Any]:
+    @staticmethod
+    def _sample_to_dict(sample: T) -> dict[str, Any]:
         """Convert sample to dictionary for queue storage."""
         if hasattr(sample, "to_dict"):
             return sample.to_dict()

@@ -18,7 +18,8 @@ from api.services.virtual_tuning_session import (
 class TestTuningOrchestrator:
     """Tests for VirtualTuningOrchestrator."""
 
-    def test_create_session(self):
+    @staticmethod
+    def test_create_session():
         """Test session creation."""
         config = TuningSessionConfig(
             engine_profile=EngineProfile.m8_114(),
@@ -37,7 +38,8 @@ class TestTuningOrchestrator:
         assert session.current_ve_front is not None
         assert session.current_ve_rear is not None
 
-    def test_session_scenarios(self):
+    @staticmethod
+    def test_session_scenarios():
         """Test different VE scenarios."""
         orchestrator = VirtualTuningOrchestrator()
 
@@ -62,7 +64,8 @@ class TestTuningOrchestrator:
             if scenario != "perfect":
                 assert not np.allclose(session.current_ve_front, session.baseline_ve)
 
-    def test_session_to_dict(self):
+    @staticmethod
+    def test_session_to_dict():
         """Test session serialization."""
         config = TuningSessionConfig(
             engine_profile=EngineProfile.m8_114(),
@@ -82,7 +85,8 @@ class TestTuningOrchestrator:
         assert "iterations" in data
         assert isinstance(data["iterations"], list)
 
-    def test_get_session(self):
+    @staticmethod
+    def test_get_session():
         """Test session retrieval."""
         orchestrator = VirtualTuningOrchestrator()
 
@@ -100,7 +104,8 @@ class TestTuningOrchestrator:
         assert retrieved is not None
         assert retrieved.session_id == session_id
 
-    def test_stop_session(self):
+    @staticmethod
+    def test_stop_session():
         """Test stopping a session."""
         orchestrator = VirtualTuningOrchestrator()
 
@@ -123,7 +128,8 @@ class TestTuningOrchestrator:
 class TestTuningSessionConfig:
     """Tests for TuningSessionConfig."""
 
-    def test_default_config(self):
+    @staticmethod
+    def test_default_config():
         """Test default configuration."""
         config = TuningSessionConfig(engine_profile=EngineProfile.m8_114())
 
@@ -133,7 +139,8 @@ class TestTuningSessionConfig:
         assert config.max_correction_per_iteration_pct == 15.0
         assert config.oscillation_detection_enabled is True
 
-    def test_custom_config(self):
+    @staticmethod
+    def test_custom_config():
         """Test custom configuration."""
         config = TuningSessionConfig(
             engine_profile=EngineProfile.m8_114(),
@@ -151,6 +158,3 @@ class TestTuningSessionConfig:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
-

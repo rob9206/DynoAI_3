@@ -219,7 +219,8 @@ class AgentOrchestrator:
         self.task_counter += 1
         return f"task_{self.task_counter:04d}"
 
-    def classify_task(self, description: str) -> str:
+    @staticmethod
+    def classify_task(description: str) -> str:
         """
         Analyze a task description and determine the best agent.
 
@@ -457,7 +458,8 @@ class AgentOrchestrator:
         self.workflows[workflow.id] = workflow
         return workflow
 
-    def get_agent_prompt(self, agent_id: str) -> str:
+    @staticmethod
+    def get_agent_prompt(agent_id: str) -> str:
         """Get the system prompt for an agent."""
         if agent_id not in AGENTS:
             raise ValueError(f"Unknown agent: {agent_id}")
@@ -470,7 +472,8 @@ class AgentOrchestrator:
         # For other agents, reference the main prompts doc
         return f"Use the {agent['name']} agent from docs/DYNOAI_AGENT_PROMPTS.md"
 
-    def format_task_for_agent(self, task: AgentTask) -> str:
+    @staticmethod
+    def format_task_for_agent(task: AgentTask) -> str:
         """Format a task as a prompt for the assigned agent."""
         agent = AGENTS.get(task.agent_id, {})
         agent_name = agent.get("name", "Unknown Agent")

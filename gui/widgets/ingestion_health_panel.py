@@ -506,7 +506,8 @@ class IngestionHealthPanel(QWidget):
 
         layout.addWidget(card)
 
-    def _create_stat_box(self, icon: str, label: str, value: str) -> QFrame:
+    @staticmethod
+    def _create_stat_box(icon: str, label: str, value: str) -> QFrame:
         """Create a stat display box."""
         frame = QFrame()
         frame.setStyleSheet(f"""
@@ -545,8 +546,9 @@ class IngestionHealthPanel(QWidget):
 
         return frame
 
+    @staticmethod
     def _update_stat_value(
-        self, frame: QFrame, value: str, color: Optional[str] = None
+        frame: QFrame, value: str, color: Optional[str] = None
     ) -> None:
         """Update a stat box value."""
         label = frame.findChild(QLabel, "stat_value")

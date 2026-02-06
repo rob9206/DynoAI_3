@@ -86,9 +86,8 @@ class TestVEApplyRollbackInverse:
         write_ve_table(path, rpm_bins, kpa_bins, factor_grid, precision=4)
         return path, rpm_bins, kpa_bins, factor_grid
 
-    def test_apply_then_rollback_exact_inverse(
-        self, temp_dir, base_ve_table, factor_table
-    ):
+    @staticmethod
+    def test_apply_then_rollback_exact_inverse(temp_dir, base_ve_table, factor_table):
         """
         Core invariant: apply → rollback → exact original table.
 
@@ -139,9 +138,8 @@ class TestVEApplyRollbackInverse:
                     f"diff={abs(original - restored):.6f}"
                 )
 
-    def test_determinism_same_input_same_output(
-        self, temp_dir, base_ve_table, factor_table
-    ):
+    @staticmethod
+    def test_determinism_same_input_same_output(temp_dir, base_ve_table, factor_table):
         """
         Verify determinism: running apply twice with same inputs produces identical outputs.
 
@@ -191,7 +189,8 @@ class TestVEApplyRollbackInverse:
 class TestClampingLimits:
     """Test all clamping and limiting logic is mathematically sound."""
 
-    def test_clamp_factor_grid_symmetric(self):
+    @staticmethod
+    def test_clamp_factor_grid_symmetric():
         """Verify clamping is symmetric around zero."""
         factor_grid = [
             [10.0, -10.0, 5.0, -5.0],
@@ -208,7 +207,8 @@ class TestClampingLimits:
         assert clamped[1][0] == 7.0, "Large positive clamped"
         assert clamped[1][1] == -7.0, "Large negative clamped"
 
-    def test_clamp_factor_grid_boundary_conditions(self):
+    @staticmethod
+    def test_clamp_factor_grid_boundary_conditions():
         """Test exact boundary values."""
         max_adjust = 7.0
         factor_grid = [
@@ -226,7 +226,8 @@ class TestClampingLimits:
         assert clamped[1][1] == -6.9999, "Just above -limit unchanged"
         assert clamped[1][2] == 0.0, "Zero unchanged"
 
-    def test_clamp_preserves_structure(self):
+    @staticmethod
+    def test_clamp_preserves_structure():
         """Verify clamping preserves grid dimensions and structure."""
         factor_grid = [
             [5.0, 3.0, 1.0],
@@ -246,7 +247,8 @@ class TestClampingLimits:
 class TestApplyMathFormula:
     """Verify the exact mathematical formula used in VEApply."""
 
-    def test_apply_formula_positive_factor(self):
+    @staticmethod
+    def test_apply_formula_positive_factor():
         """
         Verify formula: updated_ve = base_ve × (1 + factor/100)
 
@@ -265,7 +267,8 @@ class TestApplyMathFormula:
         assert result == 105.0, "Applied result"
         assert result == expected_result, "Formula consistency"
 
-    def test_apply_formula_negative_factor(self):
+    @staticmethod
+    def test_apply_formula_negative_factor():
         """
         Verify formula with negative correction.
 
@@ -283,7 +286,8 @@ class TestApplyMathFormula:
         assert result == 97.0, "Applied result"
         assert result == expected_result, "Formula consistency"
 
-    def test_apply_formula_zero_factor(self):
+    @staticmethod
+    def test_apply_formula_zero_factor():
         """Verify zero correction leaves value unchanged."""
         base_ve = 100.0
         factor = 0.0
@@ -298,7 +302,8 @@ class TestApplyMathFormula:
 class TestRollbackMathFormula:
     """Verify the exact mathematical formula used in VERollback."""
 
-    def test_rollback_formula_inverse(self):
+    @staticmethod
+    def test_rollback_formula_inverse():
         """
         Verify rollback formula: restored_ve = current_ve / (1 + factor/100)
 
@@ -320,7 +325,8 @@ class TestRollbackMathFormula:
             "Apply and rollback use same multiplier"
         )
 
-    def test_rollback_formula_negative_factor(self):
+    @staticmethod
+    def test_rollback_formula_negative_factor():
         """Verify rollback works correctly with negative factors."""
         base_ve = 100.0
         factor = -3.0  # -3%
@@ -342,7 +348,8 @@ class TestPrecisionAndRounding:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    def test_write_precision_4_decimals(self, temp_dir):
+    @staticmethod
+    def test_write_precision_4_decimals(temp_dir):
         """Verify VE tables written with exactly 4 decimal precision."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -365,7 +372,8 @@ class TestPrecisionAndRounding:
         assert "84.5556" in rows[2][1], "Third value rounded to 4 decimals"
         assert "86.1111" in rows[2][2], "Fourth value rounded to 4 decimals"
 
-    def test_precision_preserved_through_apply_rollback(self, temp_dir):
+    @staticmethod
+    def test_precision_preserved_through_apply_rollback(temp_dir):
         """Verify precision handling through full cycle maintains accuracy."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -400,7 +408,8 @@ class TestPrecisionAndRounding:
 class TestBinningRules:
     """Document and verify all binning rules used in VE operations."""
 
-    def test_rpm_bins_structure(self):
+    @staticmethod
+    def test_rpm_bins_structure():
         """
         Document RPM binning structure.
 
@@ -415,7 +424,8 @@ class TestBinningRules:
         # Document expected structure
         assert 1500 in RPM_BINS or 2000 == RPM_BINS[0], "Starts at 1500 or 2000"
 
-    def test_kpa_bins_structure(self):
+    @staticmethod
+    def test_kpa_bins_structure():
         """
         Document kPa binning structure.
 
@@ -432,7 +442,8 @@ class TestBinningRules:
         # Document actual structure
         assert KPA_BINS == [35, 50, 65, 80, 95], "Expected bin structure"
 
-    def test_table_dimensions_consistency(self):
+    @staticmethod
+    def test_table_dimensions_consistency():
         """Verify VE tables have consistent dimensions matching bin definitions."""
         from dynoai.constants import KPA_BINS, RPM_BINS
 
@@ -453,7 +464,8 @@ class TestNoFloatingState:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    def test_apply_stateless_multiple_runs(self, temp_dir):
+    @staticmethod
+    def test_apply_stateless_multiple_runs(temp_dir):
         """Verify VEApply has no instance state affecting results."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -480,7 +492,8 @@ class TestNoFloatingState:
 
         assert ve1 == ve2, "Same instance must produce identical results"
 
-    def test_rollback_stateless(self, temp_dir):
+    @staticmethod
+    def test_rollback_stateless(temp_dir):
         """Verify VERollback has no instance state affecting results."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -521,7 +534,8 @@ class TestMetadataIntegrity:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    def test_metadata_contains_hashes(self, temp_dir):
+    @staticmethod
+    def test_metadata_contains_hashes(temp_dir):
         """Verify metadata includes SHA-256 hashes for tamper detection."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -548,7 +562,8 @@ class TestMetadataIntegrity:
         assert len(metadata["base_sha"]) == 64, "SHA-256 hash is 64 hex chars"
         assert len(metadata["factor_sha"]) == 64, "SHA-256 hash is 64 hex chars"
 
-    def test_metadata_max_adjust_recorded(self, temp_dir):
+    @staticmethod
+    def test_metadata_max_adjust_recorded(temp_dir):
         """Verify max_adjust_pct is recorded in metadata for rollback."""
         rpm_bins = [2000, 3000]
         kpa_bins = [50, 80]
@@ -577,7 +592,8 @@ class TestKernelDeterminism:
     They must be deterministic (same input → same output) with no randomness.
     """
 
-    def test_k1_gradient_limit_deterministic(self):
+    @staticmethod
+    def test_k1_gradient_limit_deterministic():
         """
         K1: Gradient-Limited Smoothing
 
@@ -601,7 +617,8 @@ class TestKernelDeterminism:
         # Must be identical
         assert result1 == result2, "K1 must be deterministic"
 
-    def test_k2_coverage_adaptive_deterministic(self):
+    @staticmethod
+    def test_k2_coverage_adaptive_deterministic():
         """
         K2: Coverage-Adaptive Clamping
 
@@ -627,7 +644,8 @@ class TestKernelDeterminism:
 
         assert result1 == result2, "K2 must be deterministic"
 
-    def test_k3_bilateral_deterministic(self):
+    @staticmethod
+    def test_k3_bilateral_deterministic():
         """
         K3: Bilateral Median+Mean
 
@@ -659,7 +677,8 @@ class TestKernelDeterminism:
 class TestKernelClampingRules:
     """Document and verify clamping rules in each kernel."""
 
-    def test_k1_uses_fixed_smoothing_params(self):
+    @staticmethod
+    def test_k1_uses_fixed_smoothing_params():
         """
         K1 Clamping/Weighting Rules:
         - Gradient threshold: configurable (default 1.0%)
@@ -678,7 +697,8 @@ class TestKernelClampingRules:
         assert len(result[0]) == len(grid[0])
         assert all(val is not None for val in result[0])
 
-    def test_k2_coverage_adaptive_clamp_ranges(self):
+    @staticmethod
+    def test_k2_coverage_adaptive_clamp_ranges():
         """
         K2 Clamping Rules:
         - Low confidence (≤1%): ±15% clamp (permissive)
@@ -699,7 +719,8 @@ class TestKernelClampingRules:
             if val is not None:
                 assert abs(val) <= 15.0, f"K2 clamped value {val} exceeds ±15%"
 
-    def test_k3_coverage_tiered_clamps(self):
+    @staticmethod
+    def test_k3_coverage_tiered_clamps():
         """
         K3 Clamping Rules:
         - High coverage (≥100 samples): ±7% clamp

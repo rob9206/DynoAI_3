@@ -580,13 +580,15 @@ class JetDrivePage(QWidget):
         if hasattr(self, "_last_rpm") and hasattr(self, "_last_map"):
             self.ve_table.set_live_values(self._last_rpm, self._last_map, channel_a)
 
-    def _on_afr_targets_changed(self, grid: List[List[float]]) -> None:
+    @staticmethod
+    def _on_afr_targets_changed(grid: List[List[float]]) -> None:
         """Handle AFR target grid changes."""
         # Could send to VE table or backend for closed-loop tuning
         # For now, just log the change
         print(f"AFR targets updated: {len(grid)}x{len(grid[0])} grid")
 
-    def _on_afr_targets_changed_legacy(self, targets: dict) -> None:
+    @staticmethod
+    def _on_afr_targets_changed_legacy(targets: dict) -> None:
         """Handle legacy MAP-based AFR target changes."""
         print(f"AFR targets updated (legacy format): {len(targets)} MAP bins")
 
@@ -597,14 +599,16 @@ class JetDrivePage(QWidget):
                 f"🔧 Dyno: {config.model} (SN: {config.serial_number})"
             )
 
-    def _on_dyno_connection_changed(self, connected: bool) -> None:
+    @staticmethod
+    def _on_dyno_connection_changed(connected: bool) -> None:
         """Handle dyno connection status change."""
         if connected:
             print("✓ Dyno hardware connected")
         else:
             print("✗ Dyno hardware disconnected")
 
-    def _on_ingestion_health_updated(self, health: str) -> None:
+    @staticmethod
+    def _on_ingestion_health_updated(health: str) -> None:
         """Handle ingestion health status updates."""
         # Could display health indicator in main status
         if health in ["critical", "unhealthy"]:

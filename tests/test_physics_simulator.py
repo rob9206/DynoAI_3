@@ -20,7 +20,8 @@ from api.services.dyno_simulator import (
 class TestPhysicsBasics:
     """Test basic physics calculations."""
 
-    def test_rpm_to_rad_conversion(self):
+    @staticmethod
+    def test_rpm_to_rad_conversion():
         """Test RPM to radians/second conversion."""
         sim = DynoSimulator()
 
@@ -32,7 +33,8 @@ class TestPhysicsBasics:
         rpm = sim._rad_s_to_rpm(rad_s)
         assert abs(rpm - 1000.0) < 0.1
 
-    def test_volumetric_efficiency(self):
+    @staticmethod
+    def test_volumetric_efficiency():
         """Test VE calculation at different conditions."""
         sim = DynoSimulator()
         profile = sim.config.profile
@@ -54,7 +56,8 @@ class TestPhysicsBasics:
         ve_redline = sim._get_volumetric_efficiency(profile.redline_rpm, 100.0)
         assert ve_redline < ve_peak_wot, "VE should be lower at redline"
 
-    def test_pumping_losses(self):
+    @staticmethod
+    def test_pumping_losses():
         """Test pumping loss calculation."""
         config = SimulatorConfig(enable_pumping_losses=True)
         sim = DynoSimulator(config)
@@ -73,7 +76,8 @@ class TestPhysicsBasics:
         loss_low_rpm = sim._get_pumping_losses(2000, 50.0)
         assert loss_high_rpm > loss_low_rpm, "Higher RPM should have more friction"
 
-    def test_thermal_correction(self):
+    @staticmethod
+    def test_thermal_correction():
         """Test thermal power correction."""
         config = SimulatorConfig(enable_thermal_effects=True)
         sim = DynoSimulator(config)
@@ -100,7 +104,8 @@ class TestPhysicsBasics:
         )
         assert correction_hot > 0.85, "Hot penalty should be reasonable"
 
-    def test_air_density_correction(self):
+    @staticmethod
+    def test_air_density_correction():
         """Test air density correction."""
         # Sea level, standard conditions
         config = SimulatorConfig(
@@ -133,7 +138,8 @@ class TestPhysicsBasics:
 class TestPhysicsIntegration:
     """Test integrated physics simulation."""
 
-    def test_effective_torque_calculation(self):
+    @staticmethod
+    def test_effective_torque_calculation():
         """Test that effective torque includes all corrections."""
         sim = DynoSimulator()
         profile = sim.config.profile
@@ -162,7 +168,8 @@ class TestPhysicsIntegration:
             "Part throttle should reduce torque"
         )
 
-    def test_throttle_lag(self):
+    @staticmethod
+    def test_throttle_lag():
         """Test realistic throttle response."""
         config = SimulatorConfig(throttle_response_rate=10.0)  # 10% per second
         sim = DynoSimulator(config)
@@ -191,7 +198,8 @@ class TestPhysicsIntegration:
             f"Throttle should reach target, got {sim.physics.tps_actual}"
         )
 
-    def test_physics_update_increases_rpm(self):
+    @staticmethod
+    def test_physics_update_increases_rpm():
         """Test that physics update increases RPM under power."""
         sim = DynoSimulator()
         profile = sim.config.profile
@@ -218,7 +226,8 @@ class TestPhysicsIntegration:
 class TestSimulatorBehavior:
     """Test full simulator behavior."""
 
-    def test_simulator_starts_and_stops(self):
+    @staticmethod
+    def test_simulator_starts_and_stops():
         """Test basic start/stop functionality."""
         sim = DynoSimulator()
 
@@ -232,7 +241,8 @@ class TestSimulatorBehavior:
         time.sleep(0.1)
         assert sim.state == SimState.STOPPED
 
-    def test_trigger_pull(self):
+    @staticmethod
+    def test_trigger_pull():
         """Test triggering a pull."""
         sim = DynoSimulator()
         sim.start()
@@ -248,7 +258,8 @@ class TestSimulatorBehavior:
 
         sim.stop()
 
-    def test_pull_completes(self):
+    @staticmethod
+    def test_pull_completes():
         """Test that a pull completes and returns to idle."""
         config = SimulatorConfig(
             profile=EngineProfile.sportbike_600(),  # Faster pull
@@ -289,7 +300,8 @@ class TestSimulatorBehavior:
 
         sim.stop()
 
-    def test_pull_data_quality(self):
+    @staticmethod
+    def test_pull_data_quality():
         """Test that pull data is realistic."""
         sim = DynoSimulator()
         sim.start()
@@ -353,7 +365,8 @@ class TestSimulatorBehavior:
 
         sim.stop()
 
-    def test_decel_reports_inertial_loss_power_not_instant_zero(self):
+    @staticmethod
+    def test_decel_reports_inertial_loss_power_not_instant_zero():
         """
         Regression: after a pull transitions to DECEL, the live channels should not
         instantly flatline Horsepower/Torque to zero. We report positive magnitude
@@ -382,7 +395,8 @@ class TestSimulatorBehavior:
 class TestDifferentProfiles:
     """Test different engine profiles."""
 
-    def test_m8_114_profile(self):
+    @staticmethod
+    def test_m8_114_profile():
         """Test M8-114 profile characteristics."""
         config = SimulatorConfig(profile=EngineProfile.m8_114())
         sim = DynoSimulator(config)
@@ -394,7 +408,8 @@ class TestDifferentProfiles:
         assert profile.max_tq == 122.0
         assert profile.max_hp == 110.0
 
-    def test_sportbike_profile(self):
+    @staticmethod
+    def test_sportbike_profile():
         """Test sportbike profile characteristics."""
         config = SimulatorConfig(profile=EngineProfile.sportbike_600())
         sim = DynoSimulator(config)
@@ -405,7 +420,8 @@ class TestDifferentProfiles:
         assert profile.redline_rpm > 14000
         assert profile.engine_inertia < 0.5  # Much lighter than V-twin
 
-    def test_different_inertias(self):
+    @staticmethod
+    def test_different_inertias():
         """Test that different inertias affect acceleration."""
         # Heavy V-twin
         config_heavy = SimulatorConfig(profile=EngineProfile.m8_131())
@@ -422,7 +438,8 @@ class TestDifferentProfiles:
 class TestEnvironmentalEffects:
     """Test environmental condition effects."""
 
-    def test_altitude_effect(self):
+    @staticmethod
+    def test_altitude_effect():
         """Test that altitude reduces power."""
         # Sea level
         config_sea = SimulatorConfig(
@@ -453,7 +470,8 @@ class TestEnvironmentalEffects:
             f"Altitude loss should be 10-25%, got {loss_pct:.1f}%"
         )
 
-    def test_temperature_effect(self):
+    @staticmethod
+    def test_temperature_effect():
         """Test that temperature affects power."""
         # Cold day
         config_cold = SimulatorConfig(
@@ -482,7 +500,8 @@ class TestEnvironmentalEffects:
 class TestEnhancements:
     """Test new enhancement features."""
 
-    def test_humidity_correction(self):
+    @staticmethod
+    def test_humidity_correction():
         """Test that humidity affects air density correction."""
         # Dry conditions
         config_dry = SimulatorConfig(
@@ -518,7 +537,8 @@ class TestEnhancements:
             f"Humidity effect should be 0.2-2%, got {diff_pct:.1f}%"
         )
 
-    def test_knock_detection_lean_condition(self):
+    @staticmethod
+    def test_knock_detection_lean_condition():
         """Test knock detection with lean AFR at high load."""
         sim = DynoSimulator()
         profile = sim.config.profile
@@ -551,7 +571,8 @@ class TestEnhancements:
         assert knock_very_lean, "Very lean AFR at high load should trigger knock"
         assert risk_very_lean > 0.3, "Risk should be high with very lean AFR"
 
-    def test_knock_detection_hot_iat(self):
+    @staticmethod
+    def test_knock_detection_hot_iat():
         """Test knock detection with high intake air temperature."""
         sim = DynoSimulator()
 
@@ -568,7 +589,8 @@ class TestEnhancements:
         assert knock_hot, "Hot IAT should trigger knock"
         assert risk_hot > risk_normal, "Hot IAT should increase risk"
 
-    def test_physics_snapshot_collection(self):
+    @staticmethod
+    def test_physics_snapshot_collection():
         """Test that physics snapshots are collected when enabled."""
         sim = DynoSimulator()
         sim.start()
@@ -604,7 +626,8 @@ class TestEnhancements:
 
         sim.stop()
 
-    def test_knock_reduces_torque(self):
+    @staticmethod
+    def test_knock_reduces_torque():
         """Test that knock detection reduces effective torque."""
         sim = DynoSimulator()
 
@@ -631,7 +654,8 @@ class TestEnhancements:
             f"Knock penalty should be 3-6%, got {reduction_pct:.1f}%"
         )
 
-    def test_constants_defined(self):
+    @staticmethod
+    def test_constants_defined():
         """Test that physics constants are defined."""
         from api.services.dyno_simulator import (
             DRAG_COEFFICIENT,
@@ -650,7 +674,8 @@ class TestEnhancements:
         assert KNOCK_IAT_THRESHOLD_F > 100
         assert KNOCK_TIMING_RETARD_DEG > 0
 
-    def test_snapshot_disabled_by_default(self):
+    @staticmethod
+    def test_snapshot_disabled_by_default():
         """Test that snapshot collection is disabled by default."""
         sim = DynoSimulator()
         sim.start()
@@ -665,7 +690,8 @@ class TestEnhancements:
 
         sim.stop()
 
-    def test_pull_data_includes_knock(self):
+    @staticmethod
+    def test_pull_data_includes_knock():
         """Test that pull data includes knock information."""
         config = SimulatorConfig(
             profile=EngineProfile.sportbike_600(),  # Faster pull

@@ -23,10 +23,10 @@ if DEEPCODE_PATH not in sys.path:
     sys.path.insert(0, DEEPCODE_PATH)
 
 try:
+    from utils.simple_llm_logger import SimpleLLMLogger
     from workflows.agent_orchestration_engine import (
         execute_chat_based_planning_pipeline,
     )
-    from utils.simple_llm_logger import SimpleLLMLogger
 except ImportError as e:
     print(f"❌ Error: Could not import DeepCode modules.")
     print(f"   Make sure DeepCode is installed at: {DEEPCODE_PATH}")
@@ -69,7 +69,8 @@ class DynoAI3DeepCodeIntegration:
         print(f"🧠 DeepCode path: {DEEPCODE_PATH}")
         print()
 
-    def _setup_config_files(self):
+    @staticmethod
+    def _setup_config_files():
         """Ensure DeepCode config files are available in the working directory."""
         import shutil
 
@@ -89,7 +90,8 @@ class DynoAI3DeepCodeIntegration:
             shutil.copy(deepcode_config, local_config)
             print(f"✅ Copied config: {local_config}")
 
-    def _build_dynoai3_context(self) -> str:
+    @staticmethod
+    def _build_dynoai3_context() -> str:
         """Build context about DynoAI_3 for better code generation."""
         return """
 Project: DynoAI_3 - Deterministic Dyno Tuning Platform
@@ -212,8 +214,7 @@ Please generate production-ready code that can be directly integrated into DynoA
         Returns:
             str: Summary of test generation
         """
-        return await self.generate_feature(
-            f"""
+        return await self.generate_feature(f"""
 Create comprehensive test suite for DynoAI_3 module: {module_path}
 
 Requirements:
@@ -227,8 +228,7 @@ Requirements:
 - Follow DynoAI_3 test conventions
 
 Output location: tests/test_{Path(module_path).stem}.py
-"""
-        )
+""")
 
     async def generate_documentation(self, topic: str) -> str:
         """
@@ -240,8 +240,7 @@ Output location: tests/test_{Path(module_path).stem}.py
         Returns:
             str: Summary of documentation generation
         """
-        return await self.generate_feature(
-            f"""
+        return await self.generate_feature(f"""
 Create comprehensive documentation for DynoAI_3: {topic}
 
 Requirements:
@@ -253,9 +252,8 @@ Requirements:
 - Markdown format
 - Diagrams where helpful (mermaid syntax)
 
-Output location: docs/{topic.lower().replace(' ', '_')}.md
-"""
-        )
+Output location: docs/{topic.lower().replace(" ", "_")}.md
+""")
 
     async def generate_api_endpoint(self, endpoint_spec: str) -> str:
         """
@@ -267,8 +265,7 @@ Output location: docs/{topic.lower().replace(' ', '_')}.md
         Returns:
             str: Summary of endpoint generation
         """
-        return await self.generate_feature(
-            f"""
+        return await self.generate_feature(f"""
 Create Flask API endpoint for DynoAI_3:
 
 {endpoint_spec}
@@ -283,8 +280,7 @@ Requirements:
 - Follow existing DynoAI_3 API patterns
 
 Output location: api/routes/
-"""
-        )
+""")
 
     async def generate_frontend_component(self, component_spec: str) -> str:
         """
@@ -296,8 +292,7 @@ Output location: api/routes/
         Returns:
             str: Summary of component generation
         """
-        return await self.generate_feature(
-            f"""
+        return await self.generate_feature(f"""
 Create React/TypeScript component for DynoAI_3 frontend:
 
 {component_spec}
@@ -313,8 +308,7 @@ Requirements:
 - Storybook stories if complex
 
 Output location: frontend/src/components/
-"""
-        )
+""")
 
 
 async def interactive_menu():
@@ -448,8 +442,7 @@ async def example_usage():
     print()
 
     # Example 1: Generate a new analysis module
-    await integrator.generate_feature(
-        """
+    await integrator.generate_feature("""
 Create a boost pressure analysis module for DynoAI_3:
 
 Module: dynoai/core/boost_analyzer.py
@@ -470,8 +463,7 @@ Include:
 - Comprehensive docstrings
 - Unit tests
 - Example usage
-"""
-    )
+""")
 
 
 async def main():
