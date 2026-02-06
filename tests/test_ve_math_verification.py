@@ -87,9 +87,7 @@ class TestVEApplyRollbackInverse:
         return path, rpm_bins, kpa_bins, factor_grid
 
     @staticmethod
-    def test_apply_then_rollback_exact_inverse(
-        temp_dir, base_ve_table, factor_table
-    ):
+    def test_apply_then_rollback_exact_inverse(temp_dir, base_ve_table, factor_table):
         """
         Core invariant: apply → rollback → exact original table.
 
@@ -141,9 +139,7 @@ class TestVEApplyRollbackInverse:
                 )
 
     @staticmethod
-    def test_determinism_same_input_same_output(
-        temp_dir, base_ve_table, factor_table
-    ):
+    def test_determinism_same_input_same_output(temp_dir, base_ve_table, factor_table):
         """
         Verify determinism: running apply twice with same inputs produces identical outputs.
 

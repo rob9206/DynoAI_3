@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from dynoai.core.io_contracts import safe_path
 from external_scrapers import get_stdout_logger
 from external_scrapers.dyno_models import (
     META_FIELD_ORDER,
@@ -16,7 +17,6 @@ from external_scrapers.dyno_models import (
     slugify_title,
 )
 from external_scrapers.http_utils import fetch
-from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 

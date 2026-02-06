@@ -276,7 +276,9 @@ class InnovateClient:
             self.port = self._auto_detect_port()
             if self.port is None:
                 logger.error("No Innovate device found. Please specify port manually.")
-                self.last_error = "No Innovate device found (auto-detect returned no ports)"
+                self.last_error = (
+                    "No Innovate device found (auto-detect returned no ports)"
+                )
                 return False
 
         try:

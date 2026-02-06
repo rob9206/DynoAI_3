@@ -292,7 +292,7 @@ class TrainingDataCollector:
 
     @staticmethod
     def _extract_balance_pattern(
-        session: TuningSession
+        session: TuningSession,
     ) -> Optional[CylinderImbalancePattern]:
         """Extract cylinder imbalance pattern from session."""
         try:
@@ -316,9 +316,7 @@ class TrainingDataCollector:
             return None
 
     @staticmethod
-    def _extract_decel_pattern(
-        session: TuningSession
-    ) -> Optional[DecelPoppingPattern]:
+    def _extract_decel_pattern(session: TuningSession) -> Optional[DecelPoppingPattern]:
         """Extract decel popping pattern from session."""
         try:
             return DecelPoppingPattern(
@@ -339,9 +337,7 @@ class TrainingDataCollector:
             return None
 
     @staticmethod
-    def _extract_heat_pattern(
-        session: TuningSession
-    ) -> Optional[HeatSoakPattern]:
+    def _extract_heat_pattern(session: TuningSession) -> Optional[HeatSoakPattern]:
         """Extract heat soak pattern from session."""
         try:
             return HeatSoakPattern(
@@ -357,9 +353,7 @@ class TrainingDataCollector:
             return None
 
     @staticmethod
-    def _extract_timing_pattern(
-        session: TuningSession
-    ) -> Optional[KnockTimingPattern]:
+    def _extract_timing_pattern(session: TuningSession) -> Optional[KnockTimingPattern]:
         """Extract knock/timing pattern from session."""
         try:
             return KnockTimingPattern(
@@ -442,9 +436,7 @@ class TrainingDataCollector:
         return sum(diffs) / len(diffs) if diffs else 0.0
 
     @staticmethod
-    def _get_region_ranges(
-        region: str
-    ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    def _get_region_ranges(region: str) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """Map operating region name to RPM/load ranges."""
         region_map = {
             "idle": ((800, 1200), (15, 30)),

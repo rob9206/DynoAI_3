@@ -17,9 +17,7 @@ class TestPathTraversalPreventionDownload:
         assert response.status_code in (400, 404)
 
     @staticmethod
-    def test_download_rejects_path_traversal_in_filename(
-        client, mock_output_folder
-    ):
+    def test_download_rejects_path_traversal_in_filename(client, mock_output_folder):
         """Download rejects ../.. in filename."""
         run_id = mock_output_folder["run_id"]
         response = client.get(f"/api/download/{run_id}/../../../etc/passwd")
