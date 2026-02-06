@@ -3553,6 +3553,7 @@ def export_as_template():
         # Create template
         template_id = template_name.lower().replace(" ", "_")
         template_id = _safe_template_id(template_name)
+        template_data = {
             "version": "1.0",
             "type": "dynoai_mapping_template",
             "name": template_name,
@@ -3685,6 +3686,7 @@ def get_realtime_analysis():
                     "enabled": False,
                     "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
                     "error": "Failed to get realtime analysis.",
+                }
             )
 
         return jsonify(
@@ -3724,7 +3726,7 @@ def enable_realtime_analysis():
         target_afr = request.args.get("target_afr", 14.7, type=float)
 
         queue_mgr = get_live_queue_manager()
-                    "error": "Failed to enable realtime analysis.",
+        queue_mgr.enable_realtime_analysis(target_afr=target_afr)
 
         return jsonify(
             {
@@ -3734,13 +3736,13 @@ def enable_realtime_analysis():
             }
         )
     except Exception as e:
-    except Exception:
         logger.exception("Failed to enable realtime analysis")
+        return (
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                    "error": "Failed to enable realtime analysis.",
+                }
             ),
             500,
         )
@@ -3767,13 +3769,13 @@ def disable_realtime_analysis():
             }
         )
     except Exception as e:
-    except Exception:
         logger.exception("Failed to disable realtime analysis")
+        return (
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                    "error": "Failed to disable realtime analysis.",
+                }
             ),
             500,
         )
@@ -3826,7 +3828,7 @@ def reset_realtime_analysis():
                 {
                     "success": False,
                     "error": str(e),
-                    "error": "Failed to reset realtime analysis.",
+                }
             ),
             500,
         )
