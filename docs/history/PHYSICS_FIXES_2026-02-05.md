@@ -99,7 +99,7 @@ I = 0.5 × m × r²
 Where:
   m = 14.121 slugs (drum mass)
   r = 4.673 / (2π) = 0.7437 ft (drum radius)
-  
+
 I = 0.5 × 14.121 × 0.7437²
 I = 0.5 × 14.121 × 0.5531
 I = 3.906 slug·ft² ≈ 3.91 lb·ft² (equivalent units!)
@@ -121,17 +121,16 @@ The profile's `dyno_inertia = 4.5` was a reasonable approximation, but the simul
 
 1. ✅ `api/services/simulation/dyno_simulator.py`
    - Changed `torque_to_angular_accel_scale` from 5.5 to 50.0
-   
+
 2. ✅ `api/config.py`
    - Fixed `rotational_inertia_lbft2` property (removed incorrect 32.174 conversion)
    - Added detailed physics explanation in comments
-   
+
 3. ✅ `config/dynoware_rt150.json`
    - Updated pre-calculated `inertia_lbft2` from 8.61 to 3.91
-   
-4. ✅ `verify_simulator_physics.py` (new)
-   - Created verification script to test calculations
-   - Can be run to verify the fixes
+
+4. ✅ `scripts/dev/verify_simulator_physics.py`
+   - Verification script to test calculations
 
 ---
 
@@ -139,7 +138,7 @@ The profile's `dyno_inertia = 4.5` was a reasonable approximation, but the simul
 
 1. **Restart Backend Server**
    - Changes require server restart to take effect
-   
+
 2. **Run Test Pull**
    - Start simulator
    - Run a dyno pull
@@ -148,12 +147,12 @@ The profile's `dyno_inertia = 4.5` was a reasonable approximation, but the simul
      * M8-131: ~145 HP @ 5000 RPM
      * TC 103: ~85 HP @ 4800 RPM
      * CBR600: ~118 HP @ 13500 RPM
-     
+
 3. **Check Pull Duration**
    - Pull should take approximately 8-10 seconds for V-twin
    - Pull should take approximately 4-5 seconds for sportbike
    - If pulls are too fast or too slow, may need minor `torque_to_angular_accel_scale` tuning
-   
+
 4. **Verify Torque Curve Shape**
    - Torque should peak around 3200-3500 RPM for V-twins
    - HP should peak around 5000 RPM for V-twins
@@ -200,12 +199,12 @@ Both critical issues have been identified and fixed. The simulator should now pr
    - For rotational inertia: These are equivalent (no conversion)
    - For mass: 1 slug = 32.174 lb (force) but slug is actually mass unit
    - For force: 1 lbf = 1 slug × 1 ft/s² × 32.174 = 32.174 pdl
-   
+
 2. **Scaling Factor Tuning**: The `torque_to_angular_accel_scale` may need adjustment if:
    - Pull duration doesn't match real-world timing
    - Different engine types behave unrealistically
    - Consider making this a per-profile parameter for fine-tuning
-   
+
 3. **Validation**: Consider adding unit tests that verify:
    - HP output matches profile specs within ±5%
    - Pull duration is within expected range
@@ -217,3 +216,4 @@ Both critical issues have been identified and fixed. The simulator should now pr
 **Author:** AI Assistant (Claude)  
 **Reviewed:** Pending user testing  
 **Next Action:** User should restart backend and test with dyno pull
+

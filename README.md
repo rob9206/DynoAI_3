@@ -116,6 +116,15 @@ cd C:\Dev\DynoAI_3\frontend
 npm run dev
 ```
 
+### Engine Analyzer Library (Optional)
+
+Some Engine Analyzer features (library browsing + prediction) expect a component library directory.
+
+- Default location: `engineanalyzer/` at repo root (recommended for local dev)
+- Override: set `ENALYZER_LIB_DIR`
+  - For a one-time shell session: run `scripts\windows\set_ea_path.bat`
+  - Or set it permanently in your system environment variables
+
 ### JetDrive Auto-Tune
 
 The JetDrive page provides a complete auto-tuning workflow:

@@ -91,3 +91,18 @@ tmpclaude-*-cwd
 dynoai.db
 
 dynoai.db
+
+# Cursor / VSCode workspace files (user-specific)
+*.code-workspace
+
+# Root-level tune / PTI artifacts (local-only)
+/*.PTI
+/*.pti
+
+# Local-only large external trees (keep out of git)
+/engineanalyzer/
+/engine-sim-v0.1.14a/
+/combustion_toolbox-master/
+
+# Cursor plan artifacts (optional to track)
+.cursor/plans/*.plan.md

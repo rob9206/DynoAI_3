@@ -1,0 +1,62 @@
+================================================================================
+DYNOAI STARTUP - QUICK FIX GUIDE
+================================================================================
+
+PROBLEM: npm module errors or "Access is denied" when fixing
+
+SOLUTIONS (try in order):
+--------------------------------------------------------------------------------
+
+1. SIMPLE FIX (RECOMMENDED - Try this first!)
+
+   scripts\windows\fix-npm-simple.bat
+
+   - Fastest option
+   - No file deletion (avoids permission issues)
+   - Just reinstalls packages
+   - Takes 2-3 minutes
+
+--------------------------------------------------------------------------------
+
+2. FULL CLEAN (If simple fix didn't work)
+
+   scripts\windows\fix-npm-error.bat
+
+   - Deletes node_modules and reinstalls
+   - May show "Access denied" warnings (usually OK)
+   - More thorough than simple fix
+   - Takes 3-5 minutes
+
+--------------------------------------------------------------------------------
+
+3. ADMIN MODE (If getting lots of permission errors)
+
+   Right-click → "Run as administrator"
+   scripts\windows\fix-npm-error-admin.bat
+
+   - Uses admin privileges
+   - Forces deletion of locked files
+   - Most thorough option
+   - Takes 3-5 minutes
+
+--------------------------------------------------------------------------------
+
+AFTER FIX COMPLETES:
+
+Start the app normally:
+   scripts\windows\quick-start.bat
+
+Or if you want to see the fix in action:
+   Let the current script finish (step 4/4)
+   Then run quick-start.bat
+
+================================================================================
+
+TIPS:
+- Don't close the window while npm install is running
+- The "Access denied" errors are usually OK - script continues anyway
+- If it fails, try the SIMPLE FIX option instead
+- Make sure you have internet connection for package downloads
+
+================================================================================
+
