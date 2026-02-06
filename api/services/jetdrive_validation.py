@@ -316,10 +316,7 @@ class JetDriveDataValidator:
     def get_channels_for_provider(self, provider_id: int) -> list[ChannelMetrics]:
         """Get all channel metrics for a specific provider."""
         with self._metrics_lock:
-            return [
-                m for m in self._metrics.values()
-                if m.provider_id == provider_id
-            ]
+            return [m for m in self._metrics.values() if m.provider_id == provider_id]
 
     def get_all_health(self, provider_id: int | None = None) -> dict[str, Any]:
         """
@@ -343,7 +340,8 @@ class JetDriveDataValidator:
                     if m.provider_id == filter_provider
                 }
                 metrics_list = [
-                    m for m in self._metrics.values()
+                    m
+                    for m in self._metrics.values()
                     if m.provider_id == filter_provider
                 ]
             else:
@@ -371,7 +369,9 @@ class JetDriveDataValidator:
                 total = sum(s.total_frames for s in self._frame_stats.values())
                 dropped = sum(s.dropped_frames for s in self._frame_stats.values())
                 malformed = sum(s.malformed_frames for s in self._frame_stats.values())
-                non_provider = sum(s.non_provider_frames for s in self._frame_stats.values())
+                non_provider = sum(
+                    s.non_provider_frames for s in self._frame_stats.values()
+                )
                 drop_rate = (dropped / total * 100) if total > 0 else 0.0
                 frame_stats = {
                     "provider_id": None,
@@ -426,7 +426,10 @@ class JetDriveDataValidator:
         with self._metrics_lock:
             summary = []
             for metrics in sorted(self._metrics.values(), key=lambda m: m.channel_name):
-                if filter_provider is not None and metrics.provider_id != filter_provider:
+                if (
+                    filter_provider is not None
+                    and metrics.provider_id != filter_provider
+                ):
                     continue
                 age = metrics.get_age_seconds(current_time)
                 summary.append(
@@ -458,9 +461,7 @@ class JetDriveDataValidator:
         with self._metrics_lock:
             if provider_id is not None:
                 # Remove only metrics for this provider
-                keys_to_remove = [
-                    k for k in self._metrics if k[0] == provider_id
-                ]
+                keys_to_remove = [k for k in self._metrics if k[0] == provider_id]
                 for key in keys_to_remove:
                     del self._metrics[key]
             else:
