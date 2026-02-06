@@ -58,6 +58,7 @@ def _safe_template_id(template_name: str) -> str:
 
 # Singleton workflow instance for unified analysis
 _workflow: "AutoTuneWorkflow" | None = None
+_workflow_lock = threading.Lock()
 
 # TuneLab-style analysis configuration
 # Can be overridden via environment variables or API
@@ -97,33 +98,35 @@ def _get_autotune_types():
 def get_workflow() -> "AutoTuneWorkflow":
     """Get or create the unified workflow instance with TuneLab features."""
     global _workflow
-    if _workflow is None:
-        AutoTuneWorkflow, _, LogarithmicWeighting = _get_autotune_types()
-        _workflow = AutoTuneWorkflow(
-            # TuneLab-style filtering
-            enable_filtering=TUNELAB_CONFIG["enable_filtering"],
-            lowpass_rc_ms=TUNELAB_CONFIG["lowpass_rc_ms"],
-            afr_min=TUNELAB_CONFIG["afr_min"],
-            afr_max=TUNELAB_CONFIG["afr_max"],
-            exclude_time_ms=TUNELAB_CONFIG["exclude_time_ms"],
-            enable_statistical_filter=TUNELAB_CONFIG["enable_statistical_filter"],
-            sigma_threshold=TUNELAB_CONFIG["sigma_threshold"],
-            # TuneLab-style weighted binning
-            use_weighted_binning=TUNELAB_CONFIG["use_weighted_binning"],
-            weighting_strategy=LogarithmicWeighting(),
-        )
-        logger.info(
-            f"AutoTuneWorkflow initialized with TuneLab features: "
-            f"filtering={TUNELAB_CONFIG['enable_filtering']}, "
-            f"weighted_binning={TUNELAB_CONFIG['use_weighted_binning']}"
-        )
-    return _workflow
+    with _workflow_lock:
+        if _workflow is None:
+            AutoTuneWorkflow, _, LogarithmicWeighting = _get_autotune_types()
+            _workflow = AutoTuneWorkflow(
+                # TuneLab-style filtering
+                enable_filtering=TUNELAB_CONFIG["enable_filtering"],
+                lowpass_rc_ms=TUNELAB_CONFIG["lowpass_rc_ms"],
+                afr_min=TUNELAB_CONFIG["afr_min"],
+                afr_max=TUNELAB_CONFIG["afr_max"],
+                exclude_time_ms=TUNELAB_CONFIG["exclude_time_ms"],
+                enable_statistical_filter=TUNELAB_CONFIG["enable_statistical_filter"],
+                sigma_threshold=TUNELAB_CONFIG["sigma_threshold"],
+                # TuneLab-style weighted binning
+                use_weighted_binning=TUNELAB_CONFIG["use_weighted_binning"],
+                weighting_strategy=LogarithmicWeighting(),
+            )
+            logger.info(
+                f"AutoTuneWorkflow initialized with TuneLab features: "
+                f"filtering={TUNELAB_CONFIG['enable_filtering']}, "
+                f"weighted_binning={TUNELAB_CONFIG['use_weighted_binning']}"
+            )
+        return _workflow
 
 
 def reset_workflow() -> None:
     """Reset the workflow instance (e.g., after config change)."""
     global _workflow
-    _workflow = None
+    with _workflow_lock:
+        _workflow = None
 
 
 # =============================================================================
@@ -849,17 +852,20 @@ def analyze_run():
         ve_csv_path = safe_path_in_runs(run_id, "VE_Corrections_2D.csv")
         ve_grid = []
         if ve_csv_path.exists():
-            with open(ve_csv_path) as f:
-                lines = f.readlines()
-                for line in lines[1:]:  # Skip header
-                    parts = line.strip().split(",")
-                    if parts:
-                        ve_grid.append(
-                            {
-                                "rpm": int(parts[0]),
-                                "values": [float(v) for v in parts[1:]],
-                            }
-                        )
+            try:
+                with open(ve_csv_path) as f:
+                    lines = f.readlines()
+                    for line in lines[1:]:  # Skip header
+                        parts = line.strip().split(",")
+                        if parts and len(parts) > 1:
+                            ve_grid.append(
+                                {
+                                    "rpm": int(parts[0]),
+                                    "values": [float(v) for v in parts[1:]],
+                                }
+                            )
+            except (ValueError, IndexError) as e:
+                logger.warning("Failed to parse VE_Corrections_2D.csv: %s", e)
 
         # Ensure simulator stays active after analysis if it was active before
         if was_simulator_active:
@@ -1036,14 +1042,17 @@ def get_run(run_id: str):
     hits_csv_path = safe_path_in_runs(run_id, "Hit_Count_2D.csv")
     hit_grid = []
     if hits_csv_path.exists():
-        with open(hits_csv_path) as f:
-            lines = f.readlines()
-            for line in lines[1:]:
-                parts = line.strip().split(",")
-                if parts:
-                    hit_grid.append(
-                        {"rpm": int(parts[0]), "values": [int(v) for v in parts[1:]]}
-                    )
+        try:
+            with open(hits_csv_path) as f:
+                lines = f.readlines()
+                for line in lines[1:]:
+                    parts = line.strip().split(",")
+                    if parts and len(parts) > 1:
+                        hit_grid.append(
+                            {"rpm": int(parts[0]), "values": [int(v) for v in parts[1:]]}
+                        )
+        except (ValueError, IndexError) as e:
+            logger.warning("Failed to parse Hit_Count_2D.csv: %s", e)
 
     # Read AFR error grid
     afr_csv_path = safe_path_in_runs(run_id, "AFR_Error_2D.csv")

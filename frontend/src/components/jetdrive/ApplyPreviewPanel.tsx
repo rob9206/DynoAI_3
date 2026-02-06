@@ -216,6 +216,7 @@ export function ApplyPreviewPanel({
               value={boundsPreset}
               onChange={(e) => onBoundsPresetChange(e.target.value as VEBoundsPreset)}
               className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
+              aria-label="VE bounds preset selector"
             >
               {(Object.keys(VE_BOUNDS_PRESETS) as VEBoundsPreset[]).map((preset) => {
                 const info = getBoundsPresetInfo(preset);
@@ -235,6 +236,8 @@ export function ApplyPreviewPanel({
         <button
           onClick={() => setShowDetails(!showDetails)}
           className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-300"
+          aria-expanded={showDetails}
+          aria-label={showDetails ? 'Hide cell details' : 'Show cell details'}
         >
           {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           {showDetails ? 'Hide' : 'Show'} Zone Breakdown
@@ -429,6 +432,7 @@ Status: ${cell.wasSkipped ? 'Skipped' : cell.wasClamped ? 'Clamped' : cell.wasBo
           size="sm"
           onClick={onCancel}
           className="text-zinc-400 hover:text-zinc-300"
+          aria-label="Cancel apply corrections"
         >
           Cancel
         </Button>
@@ -447,6 +451,7 @@ Status: ${cell.wasSkipped ? 'Skipped' : cell.wasClamped ? 'Clamped' : cell.wasBo
               'bg-green-600 hover:bg-green-500 text-white' :
               'opacity-50 cursor-not-allowed'
             }
+            aria-label={summary.canApply ? 'Apply VE corrections to base tune' : 'Cannot apply corrections'}
           >
             {summary.canApply ? 'Apply Corrections' : 'Cannot Apply'}
           </Button>

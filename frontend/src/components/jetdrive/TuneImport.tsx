@@ -173,6 +173,7 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
     const [importError, setImportError] = useState<string | null>(null);
     const [showPresets, setShowPresets] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const [isParsing, setIsParsing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFile = useCallback(async (file: File) => {
@@ -183,6 +184,7 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
             return;
         }
 
+        setIsParsing(true);
         try {
             const content = await file.text();
             const parsed = parsePVV(content);
@@ -279,6 +281,8 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
         } catch (e) {
             console.error('[TuneImport] Error parsing file:', e);
             setImportError(`Failed to read file: ${e}`);
+        } finally {
+            setIsParsing(false);
         }
     }, [currentPreset, onImport]);
 
@@ -477,15 +481,21 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                     ) : (
                         /* Drop Zone */
                         <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Drop PVV file here or click to browse"
                             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                             onDragLeave={() => setIsDragging(false)}
                             onDrop={handleDrop}
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={() => !isParsing && fileInputRef.current?.click()}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); !isParsing && fileInputRef.current?.click(); } }}
                             className={`
                                 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
-                                ${isDragging 
-                                    ? 'border-blue-500 bg-blue-500/10' 
-                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
+                                ${isParsing
+                                    ? 'border-orange-500 bg-orange-500/10 cursor-wait'
+                                    : isDragging 
+                                        ? 'border-blue-500 bg-blue-500/10' 
+                                        : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
                                 }
                             `}
                         >
@@ -495,14 +505,24 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                                 accept=".pvv"
                                 onChange={handleFileSelect}
                                 className="hidden"
+                                disabled={isParsing}
                             />
-                            <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
-                            <div className="text-sm text-zinc-400">
-                                Drop .pvv file here or click to browse
-                            </div>
-                            <div className="text-xs text-zinc-600 mt-1">
-                                Exports from Power Vision will auto-populate VE and AFR tables
-                            </div>
+                            {isParsing ? (
+                                <>
+                                    <div className="w-8 h-8 mx-auto mb-2 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                                    <div className="text-sm text-orange-400">Parsing PVV file...</div>
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
+                                    <div className="text-sm text-zinc-400">
+                                        Drop .pvv file here or click to browse
+                                    </div>
+                                    <div className="text-xs text-zinc-600 mt-1">
+                                        Exports from Power Vision will auto-populate VE and AFR tables
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
 

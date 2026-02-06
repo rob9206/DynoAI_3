@@ -10,6 +10,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Play, Pause, ArrowRight, Download, Check, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings, Zap, Upload, FileText, Flame, Thermometer, Activity, Gauge, Crosshair } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -256,6 +257,7 @@ export function TuningWizard({
     } catch (error) {
       // Analysis failed - go back to collect step instead of getting stuck
       console.error('[TuningWizard] Analysis failed:', error);
+      toast.error('Analysis failed. Please try again.');
       setStep('collect');
     } finally {
       setIsAnalyzing(false);

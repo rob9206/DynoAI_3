@@ -126,7 +126,9 @@ image.png2. **Connect or Simulate** - Connect to dyno or start simulator
 4. **Collect** - Passive monitoring of pulls with live coverage progress
 5. **Analyze** - Run NextGen analysis for test planning and hypotheses
 6. **Review** - Validate coverage gaps and recommended pulls
-7. **Apply** - Download corrected tune
+7. **Apply** - Preview and apply corrections to your base tune with confidence-based clamping
+
+See [APPLY_WORKFLOW_GUIDE.md](docs/guides/APPLY_WORKFLOW_GUIDE.md) for details on the apply workflow.
 
 **NextGen Review Highlights:**
 - **Coverage Gaps** - What zones need more data

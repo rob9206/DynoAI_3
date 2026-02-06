@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -291,6 +292,8 @@ class AutoTuneWorkflow:
         self.weighting_strategy = weighting_strategy or LogarithmicWeighting()
         
         self.sessions: dict[str, AutoTuneSession] = {}
+        self._sessions_lock = threading.Lock()
+        self._session_ttl_seconds = 3600  # 1 hour default TTL
         
         # Build filter chain if filtering is enabled
         self._filter_chain: Optional[CompositeFilter] = None
@@ -356,6 +359,23 @@ class AutoTuneWorkflow:
         
         return filtered_times, filtered_values, self._filter_chain.statistics
     
+    def _cleanup_expired_sessions(self) -> int:
+        """Remove sessions older than TTL. Must be called with _sessions_lock held."""
+        now = datetime.now(timezone.utc)
+        expired = []
+        for sid, session in self.sessions.items():
+            try:
+                created = datetime.fromisoformat(session.created_at.replace('Z', '+00:00'))
+                age_seconds = (now - created).total_seconds()
+                if age_seconds > self._session_ttl_seconds:
+                    expired.append(sid)
+            except (ValueError, AttributeError):
+                # Invalid timestamp - mark for cleanup
+                expired.append(sid)
+        for sid in expired:
+            del self.sessions[sid]
+        return len(expired)
+    
     def create_session(
         self, run_id: Optional[str] = None, data_source: DataSource = DataSource.CSV
     ) -> AutoTuneSession:
@@ -364,7 +384,12 @@ class AutoTuneWorkflow:
             run_id or f"autotune_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         )
         session = AutoTuneSession(id=session_id, data_source=data_source)
-        self.sessions[session_id] = session
+        with self._sessions_lock:
+            # Cleanup expired sessions opportunistically
+            cleaned = self._cleanup_expired_sessions()
+            if cleaned > 0:
+                logger.debug("Cleaned up %d expired sessions", cleaned)
+            self.sessions[session_id] = session
         return session
 
     def get_target_afr(self, map_kpa: float) -> float:
