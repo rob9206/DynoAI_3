@@ -777,35 +777,3 @@ def generate_test_plan(
         coverage_gaps_detailed=gaps,
         total_estimated_pulls=len([s for s in unique_steps if s.test_type == "wot_pull"]),
     )
-    
-    # Build rationale
-    if not unique_steps:
-        rationale = "Data coverage appears adequate. No specific tests recommended."
-    else:
-        high_priority_count = sum(1 for s in unique_steps if s.priority == 1)
-        dyno_count = sum(1 for s in unique_steps if s.test_type == "wot_pull")
-        street_count = sum(1 for s in unique_steps if s.test_type in ["transient_rolloff", "steady_state_sweep"])
-        
-        rationale = (
-            f"{len(unique_steps)} test steps recommended. "
-            f"{high_priority_count} high priority. "
-            f"{len(gaps)} coverage gaps identified. "
-            f"Dyno tests: {dyno_count}, Street tests: {street_count}."
-        )
-        
-        if cause_tree and cause_tree.hypotheses:
-            top_hyp = cause_tree.get_top_hypothesis()
-            if top_hyp and top_hyp.confidence >= 0.7:
-                rationale += f" Top hypothesis: {top_hyp.title}."
-    
-    # Estimate pulls
-    total_pulls = sum(3 for s in unique_steps if s.test_type == "wot_pull")
-    total_pulls += sum(1 for s in unique_steps if s.test_type in ["steady_state_sweep", "transient_rolloff"])
-    
-    return NextTestPlan(
-        steps=unique_steps,
-        priority_rationale=rationale,
-        coverage_gaps=[g.description for g in coverage_gaps],  # Keep string list for backward compat
-        coverage_gaps_detailed=coverage_gaps,
-        total_estimated_pulls=total_pulls,
-    )
