@@ -275,10 +275,17 @@ class DrumConfig:
     @property
     def rotational_inertia_lbft2(self) -> float:
         """Rotational inertia in lb·ft² (for compatibility with simulator)."""
-        # 1 slug·ft² = 1 lb·s²/ft × ft² = 1 lb·ft·s²
-        # For rotational inertia: slug·ft² is equivalent to lb·ft² in the torque equation
-        # since slug = lb·s²/ft, and I·α gives torque in lb·ft
-        return self.rotational_inertia_slug_ft2 * 32.174  # Convert slug·ft² to lb·ft²
+        # IMPORTANT: slug·ft² and lb·ft² are dimensionally EQUIVALENT for rotational inertia
+        # when used in the torque equation τ = I·α.
+        # 
+        # This is because:
+        #   - slug = lb·s²/ft (definition of slug)
+        #   - For τ = I·α: [lb·ft] = [slug·ft²] × [rad/s²]
+        #   - Since rad is dimensionless: [lb·ft] = [slug·ft²] × [1/s²]
+        #   - Substituting slug = lb·s²/ft: [lb·ft] = [lb·s²/ft·ft²] × [1/s²] = [lb·ft] ✓
+        #
+        # Therefore, NO conversion factor is needed - the numeric value is the same.
+        return self.rotational_inertia_slug_ft2  # No conversion needed!
 
     def is_configured(self) -> bool:
         """Check if drum has valid configuration."""

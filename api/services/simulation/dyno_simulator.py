@@ -37,13 +37,9 @@ from api.config import get_config
 # =================
 # Unit conversion factors for rotational dynamics
 
-# Torque (lb·ft) to angular acceleration (rad/s²) scaling factor
-# This accounts for:
-# 1. Dyno gearing ratio (~2.5:1 typical)
-# 2. Unit conversions between imperial and SI
-# 3. Empirical calibration to match real dyno pull times (8-10 seconds)
-# Formula: α = (τ × SCALE) / I, where I is total inertia in lb·ft²
-# Reduced from 80.0 to 50.0 for realistic acceleration rate
+# Torque (lb·ft) to angular acceleration (rad/s²) scaling factor.
+# Deprecated: use SimulatorConfig.torque_to_angular_accel_scale instead.
+# Kept for backward compatibility references only.
 TORQUE_TO_ANGULAR_ACCEL_SCALE = 50.0
 
 # Drag coefficient for aerodynamic/mechanical losses
@@ -104,6 +100,119 @@ class EngineProfile:
     # Thermal
     optimal_temp_f: float = 180.0  # Optimal operating temp
     heat_rate: float = 0.15  # How fast engine heats during pull
+
+    @classmethod
+    def from_ea_build(cls, build, use_prediction: bool = True) -> "EngineProfile":
+        """
+        Create a simulation profile from an Engine Analyzer build.
+
+        Args:
+            build: CompleteEngineSpec from Engine Analyzer
+            use_prediction: If True, use prediction service for power estimates
+
+        Returns:
+            EngineProfile configured from the EA build specs
+        """
+        from api.services.engine_analyzer.schemas import CompleteEngineSpec
+
+        if not isinstance(build, CompleteEngineSpec):
+            raise ValueError("build must be a CompleteEngineSpec")
+
+        # Calculate displacement from short block specs
+        displacement_ci = 0.0
+        if build.short_block and build.short_block.bore and build.short_block.stroke:
+            cylinders = build.short_block.cylinders or 0
+            if cylinders:
+                displacement_ci = (
+                    math.pi
+                    / 4.0
+                    * (build.short_block.bore ** 2)
+                    * build.short_block.stroke
+                    * cylinders
+                )
+
+        # Try to use prediction service for more accurate estimates
+        max_hp = 0.0
+        max_tq = 0.0
+        hp_peak_rpm = 4800
+        tq_peak_rpm = 3500
+        ve_peak = 0.90
+
+        if use_prediction:
+            try:
+                from api.services.engine_analyzer.prediction_service import (
+                    predict_performance,
+                )
+
+                prediction = predict_performance(build)
+                metadata = prediction.metadata or {}
+
+                max_hp = metadata.get("predictedPeakHp") or max_hp
+                hp_peak_rpm = metadata.get("predictedPeakHpRpm") or hp_peak_rpm
+                max_tq = metadata.get("predictedPeakTq") or max_tq
+                tq_peak_rpm = metadata.get("predictedPeakTqRpm") or tq_peak_rpm
+
+                if prediction.veTableFront:
+                    ve_peak = max(max(row) for row in prediction.veTableFront) / 100.0
+
+            except Exception:
+                use_prediction = False
+
+        # Fallback estimation if prediction not used or failed
+        if not use_prediction or max_hp == 0:
+            cam_duration = build.cam.intake_duration_050 if build.cam else None
+            if cam_duration:
+                hp_peak_rpm = max(2500, min(7000, int((cam_duration - 180) * 30 + 3200)))
+            else:
+                hp_peak_rpm = 4800
+
+            avg_cfm = 0.0
+            if build.heads and build.heads.intake_flow:
+                avg_cfm = sum(p.cfm for p in build.heads.intake_flow) / max(
+                    1, len(build.heads.intake_flow)
+                )
+
+            max_hp = max(50.0, displacement_ci * 0.55)
+            if avg_cfm:
+                max_hp *= 1.0 + min(0.35, max(0.05, (avg_cfm - 150) / 800))
+            max_hp = round(max_hp, 1)
+
+            max_tq = round((max_hp * 5252) / hp_peak_rpm, 1)
+            tq_peak_rpm = int(hp_peak_rpm * 0.7)
+
+        redline_rpm = max(4500.0, min(8000.0, hp_peak_rpm + 800))
+
+        # Estimate idle RPM based on cam overlap
+        idle_rpm = 900.0
+        if build.cam and hasattr(build.cam, 'overlap'):
+            overlap = build.cam.overlap
+            if overlap > 60:  # High overlap cams need higher idle
+                idle_rpm = min(1200.0, 900.0 + (overlap - 60) * 5)
+
+        return cls(
+            name=build.name,
+            family="EA",
+            displacement_ci=displacement_ci or 0.0,
+            idle_rpm=idle_rpm,
+            redline_rpm=redline_rpm,
+            max_hp=max_hp,
+            hp_peak_rpm=float(hp_peak_rpm),
+            max_tq=max_tq,
+            tq_peak_rpm=float(tq_peak_rpm),
+            num_cylinders=build.short_block.cylinders
+            if build.short_block and build.short_block.cylinders
+            else 2,
+            bore_inches=build.short_block.bore
+            if build.short_block and build.short_block.bore
+            else 4.0,
+            stroke_inches=build.short_block.stroke
+            if build.short_block and build.short_block.stroke
+            else 4.5,
+            compression_ratio=build.short_block.compression_ratio
+            if build.short_block and build.short_block.compression_ratio
+            else 10.0,
+            volumetric_efficiency_peak=ve_peak,
+        )
 
     @classmethod
     def m8_114(cls) -> "EngineProfile":
@@ -207,11 +316,14 @@ class SimulatorConfig:
 
     # Timing
     update_rate_hz: float = 50.0  # Data points per second (higher for physics)
+    # Simulated time advance per real second (e.g. 3.0 = 3x faster; pull completes in 1/3 real time)
+    time_scale: float = 3.0
 
     # Physics scaling
     # Torque -> angular acceleration scaling factor (units/gear calibration)
     # Default is tuned so a typical V-twin pull lasts ~8-10s from idle to redline.
-    torque_to_angular_accel_scale: float = 5.5
+    # Calibrated for realistic pull duration with current inertia values
+    torque_to_angular_accel_scale: float = 1.2
 
     # Behavior
     auto_pull: bool = False  # Auto-start pulls periodically
@@ -480,16 +592,18 @@ class DynoSimulator:
         self.physics.angular_velocity = self._rpm_to_rad_s(profile.idle_rpm)
 
         # Ensure total inertia is never zero (would cause division by zero in physics)
-        # Prefer the configured dyno drum inertia when available, so the simulator matches
-        # your actual RT-150 drum inertia. Fall back to the profile's dyno_inertia.
+        # For simulator: Use the profile's dyno_inertia for tuning pull characteristics
+        # For real dyno: Could override with actual drum specs from config
         dyno_inertia = float(profile.dyno_inertia)
-        try:
-            dyno_cfg = get_config().dyno
-            cfg_inertia = float(dyno_cfg.drum1.rotational_inertia_lbft2)
-            if cfg_inertia > 0:
-                dyno_inertia = cfg_inertia
-        except Exception:
-            pass
+        
+        # DISABLED: Real drum inertia override (use profile values for simulator tuning)
+        # try:
+        #     dyno_cfg = get_config().dyno
+        #     cfg_inertia = float(dyno_cfg.drum1.rotational_inertia_lbft2)
+        #     if cfg_inertia > 0:
+        #         dyno_inertia = cfg_inertia
+        # except Exception:
+        #     pass
 
         total_inertia = float(profile.engine_inertia) + dyno_inertia
         self.physics.total_inertia = max(0.1, total_inertia)  # Minimum 0.1 lb·ft²
@@ -858,7 +972,10 @@ class DynoSimulator:
         Returns:
             (effective_torque, correction_factors_dict)
 
-        Torque_eff = Torque_base × VE × (1 - pumping_loss) × thermal × air_density × mechanical_eff × knock_penalty
+        Note:
+        - Base torque curves represent real dyno output (already include VE/mech losses).
+        - At WOT we only apply environmental corrections (thermal/air density) and knock.
+        - At part-throttle we scale by a smooth throttle factor and keep environmental corrections.
         """
         profile = self.config.profile
 
@@ -893,25 +1010,38 @@ class DynoSimulator:
             else:
                 self.physics.knock_detected = False
 
-        # Combine all factors
-        effective_torque = (
-            base_torque
-            * ve
-            * (1.0 - pumping_loss)
-            * thermal_factor
-            * air_density_factor
-            * mech_eff
-            * knock_factor
-        )
+        # Combine factors
+        if tps >= 80.0:
+            # WOT: treat base torque as real output; apply only environment + knock.
+            effective_torque = base_torque * thermal_factor * air_density_factor * knock_factor
+            throttle_factor = 1.0
+            ve_effective = 1.0
+            pumping_effective = 0.0
+            mech_effective = 1.0
+        else:
+            # Part-throttle: smooth non-linear reduction plus environment + knock.
+            tps_norm = max(0.0, min(1.0, tps / 100.0))
+            throttle_factor = tps_norm ** 1.35
+            effective_torque = (
+                base_torque
+                * throttle_factor
+                * thermal_factor
+                * air_density_factor
+                * knock_factor
+            )
+            ve_effective = ve
+            pumping_effective = pumping_loss
+            mech_effective = mech_eff
 
         # Return torque and correction factors for snapshot
         factors = {
             "base_torque": base_torque,
-            "ve": ve,
-            "pumping_loss": pumping_loss,
+            "ve": ve_effective,
+            "pumping_loss": pumping_effective,
             "thermal_factor": thermal_factor,
             "air_density_factor": air_density_factor,
-            "mechanical_efficiency": mech_eff,
+            "mechanical_efficiency": mech_effective,
+            "throttle_factor": throttle_factor,
             "knock_factor": knock_factor,
             "knock_risk": knock_risk,
         }
@@ -1139,8 +1269,17 @@ class DynoSimulator:
             self.state = SimState.STOPPED
             self.channels = SimulatedChannels()
 
-    def trigger_pull(self):
-        """Manually trigger a WOT pull."""
+    def trigger_pull(self, throttle_pct: float = 100.0):
+        """
+        Manually trigger a dyno pull.
+        
+        Args:
+            throttle_pct: Throttle position percentage (0-100). Default is 100% (WOT).
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SIMULATOR] trigger_pull called with throttle_pct={throttle_pct}")
+        
         with self._lock:
             if self.state == SimState.IDLE:
                 self.state = SimState.PULL
@@ -1150,8 +1289,11 @@ class DynoSimulator:
                 self._physics_snapshots = []
                 self._pull_elapsed_s = 0.0
 
-                # Set throttle target to WOT
-                self.physics.tps_target = 100.0
+                # Set throttle target and actual so pull starts at requested % (no carry-over from manual)
+                self.physics.tps_target = max(0.0, min(100.0, throttle_pct))
+                self.physics.tps_actual = self.physics.tps_target
+                
+                logger.info(f"[SIMULATOR] Pull started: tps_target={self.physics.tps_target}, tps_actual={self.physics.tps_actual}")
 
                 if self._on_state_change:
                     self._on_state_change(self.state)
@@ -1600,6 +1742,8 @@ class DynoSimulator:
         """Main simulation loop - dispatches to state handlers."""
         profile = self.config.profile
         dt = 1.0 / self.config.update_rate_hz
+        # Advance simulated time faster than real time when time_scale > 1
+        dt_sim = dt * max(0.1, float(self.config.time_scale))
         last_auto_pull = time.time()
 
         while not self._stop_event.is_set():
@@ -1609,7 +1753,7 @@ class DynoSimulator:
                 state = self.state
 
                 if state == SimState.IDLE:
-                    self._handle_idle_state(dt, profile)
+                    self._handle_idle_state(dt_sim, profile)
 
                     # Auto-pull check
                     if self.config.auto_pull:
@@ -1626,14 +1770,14 @@ class DynoSimulator:
                             last_auto_pull = time.time()
 
                 elif state == SimState.PULL:
-                    self._handle_pull_state(dt, profile)
+                    self._handle_pull_state(dt_sim, profile)
 
                 elif state == SimState.DECEL:
-                    self._handle_decel_state(dt, profile)
+                    self._handle_decel_state(dt_sim, profile)
 
                 elif state == SimState.COOLDOWN:
                     last_auto_pull = self._handle_cooldown_state(
-                        dt, profile, last_auto_pull
+                        dt_sim, profile, last_auto_pull
                     )
 
             # Sleep to maintain update rate
