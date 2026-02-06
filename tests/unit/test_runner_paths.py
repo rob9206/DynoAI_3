@@ -35,7 +35,7 @@ def test_outdir_created():
             str(outdir),
         ]
 
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
         assert r.returncode == 0, f"Command failed: {r.stderr}"
         assert outdir.exists(), f"Output directory not created: {outdir}"
@@ -67,7 +67,7 @@ def test_traversal_rejected():
         str(outdir),
     ]
 
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
     assert r.returncode != 0, "Path traversal should have been rejected"
     # Error is wrapped by argparse as "invalid _resolve_under_root value"
@@ -100,7 +100,7 @@ def test_invalid_idea_id():
             str(outdir),
         ]
 
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
         assert r.returncode != 0, "Invalid idea-id should be rejected"
         # Error message is "Unknown idea id 'nonexistent_kernel'. Known: ..."

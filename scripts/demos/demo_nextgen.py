@@ -1,8 +1,6 @@
 """
 Demo script to generate NextGen Analysis
 """
-
-import os
 import shutil
 import sys
 import time
@@ -57,7 +55,7 @@ def main():
         result = workflow.generate_for_run(run_id, force=True)
 
         if result["success"]:
-            print(f"      ✓ Analysis generated successfully!")
+            print("      ✓ Analysis generated successfully!")
 
             payload_path = (
                 Path(__file__).parent / "runs" / run_id / "NextGenAnalysis.json"
@@ -68,7 +66,7 @@ def main():
                 with open(payload_path) as f:
                     data = json.load(f)
 
-                print(f"\n      Quick Stats:")
+                print("\n      Quick Stats:")
                 print(
                     f"        - Total samples: {data.get('inputs_present', {}).get('row_count', 'N/A')}"
                 )

@@ -21,7 +21,6 @@ import os
 import statistics
 import sys
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -154,7 +153,7 @@ def print_results(results: Dict, channel_name: str):
     print(f"\n  {gap_status} Potential Packet Loss: {gaps} gaps detected")
 
     # AFR values
-    print(f"\n  [*] AFR Statistics:")
+    print("\n  [*] AFR Statistics:")
     print(f"       Range: {results.get('afr_min', 0)} - {results.get('afr_max', 0)}")
     print(f"       Mean: {results.get('afr_mean', 0)}")
     print(f"       Std Dev: {results.get('afr_stdev', 0)} (lower = more stable)")
@@ -282,9 +281,9 @@ Starting in 3 seconds...
             print(
                 f"       - Sample rate: ~{(ch1_rate + ch2_rate) / 2:.1f} Hz per channel"
             )
-            print(f"       - Both channels active")
-            print(f"       - Minimal packet loss")
-            print(f"       - Stable readings")
+            print("       - Both channels active")
+            print("       - Minimal packet loss")
+            print("       - Stable readings")
         else:
             print("\n  [!!] ISSUES DETECTED:")
             for issue in issues:

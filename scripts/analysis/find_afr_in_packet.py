@@ -4,8 +4,6 @@ Find 22.4 AFR in the MTS packet.
 Packet pattern: b2 84 47 13 01 51 (repeating)
 """
 
-import struct
-
 packet_hex = "b2844713015147130151"
 packet = bytes.fromhex(packet_hex)
 

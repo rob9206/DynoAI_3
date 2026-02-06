@@ -8,8 +8,6 @@ MTS Protocol Format (based on actual captured data):
 
 The data pattern: b2 84 47 13 01 51 47 13 01 51
 """
-
-import struct
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -129,23 +127,23 @@ def analyze_captured_data():
     result = decode_packet(pattern)
 
     if result:
-        print(f"\n--- Header ---")
+        print("\n--- Header ---")
         print(f"  Sync: {result['header']}")
 
-        print(f"\n--- Channel 1 ---")
+        print("\n--- Channel 1 ---")
         print(f"  Raw bytes: {result['ch1_raw']}")
-        print(f"  Word 1 (bytes 0-1):")
+        print("  Word 1 (bytes 0-1):")
         for k, v in result["ch1_word1"].items():
             if v is not None:
                 print(f"    {k}: {v}")
-        print(f"  Word 2 (bytes 2-3):")
+        print("  Word 2 (bytes 2-3):")
         for k, v in result["ch1_word2"].items():
             if v is not None:
                 print(f"    {k}: {v}")
 
-        print(f"\n--- Channel 2 ---")
+        print("\n--- Channel 2 ---")
         print(f"  Raw bytes: {result['ch2_raw']}")
-        print(f"  Word 1 (bytes 0-1):")
+        print("  Word 1 (bytes 0-1):")
         for k, v in result["ch2_word1"].items():
             if v is not None:
                 print(f"    {k}: {v}")
@@ -169,13 +167,13 @@ def analyze_captured_data():
     lambda2 = value2 / 8192.0 + 0.5
     afr2 = lambda2 * 14.7
 
-    print(f"\n  Word 1 (47 13):")
+    print("\n  Word 1 (47 13):")
     print(f"    Raw word: 0x{word1:04X} = {word1}")
     print(f"    13-bit value: {value1}")
     print(f"    Lambda: {lambda1:.3f}")
     print(f"    AFR (gasoline): {afr1:.1f}")
 
-    print(f"\n  Word 2 (01 51):")
+    print("\n  Word 2 (01 51):")
     print(f"    Raw word: 0x{word2:04X} = {word2}")
     print(f"    13-bit value: {value2}")
     print(f"    Lambda: {lambda2:.3f}")

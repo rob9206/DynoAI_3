@@ -25,8 +25,7 @@ from api.services.coverage_tracker import (
 from api.services.nextgen_workflow import (
     TestPlannerConstraints,
     save_planner_constraints,
-    get_planner_constraints,
-)
+    )
 from dynoai.core.next_test_planner import generate_test_plan, score_test_efficiency
 from dynoai.core.surface_builder import Surface2D, SurfaceAxis, SurfaceStats
 
@@ -97,7 +96,7 @@ def main():
         dyno_signature="dyno_test_123",
     )
     
-    print(f"[OK] Run 1 aggregated")
+    print("[OK] Run 1 aggregated")
     print(f"  Total runs: {coverage1.total_runs}")
     print(f"  Surfaces tracked: {list(coverage1.aggregated_hit_count.keys())}")
     
@@ -131,7 +130,7 @@ def main():
     )
     
     save_planner_constraints(constraints, vehicle_id)
-    print(f"[OK] Constraints saved:")
+    print("[OK] Constraints saved:")
     print(f"  RPM range: {constraints.min_rpm}-{constraints.max_rpm}")
     print(f"  MAP range: {constraints.min_map_kpa}-{constraints.max_map_kpa} kPa")
     print(f"  Max pulls: {constraints.max_pulls_per_session}")
@@ -163,7 +162,7 @@ def main():
         cumulative_coverage=summary1['coverage_pct'],
     )
     
-    print(f"[OK] Test plan generated")
+    print("[OK] Test plan generated")
     print(f"  Total steps: {len(plan.steps)}")
     print(f"  Rationale: {plan.priority_rationale}")
     
@@ -191,7 +190,7 @@ def main():
     
     summary2 = get_coverage_summary(vehicle_id)
     
-    print(f"[OK] Run 2 aggregated")
+    print("[OK] Run 2 aggregated")
     print(f"  Total runs: {coverage2.total_runs}")
     print(f"  New coverage: {summary2['coverage_pct']:.1f}% (was {summary1['coverage_pct']:.1f}%)")
     print(f"  Improvement: +{summary2['coverage_pct'] - summary1['coverage_pct']:.1f}%")

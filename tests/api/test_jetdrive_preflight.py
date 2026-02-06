@@ -15,9 +15,6 @@ import pytest
 
 from api.services.jetdrive.jetdrive_client import JetDriveSample
 from api.services.jetdrive.jetdrive_validation import (
-    ChannelHealth,
-    ChannelMetrics,
-    FrameStats,
     JetDriveDataValidator,
 )
 

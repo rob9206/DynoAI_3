@@ -45,7 +45,7 @@ if isinstance(next_tests, dict):
 else:
     print("  No test plans generated")
 
-print(f"\n[Coverage Gaps - Phase 5]:")
+print("\n[Coverage Gaps - Phase 5]:")
 if next_tests.get("coverage_gaps"):
     for gap in next_tests["coverage_gaps"][:3]:
         print(f"  - {gap}")

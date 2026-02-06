@@ -5,7 +5,7 @@ where Dynoware RT is broadcasting
 """
 
 import socket
-import struct
+import sys
 import time
 
 JETDRIVE_PORT = 22344
@@ -25,7 +25,7 @@ try:
     print(f"[OK] Bound to 0.0.0.0:{JETDRIVE_PORT}")
 except Exception as e:
     print(f"[FAIL] Could not bind: {e}")
-    exit(1)
+    sys.exit(1)
 
 # Join multicast on the SPECIFIC interface (10.0.0.100)
 for group in ["239.255.60.60", "224.0.2.10"]:

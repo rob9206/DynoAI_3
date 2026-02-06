@@ -98,7 +98,7 @@ async def jetdrive_call_async(func: Callable[..., T], *args, **kwargs) -> T:
         if circuit.state.value == "open":
             from api.reliability_agent import CircuitBreakerOpenError
 
-            raise CircuitBreakerOpenError(f"Circuit breaker 'jetdrive' is OPEN")
+            raise CircuitBreakerOpenError("Circuit breaker 'jetdrive' is OPEN")
 
         try:
             result = await func(*args, **kwargs)

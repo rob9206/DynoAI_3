@@ -40,6 +40,22 @@ logger = logging.getLogger(__name__)
 
 jetdrive_bp = Blueprint("jetdrive", __name__, url_prefix="/api/jetdrive")
 
+
+def _safe_template_id(template_name: str) -> str:
+    """
+    Convert a user-provided template name into a filesystem-safe identifier.
+
+    Only allow letters, numbers, underscore and dash. If the result is empty,
+    fall back to a safe default.
+    """
+    # Preserve existing behavior of lowercasing and replacing spaces
+    base = (template_name or "").lower().replace(" ", "_")
+    # Remove any character that is not alphanumeric, underscore, or dash
+    safe = re.sub(r"[^a-z0-9_-]", "", base)
+    if not safe:
+        safe = "template"
+    return safe
+
 # Singleton workflow instance for unified analysis
 _workflow: "AutoTuneWorkflow" | None = None
 
@@ -3450,7 +3466,6 @@ def import_mapping():
     Returns:
         Imported mapping (saved to disk)
     """
-    import json
 
     from api.services.jetdrive.jetdrive_mapping import (
         ChannelMapping,
@@ -3546,7 +3561,7 @@ def export_as_template():
 
         # Create template
         template_id = template_name.lower().replace(" ", "_")
-        template_data = {
+        template_id = _safe_template_id(template_name)
             "version": "1.0",
             "type": "dynoai_mapping_template",
             "name": template_name,
@@ -3678,7 +3693,7 @@ def get_realtime_analysis():
                     "success": True,
                     "enabled": False,
                     "message": "Realtime analysis not enabled. POST to /realtime/enable to start.",
-                }
+                    "error": "Failed to get realtime analysis.",
             )
 
         return jsonify(
@@ -3718,7 +3733,7 @@ def enable_realtime_analysis():
         target_afr = request.args.get("target_afr", 14.7, type=float)
 
         queue_mgr = get_live_queue_manager()
-        queue_mgr.enable_realtime_analysis(target_afr=target_afr)
+                    "error": "Failed to enable realtime analysis.",
 
         return jsonify(
             {
@@ -3728,13 +3743,13 @@ def enable_realtime_analysis():
             }
         )
     except Exception as e:
-        logger.error(f"Failed to enable realtime analysis: {e}")
-        return (
+    except Exception:
+        logger.exception("Failed to enable realtime analysis")
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to enable realtime analysis.",
             ),
             500,
         )
@@ -3761,13 +3776,13 @@ def disable_realtime_analysis():
             }
         )
     except Exception as e:
-        logger.error(f"Failed to disable realtime analysis: {e}")
-        return (
+    except Exception:
+        logger.exception("Failed to disable realtime analysis")
             jsonify(
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to disable realtime analysis.",
             ),
             500,
         )
@@ -3820,7 +3835,7 @@ def reset_realtime_analysis():
                 {
                     "success": False,
                     "error": str(e),
-                }
+                    "error": "Failed to reset realtime analysis.",
             ),
             500,
         )

@@ -3,8 +3,6 @@
 Decode the Innovate MTS data stream.
 Pattern observed: b'\xb2\x84G\x13\x01Q' repeating
 """
-
-import struct
 import time
 
 import serial

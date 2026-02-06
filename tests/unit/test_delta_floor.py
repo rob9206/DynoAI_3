@@ -35,7 +35,7 @@ def test_delta_floor_applied():
             str(outdir),
         ]
 
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
         assert r.returncode == 0, f"Command failed: {r.stderr}"
 

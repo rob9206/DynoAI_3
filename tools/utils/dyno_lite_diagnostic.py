@@ -182,7 +182,8 @@ class DiagnosticState:
                 return ch
         return None
 
-    def categorize_channel(self, name: str) -> str | None:
+    @staticmethod
+    def categorize_channel(name: str) -> str | None:
         """Categorize a channel name into priority groups."""
         name_lower = name.lower()
         for category, keywords in PRIORITY_CHANNELS.items():
@@ -505,7 +506,6 @@ def main():
     # Set console to UTF-8 for Windows
     if os.name == "nt":
         try:
-            import sys
 
             sys.stdout.reconfigure(encoding="utf-8")
         except Exception:

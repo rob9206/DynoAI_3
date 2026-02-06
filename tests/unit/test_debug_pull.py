@@ -4,10 +4,8 @@ import time
 
 from api.services.simulation.dyno_simulator import (
     DynoSimulator,
-    EngineProfile,
     SimState,
-    SimulatorConfig,
-)
+    )
 
 
 def test_debug_pull():
@@ -22,7 +20,7 @@ def test_debug_pull():
 
     sim.trigger_pull()
 
-    print(f"\nAfter trigger:")
+    print("\nAfter trigger:")
     print(f"State: {sim.state}")
     print(f"TPS target: {sim.physics.tps_target}")
 

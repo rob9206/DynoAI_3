@@ -65,7 +65,7 @@ def main():
 
             if ch1_samples:
                 afrs = [s.afr for s in ch1_samples]
-                print(f"\nChannel 1:")
+                print("\nChannel 1:")
                 print(f"  Samples: {len(ch1_samples)}")
                 print(
                     f"  AFR: min={min(afrs):.1f}, max={max(afrs):.1f}, avg={sum(afrs) / len(afrs):.1f}"
@@ -73,7 +73,7 @@ def main():
 
             if ch2_samples:
                 afrs = [s.afr for s in ch2_samples]
-                print(f"\nChannel 2:")
+                print("\nChannel 2:")
                 print(f"  Samples: {len(ch2_samples)}")
                 print(
                     f"  AFR: min={min(afrs):.1f}, max={max(afrs):.1f}, avg={sum(afrs) / len(afrs):.1f}"

@@ -108,7 +108,7 @@ class TestToolkitErrorHandling(unittest.TestCase):
             cwd=Path(__file__).parent.parent,
             capture_output=True,
             text=True,
-        )
+        check=True)
 
         # Should exit with error code
         self.assertNotEqual(result.returncode, 0)

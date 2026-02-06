@@ -611,11 +611,13 @@ class DynoSimulator:
         self.physics.engine_temp_f = profile.optimal_temp_f
         self.physics.iat_f = self.config.ambient_temp_f + 10  # Slightly warmer
 
-    def _rpm_to_rad_s(self, rpm: float) -> float:
+    @staticmethod
+    def _rpm_to_rad_s(rpm: float) -> float:
         """Convert RPM to radians per second."""
         return rpm * 2.0 * math.pi / 60.0
 
-    def _rad_s_to_rpm(self, rad_s: float) -> float:
+    @staticmethod
+    def _rad_s_to_rpm(rad_s: float) -> float:
         """Convert radians per second to RPM."""
         return rad_s * 60.0 / (2.0 * math.pi)
 
@@ -694,7 +696,6 @@ class DynoSimulator:
 
         torque = np.maximum(0.0, torque)
 
-        # HP = TQ * RPM / 5252
         horsepower = torque * rpm_points / 5252.0
 
         # Store for interpolation
@@ -1241,7 +1242,8 @@ class DynoSimulator:
         # Clamp to sensor range
         return max(10.0, min(20.0, afr_with_noise))
 
-    def _add_noise(self, value: float, noise_pct: float) -> float:
+    @staticmethod
+    def _add_noise(value: float, noise_pct: float) -> float:
         """Add gaussian noise to a value."""
         noise = random.gauss(0, value * noise_pct / 100.0)
         return value + noise
@@ -1756,18 +1758,20 @@ class DynoSimulator:
                     self._handle_idle_state(dt_sim, profile)
 
                     # Auto-pull check
-                    if self.config.auto_pull:
-                        if (
-                            time.time() - last_auto_pull
-                            > self.config.auto_pull_interval_sec
-                        ):
-                            self.state = SimState.PULL
-                            self._pull_start_time = time.time()
-                            self._pull_progress = 0.0
-                            self._pull_data = []
-                            self._physics_snapshots = []
-                            self.physics.tps_target = 100.0
-                            last_auto_pull = time.time()
+                    if (
+                        self.config.auto_pull
+                        and (
+                        time.time() - last_auto_pull
+                        > self.config.auto_pull_interval_sec
+                    )
+                    ):
+                        self.state = SimState.PULL
+                        self._pull_start_time = time.time()
+                        self._pull_progress = 0.0
+                        self._pull_data = []
+                        self._physics_snapshots = []
+                        self.physics.tps_target = 100.0
+                        last_auto_pull = time.time()
 
                 elif state == SimState.PULL:
                     self._handle_pull_state(dt_sim, profile)
@@ -1810,9 +1814,6 @@ def reset_simulator(
             try:
                 # Stop the existing simulator with a short timeout
                 _simulator._stop_event.set()
-                if _simulator._thread and _simulator._thread.is_alive():
-                    # Don't wait - the thread will finish on its own
-                    pass
             except Exception:
                 # Ignore errors during stop
                 pass

@@ -119,7 +119,7 @@ try:
     print(f"  AFR readings found: {len(afr_readings)}")
 
     if afr_readings:
-        print(f"\n  AFR values detected:")
+        print("\n  AFR values detected:")
         for afr in afr_readings[:10]:  # Show first 10
             print(f"    {afr:.1f}")
 

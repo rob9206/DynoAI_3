@@ -8,7 +8,6 @@ correctly without raising comparison errors.
 """
 
 import io
-import math
 import sys
 from pathlib import Path
 
@@ -172,7 +171,7 @@ def test_state_retrieval():
 
     try:
         state = engine.get_state()
-        print(f"  ✓ State retrieved successfully")
+        print("  ✓ State retrieved successfully")
         print(f"    - Coverage: {state['coverage']['coverage_pct']:.1f}%")
         print(f"    - Cells hit: {state['coverage']['cells_hit']}")
         print(f"    - Quality score: {state['quality']['score']:.1f}")

@@ -15,23 +15,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from api.services.jetdrive.jetdrive_realtime_analysis import (
-    AFR_MAX_PLAUSIBLE,
-    AFR_MIN_PLAUSIBLE,
     FROZEN_RPM_THRESHOLD_SEC,
-    MAP_BIN_SIZE,
-    MAP_MAX,
-    MAP_MIN,
-    RPM_BIN_SIZE,
-    RPM_MAX,
-    RPM_MIN,
     TOTAL_CELLS,
-    Alert,
     AlertSeverity,
     AlertType,
-    CoverageCell,
-    QualityMetrics,
     RealtimeAnalysisEngine,
-    VEDeltaCell,
     get_realtime_engine,
     reset_realtime_engine,
 )

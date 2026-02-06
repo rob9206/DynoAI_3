@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Test Innovate device connection and data flow."""
-
-import json
 import time
 
 import requests

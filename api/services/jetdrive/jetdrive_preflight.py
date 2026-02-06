@@ -381,7 +381,7 @@ def _check_recommended_channels(
     return PreflightCheck(
         name="recommended_channels",
         status=CheckStatus.PASSED,
-        message=f"All recommended channels found",
+        message="All recommended channels found",
         details={"found_channels": found_channels},
     )
 
@@ -478,7 +478,7 @@ def _run_semantic_checks(
                         expected_type="rpm",
                         observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} look like AFR (expected 500-12000)",
                         confidence=0.9,
-                        fix_suggestion=f"Remap RPM in Power Core - current channel has AFR-like values",
+                        fix_suggestion="Remap RPM in Power Core - current channel has AFR-like values",
                     )
                 )
             else:
@@ -488,7 +488,7 @@ def _run_semantic_checks(
                         expected_type="rpm",
                         observed_behavior=f"Values {rpm_min:.1f}-{rpm_max:.1f} outside plausible range",
                         confidence=0.7,
-                        fix_suggestion=f"Verify RPM channel mapping in Power Core",
+                        fix_suggestion="Verify RPM channel mapping in Power Core",
                     )
                 )
 
@@ -534,7 +534,7 @@ def _run_semantic_checks(
                         expected_type="afr",
                         observed_behavior=f"Values {afr_min:.1f}-{afr_max:.1f} look like RPM (expected 10-20)",
                         confidence=0.9,
-                        fix_suggestion=f"Remap AFR in Power Core - current channel has RPM-like values",
+                        fix_suggestion="Remap AFR in Power Core - current channel has RPM-like values",
                     )
                 )
 
@@ -611,7 +611,7 @@ def _run_semantic_checks(
                 PreflightCheck(
                     name="semantic_validation",
                     status=CheckStatus.WARNING,
-                    message=f"Possible channel issues detected (low confidence)",
+                    message="Possible channel issues detected (low confidence)",
                     fix_suggestion="Review channel mappings if data looks wrong",
                     details={
                         "checks_performed": checks_performed,

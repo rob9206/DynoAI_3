@@ -16,7 +16,6 @@ import argparse
 import socket
 import sys
 import time
-from datetime import datetime
 
 
 class Colors:
@@ -127,8 +126,8 @@ def run_full_diagnostics(ip: str, port: int) -> int:
     print("-" * 40)
     print(f"   IP Address:    {ip}")
     print(f"   Port:          {port}")
-    print(f"   Protocol:      TCP")
-    print(f"   Expected:      Dynoware RT (Model 150)")
+    print("   Protocol:      TCP")
+    print("   Expected:      Dynoware RT (Model 150)")
     print()
 
     # 1. Check local network interfaces

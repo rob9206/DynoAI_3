@@ -34,7 +34,7 @@ def test_fingerprint_contents():
             str(outdir),
         ]
 
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
         assert r.returncode == 0, f"Command failed: {r.stderr}"
 
@@ -80,7 +80,7 @@ def test_fingerprint_all_kernels():
                 str(outdir),
             ]
 
-            r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+            r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), check=True)
 
             assert r.returncode == 0, f"Failed for kernel '{kernel_id}': {r.stderr}"
 

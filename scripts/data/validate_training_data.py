@@ -24,9 +24,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-from api.models.training_data_schemas import BuildConfiguration, TuningSession
-from api.models.validators import DataValidator, ValidationResult
+from api.models.validators import DataValidator
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -103,9 +101,12 @@ class TrainingDataValidator:
         if "tuning_sessions" not in data:
             self.warnings.append("No tuning_sessions found")
 
-        if "extracted_patterns" not in data and "tuning_sessions" in data:
-            if len(data["tuning_sessions"]) > 0:
-                self.warnings.append("No extracted_patterns - run pattern extraction")
+        if (
+            "extracted_patterns" not in data
+            and "tuning_sessions" in data
+            and len(data["tuning_sessions"]) > 0
+        ):
+            self.warnings.append("No extracted_patterns - run pattern extraction")
 
     def _validate_session(self, session: Dict[str, Any], idx: int) -> None:
         """Validate individual tuning session."""
@@ -192,12 +193,15 @@ class TrainingDataValidator:
                         )
 
                 # Validate torque > HP for V-twins
-                if "peak_hp" in results and "peak_torque" in results:
-                    if results["peak_torque"] < results["peak_hp"] * 0.85:
-                        self.warnings.append(
-                            f"{prefix}: Low torque for V-twin - {results['peak_torque']} lb-ft "
-                            f"vs {results['peak_hp']} HP. V-twins typically have torque ≥ HP"
-                        )
+                if (
+                    "peak_hp" in results
+                    and "peak_torque" in results
+                    and results["peak_torque"] < results["peak_hp"] * 0.85
+                ):
+                    self.warnings.append(
+                        f"{prefix}: Low torque for V-twin - {results['peak_torque']} lb-ft "
+                        f"vs {results['peak_hp']} HP. V-twins typically have torque ≥ HP"
+                    )
 
                 # Validate AFR accuracy
                 if "afr_accuracy_rms_error" in results:
@@ -254,7 +258,8 @@ class TrainingDataValidator:
             if self.verbose:
                 self.warnings.append(f"{prefix}: Physics validation error - {str(e)}")
 
-    def _calculate_stats(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _calculate_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate statistics for the dataset."""
         stats = {
             "total_sessions": 0,
@@ -352,34 +357,34 @@ class TrainingDataValidator:
 
         # Statistics
         if stats:
-            print(f"\n📊 Statistics:")
+            print("\n📊 Statistics:")
             print(f"  Total Sessions: {stats['total_sessions']}")
             print(f"  Total Dyno Hours: {stats['total_dyno_hours']:.1f}")
             print(f"  Avg HP: {stats['avg_hp']:.1f}")
             print(f"  Avg Duration: {stats['avg_duration_hours']:.1f} hours")
 
             if stats["objectives"]:
-                print(f"\n  Objectives:")
+                print("\n  Objectives:")
                 for obj, count in stats["objectives"].items():
                     print(f"    - {obj}: {count}")
 
             if stats["engine_families"]:
-                print(f"\n  Engine Families:")
+                print("\n  Engine Families:")
                 for family, count in stats["engine_families"].items():
                     print(f"    - {family}: {count}")
 
             if stats["stages"]:
-                print(f"\n  Stages:")
+                print("\n  Stages:")
                 for stage, count in stats["stages"].items():
                     print(f"    - {stage}: {count}")
 
             if stats["cam_profiles"]:
-                print(f"\n  Cam Profiles:")
+                print("\n  Cam Profiles:")
                 for cam, count in stats["cam_profiles"].items():
                     print(f"    - {cam}: {count}")
 
             if stats["pattern_counts"]:
-                print(f"\n  Extracted Patterns:")
+                print("\n  Extracted Patterns:")
                 for pattern_type, count in stats["pattern_counts"].items():
                     print(f"    - {pattern_type}: {count}")
 

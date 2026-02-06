@@ -85,8 +85,6 @@ def seed_timeline(run_dir: Path) -> None:
     # For demo purposes, let's simulate a second analysis with different results
     # by creating a modified copy of the VE corrections
     import csv
-    import shutil
-    from datetime import datetime, timezone
 
     # Create a "refined" version of corrections (simulate a second pass)
     ve_refined = output_dir / "VE_Correction_Refined.csv"
@@ -141,7 +139,7 @@ def seed_timeline(run_dir: Path) -> None:
     print(f"\nSession log: {run_dir / 'session_log.json'}")
     print(f"Snapshots: {run_dir / 'snapshots'}")
     print("\nYou can now:")
-    print(f"  1. Start the web app: .\\start-web.ps1")
+    print("  1. Start the web app: .\\start-web.ps1")
     print(f"  2. Navigate to: http://localhost:5000/time-machine/{run_dir.name}")
 
 
