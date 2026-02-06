@@ -584,6 +584,18 @@ def analyze_run():
         return jsonify({"error": str(e)}), 400
 
     try:
+        # Enforce a strict pattern and length for run_id before using it in a subprocess
+        # This acts as a clear validation barrier for user-controlled data.
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", run_id):
+            return (
+                jsonify(
+                    {
+                        "error": "Invalid 'run_id'. Must be 1-64 characters of letters, numbers, '_' or '-'."
+                    }
+                ),
+                400,
+            )
+
         mode = data.get("mode", "simulate")
         # Normalize mode: strip whitespace and convert to lowercase for comparison
         if mode:
@@ -609,7 +621,7 @@ def analyze_run():
                 500,
             )
 
-        # Build command
+        # Build command with strictly validated run_id
         cmd = [sys.executable, str(script_path), "--run-id", run_id]
     except Exception as e:
         logger.error(f"Error in analyze_run setup: {e}", exc_info=True)
