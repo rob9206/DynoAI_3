@@ -361,6 +361,7 @@ def parse_wp8():
     try:
         # Extra defense-in-depth: ensure resolved path is within allowed Power Core dirs
         from pathlib import Path
+
         try:
             from api.services.powercore_integration import find_powercore_data_dirs
 
@@ -377,9 +378,13 @@ def parse_wp8():
             except ValueError:
                 return False
 
-        if allowed_roots and not any(_is_within(resolved, root) for root in allowed_roots):
+        if allowed_roots and not any(
+            _is_within(resolved, root) for root in allowed_roots
+        ):
             return (
-                jsonify({"error": "WP8 path is outside allowed Power Core data directories"}),
+                jsonify(
+                    {"error": "WP8 path is outside allowed Power Core data directories"}
+                ),
                 400,
             )
 
