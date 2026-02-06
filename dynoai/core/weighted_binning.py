@@ -405,7 +405,7 @@ class WeightedBinAccumulator:
         
         # Calculate distance from cell center
         # Combined Euclidean distance of X and Y percentages
-        distance = math.sqrt(percent_x ** 2 + percent_y ** 2)
+        distance = math.hypot(percent_x ** 2 + percent_y ** 2)
         
         # Calculate weight
         weight = self.weighting.calculate_weight(distance)
