@@ -415,7 +415,7 @@ class APIClient(QObject):
         """Fetch VE table data for a run."""
         worker = APIWorker("GET", f"/api/ve-data/{run_id}", self.base_url)
         worker.finished.connect(self._on_ve_data_received)
-        worker.error.connect(lambda e: self.analysis_error.emit(e))
+        worker.error.connect(self.analysis_error.emit)
         self._start_worker(worker)
 
     def _on_ve_data_received(self, data: Dict[str, Any]) -> None:
@@ -440,7 +440,7 @@ class APIClient(QObject):
         """Fetch diagnostics data for a run."""
         worker = APIWorker("GET", f"/api/diagnostics/{run_id}", self.base_url)
         worker.finished.connect(self._on_diagnostics_received)
-        worker.error.connect(lambda e: self.analysis_error.emit(e))
+        worker.error.connect(self.analysis_error.emit)
         self._start_worker(worker)
 
     def _on_diagnostics_received(self, data: Dict[str, Any]) -> None:
