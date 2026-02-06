@@ -43,7 +43,7 @@ class DynoAI3DeepCodeIntegration:
     """
 
     def __init__(self, output_base_dir: Optional[str] = None):
-        """
+        r"""
         Initialize the integration.
 
         Args:
