@@ -182,7 +182,8 @@ class DiagnosticState:
                 return ch
         return None
 
-    def categorize_channel(self, name: str) -> str | None:
+    @staticmethod
+    def categorize_channel(name: str) -> str | None:
         """Categorize a channel name into priority groups."""
         name_lower = name.lower()
         for category, keywords in PRIORITY_CHANNELS.items():

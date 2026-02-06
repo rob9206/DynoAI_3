@@ -14,7 +14,8 @@ from dynoai.core.next_test_planner import (
 class TestEfficiencyScoring:
     """Tests for score_test_efficiency function."""
     
-    def test_basic_scoring(self):
+    @staticmethod
+    def test_basic_scoring():
         """Test basic efficiency calculation."""
         step = TestStep(
             name="High-MAP Midrange Pull",
@@ -33,7 +34,8 @@ class TestEfficiencyScoring:
         assert gain <= 50  # Can't exceed remaining coverage
         assert 0 <= efficiency <= 1
     
-    def test_wot_pull_multiplier(self):
+    @staticmethod
+    def test_wot_pull_multiplier():
         """Test WOT pull gets efficiency multiplier."""
         step_wot = TestStep(
             name="WOT Pull",
@@ -59,7 +61,8 @@ class TestEfficiencyScoring:
         # WOT should have higher gain due to multiplier
         assert gain_wot > gain_steady
     
-    def test_priority_boost(self):
+    @staticmethod
+    def test_priority_boost():
         """Test high priority boosts efficiency score."""
         step_high_pri = TestStep(
             name="Test 1",
@@ -85,7 +88,8 @@ class TestEfficiencyScoring:
         # High priority should have higher efficiency
         assert eff_high >= eff_low
     
-    def test_coverage_gain_bounded(self):
+    @staticmethod
+    def test_coverage_gain_bounded():
         """Test coverage gain can't exceed remaining coverage."""
         step = TestStep(
             name="Large Test",
@@ -102,7 +106,8 @@ class TestEfficiencyScoring:
         # Gain should be at most 5%
         assert gain <= 5.0
     
-    def test_small_region_low_gain(self):
+    @staticmethod
+    def test_small_region_low_gain():
         """Test small regions have lower expected gain."""
         step_large = TestStep(
             name="Large Region",
@@ -127,7 +132,8 @@ class TestEfficiencyScoring:
         
         assert gain_large > gain_small
     
-    def test_no_rpm_map_range(self):
+    @staticmethod
+    def test_no_rpm_map_range():
         """Test handling of steps without explicit ranges."""
         step = TestStep(
             name="General Test",
@@ -142,7 +148,8 @@ class TestEfficiencyScoring:
         assert gain >= 0
         assert 0 <= efficiency <= 1
     
-    def test_test_type_multipliers(self):
+    @staticmethod
+    def test_test_type_multipliers():
         """Test different test types have appropriate multipliers."""
         base_rpm = (2000, 4000)
         base_map = (80, 100)
@@ -175,7 +182,8 @@ class TestEfficiencyScoring:
         
         assert wot_gain > idle_gain
     
-    def test_efficiency_normalized(self):
+    @staticmethod
+    def test_efficiency_normalized():
         """Test efficiency score is properly normalized to 0-1."""
         steps = [
             TestStep(
@@ -193,7 +201,8 @@ class TestEfficiencyScoring:
             _, efficiency = score_test_efficiency(step, current_coverage=50.0)
             assert 0 <= efficiency <= 1, f"Efficiency {efficiency} out of bounds for {step.name}"
     
-    def test_high_coverage_diminishing_returns(self):
+    @staticmethod
+    def test_high_coverage_diminishing_returns():
         """Test that expected gains decrease as coverage increases."""
         step = TestStep(
             name="Test",
@@ -217,7 +226,8 @@ class TestEfficiencyScoring:
 class TestEfficiencyIntegration:
     """Integration tests with generate_test_plan."""
     
-    def test_plan_includes_efficiency_scores(self):
+    @staticmethod
+    def test_plan_includes_efficiency_scores():
         """Test that generated plans include efficiency scores."""
         from dynoai.core.next_test_planner import generate_test_plan
         from dynoai.core.surface_builder import Surface2D, SurfaceAxis, SurfaceStats
@@ -254,7 +264,8 @@ class TestEfficiencyIntegration:
             assert step.expected_coverage_gain >= 0
             assert 0 <= step.efficiency_score <= 1
     
-    def test_steps_sorted_by_efficiency(self):
+    @staticmethod
+    def test_steps_sorted_by_efficiency():
         """Test that steps are sorted by priority then efficiency."""
         from dynoai.core.next_test_planner import generate_test_plan
         from dynoai.core.surface_builder import Surface2D, SurfaceAxis, SurfaceStats

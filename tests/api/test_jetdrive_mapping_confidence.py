@@ -70,7 +70,8 @@ def mock_provider(mock_channel):
 class TestUnitInference:
     """Test JDUnit-based channel inference."""
 
-    def test_rpm_unit_inference(self, mock_channel):
+    @staticmethod
+    def test_rpm_unit_inference(mock_channel):
         """JDUnit.EngineSpeed (8) should map to rpm."""
         channel = mock_channel(10, "Some RPM Channel", 8)
         all_channels = [channel]
@@ -82,7 +83,8 @@ class TestUnitInference:
         assert confidence.confidence >= 0.5  # Unit match bonus
         assert any("Unit match" in reason for reason in confidence.reasons)
 
-    def test_afr_unit_inference(self, mock_channel):
+    @staticmethod
+    def test_afr_unit_inference(mock_channel):
         """JDUnit.AFR (11) should map to afr_*."""
         channel = mock_channel(15, "Some AFR Channel", 11)
         all_channels = [channel]
@@ -93,7 +95,8 @@ class TestUnitInference:
         assert confidence.confidence >= 0.5
         assert any("Unit match" in reason for reason in confidence.reasons)
 
-    def test_lambda_unit_inference_with_transform(self, mock_channel):
+    @staticmethod
+    def test_lambda_unit_inference_with_transform(mock_channel):
         """JDUnit.Lambda (13) should map to lambda_* with transform."""
         channel = mock_channel(16, "Lambda 1", 13)
         all_channels = [channel]
@@ -104,7 +107,8 @@ class TestUnitInference:
         assert confidence.transform == "lambda_to_afr"
         assert any("Lambda channel" in warning for warning in confidence.warnings)
 
-    def test_pressure_unit_inference(self, mock_channel):
+    @staticmethod
+    def test_pressure_unit_inference(mock_channel):
         """JDUnit.Pressure (7) should map to map_kpa."""
         channel = mock_channel(20, "MAP", 7)
         all_channels = [channel]
@@ -114,7 +118,8 @@ class TestUnitInference:
         assert confidence.canonical_name == "map_kpa"
         assert confidence.confidence >= 0.5
 
-    def test_percentage_unit_inference(self, mock_channel):
+    @staticmethod
+    def test_percentage_unit_inference(mock_channel):
         """JDUnit.Percentage (16) should map to tps."""
         channel = mock_channel(21, "TPS", 16)
         all_channels = [channel]
@@ -124,7 +129,8 @@ class TestUnitInference:
         assert confidence.canonical_name == "tps"
         assert confidence.confidence >= 0.5
 
-    def test_torque_power_unit_inference(self, mock_channel):
+    @staticmethod
+    def test_torque_power_unit_inference(mock_channel):
         """JDUnit.Torque (5) and Power (4) should map correctly."""
         torque_ch = mock_channel(3, "Torque", 5)
         power_ch = mock_channel(4, "Power", 4)
@@ -143,7 +149,8 @@ class TestUnitInference:
 class TestConfidenceScoring:
     """Test confidence scoring algorithm."""
 
-    def test_high_confidence_unit_and_name_match(self, mock_channel):
+    @staticmethod
+    def test_high_confidence_unit_and_name_match(mock_channel):
         """Unit match + name match should give high confidence."""
         channel = mock_channel(10, "Digital RPM 1", 8)  # EngineSpeed unit
         all_channels = [channel]
@@ -154,7 +161,8 @@ class TestConfidenceScoring:
         assert confidence.confidence >= 0.8
         assert len(confidence.reasons) >= 2
 
-    def test_medium_confidence_name_only(self, mock_channel):
+    @staticmethod
+    def test_medium_confidence_name_only(mock_channel):
         """Name match only should give medium confidence."""
         channel = mock_channel(10, "Digital RPM 1", 255)  # NoUnit
         all_channels = [channel]
@@ -164,7 +172,8 @@ class TestConfidenceScoring:
         # Name match (0.3) + disambiguation (0.2) = 0.5
         assert 0.3 <= confidence.confidence < 0.7
 
-    def test_low_confidence_no_match(self, mock_channel):
+    @staticmethod
+    def test_low_confidence_no_match(mock_channel):
         """No unit or name match should give low/zero confidence."""
         channel = mock_channel(99, "Unknown Channel", 255)
         all_channels = [channel]
@@ -173,7 +182,8 @@ class TestConfidenceScoring:
         
         assert confidence.confidence == 0.0
 
-    def test_disambiguation_bonus(self, mock_channel):
+    @staticmethod
+    def test_disambiguation_bonus(mock_channel):
         """Best match should get disambiguation bonus."""
         # Create two RPM candidates
         good_rpm = mock_channel(10, "Digital RPM 1", 8)  # Has unit match
@@ -187,7 +197,8 @@ class TestConfidenceScoring:
         assert good_conf.confidence > bad_conf.confidence
         assert any("Best match" in reason for reason in good_conf.reasons)
 
-    def test_confidence_warnings(self, mock_channel):
+    @staticmethod
+    def test_confidence_warnings(mock_channel):
         """Low confidence should generate warnings."""
         channel = mock_channel(99, "Maybe RPM", 255)
         all_channels = [channel]
@@ -205,7 +216,8 @@ class TestConfidenceScoring:
 class TestAutoMapping:
     """Test auto-mapping with confidence."""
 
-    def test_auto_map_all_channels(self, mock_provider):
+    @staticmethod
+    def test_auto_map_all_channels(mock_provider):
         """Auto-mapping should detect all standard channels."""
         mappings = auto_map_channels_with_confidence(mock_provider)
         
@@ -215,7 +227,8 @@ class TestAutoMapping:
         assert mappings["rpm"].source_id == 10
         assert mappings["rpm"].confidence >= 0.5
 
-    def test_auto_map_prefers_high_confidence(self, mock_provider, mock_channel):
+    @staticmethod
+    def test_auto_map_prefers_high_confidence(mock_provider, mock_channel):
         """Auto-mapping should prefer high-confidence matches."""
         # Add a competing RPM channel with lower confidence
         mock_provider.channels[12] = mock_channel(12, "Maybe RPM", 255)
@@ -226,14 +239,16 @@ class TestAutoMapping:
         assert mappings["rpm"].source_id == 10
         assert mappings["rpm"].confidence > 0.5
 
-    def test_auto_map_no_duplicate_sources(self, mock_provider):
+    @staticmethod
+    def test_auto_map_no_duplicate_sources(mock_provider):
         """Each source channel should only be mapped once."""
         mappings = auto_map_channels_with_confidence(mock_provider)
         
         source_ids = [m.source_id for m in mappings.values()]
         assert len(source_ids) == len(set(source_ids))  # No duplicates
 
-    def test_auto_map_threshold(self, mock_provider, mock_channel):
+    @staticmethod
+    def test_auto_map_threshold(mock_provider, mock_channel):
         """Channels below confidence threshold should not be mapped."""
         # Add a very poor match
         mock_provider.channels[99] = mock_channel(99, "Unknown", 255)
@@ -253,7 +268,8 @@ class TestAutoMapping:
 class TestMappingValidation:
     """Test mapping validation functions."""
 
-    def test_unmapped_required_rpm(self):
+    @staticmethod
+    def test_unmapped_required_rpm():
         """Missing RPM should be detected."""
         mapping = ProviderMapping(
             provider_signature="test_sig",
@@ -267,7 +283,8 @@ class TestMappingValidation:
         
         assert "rpm" in unmapped
 
-    def test_unmapped_required_afr(self):
+    @staticmethod
+    def test_unmapped_required_afr():
         """Missing AFR should be detected."""
         mapping = ProviderMapping(
             provider_signature="test_sig",
@@ -285,7 +302,8 @@ class TestMappingValidation:
         
         assert "afr (any)" in unmapped
 
-    def test_all_required_present(self):
+    @staticmethod
+    def test_all_required_present():
         """No unmapped when all required present."""
         mapping = ProviderMapping(
             provider_signature="test_sig",
@@ -308,7 +326,8 @@ class TestMappingValidation:
         
         assert len(unmapped) == 0
 
-    def test_low_confidence_detection(self):
+    @staticmethod
+    def test_low_confidence_detection():
         """Low confidence mappings should be detected."""
         confidence_map = {
             "rpm": MappingConfidence("rpm", 10, "RPM", 0.95, [], []),
@@ -328,7 +347,8 @@ class TestMappingValidation:
 class TestImportExport:
     """Test mapping import/export functionality."""
 
-    def test_export_mapping_format(self, tmp_path):
+    @staticmethod
+    def test_export_mapping_format(tmp_path):
         """Exported mapping should have correct format."""
         mapping = ProviderMapping(
             provider_signature="test_sig",
@@ -360,7 +380,8 @@ class TestImportExport:
         assert export_data["provider_signature"] == "test_sig"
         assert "rpm" in export_data["channels"]
 
-    def test_import_valid_mapping(self, tmp_path):
+    @staticmethod
+    def test_import_valid_mapping(tmp_path):
         """Importing valid mapping should succeed."""
         import_data = {
             "version": "1.0",
@@ -397,7 +418,8 @@ class TestImportExport:
         assert mapping.provider_signature == "imported_sig"
         assert "rpm" in mapping.channels
 
-    def test_import_invalid_format(self):
+    @staticmethod
+    def test_import_invalid_format():
         """Importing invalid format should be rejected."""
         invalid_data = {
             "type": "invalid_type",
@@ -407,7 +429,8 @@ class TestImportExport:
         # Should detect invalid type
         assert invalid_data["type"] not in ("dynoai_mapping_export", "dynoai_mapping_template")
 
-    def test_template_export(self, tmp_path):
+    @staticmethod
+    def test_template_export(tmp_path):
         """Exporting as template should work."""
         mapping = ProviderMapping(
             provider_signature="test_sig",
@@ -444,7 +467,8 @@ class TestImportExport:
 class TestPersistence:
     """Test mapping persistence."""
 
-    def test_save_and_load_mapping(self, tmp_path):
+    @staticmethod
+    def test_save_and_load_mapping(tmp_path):
         """Saving and loading should round-trip correctly."""
         # Create mapping
         mapping = ProviderMapping(

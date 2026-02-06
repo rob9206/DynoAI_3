@@ -96,7 +96,8 @@ def create_decel_scenario(
 class TestDecelEventDetection:
     """Tests for detect_decel_events function."""
 
-    def test_detect_single_decel_event(self):
+    @staticmethod
+    def test_detect_single_decel_event():
         """Single throttle closure detected as decel event."""
         records = create_decel_scenario(
             start_tps=50.0,
@@ -112,7 +113,8 @@ class TestDecelEventDetection:
         assert event.end_tps < 7.0, "Event should end at low TPS"
         assert event.tps_rate < 0, "TPS rate should be negative (closing)"
 
-    def test_no_event_steady_throttle(self):
+    @staticmethod
+    def test_no_event_steady_throttle():
         """No event detected with steady throttle."""
         # Steady throttle at 50%
         records = [{"rpm": 3000.0, "tps": 50.0} for _ in range(100)]
@@ -121,7 +123,8 @@ class TestDecelEventDetection:
 
         assert len(events) == 0, "Should not detect events with steady throttle"
 
-    def test_no_event_throttle_opening(self):
+    @staticmethod
+    def test_no_event_throttle_opening():
         """No event detected when throttle is opening."""
         # Throttle opening from 10% to 80%
         records = []
@@ -133,7 +136,8 @@ class TestDecelEventDetection:
 
         assert len(events) == 0, "Should not detect events when throttle opens"
 
-    def test_event_duration_filter_too_short(self):
+    @staticmethod
+    def test_event_duration_filter_too_short():
         """Events too short are filtered out."""
         # Very rapid throttle snap (< 200ms)
         records = create_decel_scenario(
@@ -148,7 +152,8 @@ class TestDecelEventDetection:
         # With 10 samples at 10ms = 100ms, below 200ms threshold
         assert len(events) == 0, "Events shorter than 200ms should be filtered"
 
-    def test_event_rpm_range_filter(self):
+    @staticmethod
+    def test_event_rpm_range_filter():
         """Events outside RPM range are filtered."""
         # Decel at very low RPM (below 1500)
         records = create_decel_scenario(
@@ -162,7 +167,8 @@ class TestDecelEventDetection:
 
         assert len(events) == 0, "Events below 1500 RPM should be filtered"
 
-    def test_multiple_decel_events(self):
+    @staticmethod
+    def test_multiple_decel_events():
         """Multiple decel events in sequence are detected."""
         # Two decel events with steady state between
         records = []
@@ -183,7 +189,8 @@ class TestDecelEventDetection:
 class TestAFRAnalysis:
     """Tests for analyze_decel_afr function."""
 
-    def test_afr_analysis_lean_spike(self):
+    @staticmethod
+    def test_afr_analysis_lean_spike():
         """AFR excursion detected and scored correctly."""
         # Create decel with lean AFR spike
         records = create_decel_scenario()
@@ -207,7 +214,8 @@ class TestAFRAnalysis:
         assert event.afr_max >= 16.0, "Should detect lean spike"
         assert event.pop_likelihood > 0.5, "High pop likelihood for lean spike"
 
-    def test_afr_analysis_rich_mixture(self):
+    @staticmethod
+    def test_afr_analysis_rich_mixture():
         """Rich AFR during decel results in low pop likelihood."""
         records = create_decel_scenario()
 
@@ -224,7 +232,8 @@ class TestAFRAnalysis:
                     "Rich mixture should have low pop likelihood"
                 )
 
-    def test_afr_analysis_missing_data(self):
+    @staticmethod
+    def test_afr_analysis_missing_data():
         """Missing AFR data handled gracefully."""
         records = create_decel_scenario()
         # No AFR data added
@@ -247,7 +256,8 @@ class TestAFRAnalysis:
 class TestEnrichmentCalculation:
     """Tests for calculate_decel_enrichment function."""
 
-    def test_base_enrichment_applied(self):
+    @staticmethod
+    def test_base_enrichment_applied():
         """Base enrichment table applied to zones."""
         events: List[DecelEvent] = []  # No events
 
@@ -260,7 +270,8 @@ class TestEnrichmentCalculation:
         for zone, value in enrichment.items():
             assert value > 0, f"Enrichment should be positive for zone {zone}"
 
-    def test_severity_low_scaling(self):
+    @staticmethod
+    def test_severity_low_scaling():
         """LOW severity scales enrichment down."""
         events: List[DecelEvent] = []
 
@@ -279,7 +290,8 @@ class TestEnrichmentCalculation:
             "Some zones should show LOW < MEDIUM difference"
         )
 
-    def test_severity_high_scaling(self):
+    @staticmethod
+    def test_severity_high_scaling():
         """HIGH severity scales enrichment up."""
         events: List[DecelEvent] = []
 
@@ -292,7 +304,8 @@ class TestEnrichmentCalculation:
                 f"HIGH should be greater than MEDIUM for {zone}"
             )
 
-    def test_enrichment_clamping_max(self):
+    @staticmethod
+    def test_enrichment_clamping_max():
         """Enrichment capped at maximum."""
         # Create event with very high pop likelihood
         event = DecelEvent(
@@ -314,7 +327,8 @@ class TestEnrichmentCalculation:
                 f"Enrichment should not exceed {MAX_ENRICHMENT_PCT}"
             )
 
-    def test_enrichment_minimum_floor(self):
+    @staticmethod
+    def test_enrichment_minimum_floor():
         """Enrichment has minimum floor in decel zone."""
         events: List[DecelEvent] = []
 
@@ -334,7 +348,8 @@ class TestEnrichmentCalculation:
 class TestOverlayGeneration:
     """Tests for generate_decel_overlay function."""
 
-    def test_overlay_dimensions(self):
+    @staticmethod
+    def test_overlay_dimensions():
         """Overlay has correct dimensions."""
         enrichment = calculate_decel_enrichment([], DecelSeverity.MEDIUM)
         overlay = generate_decel_overlay(enrichment)
@@ -343,7 +358,8 @@ class TestOverlayGeneration:
         for row in overlay:
             assert len(row) == len(KPA_BINS), "Overlay should have correct column count"
 
-    def test_overlay_low_kpa_only(self):
+    @staticmethod
+    def test_overlay_low_kpa_only():
         """Enrichment only applied to low-MAP cells."""
         enrichment = calculate_decel_enrichment([], DecelSeverity.MEDIUM)
         overlay = generate_decel_overlay(enrichment)
@@ -355,7 +371,8 @@ class TestOverlayGeneration:
                         f"High kPa cell ({rpm}, {kpa}) should have 0 enrichment"
                     )
 
-    def test_overlay_decel_zone_has_values(self):
+    @staticmethod
+    def test_overlay_decel_zone_has_values():
         """Decel zone cells have enrichment values."""
         enrichment = calculate_decel_enrichment([], DecelSeverity.MEDIUM)
         overlay = generate_decel_overlay(enrichment)
@@ -378,7 +395,8 @@ class TestOverlayGeneration:
 class TestOutputFiles:
     """Tests for output file generation."""
 
-    def test_write_overlay_csv(self):
+    @staticmethod
+    def test_write_overlay_csv():
         """Overlay CSV written correctly."""
         enrichment = calculate_decel_enrichment([], DecelSeverity.MEDIUM)
         overlay = generate_decel_overlay(enrichment)
@@ -396,7 +414,8 @@ class TestOutputFiles:
             assert len(lines) == len(RPM_BINS) + 1, "CSV should have header + data rows"
             assert "RPM" in lines[0], "Header should contain RPM"
 
-    def test_write_analysis_report(self):
+    @staticmethod
+    def test_write_analysis_report():
         """Analysis report JSON written correctly."""
         report = DecelAnalysisReport(
             input_file="test.csv",
@@ -427,7 +446,8 @@ class TestOutputFiles:
 class TestFullPipeline:
     """Tests for complete decel management pipeline."""
 
-    def test_process_decel_management_with_events(self):
+    @staticmethod
+    def test_process_decel_management_with_events():
         """Full pipeline processes log with decel events."""
         records = create_decel_scenario(
             start_tps=60.0,
@@ -457,7 +477,8 @@ class TestFullPipeline:
             assert Path(result["output_files"]["overlay"]).exists()
             assert Path(result["output_files"]["report"]).exists()
 
-    def test_process_decel_management_no_events(self):
+    @staticmethod
+    def test_process_decel_management_no_events():
         """Pipeline handles log with no decel events."""
         # Steady state log - no decel
         records = [{"rpm": 3000.0, "tps": 50.0, "afr_meas_f": 13.5} for _ in range(100)]
@@ -482,19 +503,22 @@ class TestFullPipeline:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    def test_empty_records(self):
+    @staticmethod
+    def test_empty_records():
         """Empty records handled gracefully."""
         events = detect_decel_events([], sample_rate_ms=10.0)
         assert events == []
 
-    def test_missing_tps_data(self):
+    @staticmethod
+    def test_missing_tps_data():
         """Records with missing TPS handled."""
         records = [{"rpm": 3000.0} for _ in range(50)]  # No TPS
 
         events = detect_decel_events(records, sample_rate_ms=10.0)
         assert events == []  # Should not crash
 
-    def test_invalid_severity_string(self):
+    @staticmethod
+    def test_invalid_severity_string():
         """Invalid severity string defaults to medium."""
         records = create_decel_scenario()
 

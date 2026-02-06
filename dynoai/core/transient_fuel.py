@@ -233,7 +233,8 @@ class TransientFuelAnalyzer:
         factor = 1.0 + (delta_t * self.iat_wall_wetting_coeff)
         return max(0.3, min(factor, 2.5))  # Clamp to reasonable range
     
-    def _get_iat_category(self, iat_c: float) -> str:
+    @staticmethod
+    def _get_iat_category(iat_c: float) -> str:
         """
         Categorize IAT into cold/warm/hot for reporting.
         
@@ -313,7 +314,8 @@ class TransientFuelAnalyzer:
             plots=plots,
         )
     
-    def _validate_input(self, df: pd.DataFrame) -> None:
+    @staticmethod
+    def _validate_input(df: pd.DataFrame) -> None:
         """Validate input DataFrame has required columns and valid data."""
         required_cols = ['time', 'rpm', 'map', 'tps', 'afr']
         missing = [col for col in required_cols if col not in df.columns]
@@ -427,7 +429,8 @@ class TransientFuelAnalyzer:
         
         return events
     
-    def _find_continuous_regions(self, mask: pd.Series) -> List[Tuple[int, int]]:
+    @staticmethod
+    def _find_continuous_regions(mask: pd.Series) -> List[Tuple[int, int]]:
         """Find continuous True regions in a boolean mask."""
         regions = []
         in_region = False
@@ -732,8 +735,9 @@ class TransientFuelAnalyzer:
         
         return params_list
     
+    @staticmethod
     def calculate_tau_enrichment(
-        self, map_rate: float, tau_params: TauWallWettingParams
+        map_rate: float, tau_params: TauWallWettingParams
     ) -> float:
         """
         Calculate instantaneous enrichment using X-Tau model.
@@ -817,8 +821,9 @@ class TransientFuelAnalyzer:
         
         return pd.DataFrame(rows)
     
+    @staticmethod
     def _calculate_decel_fuel_cut(
-        self, df: pd.DataFrame, events: List[TransientEvent]
+        df: pd.DataFrame, events: List[TransientEvent]
     ) -> pd.DataFrame:
         """Calculate deceleration fuel cut table."""
         # Define RPM bins
@@ -900,8 +905,9 @@ class TransientFuelAnalyzer:
         enrichment = (afr_error / self.target_afr) * 100 * self.compensation_factor * iat_factor * env_factor
         return max(0, min(enrichment, 25))  # Cap at 25% enrichment for safety
     
+    @staticmethod
     def _extract_afr_errors(
-        self, df: pd.DataFrame, events: List[TransientEvent]
+        df: pd.DataFrame, events: List[TransientEvent]
     ) -> List[Tuple[float, float]]:
         """Extract AFR errors during transient events."""
         errors = []
@@ -1039,8 +1045,8 @@ class TransientFuelAnalyzer:
         
         return recommendations
     
+    @staticmethod
     def _create_plots(
-        self,
         df: pd.DataFrame,
         events: List[TransientEvent],
         map_rate_table: pd.DataFrame,

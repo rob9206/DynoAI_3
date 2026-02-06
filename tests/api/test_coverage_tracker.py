@@ -67,7 +67,8 @@ def clean_tracker_dir():
 class TestCumulativeCoverage:
     """Tests for CumulativeCoverage data class."""
     
-    def test_to_dict(self):
+    @staticmethod
+    def test_to_dict():
         """Test serialization."""
         coverage = CumulativeCoverage(
             vehicle_id="test_vehicle",
@@ -87,7 +88,8 @@ class TestCumulativeCoverage:
         assert len(data["run_ids"]) == 3
         assert "spark_f" in data["aggregated_hit_count"]
     
-    def test_from_dict(self):
+    @staticmethod
+    def test_from_dict():
         """Test deserialization."""
         data = {
             "vehicle_id": "test_vehicle",
@@ -111,14 +113,16 @@ class TestCumulativeCoverage:
 class TestPersistence:
     """Tests for loading/saving coverage data."""
     
-    def test_get_tracker_path(self):
+    @staticmethod
+    def test_get_tracker_path():
         """Test path generation."""
         path = get_tracker_path("test_vehicle")
         
         assert path.name == "test_vehicle.json"
         assert "coverage_tracker" in str(path)
     
-    def test_save_and_load(self, clean_tracker_dir):
+    @staticmethod
+    def test_save_and_load(clean_tracker_dir):
         """Test round-trip persistence."""
         coverage = CumulativeCoverage(
             vehicle_id="test_save_load",
@@ -139,12 +143,14 @@ class TestPersistence:
         assert loaded.total_runs == 1
         assert "spark_f" in loaded.aggregated_hit_count
     
-    def test_load_nonexistent(self):
+    @staticmethod
+    def test_load_nonexistent():
         """Test loading nonexistent tracker."""
         loaded = load_cumulative_coverage("nonexistent_vehicle")
         assert loaded is None
     
-    def test_reset_coverage(self, clean_tracker_dir):
+    @staticmethod
+    def test_reset_coverage(clean_tracker_dir):
         """Test reset."""
         # Create tracker
         coverage = CumulativeCoverage(
@@ -168,7 +174,8 @@ class TestPersistence:
 class TestAggregation:
     """Tests for coverage aggregation."""
     
-    def test_aggregate_single_run(self, clean_tracker_dir, sample_surface):
+    @staticmethod
+    def test_aggregate_single_run(clean_tracker_dir, sample_surface):
         """Test aggregating first run."""
         coverage = aggregate_run_coverage(
             vehicle_id="test_agg_single",
@@ -187,7 +194,8 @@ class TestAggregation:
         assert spark_hits[0][0] == 5
         assert spark_hits[1][1] == 15
     
-    def test_aggregate_multiple_runs(self, clean_tracker_dir, sample_surface):
+    @staticmethod
+    def test_aggregate_multiple_runs(clean_tracker_dir, sample_surface):
         """Test aggregating multiple runs."""
         # First run
         coverage1 = aggregate_run_coverage(
@@ -215,7 +223,8 @@ class TestAggregation:
         assert spark_hits[0][0] == 10  # 5 + 5
         assert spark_hits[1][1] == 30  # 15 + 15
     
-    def test_aggregate_duplicate_run_id(self, clean_tracker_dir, sample_surface):
+    @staticmethod
+    def test_aggregate_duplicate_run_id(clean_tracker_dir, sample_surface):
         """Test aggregating same run ID twice doesn't duplicate in run_ids list."""
         # First aggregate
         aggregate_run_coverage(
@@ -241,7 +250,8 @@ class TestAggregation:
 class TestGapDetection:
     """Tests for coverage gap detection."""
     
-    def test_get_cumulative_gaps(self, clean_tracker_dir, sample_surface):
+    @staticmethod
+    def test_get_cumulative_gaps(clean_tracker_dir, sample_surface):
         """Test gap detection."""
         # Aggregate a run
         aggregate_run_coverage(
@@ -269,7 +279,8 @@ class TestGapDetection:
             assert "coverage_pct" in gap
             assert "impact" in gap
     
-    def test_gaps_no_tracker(self):
+    @staticmethod
+    def test_gaps_no_tracker():
         """Test gap detection for nonexistent vehicle."""
         gaps = get_cumulative_gaps("nonexistent_vehicle")
         assert gaps == []
@@ -278,7 +289,8 @@ class TestGapDetection:
 class TestCoverageSummary:
     """Tests for coverage summary."""
     
-    def test_get_coverage_summary(self, clean_tracker_dir, sample_surface):
+    @staticmethod
+    def test_get_coverage_summary(clean_tracker_dir, sample_surface):
         """Test summary generation."""
         # Aggregate runs
         aggregate_run_coverage(
@@ -310,7 +322,8 @@ class TestCoverageSummary:
         assert summary["coverage_pct"] >= 0
         assert summary["coverage_pct"] <= 100
     
-    def test_summary_no_tracker(self):
+    @staticmethod
+    def test_summary_no_tracker():
         """Test summary for nonexistent vehicle."""
         summary = get_coverage_summary("nonexistent_vehicle")
         assert summary is None
@@ -319,7 +332,8 @@ class TestCoverageSummary:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
     
-    def test_empty_surfaces(self, clean_tracker_dir):
+    @staticmethod
+    def test_empty_surfaces(clean_tracker_dir):
         """Test aggregating with empty surfaces."""
         coverage = aggregate_run_coverage(
             vehicle_id="test_empty",
@@ -331,7 +345,8 @@ class TestEdgeCases:
         assert coverage.total_runs == 1
         assert len(coverage.aggregated_hit_count) == 0
     
-    def test_surface_without_hit_count(self, clean_tracker_dir):
+    @staticmethod
+    def test_surface_without_hit_count(clean_tracker_dir):
         """Test surface without hit_count field."""
         surfaces = {
             "spark_f": {
@@ -352,7 +367,8 @@ class TestEdgeCases:
         # Should not crash, but spark_f won't be in aggregated_hit_count
         assert "spark_f" not in coverage.aggregated_hit_count
     
-    def test_mismatched_matrix_sizes(self, clean_tracker_dir):
+    @staticmethod
+    def test_mismatched_matrix_sizes(clean_tracker_dir):
         """Test handling of mismatched matrix sizes across runs."""
         # First run with 2x2 matrix
         surfaces1 = {

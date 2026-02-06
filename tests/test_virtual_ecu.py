@@ -234,7 +234,8 @@ class TestVirtualECU:
 class TestHelperFunctions:
     """Tests for helper functions."""
 
-    def test_create_baseline_ve_table(self):
+    @staticmethod
+    def test_create_baseline_ve_table():
         """Test baseline VE table creation."""
         ve_table = create_baseline_ve_table(peak_ve=0.85, peak_rpm=4000)
 
@@ -249,7 +250,8 @@ class TestHelperFunctions:
         assert np.max(ve_table) >= 0.80
         assert np.max(ve_table) <= 1.0
 
-    def test_create_afr_target_table(self):
+    @staticmethod
+    def test_create_afr_target_table():
         """Test AFR target table creation."""
         afr_table = create_afr_target_table(cruise_afr=14.0, wot_afr=12.5)
 
@@ -263,7 +265,8 @@ class TestHelperFunctions:
         # Low MAP should be leaner
         assert afr_table[0, 0] > afr_table[0, -1]
 
-    def test_create_intentionally_wrong_ve_table(self):
+    @staticmethod
+    def test_create_intentionally_wrong_ve_table():
         """Test creation of intentionally wrong VE table."""
         # Create baseline
         baseline = create_baseline_ve_table(peak_ve=0.85)
@@ -284,7 +287,8 @@ class TestHelperFunctions:
         mean_error = np.mean(error_pct)
         assert abs(mean_error - (-10.0)) < 2.0  # Within 2% of target
 
-    def test_wrong_ve_table_reproducibility(self):
+    @staticmethod
+    def test_wrong_ve_table_reproducibility():
         """Test that wrong VE table is reproducible with same seed."""
         baseline = create_baseline_ve_table(peak_ve=0.85)
 
@@ -299,7 +303,8 @@ class TestHelperFunctions:
 class TestIntegration:
     """Integration tests for complete workflows."""
 
-    def test_complete_tuning_scenario(self):
+    @staticmethod
+    def test_complete_tuning_scenario():
         """Test a complete tuning scenario: wrong VE → AFR errors → corrections."""
         # Create correct VE
         correct_ve = create_baseline_ve_table(peak_ve=0.85, peak_rpm=4000)

@@ -69,7 +69,8 @@ class DynoAI3DeepCodeIntegration:
         print(f"🧠 DeepCode path: {DEEPCODE_PATH}")
         print()
 
-    def _setup_config_files(self):
+    @staticmethod
+    def _setup_config_files():
         """Ensure DeepCode config files are available in the working directory."""
         import shutil
 
@@ -89,7 +90,8 @@ class DynoAI3DeepCodeIntegration:
             shutil.copy(deepcode_config, local_config)
             print(f"✅ Copied config: {local_config}")
 
-    def _build_dynoai3_context(self) -> str:
+    @staticmethod
+    def _build_dynoai3_context() -> str:
         """Build context about DynoAI_3 for better code generation."""
         return """
 Project: DynoAI_3 - Deterministic Dyno Tuning Platform

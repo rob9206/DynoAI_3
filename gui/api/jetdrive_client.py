@@ -119,7 +119,8 @@ class JetDriveWorker(QObject):
         except Exception as e:
             self.error.emit(str(e))
 
-    def _parse_sample(self, data: Dict[str, Any]) -> JetDriveSample:
+    @staticmethod
+    def _parse_sample(data: Dict[str, Any]) -> JetDriveSample:
         """Parse API response into a sample."""
         channels = data.get("channels", {})
 

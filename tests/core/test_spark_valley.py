@@ -109,7 +109,8 @@ class TestSparkValleyDetection:
             surface_id="spark_front",
         )
     
-    def test_detects_valley_at_expected_rpm(self, valley_surface):
+    @staticmethod
+    def test_detects_valley_at_expected_rpm(valley_surface):
         """Valley detection finds valley near 4000 RPM."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -119,7 +120,8 @@ class TestSparkValleyDetection:
         # Valley should be detected near 4000 RPM (within 500 RPM tolerance)
         assert abs(finding.rpm_center - 4000) <= 500
     
-    def test_valley_depth_approximately_correct(self, valley_surface):
+    @staticmethod
+    def test_valley_depth_approximately_correct(valley_surface):
         """Detected valley depth is approximately correct."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -129,7 +131,8 @@ class TestSparkValleyDetection:
         # Valley depth should be around 6-10 degrees
         assert 4 <= finding.depth_deg <= 12
     
-    def test_rpm_band_contains_center(self, valley_surface):
+    @staticmethod
+    def test_rpm_band_contains_center(valley_surface):
         """Valley rpm_band contains rpm_center."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -139,7 +142,8 @@ class TestSparkValleyDetection:
         low, high = finding.rpm_band
         assert low <= finding.rpm_center <= high
     
-    def test_rpm_band_bounds_sensible(self, valley_surface):
+    @staticmethod
+    def test_rpm_band_bounds_sensible(valley_surface):
         """Valley rpm_band has sensible bounds."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -154,7 +158,8 @@ class TestSparkValleyDetection:
         assert low >= 2000
         assert high <= 6000
     
-    def test_confidence_score_valid(self, valley_surface):
+    @staticmethod
+    def test_confidence_score_valid(valley_surface):
         """Confidence score is between 0 and 1."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -163,7 +168,8 @@ class TestSparkValleyDetection:
         finding = findings[0]
         assert 0.0 <= finding.confidence <= 1.0
     
-    def test_evidence_list_populated(self, valley_surface):
+    @staticmethod
+    def test_evidence_list_populated(valley_surface):
         """Evidence list contains analysis notes."""
         findings = detect_spark_valley(valley_surface, high_map_min_kpa=80.0)
         
@@ -210,14 +216,16 @@ class TestNoValleyDetection:
             surface_id="spark_increasing",
         )
     
-    def test_no_valley_in_flat_timing(self, flat_surface):
+    @staticmethod
+    def test_no_valley_in_flat_timing(flat_surface):
         """No valley detected in flat timing surface."""
         findings = detect_spark_valley(flat_surface, high_map_min_kpa=80.0)
         
         # Should find no valleys (flat line has no minimum)
         assert len(findings) == 0
     
-    def test_no_valley_in_monotonic_timing(self, monotonic_surface):
+    @staticmethod
+    def test_no_valley_in_monotonic_timing(monotonic_surface):
         """No valley detected in monotonically increasing timing."""
         findings = detect_spark_valley(monotonic_surface, high_map_min_kpa=80.0)
         
@@ -261,7 +269,8 @@ class TestMultiCylinderValley:
             ),
         }
     
-    def test_finds_valleys_for_both_cylinders(self, cylinder_surfaces):
+    @staticmethod
+    def test_finds_valleys_for_both_cylinders(cylinder_surfaces):
         """Multi-cylinder detection finds valleys for front and rear."""
         findings = detect_valleys_multi_cylinder(cylinder_surfaces)
         
@@ -269,7 +278,8 @@ class TestMultiCylinderValley:
         assert "front" in cylinders_found
         assert "rear" in cylinders_found
     
-    def test_cylinder_labels_correct(self, cylinder_surfaces):
+    @staticmethod
+    def test_cylinder_labels_correct(cylinder_surfaces):
         """Each finding has correct cylinder label."""
         findings = detect_valleys_multi_cylinder(cylinder_surfaces)
         
@@ -283,7 +293,8 @@ class TestMultiCylinderValley:
 class TestValleySerialization:
     """Tests for SparkValleyFinding serialization."""
     
-    def test_to_dict_includes_all_fields(self):
+    @staticmethod
+    def test_to_dict_includes_all_fields():
         """to_dict includes all required fields."""
         finding = SparkValleyFinding(
             cylinder="front",
@@ -311,7 +322,8 @@ class TestValleySerialization:
         assert d["confidence"] == 0.85
         assert d["evidence"] == ["Test evidence 1", "Test evidence 2"]
     
-    def test_to_dict_is_json_serializable(self):
+    @staticmethod
+    def test_to_dict_is_json_serializable():
         """to_dict output can be serialized to JSON."""
         import json
         
@@ -362,7 +374,8 @@ class TestEdgeCases:
         
         return surface
     
-    def test_handles_sparse_high_map_data(self, sparse_surface):
+    @staticmethod
+    def test_handles_sparse_high_map_data(sparse_surface):
         """Valley detection handles sparse high-MAP data gracefully."""
         # Should not crash
         findings = detect_spark_valley(sparse_surface, high_map_min_kpa=80.0)
@@ -388,7 +401,8 @@ class TestEdgeCases:
             surface_id="spark_narrow",
         )
     
-    def test_handles_narrow_rpm_range(self, narrow_surface):
+    @staticmethod
+    def test_handles_narrow_rpm_range(narrow_surface):
         """Valley detection handles narrow RPM ranges."""
         findings = detect_spark_valley(narrow_surface, high_map_min_kpa=80.0)
         

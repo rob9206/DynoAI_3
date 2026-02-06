@@ -398,7 +398,8 @@ class VirtualTuningOrchestrator:
 
         return session
 
-    def _run_iteration(self, session: TuningSession, iteration: int) -> IterationResult:
+    @staticmethod
+    def _run_iteration(session: TuningSession, iteration: int) -> IterationResult:
         """
         Run one iteration of the tuning loop.
 
@@ -621,8 +622,9 @@ class VirtualTuningOrchestrator:
             correction_table=correction_array.copy(),
         )
 
+    @staticmethod
     def _apply_corrections(
-        self, session: TuningSession, iteration_result: IterationResult
+        session: TuningSession, iteration_result: IterationResult
     ) -> None:
         """
         Apply VE corrections to session's current VE tables.
@@ -687,7 +689,8 @@ class VirtualTuningOrchestrator:
             f"mean={mean_corr_pct:.2f}%"
         )
 
-    def _detect_oscillation(self, session: TuningSession) -> bool:
+    @staticmethod
+    def _detect_oscillation(session: TuningSession) -> bool:
         """
         Detect if corrections are oscillating (not converging).
 

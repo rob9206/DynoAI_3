@@ -497,11 +497,13 @@ class DynoSimulator:
         self.physics.engine_temp_f = profile.optimal_temp_f
         self.physics.iat_f = self.config.ambient_temp_f + 10  # Slightly warmer
 
-    def _rpm_to_rad_s(self, rpm: float) -> float:
+    @staticmethod
+    def _rpm_to_rad_s(rpm: float) -> float:
         """Convert RPM to radians per second."""
         return rpm * 2.0 * math.pi / 60.0
 
-    def _rad_s_to_rpm(self, rad_s: float) -> float:
+    @staticmethod
+    def _rad_s_to_rpm(rad_s: float) -> float:
         """Convert radians per second to RPM."""
         return rad_s * 60.0 / (2.0 * math.pi)
 
@@ -1111,7 +1113,8 @@ class DynoSimulator:
         # Clamp to sensor range
         return max(10.0, min(20.0, afr_with_noise))
 
-    def _add_noise(self, value: float, noise_pct: float) -> float:
+    @staticmethod
+    def _add_noise(value: float, noise_pct: float) -> float:
         """Add gaussian noise to a value."""
         noise = random.gauss(0, value * noise_pct / 100.0)
         return value + noise

@@ -93,7 +93,8 @@ def sample_dyno_data() -> pd.DataFrame:
 class TestGoldenValues:
     """Validate calculations against known-good golden values."""
     
-    def test_v1_golden_values(self, golden_test_cases):
+    @staticmethod
+    def test_v1_golden_values(golden_test_cases):
         """v1.0.0 should match golden values exactly."""
         for case in golden_test_cases:
             result = calculate_ve_correction(
@@ -106,7 +107,8 @@ class TestGoldenValues:
             assert abs(result - expected) < 0.0001, \
                 f"v1.0.0 failed for {case['scenario']}: expected {expected}, got {result}"
     
-    def test_v2_golden_values(self, golden_test_cases):
+    @staticmethod
+    def test_v2_golden_values(golden_test_cases):
         """v2.0.0 should match golden values exactly."""
         for case in golden_test_cases:
             result = calculate_ve_correction(
@@ -119,7 +121,8 @@ class TestGoldenValues:
             assert abs(result - expected) < 1e-10, \
                 f"v2.0.0 failed for {case['scenario']}: expected {expected}, got {result}"
     
-    def test_ratio_formula_exact(self, golden_test_cases):
+    @staticmethod
+    def test_ratio_formula_exact(golden_test_cases):
         """v2.0.0 must equal measured/target exactly."""
         for case in golden_test_cases:
             result = calculate_ve_correction(
@@ -142,12 +145,14 @@ class TestGoldenValues:
 class TestVersionConsistency:
     """Ensure version behavior is consistent and documented."""
     
-    def test_default_version_is_v2(self):
+    @staticmethod
+    def test_default_version_is_v2():
         """Default math version should be v2.0.0."""
         config = get_default_config()
         assert config.version == MathVersion.V2_0_0
     
-    def test_version_override_works(self):
+    @staticmethod
+    def test_version_override_works():
         """Version parameter should override config."""
         config = MathConfig(version=MathVersion.V1_0_0)
         
@@ -159,7 +164,8 @@ class TestVersionConsistency:
         # Should be v2 result (ratio), not v1 (linear)
         assert abs(result - 14.0/13.0) < 1e-10
     
-    def test_versions_differ_at_large_errors(self):
+    @staticmethod
+    def test_versions_differ_at_large_errors():
         """v1 and v2 should diverge at large AFR errors."""
         # At 3 AFR point deviation
         v1 = calculate_ve_correction(16.0, 13.0, MathVersion.V1_0_0, clamp=False)
@@ -170,7 +176,8 @@ class TestVersionConsistency:
         diff_pct = abs(v2 - v1) / v2 * 100
         assert diff_pct > 1.0, f"Versions should differ by >1% at 3 AFR points, got {diff_pct:.2f}%"
     
-    def test_versions_similar_at_small_errors(self):
+    @staticmethod
+    def test_versions_similar_at_small_errors():
         """v1 and v2 should be similar at small AFR errors."""
         # At 0.5 AFR point deviation
         v1 = calculate_ve_correction(13.5, 13.0, MathVersion.V1_0_0, clamp=False)
@@ -188,7 +195,8 @@ class TestVersionConsistency:
 class TestCrossComponentAgreement:
     """Ensure all components calculate VE corrections identically."""
     
-    def test_cylinder_balancing_uses_ve_math(self):
+    @staticmethod
+    def test_cylinder_balancing_uses_ve_math():
         """cylinder_balancing.py should use ve_math module."""
         from dynoai.core.cylinder_balancing import _calculate_ve_correction_decimal
         
@@ -198,7 +206,8 @@ class TestCrossComponentAgreement:
         
         assert abs(result - expected) < 1e-10
     
-    def test_jetdrive_autotune_config(self):
+    @staticmethod
+    def test_jetdrive_autotune_config():
         """jetdrive_autotune.py should support math version config."""
         from scripts.jetdrive_autotune import TuneConfig
         
@@ -208,7 +217,8 @@ class TestCrossComponentAgreement:
         config_v1 = TuneConfig(math_version=MathVersion.V1_0_0)
         assert config_v1.math_version == MathVersion.V1_0_0
     
-    def test_autotune_workflow_config(self):
+    @staticmethod
+    def test_autotune_workflow_config():
         """autotune_workflow.py should support math version config."""
         from api.services.autotune_workflow import AutoTuneWorkflow
         
@@ -226,7 +236,8 @@ class TestCrossComponentAgreement:
 class TestDeterminismRegression:
     """Ensure determinism guarantees are maintained."""
     
-    def test_same_inputs_same_outputs_v2(self):
+    @staticmethod
+    def test_same_inputs_same_outputs_v2():
         """v2.0.0 must be deterministic."""
         results = set()
         for _ in range(1000):
@@ -235,7 +246,8 @@ class TestDeterminismRegression:
         
         assert len(results) == 1, "v2.0.0 not deterministic!"
     
-    def test_batch_matches_individual(self):
+    @staticmethod
+    def test_batch_matches_individual():
         """Batch calculation must match individual calculations."""
         measured = [14.0, 13.5, 13.0, 12.5, 12.0]
         targets = [13.0, 13.0, 13.0, 13.0, 13.0]
@@ -246,7 +258,8 @@ class TestDeterminismRegression:
         for i, (b, ind) in enumerate(zip(batch, individual)):
             assert b == ind, f"Batch/individual mismatch at index {i}"
     
-    def test_no_state_between_calls(self):
+    @staticmethod
+    def test_no_state_between_calls():
         """Each call should be independent."""
         # Call many times with different values
         for measured in np.linspace(10, 18, 100):
@@ -266,19 +279,22 @@ class TestDeterminismRegression:
 class TestBoundaryConditions:
     """Test edge cases and boundary conditions."""
     
-    def test_minimum_afr_accepted(self):
+    @staticmethod
+    def test_minimum_afr_accepted():
         """Minimum valid AFR should be accepted."""
         result = calculate_ve_correction(AFR_MIN, 13.0, clamp=False)
         assert result is not None
         assert abs(result - AFR_MIN / 13.0) < 1e-10
     
-    def test_maximum_afr_accepted(self):
+    @staticmethod
+    def test_maximum_afr_accepted():
         """Maximum valid AFR should be accepted."""
         result = calculate_ve_correction(AFR_MAX, 13.0, clamp=False)
         assert result is not None
         assert abs(result - AFR_MAX / 13.0) < 1e-10
     
-    def test_clamping_works_lean(self):
+    @staticmethod
+    def test_clamping_works_lean():
         """Extreme lean should be clamped."""
         config = MathConfig(max_correction_pct=15.0)
         result = calculate_ve_correction(18.0, 12.0, config=config, clamp=True)
@@ -286,7 +302,8 @@ class TestBoundaryConditions:
         # 18/12 = 1.5 (50%) should be clamped to 1.15 (15%)
         assert result <= 1.15 + 1e-10
     
-    def test_clamping_works_rich(self):
+    @staticmethod
+    def test_clamping_works_rich():
         """Extreme rich should be clamped."""
         config = MathConfig(max_correction_pct=15.0)
         result = calculate_ve_correction(10.0, 14.0, config=config, clamp=True)
@@ -294,7 +311,8 @@ class TestBoundaryConditions:
         # 10/14 = 0.714 (-28.6%) should be clamped to 0.85 (-15%)
         assert result >= 0.85 - 1e-10
     
-    def test_equal_afr_gives_one(self):
+    @staticmethod
+    def test_equal_afr_gives_one():
         """Equal measured and target should give exactly 1.0."""
         for afr in [10.0, 12.0, 13.0, 14.0, 14.7, 16.0, 18.0]:
             result = calculate_ve_correction(afr, afr)
@@ -308,7 +326,8 @@ class TestBoundaryConditions:
 class TestRealWorldScenarios:
     """Test scenarios that match real tuning situations."""
     
-    def test_typical_wot_tuning(self):
+    @staticmethod
+    def test_typical_wot_tuning():
         """Typical WOT tuning scenario."""
         # Target 12.5:1 at WOT, running 13.5:1 (lean)
         correction = calculate_ve_correction(13.5, 12.5)
@@ -317,7 +336,8 @@ class TestRealWorldScenarios:
         # Should recommend ~8% more fuel
         assert 7.0 < pct < 9.0, f"WOT lean correction should be ~8%, got {pct:.1f}%"
     
-    def test_typical_cruise_tuning(self):
+    @staticmethod
+    def test_typical_cruise_tuning():
         """Typical cruise tuning scenario."""
         # Target 14.7:1 at cruise, running 13.5:1 (rich)
         correction = calculate_ve_correction(13.5, 14.7)
@@ -326,7 +346,8 @@ class TestRealWorldScenarios:
         # Should recommend ~8% less fuel
         assert -9.0 < pct < -7.0, f"Cruise rich correction should be ~-8%, got {pct:.1f}%"
     
-    def test_fine_tuning_scenario(self):
+    @staticmethod
+    def test_fine_tuning_scenario():
         """Fine-tuning with small adjustments."""
         # Target 13.0, running 13.2 (slightly lean)
         correction = calculate_ve_correction(13.2, 13.0)
@@ -335,7 +356,8 @@ class TestRealWorldScenarios:
         # Should recommend ~1.5% more fuel
         assert 1.0 < pct < 2.0, f"Fine-tune correction should be ~1.5%, got {pct:.1f}%"
     
-    def test_cylinder_balance_scenario(self):
+    @staticmethod
+    def test_cylinder_balance_scenario():
         """Per-cylinder balancing scenario."""
         # Front running 13.0, rear running 13.5 (0.5 AFR imbalance)
         avg_afr = (13.0 + 13.5) / 2  # 13.25
@@ -360,7 +382,8 @@ class TestRealWorldScenarios:
 class TestCompareVersions:
     """Test the version comparison utility."""
     
-    def test_compare_returns_all_fields(self):
+    @staticmethod
+    def test_compare_returns_all_fields():
         """compare_versions should return all expected fields."""
         result = compare_versions(14.0, 13.0)
         
@@ -374,7 +397,8 @@ class TestCompareVersions:
         for field in expected_fields:
             assert field in result, f"Missing field: {field}"
     
-    def test_compare_calculates_difference(self):
+    @staticmethod
+    def test_compare_calculates_difference():
         """compare_versions should calculate difference correctly."""
         result = compare_versions(16.0, 13.0)
         
@@ -393,7 +417,8 @@ class TestCompareVersions:
 class TestPerformance:
     """Ensure no performance regression."""
     
-    def test_single_calculation_speed(self):
+    @staticmethod
+    def test_single_calculation_speed():
         """Single calculation should be < 0.1ms."""
         import time
         
@@ -405,7 +430,8 @@ class TestPerformance:
         # 10000 calculations in < 100ms = < 0.01ms each
         assert elapsed < 0.1, f"10k calculations took {elapsed:.3f}s (too slow)"
     
-    def test_batch_not_slower(self):
+    @staticmethod
+    def test_batch_not_slower():
         """Batch should not be slower than individual."""
         import time
         
@@ -435,7 +461,8 @@ class TestPerformance:
 class TestIntegrationWithRealData:
     """Test with realistic data patterns."""
     
-    def test_analyze_sample_data(self, sample_dyno_data):
+    @staticmethod
+    def test_analyze_sample_data(sample_dyno_data):
         """Should correctly analyze sample dyno data."""
         df = sample_dyno_data
         
@@ -451,7 +478,8 @@ class TestIntegrationWithRealData:
         assert 0.95 < mean_correction < 1.05, \
             f"Mean correction {mean_correction:.3f} too far from 1.0"
     
-    def test_grid_analysis(self, sample_dyno_data):
+    @staticmethod
+    def test_grid_analysis(sample_dyno_data):
         """Should work with grid-based analysis."""
         df = sample_dyno_data
         

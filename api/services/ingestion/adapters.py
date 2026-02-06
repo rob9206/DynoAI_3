@@ -288,8 +288,8 @@ class InnovateAdapter(DataAdapter):
             afr_rear=afr if channel == 2 else None,
         )
 
+    @staticmethod
     def merge_with_dyno(
-        self,
         afr_samples: list[Any],
         dyno_points: list[DynoDataPointSchema],
         time_tolerance_ms: int = 100,
@@ -582,7 +582,8 @@ class WP8Adapter(DataAdapter):
 
         return channels
 
-    def _parse_channel_def(self, data: bytes) -> tuple[int, str] | None:
+    @staticmethod
+    def _parse_channel_def(data: bytes) -> tuple[int, str] | None:
         """Parse a single channel definition."""
         try:
             name = ""
@@ -641,8 +642,9 @@ class WP8Adapter(DataAdapter):
 
         return None
 
+    @staticmethod
     def _parse_data(
-        self, content: bytes, channels: dict[int, str]
+        content: bytes, channels: dict[int, str]
     ) -> list[DynoDataPointSchema]:
         """Parse time-series data from WP8 content."""
         # This is a simplified parser - actual WP8 data format varies

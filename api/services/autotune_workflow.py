@@ -484,7 +484,8 @@ class AutoTuneWorkflow:
             session.status = "error"
             return False
 
-    def _estimate_map_from_rpm(self, rpm: float) -> float:
+    @staticmethod
+    def _estimate_map_from_rpm(rpm: float) -> float:
         """Estimate MAP from RPM when not available."""
         if rpm < 2000:
             return 35  # Vacuum at idle
@@ -495,7 +496,8 @@ class AutoTuneWorkflow:
         else:
             return 80  # High load / WOT
 
-    def _extract_peak_performance(self, session: AutoTuneSession) -> None:
+    @staticmethod
+    def _extract_peak_performance(session: AutoTuneSession) -> None:
         """Extract peak HP and torque from session data."""
         if session.dynoai_data is None:
             return
@@ -550,7 +552,8 @@ class AutoTuneWorkflow:
             if rpm_col in df.columns:
                 session.peak_tq_rpm = float(df.loc[peak_idx, rpm_col])
 
-    def import_tune(self, session: AutoTuneSession, tune_path: str) -> bool:
+    @staticmethod
+    def import_tune(session: AutoTuneSession, tune_path: str) -> bool:
         """
         Import a PVV tune file as the base tune.
 
@@ -862,8 +865,8 @@ class AutoTuneWorkflow:
         session.status = "corrections_calculated"
         return result
 
+    @staticmethod
     def export_tunelab_script(
-        self,
         session: AutoTuneSession,
         output_dir: str,
         correction_table: str = "Volumetric Efficiency",
@@ -895,8 +898,8 @@ class AutoTuneWorkflow:
         session.output_tunelab_script = str(script_path)
         return str(script_path)
 
+    @staticmethod
     def export_pvv_corrections(
-        self,
         session: AutoTuneSession,
         output_dir: str,
         table_name: str = "VE Correction",
@@ -1049,7 +1052,8 @@ class AutoTuneWorkflow:
 
         return session
 
-    def get_session_summary(self, session: AutoTuneSession) -> dict:
+    @staticmethod
+    def get_session_summary(session: AutoTuneSession) -> dict:
         """Get a summary of the session for display."""
 
         def _build_power_curve_from_df(df: "pd.DataFrame") -> list[dict[str, float]]:

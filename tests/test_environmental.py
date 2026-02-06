@@ -27,14 +27,16 @@ from dynoai.core.environmental import (
 class TestEnvironmentalConditions:
     """Tests for EnvironmentalConditions dataclass."""
 
-    def test_default_values(self):
+    @staticmethod
+    def test_default_values():
         """Test default standard conditions."""
         conditions = EnvironmentalConditions()
         assert conditions.barometric_pressure_inhg == 29.92
         assert conditions.ambient_temp_f == 77.0
         assert conditions.humidity_percent == 0.0
 
-    def test_altitude_calculated_from_baro(self):
+    @staticmethod
+    def test_altitude_calculated_from_baro():
         """Test that altitude is auto-calculated from barometric pressure."""
         # Sea level
         conditions = EnvironmentalConditions(barometric_pressure_inhg=29.92)
@@ -45,7 +47,8 @@ class TestEnvironmentalConditions:
         conditions = EnvironmentalConditions(barometric_pressure_inhg=24.89)
         assert 4500 < conditions.altitude_ft < 5500
 
-    def test_explicit_altitude_preserved(self):
+    @staticmethod
+    def test_explicit_altitude_preserved():
         """Test that explicit altitude is not overwritten."""
         conditions = EnvironmentalConditions(
             barometric_pressure_inhg=29.92,
@@ -57,12 +60,14 @@ class TestEnvironmentalConditions:
 class TestAltitudeEstimation:
     """Tests for altitude/barometric conversion functions."""
 
-    def test_sea_level(self):
+    @staticmethod
+    def test_sea_level():
         """Test sea level altitude from standard pressure."""
         altitude = estimate_altitude_from_baro(29.92)
         assert abs(altitude) < 50  # Should be near 0
 
-    def test_common_altitudes(self):
+    @staticmethod
+    def test_common_altitudes():
         """Test altitude estimation at common elevations."""
         # Denver, CO (~5280 ft)
         altitude = estimate_altitude_from_baro(24.63)
@@ -72,14 +77,16 @@ class TestAltitudeEstimation:
         altitude = estimate_altitude_from_baro(22.65)
         assert 7000 < altitude < 7700
 
-    def test_round_trip_conversion(self):
+    @staticmethod
+    def test_round_trip_conversion():
         """Test baro -> altitude -> baro round trip."""
         original_baro = 26.5
         altitude = estimate_altitude_from_baro(original_baro)
         recovered_baro = estimate_baro_from_altitude(altitude)
         assert abs(original_baro - recovered_baro) < 0.01
 
-    def test_altitude_to_baro(self):
+    @staticmethod
+    def test_altitude_to_baro():
         """Test altitude to barometric pressure conversion."""
         # Sea level
         baro = estimate_baro_from_altitude(0)
@@ -93,7 +100,8 @@ class TestAltitudeEstimation:
 class TestEnvironmentalCorrector:
     """Tests for EnvironmentalCorrector class."""
 
-    def test_default_initialization(self):
+    @staticmethod
+    def test_default_initialization():
         """Test corrector with default parameters."""
         corrector = EnvironmentalCorrector()
         assert corrector.standard == CorrectionStandard.SAE_J1349
@@ -102,7 +110,8 @@ class TestEnvironmentalCorrector:
         assert corrector.enable_humidity is True
         assert corrector.enable_ect is True
 
-    def test_standard_day_no_correction(self):
+    @staticmethod
+    def test_standard_day_no_correction():
         """Test that standard conditions give correction of 1.0."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions()  # Standard conditions
@@ -111,7 +120,8 @@ class TestEnvironmentalCorrector:
         assert result.is_standard_day is True
         assert 0.99 < result.total_correction < 1.01
 
-    def test_high_altitude_reduces_fuel(self):
+    @staticmethod
+    def test_high_altitude_reduces_fuel():
         """Test that high altitude requires less fuel."""
         corrector = EnvironmentalCorrector()
 
@@ -123,7 +133,8 @@ class TestEnvironmentalCorrector:
         assert result.total_correction < 0.90
         assert result.pressure_correction < 1.0
 
-    def test_hot_temperature_reduces_fuel(self):
+    @staticmethod
+    def test_hot_temperature_reduces_fuel():
         """Test that hot temperatures require less fuel."""
         corrector = EnvironmentalCorrector()
 
@@ -135,7 +146,8 @@ class TestEnvironmentalCorrector:
         assert result.temperature_correction < 1.0
         assert result.total_correction < 1.0
 
-    def test_cold_temperature_increases_fuel(self):
+    @staticmethod
+    def test_cold_temperature_increases_fuel():
         """Test that cold temperatures require more fuel."""
         corrector = EnvironmentalCorrector()
 
@@ -147,7 +159,8 @@ class TestEnvironmentalCorrector:
         assert result.temperature_correction > 1.0
         assert result.total_correction > 1.0
 
-    def test_high_humidity_reduces_fuel(self):
+    @staticmethod
+    def test_high_humidity_reduces_fuel():
         """Test that high humidity requires slightly less fuel."""
         corrector = EnvironmentalCorrector()
 
@@ -158,7 +171,8 @@ class TestEnvironmentalCorrector:
         # Should need slightly less fuel (water vapor displaces oxygen)
         assert result.humidity_correction < 1.0
 
-    def test_cold_engine_increases_fuel(self):
+    @staticmethod
+    def test_cold_engine_increases_fuel():
         """Test that cold engine requires enrichment."""
         corrector = EnvironmentalCorrector()
 
@@ -170,7 +184,8 @@ class TestEnvironmentalCorrector:
         assert result.ect_correction > 1.0
         assert result.ect_correction > 1.10  # At least 10% enrichment
 
-    def test_warm_engine_no_correction(self):
+    @staticmethod
+    def test_warm_engine_no_correction():
         """Test that warm engine needs no correction."""
         corrector = EnvironmentalCorrector()
 
@@ -180,7 +195,8 @@ class TestEnvironmentalCorrector:
 
         assert result.ect_correction == 1.0
 
-    def test_transitional_ect(self):
+    @staticmethod
+    def test_transitional_ect():
         """Test ECT correction during warmup."""
         corrector = EnvironmentalCorrector()
 
@@ -191,7 +207,8 @@ class TestEnvironmentalCorrector:
         # Should have some enrichment, but less than cold
         assert 1.0 < result.ect_correction < 1.15
 
-    def test_combined_conditions(self):
+    @staticmethod
+    def test_combined_conditions():
         """Test combined environmental effects."""
         corrector = EnvironmentalCorrector()
 
@@ -209,7 +226,8 @@ class TestEnvironmentalCorrector:
         assert result.temperature_correction < 1.0
         assert result.humidity_correction < 1.0
 
-    def test_corrections_multiplicative(self):
+    @staticmethod
+    def test_corrections_multiplicative():
         """Test that corrections are applied multiplicatively."""
         corrector = EnvironmentalCorrector(enable_ect=False)
 
@@ -228,7 +246,8 @@ class TestEnvironmentalCorrector:
         )
         assert abs(result.total_correction - expected) < 0.001
 
-    def test_safety_clamping(self):
+    @staticmethod
+    def test_safety_clamping():
         """Test that extreme corrections are clamped."""
         corrector = EnvironmentalCorrector(max_correction=1.20)
 
@@ -243,7 +262,8 @@ class TestEnvironmentalCorrector:
         assert result.total_correction >= 1.0 / 1.20
         assert result.total_correction <= 1.20
 
-    def test_disable_individual_corrections(self):
+    @staticmethod
+    def test_disable_individual_corrections():
         """Test disabling individual correction factors."""
         corrector = EnvironmentalCorrector(
             enable_pressure=False,
@@ -269,7 +289,8 @@ class TestEnvironmentalCorrector:
 class TestConvenienceFunctions:
     """Tests for convenience functions."""
 
-    def test_calculate_altitude_correction(self):
+    @staticmethod
+    def test_calculate_altitude_correction():
         """Test altitude-only correction function."""
         # Sea level
         corr = calculate_altitude_correction(0)
@@ -279,7 +300,8 @@ class TestConvenienceFunctions:
         corr = calculate_altitude_correction(5000)
         assert 0.80 < corr < 0.90
 
-    def test_calculate_density_altitude(self):
+    @staticmethod
+    def test_calculate_density_altitude():
         """Test density altitude calculation."""
         # Standard day at 5000 ft
         # ISA temp at 5000 ft = 59 - (5000/1000 * 3.5) = 41.5°F
@@ -291,7 +313,8 @@ class TestConvenienceFunctions:
         # DA = 5000 + (120 * 53.5) = 5000 + 6420 = 11420 ft
         assert da > 10000  # Much higher than pressure altitude
 
-    def test_calculate_sae_j1349_correction(self):
+    @staticmethod
+    def test_calculate_sae_j1349_correction():
         """Test SAE J1349 correction function."""
         # Standard conditions
         corr = calculate_sae_j1349_correction(29.92, 77.0, 0.0)
@@ -305,7 +328,8 @@ class TestConvenienceFunctions:
 class TestCorrectionStandards:
     """Tests for different correction standards."""
 
-    def test_sae_vs_din_reference_temp(self):
+    @staticmethod
+    def test_sae_vs_din_reference_temp():
         """Test different reference temps between standards."""
         sae = STANDARD_CONDITIONS[CorrectionStandard.SAE_J1349]
         din = STANDARD_CONDITIONS[CorrectionStandard.DIN_70020]
@@ -313,7 +337,8 @@ class TestCorrectionStandards:
         assert sae.temp_f == 77.0  # 25°C
         assert din.temp_f == 68.0  # 20°C
 
-    def test_different_standards_give_different_results(self):
+    @staticmethod
+    def test_different_standards_give_different_results():
         """Test that different standards produce different corrections."""
         conditions = EnvironmentalConditions(
             barometric_pressure_inhg=28.0,
@@ -333,7 +358,8 @@ class TestCorrectionStandards:
 class TestCorrectionSummary:
     """Tests for human-readable summary output."""
 
-    def test_summary_generation(self):
+    @staticmethod
+    def test_summary_generation():
         """Test that summary is generated correctly."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(
@@ -356,7 +382,8 @@ class TestCorrectionSummary:
 class TestEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
-    def test_zero_humidity(self):
+    @staticmethod
+    def test_zero_humidity():
         """Test zero humidity (dry air)."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(humidity_percent=0.0)
@@ -364,7 +391,8 @@ class TestEdgeCases:
 
         assert result.humidity_correction == 1.0
 
-    def test_no_ect_data(self):
+    @staticmethod
+    def test_no_ect_data():
         """Test when ECT data is not available."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(ect_f=None)
@@ -372,7 +400,8 @@ class TestEdgeCases:
 
         assert result.ect_correction == 1.0
 
-    def test_very_low_pressure(self):
+    @staticmethod
+    def test_very_low_pressure():
         """Test extremely low barometric pressure."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(barometric_pressure_inhg=15.0)  # ~18000 ft
@@ -382,7 +411,8 @@ class TestEdgeCases:
         assert result.total_correction > 0
         assert result.total_correction <= corrector.max_correction
 
-    def test_extreme_temperatures(self):
+    @staticmethod
+    def test_extreme_temperatures():
         """Test extreme temperature values."""
         corrector = EnvironmentalCorrector()
 
@@ -400,7 +430,8 @@ class TestEdgeCases:
 class TestIntegrationScenarios:
     """Integration tests with real-world scenarios."""
 
-    def test_denver_summer(self):
+    @staticmethod
+    def test_denver_summer():
         """Test Denver, CO summer conditions."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(
@@ -413,7 +444,8 @@ class TestIntegrationScenarios:
         # Should need significantly less fuel
         assert 0.80 < result.total_correction < 0.90
 
-    def test_florida_summer(self):
+    @staticmethod
+    def test_florida_summer():
         """Test Florida summer conditions (sea level, hot, humid)."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(
@@ -427,7 +459,8 @@ class TestIntegrationScenarios:
         # Net effect is small reduction
         assert 0.90 < result.total_correction < 1.0
 
-    def test_cold_start_scenario(self):
+    @staticmethod
+    def test_cold_start_scenario():
         """Test cold start in cold weather."""
         corrector = EnvironmentalCorrector()
         conditions = EnvironmentalConditions(

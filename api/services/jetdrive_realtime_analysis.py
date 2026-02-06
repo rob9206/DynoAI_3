@@ -360,7 +360,8 @@ class RealtimeAnalysisEngine:
             if tps is not None and not math.isnan(tps):
                 self._last_tps = tps
     
-    def _bin_rpm_map(self, rpm: float, map_kpa: float) -> tuple[int, int] | None:
+    @staticmethod
+    def _bin_rpm_map(rpm: float, map_kpa: float) -> tuple[int, int] | None:
         """
         Convert RPM and MAP to bin indices.
         

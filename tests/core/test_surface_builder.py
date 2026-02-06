@@ -45,7 +45,8 @@ class TestSurfaceBuilderShapes:
         })
         return df
     
-    def test_surface_values_shape_matches_bins(self, sample_df):
+    @staticmethod
+    def test_surface_values_shape_matches_bins(sample_df):
         """Surface values matrix shape matches (rpm_bins, map_bins)."""
         rpm_bins = [2000, 3000, 4000, 5000, 6000]
         map_bins = [40, 60, 80, 100]
@@ -62,7 +63,8 @@ class TestSurfaceBuilderShapes:
         assert len(surface.values[0]) == len(map_bins)
         assert surface.shape == (len(rpm_bins), len(map_bins))
     
-    def test_hit_count_shape_matches_values(self, sample_df):
+    @staticmethod
+    def test_hit_count_shape_matches_values(sample_df):
         """Hit count matrix has same shape as values matrix."""
         rpm_bins = [2000, 3000, 4000, 5000, 6000]
         map_bins = [40, 60, 80, 100]
@@ -77,7 +79,8 @@ class TestSurfaceBuilderShapes:
         assert len(surface.hit_count) == len(surface.values)
         assert len(surface.hit_count[0]) == len(surface.values[0])
     
-    def test_axis_bins_stored_correctly(self, sample_df):
+    @staticmethod
+    def test_axis_bins_stored_correctly(sample_df):
         """Surface axis bins match input bins."""
         rpm_bins = [1500, 2500, 3500, 4500, 5500]
         map_bins = [35, 50, 65, 80, 95]
@@ -133,7 +136,8 @@ class TestMinSamplesPerCell:
         
         return pd.DataFrame(data_rows)
     
-    def test_low_hit_cells_masked_to_none(self, sparse_df):
+    @staticmethod
+    def test_low_hit_cells_masked_to_none(sparse_df):
         """Cells with fewer samples than min_samples_per_cell are None."""
         # Use bins that exactly match our data points
         rpm_bins = [3000, 4000, 5000]
@@ -157,7 +161,8 @@ class TestMinSamplesPerCell:
         # The (5000, 60) cell has only 2 samples, should be None
         assert non_none_count == 2
     
-    def test_high_hit_cells_have_values(self, sparse_df):
+    @staticmethod
+    def test_high_hit_cells_have_values(sparse_df):
         """Cells with enough samples have computed values."""
         rpm_bins = [3000, 4000, 5000]
         map_bins = [60, 80]
@@ -180,7 +185,8 @@ class TestMinSamplesPerCell:
         # Should have some non-None values (at least the 2 high-hit cells)
         assert len(cells_with_values) >= 2
     
-    def test_min_samples_zero_includes_all(self, sparse_df):
+    @staticmethod
+    def test_min_samples_zero_includes_all(sparse_df):
         """Setting min_samples_per_cell=0 includes all cells with any data."""
         rpm_bins = [3000, 4000, 5000]
         map_bins = [60, 80]
@@ -223,7 +229,8 @@ class TestSurfaceAggregation:
         
         return pd.DataFrame(data_rows)
     
-    def test_mean_aggregation(self, multi_value_df):
+    @staticmethod
+    def test_mean_aggregation(multi_value_df):
         """Mean aggregation computes average."""
         spec = SurfaceSpec(
             value_column="test_val",
@@ -242,7 +249,8 @@ class TestSurfaceAggregation:
         assert val is not None
         assert abs(val - 30) < 1  # Allow for weighting effects
     
-    def test_max_aggregation(self, multi_value_df):
+    @staticmethod
+    def test_max_aggregation(multi_value_df):
         """Max aggregation returns maximum value."""
         spec = SurfaceSpec(
             value_column="test_val",
@@ -260,7 +268,8 @@ class TestSurfaceAggregation:
         assert val is not None
         assert val == 50  # Max of [10, 20, 30, 40, 50]
     
-    def test_min_aggregation(self, multi_value_df):
+    @staticmethod
+    def test_min_aggregation(multi_value_df):
         """Min aggregation returns minimum value."""
         spec = SurfaceSpec(
             value_column="test_val",
@@ -300,21 +309,24 @@ class TestBuildStandardSurfaces:
         })
         return df
     
-    def test_builds_spark_surfaces(self, full_df):
+    @staticmethod
+    def test_builds_spark_surfaces(full_df):
         """build_standard_surfaces creates spark surfaces when available."""
         surfaces = build_standard_surfaces(full_df)
         
         assert "spark_front" in surfaces
         assert "spark_rear" in surfaces
     
-    def test_builds_afr_error_surfaces(self, full_df):
+    @staticmethod
+    def test_builds_afr_error_surfaces(full_df):
         """build_standard_surfaces creates AFR error surfaces when available."""
         surfaces = build_standard_surfaces(full_df)
         
         assert "afr_error_front" in surfaces
         assert "afr_error_rear" in surfaces
     
-    def test_surface_ids_match_keys(self, full_df):
+    @staticmethod
+    def test_surface_ids_match_keys(full_df):
         """Surface IDs in objects match dictionary keys."""
         surfaces = build_standard_surfaces(full_df)
         
@@ -341,7 +353,8 @@ class TestSurfaceStatistics:
         
         return pd.DataFrame(data_rows)
     
-    def test_stats_computed_correctly(self, known_values_df):
+    @staticmethod
+    def test_stats_computed_correctly(known_values_df):
         """Surface statistics are computed from actual values."""
         spec = SurfaceSpec(
             value_column="test_val",

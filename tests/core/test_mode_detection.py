@@ -26,19 +26,22 @@ from dynoai.core.mode_detection import (
 class TestModeTagEnum:
     """Tests for ModeTag enumeration."""
     
-    def test_all_modes_defined(self):
+    @staticmethod
+    def test_all_modes_defined():
         """All expected modes are defined."""
         expected_modes = ["idle", "cruise", "tip_in", "tip_out", "wot", "decel", "heat_soak", "unknown"]
         
         for mode in expected_modes:
             assert hasattr(ModeTag, mode.upper())
     
-    def test_mode_values_are_lowercase(self):
+    @staticmethod
+    def test_mode_values_are_lowercase():
         """Mode values are lowercase strings."""
         for mode in ModeTag:
             assert mode.value == mode.value.lower()
     
-    def test_mode_string_conversion(self):
+    @staticmethod
+    def test_mode_string_conversion():
         """ModeTag converts to string correctly."""
         assert str(ModeTag.IDLE) == "idle"
         assert str(ModeTag.WOT) == "wot"
@@ -77,28 +80,32 @@ class TestModeDetection:
             "iat": [85, 85, 85, 85, 85],
         })
     
-    def test_detects_idle(self, idle_df):
+    @staticmethod
+    def test_detects_idle(idle_df):
         """Idle conditions are labeled as IDLE."""
         result = label_modes(idle_df)
         
         idle_count = (result.df["mode"] == "idle").sum()
         assert idle_count > 0
     
-    def test_detects_wot(self, wot_df):
+    @staticmethod
+    def test_detects_wot(wot_df):
         """WOT conditions are labeled as WOT."""
         result = label_modes(wot_df)
         
         wot_count = (result.df["mode"] == "wot").sum()
         assert wot_count > 0
     
-    def test_detects_cruise(self, cruise_df):
+    @staticmethod
+    def test_detects_cruise(cruise_df):
         """Cruise conditions are labeled as CRUISE."""
         result = label_modes(cruise_df)
         
         cruise_count = (result.df["mode"] == "cruise").sum()
         assert cruise_count > 0
     
-    def test_deterministic_classification(self, cruise_df):
+    @staticmethod
+    def test_deterministic_classification(cruise_df):
         """Mode classification is deterministic."""
         result1 = label_modes(cruise_df)
         result2 = label_modes(cruise_df)
@@ -133,7 +140,8 @@ class TestTransientDetection:
             "time_ms": [0, 100, 200, 300, 400],
         })
     
-    def test_detects_tip_in(self, tipin_df):
+    @staticmethod
+    def test_detects_tip_in(tipin_df):
         """Tip-in events are detected."""
         result = label_modes(tipin_df)
         
@@ -141,7 +149,8 @@ class TestTransientDetection:
         # Should detect at least some tip-in samples
         assert tipin_count >= 1
     
-    def test_detects_tip_out(self, tipout_df):
+    @staticmethod
+    def test_detects_tip_out(tipout_df):
         """Tip-out events are detected."""
         result = label_modes(tipout_df)
         
@@ -163,7 +172,8 @@ class TestHeatSoakDetection:
             "iat": [140, 145, 150, 155, 160],  # High IAT
         })
     
-    def test_detects_heat_soak(self, heatsoak_df):
+    @staticmethod
+    def test_detects_heat_soak(heatsoak_df):
         """Heat soak conditions are labeled as HEAT_SOAK."""
         config = ModeDetectionConfig(iat_soak_threshold=130.0)
         result = label_modes(heatsoak_df, config)
@@ -204,7 +214,8 @@ class TestModeLabeledFrame:
         })
         return df
     
-    def test_summary_counts_accurate(self, mixed_df):
+    @staticmethod
+    def test_summary_counts_accurate(mixed_df):
         """Summary counts reflect actual mode distribution."""
         result = label_modes(mixed_df)
         
@@ -213,20 +224,23 @@ class TestModeLabeledFrame:
         
         assert total_from_summary == total_rows
     
-    def test_total_samples_property(self, mixed_df):
+    @staticmethod
+    def test_total_samples_property(mixed_df):
         """total_samples property returns correct count."""
         result = label_modes(mixed_df)
         
         assert result.total_samples == len(mixed_df)
     
-    def test_mode_distribution_sums_to_100(self, mixed_df):
+    @staticmethod
+    def test_mode_distribution_sums_to_100(mixed_df):
         """Mode distribution percentages sum to ~100%."""
         result = label_modes(mixed_df)
         
         total_pct = sum(result.mode_distribution.values())
         assert abs(total_pct - 100.0) < 0.1
     
-    def test_get_mode_mask_returns_boolean_series(self, mixed_df):
+    @staticmethod
+    def test_get_mode_mask_returns_boolean_series(mixed_df):
         """get_mode_mask returns boolean Series."""
         result = label_modes(mixed_df)
         
@@ -235,7 +249,8 @@ class TestModeLabeledFrame:
         assert isinstance(mask, pd.Series)
         assert mask.dtype == bool
     
-    def test_filter_by_mode_returns_subset(self, mixed_df):
+    @staticmethod
+    def test_filter_by_mode_returns_subset(mixed_df):
         """filter_by_mode returns filtered DataFrame."""
         result = label_modes(mixed_df)
         
@@ -259,7 +274,8 @@ class TestMaskHelpers:
             "mode": ["idle", "cruise", "wot", "tip_in", "tip_out"],
         })
     
-    def test_steady_state_mask_excludes_transients(self, labeled_df):
+    @staticmethod
+    def test_steady_state_mask_excludes_transients(labeled_df):
         """Steady state mask excludes tip_in and tip_out."""
         mask = get_steady_state_mask(labeled_df)
         
@@ -272,7 +288,8 @@ class TestMaskHelpers:
         assert mask.iloc[1]  # cruise
         assert mask.iloc[2]  # wot
     
-    def test_wot_mask_selects_wot_only(self, labeled_df):
+    @staticmethod
+    def test_wot_mask_selects_wot_only(labeled_df):
         """WOT mask only selects WOT samples."""
         mask = get_wot_mask(labeled_df)
         
@@ -280,7 +297,8 @@ class TestMaskHelpers:
         assert not mask.iloc[0]  # idle
         assert not mask.iloc[1]  # cruise
     
-    def test_transient_mask_selects_tip_events(self, labeled_df):
+    @staticmethod
+    def test_transient_mask_selects_tip_events(labeled_df):
         """Transient mask selects tip_in and tip_out."""
         mask = get_transient_mask(labeled_df)
         
@@ -293,7 +311,8 @@ class TestMaskHelpers:
 class TestDerivativeComputation:
     """Tests for TPS/MAP derivative computation."""
     
-    def test_computes_tps_dot(self):
+    @staticmethod
+    def test_computes_tps_dot():
         """TPS derivative is computed correctly."""
         df = pd.DataFrame({
             "rpm": [3000, 3000, 3000, 3000, 3000],
@@ -309,7 +328,8 @@ class TestDerivativeComputation:
         # Rate should be positive (increasing TPS)
         assert result_df["tps_dot"].iloc[-1] > 0
     
-    def test_computes_map_dot(self):
+    @staticmethod
+    def test_computes_map_dot():
         """MAP derivative is computed correctly."""
         df = pd.DataFrame({
             "rpm": [3000, 3000, 3000, 3000, 3000],
@@ -325,7 +345,8 @@ class TestDerivativeComputation:
         # Rate should be positive (increasing MAP)
         assert result_df["map_dot"].iloc[-1] > 0
     
-    def test_handles_missing_time_column(self):
+    @staticmethod
+    def test_handles_missing_time_column():
         """Derivatives computed using default sample rate when time missing."""
         df = pd.DataFrame({
             "rpm": [3000, 3000, 3000],
@@ -344,7 +365,8 @@ class TestDerivativeComputation:
 class TestCustomConfig:
     """Tests for custom ModeDetectionConfig."""
     
-    def test_custom_wot_threshold(self):
+    @staticmethod
+    def test_custom_wot_threshold():
         """Custom WOT threshold is respected."""
         df = pd.DataFrame({
             "rpm": [5000, 5000, 5000],
@@ -366,7 +388,8 @@ class TestCustomConfig:
         
         assert wot_count2 >= wot_count1
     
-    def test_custom_idle_threshold(self):
+    @staticmethod
+    def test_custom_idle_threshold():
         """Custom idle thresholds are respected."""
         df = pd.DataFrame({
             "rpm": [1100, 1100, 1100],

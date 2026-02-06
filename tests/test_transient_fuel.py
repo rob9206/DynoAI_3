@@ -149,7 +149,8 @@ def sample_cold_iat_data():
 class TestTransientFuelAnalyzer:
     """Tests for TransientFuelAnalyzer class."""
     
-    def test_initialization(self):
+    @staticmethod
+    def test_initialization():
         """Test analyzer initialization with default parameters."""
         analyzer = TransientFuelAnalyzer()
         assert analyzer.target_afr == 13.0
@@ -158,7 +159,8 @@ class TestTransientFuelAnalyzer:
         assert analyzer.afr_tolerance == 0.5
         assert analyzer.sample_rate_hz == 50.0
     
-    def test_initialization_custom_params(self):
+    @staticmethod
+    def test_initialization_custom_params():
         """Test analyzer initialization with custom parameters."""
         analyzer = TransientFuelAnalyzer(
             target_afr=12.5,
@@ -173,7 +175,8 @@ class TestTransientFuelAnalyzer:
         assert analyzer.afr_tolerance == 0.3
         assert analyzer.sample_rate_hz == 100.0
     
-    def test_initialization_iat_params(self):
+    @staticmethod
+    def test_initialization_iat_params():
         """Test analyzer initialization with IAT parameters."""
         analyzer = TransientFuelAnalyzer(
             iat_reference_c=20.0,
@@ -184,7 +187,8 @@ class TestTransientFuelAnalyzer:
         assert analyzer.iat_density_coeff == 0.004
         assert analyzer.iat_wall_wetting_coeff == 0.03
     
-    def test_validate_input_missing_columns(self):
+    @staticmethod
+    def test_validate_input_missing_columns():
         """Test input validation catches missing columns."""
         analyzer = TransientFuelAnalyzer()
         df = pd.DataFrame({'time': [1, 2, 3], 'rpm': [3000, 3000, 3000]})
@@ -192,7 +196,8 @@ class TestTransientFuelAnalyzer:
         with pytest.raises(ValueError, match="Missing required columns"):
             analyzer._validate_input(df)
     
-    def test_validate_input_insufficient_data(self):
+    @staticmethod
+    def test_validate_input_insufficient_data():
         """Test input validation catches insufficient data."""
         analyzer = TransientFuelAnalyzer()
         df = pd.DataFrame({
@@ -206,7 +211,8 @@ class TestTransientFuelAnalyzer:
         with pytest.raises(ValueError, match="Insufficient data points"):
             analyzer._validate_input(df)
     
-    def test_validate_input_invalid_rpm(self):
+    @staticmethod
+    def test_validate_input_invalid_rpm():
         """Test input validation catches invalid RPM values."""
         analyzer = TransientFuelAnalyzer()
         df = pd.DataFrame({
@@ -220,7 +226,8 @@ class TestTransientFuelAnalyzer:
         with pytest.raises(ValueError, match="RPM values out of reasonable range"):
             analyzer._validate_input(df)
     
-    def test_calculate_rates(self, sample_steady_state_data):
+    @staticmethod
+    def test_calculate_rates(sample_steady_state_data):
         """Test rate calculation for steady-state data."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_steady_state_data)
@@ -232,7 +239,8 @@ class TestTransientFuelAnalyzer:
         assert df_with_rates['map_rate'].abs().mean() < 5.0
         assert df_with_rates['tps_rate'].abs().mean() < 5.0
     
-    def test_calculate_rates_acceleration(self, sample_accel_data):
+    @staticmethod
+    def test_calculate_rates_acceleration(sample_accel_data):
         """Test rate calculation detects acceleration."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -242,7 +250,8 @@ class TestTransientFuelAnalyzer:
         assert df_with_rates.loc[accel_period, 'map_rate'].mean() > 20.0
         assert df_with_rates.loc[accel_period, 'tps_rate'].mean() > 10.0
     
-    def test_detect_transient_events_steady_state(self, sample_steady_state_data):
+    @staticmethod
+    def test_detect_transient_events_steady_state(sample_steady_state_data):
         """Test transient detection on steady-state data."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_steady_state_data)
@@ -251,7 +260,8 @@ class TestTransientFuelAnalyzer:
         # Should detect no events in steady state
         assert len(events) == 0
     
-    def test_detect_transient_events_acceleration(self, sample_accel_data):
+    @staticmethod
+    def test_detect_transient_events_acceleration(sample_accel_data):
         """Test transient detection on acceleration data."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -267,7 +277,8 @@ class TestTransientFuelAnalyzer:
         assert accel_event.peak_tps_rate > 20.0
         assert accel_event.severity in ['mild', 'moderate', 'aggressive']
     
-    def test_detect_transient_events_deceleration(self, sample_decel_data):
+    @staticmethod
+    def test_detect_transient_events_deceleration(sample_decel_data):
         """Test transient detection on deceleration data."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_decel_data)
@@ -277,7 +288,8 @@ class TestTransientFuelAnalyzer:
         assert len(events) >= 1
         assert any(e.event_type == 'decel' for e in events)
     
-    def test_analyze_transients_full_workflow(self, sample_accel_data):
+    @staticmethod
+    def test_analyze_transients_full_workflow(sample_accel_data):
         """Test complete analysis workflow."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_accel_data)
@@ -291,7 +303,8 @@ class TestTransientFuelAnalyzer:
         assert len(result.recommendations) > 0
         assert len(result.plots) > 0
     
-    def test_calculate_map_rate_enrichment(self, sample_accel_data):
+    @staticmethod
+    def test_calculate_map_rate_enrichment(sample_accel_data):
         """Test MAP rate enrichment table calculation."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -307,7 +320,8 @@ class TestTransientFuelAnalyzer:
         positive_rates = table[table['map_rate_kpa_per_sec'] > 0]
         assert len(positive_rates) > 0
     
-    def test_calculate_tps_rate_enrichment(self, sample_accel_data):
+    @staticmethod
+    def test_calculate_tps_rate_enrichment(sample_accel_data):
         """Test TPS rate enrichment table calculation."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -319,7 +333,8 @@ class TestTransientFuelAnalyzer:
         assert 'tps_rate_percent_per_sec' in table.columns
         assert 'enrichment_percent' in table.columns
     
-    def test_calculate_wall_wetting_compensation(self, sample_accel_data):
+    @staticmethod
+    def test_calculate_wall_wetting_compensation(sample_accel_data):
         """Test wall wetting compensation calculation with improved formula."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -334,7 +349,8 @@ class TestTransientFuelAnalyzer:
         for factor in factors.values():
             assert 0.90 <= factor <= 1.15
     
-    def test_compensation_factor_initialization(self):
+    @staticmethod
+    def test_compensation_factor_initialization():
         """Test compensation_factor parameter initialization and clamping."""
         # Default should be 0.65
         analyzer = TransientFuelAnalyzer()
@@ -352,7 +368,8 @@ class TestTransientFuelAnalyzer:
         analyzer = TransientFuelAnalyzer(compensation_factor=1.5)
         assert analyzer.compensation_factor == 1.0
     
-    def test_iat_density_factor_calculation(self):
+    @staticmethod
+    def test_iat_density_factor_calculation():
         """Test IAT density factor calculation."""
         analyzer = TransientFuelAnalyzer(iat_reference_c=25.0)
         
@@ -376,7 +393,8 @@ class TestTransientFuelAnalyzer:
         factor = analyzer._calculate_iat_density_factor(100.0)  # Very hot
         assert factor >= 0.85
     
-    def test_iat_wall_wetting_factor_calculation(self):
+    @staticmethod
+    def test_iat_wall_wetting_factor_calculation():
         """Test IAT wall wetting factor calculation."""
         analyzer = TransientFuelAnalyzer(iat_reference_c=25.0)
         
@@ -394,7 +412,8 @@ class TestTransientFuelAnalyzer:
         factor = analyzer._calculate_iat_wall_wetting_factor(50.0)
         assert 0.35 <= factor <= 0.40
     
-    def test_iat_category(self):
+    @staticmethod
+    def test_iat_category():
         """Test IAT category classification."""
         analyzer = TransientFuelAnalyzer()
         
@@ -403,7 +422,8 @@ class TestTransientFuelAnalyzer:
         assert analyzer._get_iat_category(30.0) == 'warm'
         assert analyzer._get_iat_category(50.0) == 'hot'
     
-    def test_afr_error_to_enrichment_with_iat(self):
+    @staticmethod
+    def test_afr_error_to_enrichment_with_iat():
         """Test AFR error to enrichment with IAT correction."""
         analyzer = TransientFuelAnalyzer(target_afr=13.0, compensation_factor=0.65)
         
@@ -420,7 +440,8 @@ class TestTransientFuelAnalyzer:
         enrichment_hot = analyzer._afr_error_to_enrichment(1.0, iat_c=50.0)
         assert enrichment_hot < enrichment_ref
     
-    def test_afr_error_to_enrichment(self):
+    @staticmethod
+    def test_afr_error_to_enrichment():
         """Test AFR error to enrichment conversion using stoichiometric formula with compensation factor."""
         # Default compensation_factor is 0.65
         analyzer = TransientFuelAnalyzer(target_afr=13.0)
@@ -454,7 +475,8 @@ class TestTransientFuelAnalyzer:
         enrichment = analyzer_conservative._afr_error_to_enrichment(1.0)
         assert 1.8 <= enrichment <= 2.1  # Should be ~1.92%
     
-    def test_generate_recommendations(self, sample_accel_data):
+    @staticmethod
+    def test_generate_recommendations(sample_accel_data):
         """Test recommendation generation."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_accel_data)
@@ -462,7 +484,8 @@ class TestTransientFuelAnalyzer:
         assert len(result.recommendations) > 0
         assert any('event' in rec.lower() for rec in result.recommendations)
     
-    def test_export_power_vision(self, sample_accel_data, tmp_path):
+    @staticmethod
+    def test_export_power_vision(sample_accel_data, tmp_path):
         """Test Power Vision export functionality."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_accel_data)
@@ -476,7 +499,8 @@ class TestTransientFuelAnalyzer:
         assert "MAP Rate" in content
         assert "TPS Rate" in content
     
-    def test_determinism(self, sample_accel_data):
+    @staticmethod
+    def test_determinism(sample_accel_data):
         """Test that analysis is deterministic (same input = same output)."""
         analyzer1 = TransientFuelAnalyzer()
         analyzer2 = TransientFuelAnalyzer()
@@ -494,7 +518,8 @@ class TestTransientFuelAnalyzer:
         # Wall wetting factors should be identical
         assert result1.wall_wetting_factor == result2.wall_wetting_factor
     
-    def test_find_continuous_regions(self):
+    @staticmethod
+    def test_find_continuous_regions():
         """Test continuous region detection."""
         analyzer = TransientFuelAnalyzer()
         
@@ -506,7 +531,8 @@ class TestTransientFuelAnalyzer:
         assert regions[0] == (2, 5)
         assert regions[1] == (7, 8)
     
-    def test_empty_data_handling(self):
+    @staticmethod
+    def test_empty_data_handling():
         """Test handling of edge case with minimal data."""
         analyzer = TransientFuelAnalyzer()
         
@@ -529,7 +555,8 @@ class TestTransientFuelAnalyzer:
 class TestTauWallWetting:
     """Tests for X-Tau wall wetting model."""
     
-    def test_tau_wall_wetting_calculation(self, sample_accel_data):
+    @staticmethod
+    def test_tau_wall_wetting_calculation(sample_accel_data):
         """Test tau wall wetting parameter calculation."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_accel_data)
@@ -547,7 +574,8 @@ class TestTauWallWetting:
             assert params.rpm_range in ['idle', 'low', 'mid', 'high', 'redline']
             assert params.temperature_condition in ['cold', 'cool', 'warm', 'hot']
     
-    def test_tau_enrichment_calculation(self):
+    @staticmethod
+    def test_tau_enrichment_calculation():
         """Test tau-based instantaneous enrichment calculation."""
         analyzer = TransientFuelAnalyzer()
         
@@ -589,7 +617,8 @@ class TestTauWallWetting:
         enrichment = analyzer.calculate_tau_enrichment(100.0, params_aggressive)
         assert enrichment == 25.0
     
-    def test_tau_params_in_result(self, sample_accel_data):
+    @staticmethod
+    def test_tau_params_in_result(sample_accel_data):
         """Test that tau params are included in analysis result."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_accel_data)
@@ -598,7 +627,8 @@ class TestTauWallWetting:
         assert isinstance(result.tau_wall_wetting_params, list)
         assert len(result.tau_wall_wetting_params) > 0
     
-    def test_tau_model_steady_state(self, sample_steady_state_data):
+    @staticmethod
+    def test_tau_model_steady_state(sample_steady_state_data):
         """Test tau model with steady state data (no events)."""
         analyzer = TransientFuelAnalyzer()
         df_with_rates = analyzer._calculate_rates(sample_steady_state_data)
@@ -617,7 +647,8 @@ class TestTauWallWetting:
 class TestIATCompensation:
     """Tests for IAT compensation throughout the analysis."""
     
-    def test_cold_iat_increases_enrichment(self, sample_cold_iat_data, sample_accel_data):
+    @staticmethod
+    def test_cold_iat_increases_enrichment(sample_cold_iat_data, sample_accel_data):
         """Test that cold IAT produces higher enrichment recommendations."""
         analyzer = TransientFuelAnalyzer()
         
@@ -635,7 +666,8 @@ class TestIATCompensation:
         # (though this depends on AFR errors in the data)
         assert len(result_cold.tau_wall_wetting_params) == 5
     
-    def test_event_captures_iat(self, sample_cold_iat_data):
+    @staticmethod
+    def test_event_captures_iat(sample_cold_iat_data):
         """Test that transient events capture IAT data."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_cold_iat_data)
@@ -648,7 +680,8 @@ class TestIATCompensation:
             assert event.iat_category in ['cold', 'cool']
             assert event.avg_iat_c < 10.0
     
-    def test_enrichment_tables_include_iat(self, sample_accel_data):
+    @staticmethod
+    def test_enrichment_tables_include_iat(sample_accel_data):
         """Test that enrichment tables include IAT information."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_accel_data)
@@ -663,7 +696,8 @@ class TestIATCompensation:
         assert 'avg_iat_c' in result.transient_3d_table.columns
         assert 'iat_category' in result.transient_3d_table.columns
     
-    def test_recommendations_mention_iat(self, sample_cold_iat_data):
+    @staticmethod
+    def test_recommendations_mention_iat(sample_cold_iat_data):
         """Test that recommendations include IAT-based insights."""
         analyzer = TransientFuelAnalyzer()
         result = analyzer.analyze_transients(sample_cold_iat_data)
@@ -676,7 +710,8 @@ class TestIATCompensation:
 class TestTransientEvent:
     """Tests for TransientEvent dataclass."""
     
-    def test_creation(self):
+    @staticmethod
+    def test_creation():
         """Test TransientEvent creation with IAT fields."""
         event = TransientEvent(
             start_time=5.0,
@@ -704,7 +739,8 @@ class TestTransientEvent:
 class TestTransientFuelResult:
     """Tests for TransientFuelResult dataclass."""
     
-    def test_creation(self):
+    @staticmethod
+    def test_creation():
         """Test TransientFuelResult creation."""
         result = TransientFuelResult()
         
@@ -720,7 +756,8 @@ class TestTransientFuelResult:
 class TestTauWallWettingParams:
     """Tests for TauWallWettingParams dataclass."""
     
-    def test_creation(self):
+    @staticmethod
+    def test_creation():
         """Test TauWallWettingParams creation."""
         params = TauWallWettingParams(
             x_fraction=0.25,

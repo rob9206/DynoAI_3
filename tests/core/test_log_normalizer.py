@@ -22,7 +22,8 @@ from dynoai.core.log_normalizer import (
 class TestColumnAliasDetection:
     """Tests for column alias detection."""
     
-    def test_detects_canonical_names(self):
+    @staticmethod
+    def test_detects_canonical_names():
         """Detects columns when using canonical names."""
         df = pd.DataFrame({
             "rpm": [3000, 3500, 4000],
@@ -36,7 +37,8 @@ class TestColumnAliasDetection:
         assert "map_kpa" in found
         assert "tps" in found
     
-    def test_detects_aliases(self):
+    @staticmethod
+    def test_detects_aliases():
         """Detects columns when using alias names."""
         df = pd.DataFrame({
             "engine_rpm": [3000, 3500, 4000],  # Alias for rpm
@@ -50,7 +52,8 @@ class TestColumnAliasDetection:
         assert "map_kpa" in found
         assert "tps" in found
     
-    def test_case_insensitive_detection(self):
+    @staticmethod
+    def test_case_insensitive_detection():
         """Column detection is case-insensitive."""
         df = pd.DataFrame({
             "RPM": [3000, 3500, 4000],
@@ -93,7 +96,8 @@ class TestNormalizationResult:
             "knock": [0, 0, 1],
         })
     
-    def test_returns_normalization_result(self, minimal_df):
+    @staticmethod
+    def test_returns_normalization_result(minimal_df):
         """normalize_dataframe returns NormalizationResult."""
         result = normalize_dataframe(minimal_df)
         
@@ -103,7 +107,8 @@ class TestNormalizationResult:
         assert hasattr(result, "columns_missing")
         assert hasattr(result, "presence")
     
-    def test_renames_columns_to_canonical(self):
+    @staticmethod
+    def test_renames_columns_to_canonical():
         """Columns are renamed to canonical names."""
         df = pd.DataFrame({
             "engine_rpm": [3000, 3500, 4000],
@@ -116,14 +121,16 @@ class TestNormalizationResult:
         assert "map_kpa" in result.df.columns
         assert "engine_rpm" not in result.df.columns
     
-    def test_tracks_found_columns(self, minimal_df):
+    @staticmethod
+    def test_tracks_found_columns(minimal_df):
         """Found columns are tracked in result."""
         result = normalize_dataframe(minimal_df)
         
         assert "rpm" in result.columns_found
         assert "map_kpa" in result.columns_found
     
-    def test_tracks_missing_columns(self, minimal_df):
+    @staticmethod
+    def test_tracks_missing_columns(minimal_df):
         """Missing columns are tracked in result."""
         result = normalize_dataframe(minimal_df)
         
@@ -134,7 +141,8 @@ class TestNormalizationResult:
 class TestGracefulDegradation:
     """Tests for graceful degradation when columns are missing."""
     
-    def test_global_afr_used_when_per_cylinder_missing(self):
+    @staticmethod
+    def test_global_afr_used_when_per_cylinder_missing():
         """Global AFR used when per-cylinder AFR missing."""
         df = pd.DataFrame({
             "rpm": [3000, 3500, 4000],
@@ -150,7 +158,8 @@ class TestGracefulDegradation:
         assert "afr_meas_r" in result.df.columns
         assert "afr_meas_f" in result.columns_derived
     
-    def test_stoich_default_when_afr_cmd_missing(self):
+    @staticmethod
+    def test_stoich_default_when_afr_cmd_missing():
         """Stoichiometric (14.7) used when commanded AFR missing."""
         df = pd.DataFrame({
             "rpm": [3000, 3500, 4000],
@@ -167,7 +176,8 @@ class TestGracefulDegradation:
         assert result.df["afr_cmd_f"].iloc[0] == 14.7
         assert any("stoich" in w.lower() or "14.7" in w for w in result.warnings)
     
-    def test_afr_error_computed(self):
+    @staticmethod
+    def test_afr_error_computed():
         """AFR error columns are computed from measured - commanded."""
         df = pd.DataFrame({
             "rpm": [3000, 3500, 4000],
@@ -189,7 +199,8 @@ class TestGracefulDegradation:
 class TestChannelPresence:
     """Tests for channel presence detection."""
     
-    def test_has_required_true_when_present(self):
+    @staticmethod
+    def test_has_required_true_when_present():
         """has_required is True when rpm and map_kpa present."""
         df = pd.DataFrame({
             "rpm": [3000],
@@ -200,7 +211,8 @@ class TestChannelPresence:
         
         assert result.presence.has_required is True
     
-    def test_has_required_false_when_missing(self):
+    @staticmethod
+    def test_has_required_false_when_missing():
         """has_required is False when rpm or map_kpa missing."""
         df = pd.DataFrame({
             "rpm": [3000],
@@ -211,7 +223,8 @@ class TestChannelPresence:
         
         assert result.presence.has_required is False
     
-    def test_has_per_cylinder_afr_detected(self):
+    @staticmethod
+    def test_has_per_cylinder_afr_detected():
         """Per-cylinder AFR detection works."""
         df = pd.DataFrame({
             "rpm": [3000],
@@ -224,7 +237,8 @@ class TestChannelPresence:
         
         assert result.presence.has_per_cylinder_afr is True
     
-    def test_has_knock_detected(self):
+    @staticmethod
+    def test_has_knock_detected():
         """Knock channel detection works."""
         df = pd.DataFrame({
             "rpm": [3000],
@@ -240,7 +254,8 @@ class TestChannelPresence:
 class TestConfidenceFactor:
     """Tests for confidence factor computation."""
     
-    def test_confidence_factor_zero_without_required(self):
+    @staticmethod
+    def test_confidence_factor_zero_without_required():
         """Confidence is 0 when required columns missing."""
         df = pd.DataFrame({
             "rpm": [3000],
@@ -251,7 +266,8 @@ class TestConfidenceFactor:
         
         assert result.confidence_factor == 0.0
     
-    def test_confidence_factor_increases_with_channels(self):
+    @staticmethod
+    def test_confidence_factor_increases_with_channels():
         """Confidence increases with more available channels."""
         minimal_df = pd.DataFrame({
             "rpm": [3000],
@@ -275,7 +291,8 @@ class TestConfidenceFactor:
         
         assert full_result.confidence_factor > minimal_result.confidence_factor
     
-    def test_confidence_factor_max_one(self):
+    @staticmethod
+    def test_confidence_factor_max_one():
         """Confidence factor is capped at 1.0."""
         df = pd.DataFrame({
             "rpm": [3000],

@@ -121,7 +121,8 @@ class DynojetScraper:
             max_torque_rpm=None,
         )
 
-    def _select_best_image(self, soup: BeautifulSoup, base_url: str) -> Optional[str]:
+    @staticmethod
+    def _select_best_image(soup: BeautifulSoup, base_url: str) -> Optional[str]:
         content_root = soup.find("article") or soup.find(class_="entry-content")
         search_scope = content_root or soup
         images = search_scope.find_all("img")

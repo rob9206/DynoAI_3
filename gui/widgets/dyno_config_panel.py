@@ -260,7 +260,8 @@ class DynoConfigPanel(QWidget):
 
         layout.addWidget(card)
 
-    def _create_section(self, title: str) -> QVBoxLayout:
+    @staticmethod
+    def _create_section(title: str) -> QVBoxLayout:
         """Create a section layout with title."""
         layout = QVBoxLayout()
         layout.setSpacing(8)
@@ -273,7 +274,8 @@ class DynoConfigPanel(QWidget):
 
         return layout
 
-    def _wrap_section(self, layout: QVBoxLayout) -> QFrame:
+    @staticmethod
+    def _wrap_section(layout: QVBoxLayout) -> QFrame:
         """Wrap a section in a styled frame."""
         frame = QFrame()
         frame.setStyleSheet(f"""
@@ -362,7 +364,8 @@ class DynoConfigPanel(QWidget):
 
         reply.deleteLater()
 
-    def _parse_config(self, data: Dict[str, Any]) -> DynoConfig:
+    @staticmethod
+    def _parse_config(data: Dict[str, Any]) -> DynoConfig:
         """Parse config data into DynoConfig object."""
         drum1 = None
         if "drum1" in data:

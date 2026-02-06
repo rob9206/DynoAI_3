@@ -10,24 +10,28 @@ import pytest
 class TestRunsListEndpoint:
     """Tests for the /api/runs endpoint."""
 
-    def test_runs_returns_200(self, client):
+    @staticmethod
+    def test_runs_returns_200(client):
         """Runs endpoint returns 200 status code."""
         response = client.get("/api/runs")
         assert response.status_code == 200
 
-    def test_runs_returns_json(self, client):
+    @staticmethod
+    def test_runs_returns_json(client):
         """Runs endpoint returns JSON content type."""
         response = client.get("/api/runs")
         assert response.content_type == "application/json"
 
-    def test_runs_returns_list(self, client):
+    @staticmethod
+    def test_runs_returns_list(client):
         """Runs endpoint returns runs list in response."""
         response = client.get("/api/runs")
         data = response.get_json()
         assert "runs" in data
         assert isinstance(data["runs"], list)
 
-    def test_runs_with_mock_data(self, client, mock_output_folder):
+    @staticmethod
+    def test_runs_with_mock_data(client, mock_output_folder):
         """Runs endpoint returns run data when available."""
         response = client.get("/api/runs")
         assert response.status_code == 200
@@ -41,17 +45,20 @@ class TestRunsListEndpoint:
 class TestRunsListEndpointMethods:
     """Tests for runs endpoint HTTP method handling."""
 
-    def test_runs_rejects_post(self, client):
+    @staticmethod
+    def test_runs_rejects_post(client):
         """Runs endpoint rejects POST requests."""
         response = client.post("/api/runs")
         assert response.status_code == 405
 
-    def test_runs_rejects_put(self, client):
+    @staticmethod
+    def test_runs_rejects_put(client):
         """Runs endpoint rejects PUT requests."""
         response = client.put("/api/runs")
         assert response.status_code == 405
 
-    def test_runs_rejects_delete(self, client):
+    @staticmethod
+    def test_runs_rejects_delete(client):
         """Runs endpoint rejects DELETE requests."""
         response = client.delete("/api/runs")
         assert response.status_code == 405
@@ -60,14 +67,16 @@ class TestRunsListEndpointMethods:
 class TestStatusEndpoint:
     """Tests for the /api/status/<run_id> endpoint."""
 
-    def test_status_returns_404_for_missing_run(self, client):
+    @staticmethod
+    def test_status_returns_404_for_missing_run(client):
         """Status endpoint returns 404 for non-existent run."""
         response = client.get("/api/status/nonexistent-run-id")
         assert response.status_code == 404
         data = response.get_json()
         assert "error" in data
 
-    def test_status_returns_valid_response_structure(self, client, sample_csv_file):
+    @staticmethod
+    def test_status_returns_valid_response_structure(client, sample_csv_file):
         """Status endpoint returns properly structured response."""
         # First create a job
         with open(sample_csv_file, "rb") as f:
@@ -90,17 +99,20 @@ class TestStatusEndpoint:
 class TestStatusEndpointMethods:
     """Tests for status endpoint HTTP method handling."""
 
-    def test_status_rejects_post(self, client):
+    @staticmethod
+    def test_status_rejects_post(client):
         """Status endpoint rejects POST requests."""
         response = client.post("/api/status/some-run-id")
         assert response.status_code == 405
 
-    def test_status_rejects_put(self, client):
+    @staticmethod
+    def test_status_rejects_put(client):
         """Status endpoint rejects PUT requests."""
         response = client.put("/api/status/some-run-id")
         assert response.status_code == 405
 
-    def test_status_rejects_delete(self, client):
+    @staticmethod
+    def test_status_rejects_delete(client):
         """Status endpoint rejects DELETE requests."""
         response = client.delete("/api/status/some-run-id")
         assert response.status_code == 405

@@ -332,8 +332,8 @@ class NextGenWorkflow:
         
         return result
     
+    @staticmethod
     def _execute_pipeline(
-        self,
         run_id: str,
         csv_path: Path,
     ) -> NextGenAnalysisPayload:
@@ -424,8 +424,8 @@ class NextGenWorkflow:
         logger.info(f"NextGen analysis complete for run {run_id}")
         return payload
     
+    @staticmethod
     def _write_outputs(
-        self,
         output_dir: Path,
         payload: NextGenAnalysisPayload,
     ) -> None:
@@ -469,7 +469,8 @@ class NextGenWorkflow:
         
         logger.info(f"Wrote metadata to {meta_path}")
     
-    def _build_summary(self, payload_dict: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _build_summary(payload_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build a summary dict from payload.
         

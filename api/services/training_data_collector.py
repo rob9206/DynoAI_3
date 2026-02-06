@@ -70,8 +70,8 @@ class TrainingDataCollector:
         self.strict_mode = strict_mode
         self.validator = DataValidator()
 
+    @staticmethod
     def create_session_from_run(
-        self,
         run_id: str,
         build_config: BuildConfiguration,
         objective: TuningObjective,
@@ -290,8 +290,9 @@ class TrainingDataCollector:
             logger.warning(f"Failed to extract VE pattern: {e}")
             return None
 
+    @staticmethod
     def _extract_balance_pattern(
-        self, session: TuningSession
+        session: TuningSession
     ) -> Optional[CylinderImbalancePattern]:
         """Extract cylinder imbalance pattern from session."""
         try:
@@ -314,8 +315,9 @@ class TrainingDataCollector:
             logger.warning(f"Failed to extract balance pattern: {e}")
             return None
 
+    @staticmethod
     def _extract_decel_pattern(
-        self, session: TuningSession
+        session: TuningSession
     ) -> Optional[DecelPoppingPattern]:
         """Extract decel popping pattern from session."""
         try:
@@ -336,8 +338,9 @@ class TrainingDataCollector:
             logger.warning(f"Failed to extract decel pattern: {e}")
             return None
 
+    @staticmethod
     def _extract_heat_pattern(
-        self, session: TuningSession
+        session: TuningSession
     ) -> Optional[HeatSoakPattern]:
         """Extract heat soak pattern from session."""
         try:
@@ -353,8 +356,9 @@ class TrainingDataCollector:
             logger.warning(f"Failed to extract heat pattern: {e}")
             return None
 
+    @staticmethod
     def _extract_timing_pattern(
-        self, session: TuningSession
+        session: TuningSession
     ) -> Optional[KnockTimingPattern]:
         """Extract knock/timing pattern from session."""
         try:
@@ -394,8 +398,8 @@ class TrainingDataCollector:
 
         return patterns
 
+    @staticmethod
     def _calculate_ve_delta(
-        self,
         initial: List[List[float]],
         final: List[List[float]],
         rpm_range: Tuple[int, int],
@@ -420,8 +424,9 @@ class TrainingDataCollector:
 
         return sum(deltas) / len(deltas) if deltas else 0.0
 
+    @staticmethod
     def _calculate_table_difference(
-        self, table1: List[List[float]], table2: List[List[float]]
+        table1: List[List[float]], table2: List[List[float]]
     ) -> float:
         """Calculate average percentage difference between two tables."""
         if not table1 or not table2:
@@ -436,8 +441,9 @@ class TrainingDataCollector:
 
         return sum(diffs) / len(diffs) if diffs else 0.0
 
+    @staticmethod
     def _get_region_ranges(
-        self, region: str
+        region: str
     ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """Map operating region name to RPM/load ranges."""
         region_map = {
@@ -468,7 +474,8 @@ class TrainingDataCollector:
 
         logger.info(f"Saved training dataset to {output_path}")
 
-    def load_dataset(self, input_path: str | Path) -> None:
+    @staticmethod
+    def load_dataset(input_path: str | Path) -> None:
         """Load training dataset from JSON file."""
         input_path = Path(input_path)
 

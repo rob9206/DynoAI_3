@@ -120,7 +120,8 @@ def nextgen_run_no_knock(tmp_path):
 class TestNextGenGenerateEndpoint:
     """Tests for POST /api/nextgen/<run_id>/generate endpoint."""
     
-    def test_generate_returns_200_and_creates_files(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_generate_returns_200_and_creates_files(client, nextgen_run_dir):
         """Generate endpoint returns 200 and creates NextGenAnalysis.json."""
         run_id = nextgen_run_dir["run_id"]
         output_dir = nextgen_run_dir["run_dir"] / "output"
@@ -169,7 +170,8 @@ class TestNextGenGenerateEndpoint:
             assert data["success"] is True
             assert data["run_id"] == run_id
     
-    def test_generate_returns_summary_fields(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_generate_returns_summary_fields(client, nextgen_run_dir):
         """Generate endpoint returns expected summary fields."""
         run_id = nextgen_run_dir["run_id"]
         
@@ -203,7 +205,8 @@ class TestNextGenGenerateEndpoint:
             assert "test_step_count" in summary
             assert summary["total_samples"] > 0
     
-    def test_generate_with_force_regenerates(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_generate_with_force_regenerates(client, nextgen_run_dir):
         """Generate with force=true regenerates even if cached."""
         run_id = nextgen_run_dir["run_id"]
         
@@ -236,7 +239,8 @@ class TestNextGenGenerateEndpoint:
             call_args = mock_workflow.generate_for_run.call_args
             assert call_args is not None
     
-    def test_generate_with_include_full_returns_payload(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_generate_with_include_full_returns_payload(client, nextgen_run_dir):
         """Generate with include=full returns full payload inline."""
         run_id = nextgen_run_dir["run_id"]
         
@@ -270,7 +274,8 @@ class TestNextGenGenerateEndpoint:
             assert "surfaces" in data["payload"]
             assert "cause_tree" in data["payload"]
     
-    def test_generate_returns_error_for_missing_run(self, client):
+    @staticmethod
+    def test_generate_returns_error_for_missing_run(client):
         """Generate returns error for non-existent run."""
         with patch("api.routes.nextgen.get_nextgen_workflow") as mock_get_workflow:
             mock_workflow = MagicMock()
@@ -292,7 +297,8 @@ class TestNextGenGenerateEndpoint:
 class TestNextGenGetEndpoint:
     """Tests for GET /api/nextgen/<run_id> endpoint."""
     
-    def test_get_returns_404_before_generation(self, client):
+    @staticmethod
+    def test_get_returns_404_before_generation(client):
         """GET returns 404 when analysis hasn't been generated."""
         with patch("api.routes.nextgen.get_nextgen_workflow") as mock_get_workflow:
             mock_workflow = MagicMock()
@@ -305,7 +311,8 @@ class TestNextGenGetEndpoint:
             data = response.get_json()
             assert "error" in data
     
-    def test_get_returns_payload_after_generation(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_get_returns_payload_after_generation(client, nextgen_run_dir):
         """GET returns cached payload after generation."""
         run_id = nextgen_run_dir["run_id"]
         
@@ -339,7 +346,8 @@ class TestNextGenGetEndpoint:
             assert "cause_tree" in data
             assert "next_tests" in data
     
-    def test_get_payload_has_expected_keys(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_get_payload_has_expected_keys(client, nextgen_run_dir):
         """GET payload contains all required schema keys."""
         run_id = nextgen_run_dir["run_id"]
         
@@ -385,7 +393,8 @@ class TestNextGenGetEndpoint:
 class TestNextGenDownloadEndpoint:
     """Tests for GET /api/nextgen/<run_id>/download endpoint."""
     
-    def test_download_returns_404_before_generation(self, client):
+    @staticmethod
+    def test_download_returns_404_before_generation(client):
         """Download returns 404 when file doesn't exist."""
         with patch("api.routes.nextgen.get_nextgen_workflow") as mock_get_workflow:
             mock_workflow = MagicMock()
@@ -396,7 +405,8 @@ class TestNextGenDownloadEndpoint:
             
             assert response.status_code == 404
     
-    def test_download_returns_json_attachment(self, client, nextgen_run_dir):
+    @staticmethod
+    def test_download_returns_json_attachment(client, nextgen_run_dir):
         """Download returns JSON file as attachment."""
         run_id = nextgen_run_dir["run_id"]
         output_dir = nextgen_run_dir["run_dir"] / "output"
@@ -424,7 +434,8 @@ class TestNextGenDownloadEndpoint:
 class TestNextGenGracefulDegradation:
     """Tests for graceful degradation when optional columns are missing."""
     
-    def test_generate_succeeds_without_knock_column(self, client, nextgen_run_no_knock):
+    @staticmethod
+    def test_generate_succeeds_without_knock_column(client, nextgen_run_no_knock):
         """Generate succeeds when knock column is missing."""
         run_id = nextgen_run_no_knock["run_id"]
         
@@ -460,7 +471,8 @@ class TestNextGenGracefulDegradation:
             assert payload_data is not None
             assert "surfaces" in payload_data
     
-    def test_knock_surfaces_omitted_when_missing(self, client, nextgen_run_no_knock):
+    @staticmethod
+    def test_knock_surfaces_omitted_when_missing(client, nextgen_run_no_knock):
         """Knock surfaces are not present when knock data is missing."""
         run_id = nextgen_run_no_knock["run_id"]
         
@@ -494,7 +506,8 @@ class TestNextGenGracefulDegradation:
             surfaces = payload_data["surfaces"]
             assert "knock_activity" not in surfaces
     
-    def test_warning_recorded_for_missing_knock(self, client, nextgen_run_no_knock):
+    @staticmethod
+    def test_warning_recorded_for_missing_knock(client, nextgen_run_no_knock):
         """Warning is recorded in notes_warnings when knock is missing."""
         run_id = nextgen_run_no_knock["run_id"]
         
@@ -536,14 +549,16 @@ class TestNextGenGracefulDegradation:
 class TestNextGenInputValidation:
     """Tests for NextGen endpoint input validation."""
     
-    def test_generate_rejects_invalid_run_id(self, client):
+    @staticmethod
+    def test_generate_rejects_invalid_run_id(client):
         """Generate rejects run_id with path traversal attempts."""
         response = client.post("/api/nextgen/../../../etc/passwd/generate")
         
         # Should be rejected (either 400, 404, or route not found)
         assert response.status_code in [400, 404, 405]
     
-    def test_get_rejects_empty_run_id(self, client):
+    @staticmethod
+    def test_get_rejects_empty_run_id(client):
         """GET rejects empty run_id."""
         response = client.get("/api/nextgen//")
         

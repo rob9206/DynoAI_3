@@ -71,7 +71,8 @@ def make_sample(provider_id: int, channel_id: int, channel_name: str, value: flo
 class TestProviderScoping:
     """Test that channel metrics are properly scoped by provider ID."""
 
-    def test_same_channel_id_different_providers_no_collision(self, validator, sample_provider_1, sample_provider_2):
+    @staticmethod
+    def test_same_channel_id_different_providers_no_collision(validator, sample_provider_1, sample_provider_2):
         """
         Two providers with the same channel_id should have separate metrics.
         This prevents cross-contamination when multiple dynos are on the network.
@@ -107,7 +108,8 @@ class TestProviderScoping:
         assert metrics1.last_value == sample_provider_1["rpm_value"]
         assert metrics2.last_value == sample_provider_2["rpm_value"]
 
-    def test_metrics_keyed_by_provider_channel_tuple(self, validator, sample_provider_1):
+    @staticmethod
+    def test_metrics_keyed_by_provider_channel_tuple(validator, sample_provider_1):
         """Verify that internal metrics dict uses (provider_id, channel_id) tuple keys."""
         sample = make_sample(
             sample_provider_1["provider_id"],
@@ -122,7 +124,8 @@ class TestProviderScoping:
         assert expected_key in validator._metrics
         assert validator._metrics[expected_key].provider_id == sample_provider_1["provider_id"]
 
-    def test_get_channels_for_provider(self, validator, sample_provider_1, sample_provider_2):
+    @staticmethod
+    def test_get_channels_for_provider(validator, sample_provider_1, sample_provider_2):
         """Test filtering channels by provider."""
         # Add channels from both providers
         validator.record_sample(make_sample(sample_provider_1["provider_id"], 10, "RPM", 3500))
@@ -143,7 +146,8 @@ class TestProviderScoping:
 class TestProviderPinning:
     """Test that provider pinning correctly filters samples."""
 
-    def test_active_provider_filters_other_providers(self, validator, sample_provider_1, sample_provider_2):
+    @staticmethod
+    def test_active_provider_filters_other_providers(validator, sample_provider_1, sample_provider_2):
         """When active provider is set, samples from other providers should be rejected."""
         # Pin to provider 1
         validator.set_active_provider(sample_provider_1["provider_id"])
@@ -162,7 +166,8 @@ class TestProviderPinning:
         assert validator.get_channel_health(sample_provider_1["provider_id"], 10) is not None
         assert validator.get_channel_health(sample_provider_2["provider_id"], 10) is None
 
-    def test_no_active_provider_accepts_all(self, validator, sample_provider_1, sample_provider_2):
+    @staticmethod
+    def test_no_active_provider_accepts_all(validator, sample_provider_1, sample_provider_2):
         """When no active provider is set, samples from all providers should be recorded."""
         # No provider pinned (default)
         assert validator.get_active_provider() is None
@@ -178,7 +183,8 @@ class TestProviderPinning:
         assert validator.get_channel_health(sample_provider_1["provider_id"], 10) is not None
         assert validator.get_channel_health(sample_provider_2["provider_id"], 10) is not None
 
-    def test_clear_active_provider(self, validator, sample_provider_1):
+    @staticmethod
+    def test_clear_active_provider(validator, sample_provider_1):
         """Setting active provider to None should clear the filter."""
         # Pin, then unpin
         validator.set_active_provider(sample_provider_1["provider_id"])
@@ -186,7 +192,8 @@ class TestProviderPinning:
 
         assert validator.get_active_provider() is None
 
-    def test_rejected_samples_tracked_as_non_provider_frames(self, validator, sample_provider_1, sample_provider_2):
+    @staticmethod
+    def test_rejected_samples_tracked_as_non_provider_frames(validator, sample_provider_1, sample_provider_2):
         """Rejected samples should be counted in frame stats."""
         validator.set_active_provider(sample_provider_1["provider_id"])
 
@@ -208,7 +215,8 @@ class TestProviderPinning:
 class TestSemanticValidation:
     """Test semantic checks that detect mislabeled channels."""
 
-    def test_rpm_like_values_detected(self):
+    @staticmethod
+    def test_rpm_like_values_detected():
         """Test detection of AFR-like values in RPM channel."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -223,7 +231,8 @@ class TestSemanticValidation:
         assert any("rpm" in s.expected_type.lower() for s in suspicions)
         assert any("afr" in s.observed_behavior.lower() for s in suspicions)
 
-    def test_afr_like_values_detected(self):
+    @staticmethod
+    def test_afr_like_values_detected():
         """Test detection of RPM-like values in AFR channel."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -237,7 +246,8 @@ class TestSemanticValidation:
         assert len(suspicions) > 0, "Should detect mislabeled AFR"
         assert any("afr" in s.expected_type.lower() for s in suspicions)
 
-    def test_frozen_rpm_detected(self):
+    @staticmethod
+    def test_frozen_rpm_detected():
         """Test detection of frozen/stuck RPM sensor."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -251,7 +261,8 @@ class TestSemanticValidation:
         assert len(suspicions) > 0, "Should detect frozen RPM"
         assert any("frozen" in s.observed_behavior.lower() for s in suspicions)
 
-    def test_lambda_instead_of_afr_detected(self):
+    @staticmethod
+    def test_lambda_instead_of_afr_detected():
         """Test detection of Lambda values where AFR expected."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -265,7 +276,8 @@ class TestSemanticValidation:
         assert len(suspicions) > 0, "Should detect Lambda instead of AFR"
         assert any("lambda" in s.observed_behavior.lower() for s in suspicions)
 
-    def test_tps_out_of_range_detected(self):
+    @staticmethod
+    def test_tps_out_of_range_detected():
         """Test detection of TPS values outside 0-100% range."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -279,7 +291,8 @@ class TestSemanticValidation:
         assert len(suspicions) > 0, "Should detect out-of-range TPS"
         assert any("tps" in s.expected_type.lower() for s in suspicions)
 
-    def test_valid_data_passes(self):
+    @staticmethod
+    def test_valid_data_passes():
         """Test that valid data passes semantic checks."""
         from api.services.jetdrive_preflight import _run_semantic_checks
 
@@ -304,7 +317,8 @@ class TestSemanticValidation:
 class TestRequiredChannels:
     """Test required channel detection."""
 
-    def test_required_channels_found(self):
+    @staticmethod
+    def test_required_channels_found():
         """Test that required channels are detected when present."""
         from api.services.jetdrive_preflight import _check_required_channels
 
@@ -314,7 +328,8 @@ class TestRequiredChannels:
         assert check.status.value == "passed"
         assert len(missing) == 0
 
-    def test_missing_rpm_detected(self):
+    @staticmethod
+    def test_missing_rpm_detected():
         """Test that missing RPM channel is detected."""
         from api.services.jetdrive_preflight import _check_required_channels
 
@@ -324,7 +339,8 @@ class TestRequiredChannels:
         assert check.status.value == "failed"
         assert "rpm" in missing
 
-    def test_missing_afr_detected(self):
+    @staticmethod
+    def test_missing_afr_detected():
         """Test that missing AFR channel is detected."""
         from api.services.jetdrive_preflight import _check_required_channels
 
@@ -342,7 +358,8 @@ class TestRequiredChannels:
 class TestHealthThresholds:
     """Test health threshold checks."""
 
-    def test_healthy_data_passes(self):
+    @staticmethod
+    def test_healthy_data_passes():
         """Test that healthy data passes threshold checks."""
         from api.services.jetdrive_preflight import _check_health_thresholds
 
@@ -362,7 +379,8 @@ class TestHealthThresholds:
         check = _check_health_thresholds(health_data)
         assert check.status.value == "passed"
 
-    def test_critical_health_fails(self):
+    @staticmethod
+    def test_critical_health_fails():
         """Test that critical health fails threshold checks."""
         from api.services.jetdrive_preflight import _check_health_thresholds
 
@@ -377,7 +395,8 @@ class TestHealthThresholds:
         check = _check_health_thresholds(health_data)
         assert check.status.value == "failed"
 
-    def test_high_drop_rate_warns(self):
+    @staticmethod
+    def test_high_drop_rate_warns():
         """Test that high drop rate triggers warning."""
         from api.services.jetdrive_preflight import _check_health_thresholds
 
@@ -400,7 +419,8 @@ class TestHealthThresholds:
 class TestPreflightIntegration:
     """Integration tests for the full preflight flow."""
 
-    def test_preflight_with_no_providers(self):
+    @staticmethod
+    def test_preflight_with_no_providers():
         """Test preflight when no providers are found."""
         import asyncio
         from api.services.jetdrive_preflight import run_preflight
@@ -417,7 +437,8 @@ class TestPreflightIntegration:
             assert connectivity_check is not None
             assert connectivity_check.status.value == "failed"
 
-    def test_preflight_passes_with_good_data(self):
+    @staticmethod
+    def test_preflight_passes_with_good_data():
         """Test preflight passes with valid provider and data."""
         import asyncio
         from api.services.jetdrive_preflight import run_preflight
