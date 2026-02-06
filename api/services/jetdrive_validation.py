@@ -459,7 +459,7 @@ class JetDriveDataValidator:
             if provider_id is not None:
                 # Remove only metrics for this provider
                 keys_to_remove = [
-                    k for k in self._metrics.keys() if k[0] == provider_id
+                    k for k in self._metrics if k[0] == provider_id
                 ]
                 for key in keys_to_remove:
                     del self._metrics[key]

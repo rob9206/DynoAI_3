@@ -789,7 +789,7 @@ def auto_map_channels_with_confidence(provider: Any) -> dict[str, MappingConfide
     used_channel_ids: set[int] = set()
     
     # Try to map each canonical channel
-    for canonical_name in CANONICAL_CHANNELS.keys():
+    for canonical_name in CANONICAL_CHANNELS:
         best_confidence: MappingConfidence | None = None
         
         # Score all available channels for this canonical name

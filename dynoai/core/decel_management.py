@@ -408,7 +408,7 @@ def calculate_decel_enrichment(
             continue  # Skip low-likelihood events
 
         # Find which zone this event falls into
-        for zone in BASE_ENRICHMENT.keys():
+        for zone in BASE_ENRICHMENT:
             rpm_min, rpm_max, tps_min, tps_max = zone
 
             # Check if event's end point is in this zone

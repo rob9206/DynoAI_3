@@ -3196,7 +3196,7 @@ def get_available_transforms():
     from api.services.jetdrive_mapping import TRANSFORMS
 
     transforms = []
-    for name in TRANSFORMS.keys():
+    for name in TRANSFORMS:
         # Generate description from name
         parts = name.split("_to_")
         if len(parts) == 2:
