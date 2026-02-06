@@ -16,8 +16,8 @@ import { CellZone, ZoneConfig } from '../../types/veApplyTypes';
  * - edge:         <1200 or >5500 RPM, any MAP (idle, redline)
  */
 export function getCellZone(rpm: number, mapKpa: number): CellZone {
-  // RPM extremes are always edge
-  if (rpm >= 5500 || rpm <= 1200) return 'edge';
+  // RPM extremes are always edge (<1200 or >5500 per spec)
+  if (rpm > 5500 || rpm < 1200) return 'edge';
 
   // MAP-based zones for normal RPM range
   if (mapKpa <= 30) return 'decel';

@@ -238,6 +238,7 @@ try:
     from api.routes.virtual_tune import virtual_tune_bp
 
     app.register_blueprint(virtual_tune_bp)
+    print("[+] Virtual Tuning (closed-loop) registered at /api/virtual-tune")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Virtual Tuning: {e}")
 
@@ -1316,6 +1317,13 @@ def print_startup_banner():
     print("  GET  /api/nextgen/<run_id>/surfaces   - Get surface data")
     print("  GET  /api/nextgen/<run_id>/hypotheses - Get causal hypotheses")
     print("  GET  /api/nextgen/<run_id>/test-plan  - Get next-test plan")
+    print("\n[*] Virtual Tuning (closed-loop) endpoints:")
+    print("  POST /api/virtual-tune/start         - Start tuning session")
+    print("  GET  /api/virtual-tune/status/<id>  - Get session status")
+    print("  POST /api/virtual-tune/stop/<id>    - Stop session")
+    print("  GET  /api/virtual-tune/results/<id> - Get session results")
+    print("  GET  /api/virtual-tune/sessions      - List sessions")
+    print("  GET  /api/virtual-tune/health       - Health check")
     print("\n" + "=" * 60 + "\n")
 
     debug_flag = bool(os.getenv("DYNOAI_DEBUG", "true").lower() == "true")

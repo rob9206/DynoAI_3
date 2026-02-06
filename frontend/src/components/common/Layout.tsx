@@ -1,6 +1,6 @@
 import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX, Shield } from 'lucide-react';
+import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX, Shield, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
@@ -126,6 +126,16 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <Shield className="h-4 w-4" />
                 <span>Training</span>
+              </Link>
+              <Link
+                to="/engine-analyzer"
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/engine-analyzer')
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-cyan-500/10 hover:text-cyan-300'
+                  }`}
+              >
+                <Database className="h-4 w-4" />
+                <span>EA Library</span>
               </Link>
 
               <div className="w-px h-6 bg-border mx-2" />

@@ -72,19 +72,29 @@ if errorlevel 1 (
 
 echo.
 echo [2/10] Updating system dependencies...
+echo NOTE: This step may take a few minutes. You can skip this by using quick-start.bat instead.
 
 REM Update Python pip
 echo Updating pip...
-%PYTHON_EXE% -m pip install --upgrade pip >nul 2>&1
+%PYTHON_EXE% -m pip install --upgrade pip --timeout 30 2>&1 | findstr /v "Requirement already satisfied"
+if errorlevel 1 (
+    echo WARNING: pip update timed out or failed, continuing anyway...
+)
 
 REM Update Python packages
-echo Updating Python packages...
-%PYTHON_EXE% -m pip install -U -r "%PROJECT_ROOT%\requirements.txt" >nul 2>&1
+echo Updating Python packages (this may take a while)...
+%PYTHON_EXE% -m pip install -U -r "%PROJECT_ROOT%\requirements.txt" --timeout 60 2>&1 | findstr /v "Requirement already satisfied"
+if errorlevel 1 (
+    echo WARNING: Some packages failed to update, continuing anyway...
+)
 
 REM Update Node.js dependencies
-echo Updating Node.js dependencies...
+echo Updating Node.js dependencies (this may take a while)...
 cd "%PROJECT_ROOT%\frontend"
-call "%NPM_EXE%" update --silent
+call "%NPM_EXE%" update
+if errorlevel 1 (
+    echo WARNING: npm update failed, continuing anyway...
+)
 cd "%PROJECT_ROOT%"
 
 echo.

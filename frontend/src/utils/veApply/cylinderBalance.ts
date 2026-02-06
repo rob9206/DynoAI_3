@@ -40,14 +40,14 @@ export function checkCylinderBalance(
 
   frontCorrections.forEach((row, rpmIdx) => {
     row.forEach((frontCorr, mapIdx) => {
-      const frontHits = hitCounts.front[rpmIdx][mapIdx];
-      const rearHits = hitCounts.rear[rpmIdx][mapIdx];
+      const frontHits = hitCounts.front[rpmIdx]?.[mapIdx] ?? 0;
+      const rearHits = hitCounts.rear[rpmIdx]?.[mapIdx] ?? 0;
       const minHits = Math.min(frontHits, rearHits);
 
       // Exclude cells where either cylinder has insufficient data
       if (minHits < SAFETY.minHitsForInclusion) return;
 
-      const rearCorr = rearCorrections[rpmIdx][mapIdx];
+      const rearCorr = rearCorrections[rpmIdx]?.[mapIdx];
 
       // Sanitize both corrections
       const frontSafe = sanitizeCorrection(frontCorr);
@@ -80,8 +80,8 @@ export function checkCylinderBalance(
 
       // Applied balance (if provided)
       if (frontApplied && rearApplied) {
-        const frontApp = frontApplied[rpmIdx][mapIdx];
-        const rearApp = rearApplied[rpmIdx][mapIdx];
+        const frontApp = frontApplied[rpmIdx]?.[mapIdx];
+        const rearApp = rearApplied[rpmIdx]?.[mapIdx];
         if (frontApp > 0 && rearApp > 0) {
           const appliedDiffPct = (rearApp / frontApp - 1) * 100;
           appliedWeightedSumDiff += appliedDiffPct * weight;

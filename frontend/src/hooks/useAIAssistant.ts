@@ -9,6 +9,9 @@
 
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 
+/** Set to true only when debugging AI Assistant; verbose logs hurt performance at 50Hz. */
+const DEBUG_AI_ASSISTANT = false;
+
 export interface AIAssistantState {
     isEnabled: boolean;
     isSpeaking: boolean;
@@ -163,7 +166,7 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
     // Update enabled state when options change
     useEffect(() => {
         setState(prev => ({ ...prev, isEnabled: opts.enabled }));
-        console.log('[AI Assistant] Enabled state changed:', opts.enabled);
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Enabled state changed:', opts.enabled);
     }, [opts.enabled]);
 
     const synthRef = useRef<SpeechSynthesis | null>(null);
@@ -183,7 +186,7 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         }
 
         synthRef.current = window.speechSynthesis;
-        console.log('[AI Assistant] Speech synthesis initialized');
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speech synthesis initialized');
 
         const loadVoices = () => {
             const voices = synthRef.current?.getVoices() ?? [];
@@ -233,9 +236,9 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
             if (selectedVoice) {
                 voiceRef.current = selectedVoice;
                 setState(prev => ({ ...prev, voiceName: selectedVoice.name }));
-                console.log('[AI Assistant] ✅ Selected voice:', selectedVoice.name);
+                if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] ✅ Selected voice:', selectedVoice.name);
             } else {
-                console.warn('[AI Assistant] ❌ No suitable voice found! Total voices available:', voices.length);
+                if (DEBUG_AI_ASSISTANT) console.warn('[AI Assistant] ❌ No suitable voice found! Total voices available:', voices.length);
             }
         };
 
@@ -256,12 +259,11 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         }
 
         if (!state.isEnabled) {
-            console.log('[AI Assistant] Not speaking - disabled');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Not speaking - disabled');
             return;
         }
 
-        console.log('[AI Assistant] Speaking:', text);
-        console.log('[AI Assistant] State:', { volume: state.volume, pitch: state.pitch, rate: state.rate });
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speaking:', text, 'State:', { volume: state.volume, pitch: state.pitch, rate: state.rate });
 
         // Cancel any ongoing speech
         synthRef.current.cancel();
@@ -270,9 +272,9 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
 
         if (voiceRef.current) {
             utterance.voice = voiceRef.current;
-            console.log('[AI Assistant] Using voice:', voiceRef.current.name);
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Using voice:', voiceRef.current.name);
         } else {
-            console.log('[AI Assistant] No voice selected, using default');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] No voice selected, using default');
         }
 
         utterance.volume = state.volume;
@@ -280,12 +282,12 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         utterance.rate = state.rate;
 
         utterance.onstart = () => {
-            console.log('[AI Assistant] Speech started');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speech started');
             setState(prev => ({ ...prev, isSpeaking: true }));
         };
 
         utterance.onend = () => {
-            console.log('[AI Assistant] Speech ended');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speech ended');
             setState(prev => ({ ...prev, isSpeaking: false }));
         };
 
@@ -295,29 +297,29 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         };
 
         utterance.onpause = () => {
-            console.log('[AI Assistant] Speech paused');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speech paused');
         };
 
         utterance.onresume = () => {
-            console.log('[AI Assistant] Speech resumed');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Speech resumed');
         };
 
-        console.log('[AI Assistant] Calling speak()...');
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Calling speak()...');
         synthRef.current.speak(utterance);
 
-        // Log the speaking state immediately
-        setTimeout(() => {
-            console.log('[AI Assistant] Speaking state:', synthRef.current?.speaking);
-            console.log('[AI Assistant] Pending state:', synthRef.current?.pending);
-        }, 100);
+        if (DEBUG_AI_ASSISTANT) {
+            setTimeout(() => {
+                console.log('[AI Assistant] Speaking state:', synthRef.current?.speaking, 'Pending:', synthRef.current?.pending);
+            }, 100);
+        }
     }, [state.isEnabled, state.volume, state.pitch, state.rate]);
 
     // Trigger an event (selects random phrase and speaks it)
     const triggerEvent = useCallback((event: VoiceEvent) => {
-        console.log('[AI Assistant] triggerEvent called:', event.type, 'enabled:', state.isEnabled);
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] triggerEvent called:', event.type, 'enabled:', state.isEnabled);
 
         if (!state.isEnabled) {
-            console.log('[AI Assistant] Event ignored - not enabled');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Event ignored - not enabled');
             return;
         }
 
@@ -325,13 +327,13 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
 
         // Check cooldown for same event type
         if (event.type === lastEventRef.current && now - lastEventTimeRef.current < cooldownMs) {
-            console.log('[AI Assistant] Event ignored - cooldown active');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Event ignored - cooldown active');
             return;
         }
 
         const phrases = PHRASES[event.type];
         if (!phrases || phrases.length === 0) {
-            console.log('[AI Assistant] No phrases for event type:', event.type);
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] No phrases for event type:', event.type);
             return;
         }
 
@@ -343,7 +345,7 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
             phrase = phrase.replace('{{value}}', event.value.toFixed(0));
         }
 
-        console.log('[AI Assistant] Selected phrase:', phrase);
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Selected phrase:', phrase);
 
         lastEventRef.current = event.type;
         lastEventTimeRef.current = now;
@@ -353,7 +355,7 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
 
     // Convenience methods for specific events
     const onPullStart = useCallback(() => {
-        console.log('[AI Assistant] onPullStart called');
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] onPullStart called');
         triggerEvent({ type: 'pull_start' });
     }, [triggerEvent]);
 
@@ -444,12 +446,11 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
 
     // Test voice
     const testVoice = useCallback(() => {
-        console.log('[AI Assistant] testVoice called, state:', state);
-        console.log('[AI Assistant] Available voices:', synthRef.current?.getVoices().length);
+        if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] testVoice called, state:', state, 'voices:', synthRef.current?.getVoices().length);
 
         // Force enable for testing
         if (!state.isEnabled) {
-            console.log('[AI Assistant] Force enabling for test');
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Force enabling for test');
             setState(prev => ({ ...prev, isEnabled: true }));
         }
 
@@ -481,7 +482,7 @@ export function useAIAssistant(options: UseAIAssistantOptions = {}) {
         if (voice) {
             voiceRef.current = voice;
             setState(prev => ({ ...prev, voiceName: voice.name }));
-            console.log('[AI Assistant] Voice changed to:', voice.name);
+            if (DEBUG_AI_ASSISTANT) console.log('[AI Assistant] Voice changed to:', voice.name);
         }
     }, []);
 

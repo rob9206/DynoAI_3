@@ -449,9 +449,9 @@ export function AFRTargetTable({
                                     <span className="text-[9px] text-zinc-500">MAP ↓</span>
                                 </div>
                             </th>
-                            {RPM_BINS.map((rpm) => (
+                            {RPM_BINS.map((rpm, rpmIdx) => (
                                 <th
-                                    key={rpm}
+                                    key={`rpm-${rpmIdx}`}
                                     className={cn(
                                         "min-w-[48px] w-[48px] px-1.5 py-2 text-center font-bold text-zinc-300 border-l border-zinc-800/50",
                                         activeCell && RPM_BINS[activeCell.rpmIdx] === rpm && "bg-orange-500/20 text-orange-300"
@@ -464,7 +464,7 @@ export function AFRTargetTable({
                     </thead>
                     <tbody>
                         {MAP_BINS.map((mapKpa, mapIdx) => (
-                            <tr key={mapKpa} className={cn(
+                            <tr key={`map-${mapIdx}`} className={cn(
                                 "border-t border-zinc-800/50",
                                 mapIdx % 2 === 0 ? "bg-zinc-900/30" : "bg-zinc-900/10"
                             )}>
@@ -487,7 +487,7 @@ export function AFRTargetTable({
 
                                     return (
                                         <td
-                                            key={`${rpm}-${mapKpa}`}
+                                            key={`cell-${mapIdx}-${rpmIdx}`}
                                             className={cn(
                                                 "min-w-[48px] w-[48px] h-12 px-1 py-1.5 text-center cursor-pointer transition-colors border-l border-zinc-800/30 align-middle",
                                                 getAfrBgColor(afr),

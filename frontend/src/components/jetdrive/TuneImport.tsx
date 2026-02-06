@@ -214,6 +214,30 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                 return;
             }
 
+            // Warn if this looks like a DynoAI correction file, not a base tune
+            if (parsed.veFront) {
+                const tableName = parsed.veFront.name.toLowerCase();
+                const values = parsed.veFront.values;
+                const isCorrection = tableName.includes('correction') || tableName.includes('dynoai');
+                // Correction files have small values (percentage changes near 0)
+                // Base tune files have larger VE values (typically 50-120)
+                const sampleValues = values.flat().filter(v => Number.isFinite(v));
+                const avgAbsValue = sampleValues.length > 0 
+                    ? sampleValues.reduce((sum, v) => sum + Math.abs(v), 0) / sampleValues.length 
+                    : 0;
+                
+                if (isCorrection || avgAbsValue < 30) {
+                    console.warn('[TuneImport] This appears to be a correction file, not a base tune.',
+                        { tableName: parsed.veFront.name, avgAbsValue: avgAbsValue.toFixed(1) });
+                    setImportError(
+                        'This appears to be a VE correction file, not a base tune. ' +
+                        'Please import your original Power Vision tune file (.pvv) with base VE tables, ' +
+                        'or use a preset instead.'
+                    );
+                    return;
+                }
+            }
+
             setImportedPVV(parsed);
 
             // Extract and send data to parent
@@ -221,14 +245,24 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                 ? extractAfrTargets(parsed.afrTarget)
                 : getEnginePreset(currentPreset)?.afrTargets ?? {};
 
+            // Deduplicate bins - PVV files can have near-duplicate values that
+            // round to the same integer, causing duplicate rows/columns in the grid
+            const deduplicateBins = (bins: number[]): number[] => {
+                const rounded = bins.map(b => Math.round(b));
+                return [...new Set(rounded)].sort((a, b) => a - b);
+            };
+
+            const rawRpmBins = parsed.veFront?.rows ?? getEnginePreset(currentPreset)?.rpmBins ?? [];
+            const rawMapBins = parsed.veFront?.columns ?? getEnginePreset(currentPreset)?.mapBins ?? [];
+
             const result: TuneImportResult = {
                 source: 'pvv',
                 sourceName: parsed.sourceFile || file.name,
                 veFront: parsed.veFront,
                 veRear: parsed.veRear,
                 afrTargets,
-                rpmBins: parsed.veFront?.rows ?? getEnginePreset(currentPreset)?.rpmBins ?? [],
-                mapBins: parsed.veFront?.columns ?? getEnginePreset(currentPreset)?.mapBins ?? [],
+                rpmBins: deduplicateBins(rawRpmBins),
+                mapBins: deduplicateBins(rawMapBins),
             };
 
             console.log('[TuneImport] Sending result to parent:', {

@@ -25,12 +25,13 @@ logger = logging.getLogger(__name__)
 virtual_tune_bp = Blueprint("virtual_tune", __name__, url_prefix="/api/virtual-tune")
 
 
-@virtual_tune_bp.route("/start", methods=["POST"])
+@virtual_tune_bp.route("/start", methods=["GET", "POST"])
 def start_tuning_session():
     """
     Start a new closed-loop virtual tuning session.
+    GET returns a short usage message; use POST with JSON body to start a session.
 
-    Request body:
+    Request body (POST):
     {
         "engine_profile": "m8_114" | "m8_131" | "twin_cam_103" | "sportbike_600",
         "base_ve_scenario": "perfect" | "lean" | "rich" | "custom",
@@ -53,6 +54,19 @@ def start_tuning_session():
         "config": {...}
     }
     """
+    if request.method == "GET":
+        return (
+            jsonify(
+                {
+                    "error": "Method not allowed",
+                    "message": "Use POST to start a tuning session.",
+                    "example": "POST /api/virtual-tune/start with JSON body: { \"engine_profile\": \"m8_114\", \"base_ve_scenario\": \"lean\" }",
+                    "health": "GET /api/virtual-tune/health to verify the API is available.",
+                }
+            ),
+            405,
+        )
+
     try:
         data = request.get_json() or {}
 

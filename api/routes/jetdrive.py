@@ -616,7 +616,7 @@ def analyze_run():
         )
 
         project_root = get_project_root()
-        script_path = project_root / "scripts" / "jetdrive_autotune.py"
+        script_path = project_root / "scripts" / "jetdrive" / "jetdrive_autotune.py"
 
         if not script_path.exists():
             logger.error(f"Autotune script not found at: {script_path}")
@@ -688,97 +688,79 @@ def analyze_run():
                 500,
             )
 
-        if not pull_data:
-            logger.warning("No pull data available from simulator")
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": (
-                            "No simulator pull data available. Please run a pull first by clicking "
-                            "'Trigger Pull' in the simulator controls."
-                        ),
-                    }
-                ),
-                400,
-            )
+        if not pull_data or len(pull_data) == 0:
+            logger.warning("No pull data available from simulator - falling back to simulate mode")
+            # Graceful fallback: use synthetic simulation instead of failing
+            mode = "simulate"
+            cmd.append("--simulate")
+            # Skip the rest of simulator_pull logic
+            pull_data = None
 
-        # Validate pull data has required fields
-        if len(pull_data) == 0:
-            logger.warning("Pull data is empty list")
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Simulator pull data is empty. Please run a pull first.",
-                    }
-                ),
-                400,
-            )
-
-        # Check for required fields in first data point
-        first_point = pull_data[0]
-        logger.info(f"First data point keys: {list(first_point.keys())}")
-        required_fields = ["Engine RPM", "Torque", "Horsepower"]
-        missing_fields = [f for f in required_fields if f not in first_point]
-        if missing_fields:
-            logger.error(f"Missing required fields in pull data: {missing_fields}")
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
-                    }
-                ),
-                400,
-            )
-
-        # Save pull data to CSV
-        uploads_dir = project_root / "uploads"
-        uploads_dir.mkdir(exist_ok=True)
-        csv_filename = f"{run_id}_pull.csv"
-        csv_path = str(uploads_dir / csv_filename)
-
-        try:
-            with open(csv_path, "w", newline="") as f:
-                fieldnames = [
-                    "timestamp_ms",
-                    "RPM",
-                    "Torque",
-                    "Horsepower",
-                    "AFR",
-                    "MAP_kPa",
-                    "TPS",
-                    "IAT",
-                ]
-
-                writer = csv_module.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-
-                for i, row in enumerate(pull_data):
-                    # Use average of front/rear AFR
-                    afr_avg = (
-                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
-                    ) / 2
-
-                    writer.writerow(
+        # Only process pull data if we didn't fall back to simulate mode
+        if pull_data is not None:
+            # Check for required fields in first data point
+            first_point = pull_data[0]
+            logger.info(f"First data point keys: {list(first_point.keys())}")
+            required_fields = ["Engine RPM", "Torque", "Horsepower"]
+            missing_fields = [f for f in required_fields if f not in first_point]
+            if missing_fields:
+                logger.error(f"Missing required fields in pull data: {missing_fields}")
+                return (
+                    jsonify(
                         {
-                            "timestamp_ms": i
-                            * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
-                            "RPM": row.get("Engine RPM", 0),
-                            "Torque": row.get("Torque", 0),
-                            "Horsepower": row.get("Horsepower", 0),
-                            "AFR": afr_avg,
-                            "MAP_kPa": row.get("MAP kPa", 0),
-                            "TPS": row.get("TPS", 0),
-                            "IAT": row.get("IAT F", 85),
+                            "success": False,
+                            "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
                         }
-                    )
-        except Exception as e:
-            return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
+                    ),
+                    400,
+                )
 
-        # Now analyze the saved CSV
-        cmd.extend(["--csv", csv_path])
+            # Save pull data to CSV
+            uploads_dir = project_root / "uploads"
+            uploads_dir.mkdir(exist_ok=True)
+            csv_filename = f"{run_id}_pull.csv"
+            csv_path = str(uploads_dir / csv_filename)
+
+            try:
+                with open(csv_path, "w", newline="") as f:
+                    fieldnames = [
+                        "timestamp_ms",
+                        "RPM",
+                        "Torque",
+                        "Horsepower",
+                        "AFR",
+                        "MAP_kPa",
+                        "TPS",
+                        "IAT",
+                    ]
+
+                    writer = csv_module.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+
+                    for i, row in enumerate(pull_data):
+                        # Use average of front/rear AFR
+                        afr_avg = (
+                            row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
+                        ) / 2
+
+                        writer.writerow(
+                            {
+                                "timestamp_ms": i
+                                * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
+                                "RPM": row.get("Engine RPM", 0),
+                                "Torque": row.get("Torque", 0),
+                                "Horsepower": row.get("Horsepower", 0),
+                                "AFR": afr_avg,
+                                "MAP_kPa": row.get("MAP kPa", 0),
+                                "TPS": row.get("TPS", 0),
+                                "IAT": row.get("IAT F", 85),
+                            }
+                        )
+            except Exception as e:
+                return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
+
+            # Now analyze the saved CSV
+            cmd.extend(["--csv", csv_path])
     else:
         valid_modes = ["simulate", "csv", "simulator_pull"]
         return (
@@ -4933,7 +4915,12 @@ def get_simulator_status():
 
 @jetdrive_bp.route("/simulator/pull", methods=["POST"])
 def trigger_pull():
-    """Manually trigger a WOT pull in the simulator."""
+    """
+    Manually trigger a dyno pull in the simulator.
+    
+    Body (optional):
+      { "throttle": 0-100 }  # Default is 100 (WOT)
+    """
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
@@ -4953,13 +4940,25 @@ def trigger_pull():
             400,
         )
 
-    sim.trigger_pull()
+    # Get throttle percentage from request body (default to 100% WOT)
+    data = request.get_json() or {}
+    throttle_pct = float(data.get("throttle", 100.0))
+    
+    logger.info(f"[PULL] Received pull request: data={data}, throttle_pct={throttle_pct}")
+    
+    # Validate throttle range
+    if not (0 <= throttle_pct <= 100):
+        return jsonify({"error": "Throttle must be between 0 and 100"}), 400
+
+    sim.trigger_pull(throttle_pct=throttle_pct)
+    logger.info(f"[PULL] Called trigger_pull with throttle_pct={throttle_pct}")
 
     return jsonify(
         {
             "success": True,
             "status": "pull_started",
             "state": "pull",
+            "throttle_pct": throttle_pct,
         }
     )
 
@@ -4968,6 +4967,9 @@ def trigger_pull():
 def set_simulator_throttle():
     """
     Set simulator throttle target (TPS %) for manual operator control.
+
+    Note: Manual throttle control is blocked during PULL state to prevent
+    interference with triggered pulls.
 
     Body:
       { "tps": 0-100 }
@@ -4984,11 +4986,30 @@ def set_simulator_throttle():
     if not (0.0 <= tps <= 100.0):
         return jsonify({"error": "'tps' must be between 0 and 100"}), 400
 
-    from api.services.simulation.dyno_simulator import get_simulator
+    from api.services.simulation.dyno_simulator import get_simulator, SimState
 
     sim = get_simulator()
-    # Only allow manual throttle while simulator is running.
+    current_state = sim.get_state()
+    
+    logger.info(f"[THROTTLE] Received throttle request: tps={tps}, current_state={current_state.value}")
+
+    # Block manual throttle during PULL state to prevent override
+    if current_state == SimState.PULL:
+        logger.info(f"[THROTTLE] BLOCKED - manual throttle during pull")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Manual throttle blocked during pull",
+                    "state": "pull",
+                }
+            ),
+            400,
+        )
+
+    # Allow manual throttle in IDLE, DECEL, COOLDOWN states
     sim.physics.tps_target = tps
+    logger.info(f"[THROTTLE] Set tps_target={tps}")
 
     return jsonify({"success": True, "tps_target": tps})
 

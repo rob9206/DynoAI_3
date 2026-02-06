@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Settings2, Target, Wrench, FlaskConical, X } from 'lucide-react';
+import { Settings2, Target, Wrench, FlaskConical, X, Zap, Play, Info } from 'lucide-react';
 import {
     Sheet,
     SheetContent,
@@ -21,12 +21,16 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Slider } from '../ui/slider';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
+import { Switch } from '../ui/switch';
 import { AFRTargetTable } from './AFRTargetTable';
 import { StageConfigPanel } from './StageConfigPanel';
 import { TransientFuelPanel } from './TransientFuelPanel';
 import { VirtualECUPanel, type VEScenario } from './VirtualECUPanel';
 import { ClosedLoopTuningPanel } from './ClosedLoopTuningPanel';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { Alert, AlertDescription } from '../ui/alert';
 
 interface SettingsSheetProps {
     open: boolean;
@@ -60,6 +64,13 @@ interface SettingsSheetProps {
     veErrorStd: number;
     onVeErrorStdChange: (std: number) => void;
 
+    // Auto-pull settings (Simulator)
+    autoPullEnabled?: boolean;
+    onAutoPullEnabledChange?: (enabled: boolean) => void;
+    autoPullInterval?: number;
+    onAutoPullIntervalChange?: (interval: number) => void;
+    isSimulatorActive?: boolean;
+
     // Closed-loop settings
     selectedProfile: string;
 }
@@ -89,6 +100,11 @@ export function SettingsSheet({
     onVeErrorPctChange,
     veErrorStd,
     onVeErrorStdChange,
+    autoPullEnabled = false,
+    onAutoPullEnabledChange,
+    autoPullInterval = 15,
+    onAutoPullIntervalChange,
+    isSimulatorActive = false,
     selectedProfile,
 }: SettingsSheetProps) {
     const [activeTab, setActiveTab] = useState('targets');
@@ -224,18 +240,97 @@ export function SettingsSheet({
 
                             {/* Analysis Tab */}
                             <TabsContent value="analysis" className="mt-0 p-6 space-y-6">
+                                {/* Auto-Pull (Simulator Only) */}
+                                {onAutoPullEnabledChange && onAutoPullIntervalChange && (
+                                    <Card className="bg-zinc-900/60 border-zinc-800">
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-sm flex items-center gap-2">
+                                                <Zap className="w-4 h-4 text-orange-400" />
+                                                Auto-Pull Mode
+                                                <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-400 bg-orange-500/10">
+                                                    Simulator Only
+                                                </Badge>
+                                            </CardTitle>
+                                            <CardDescription className="text-xs">
+                                                Automatically trigger dyno pulls to build coverage
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {/* Enable Toggle */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-sm text-zinc-200">Enable Auto-Pull</Label>
+                                                    <p className="text-xs text-zinc-500">
+                                                        Continuously run pulls at set intervals
+                                                    </p>
+                                                </div>
+                                                <Switch
+                                                    checked={autoPullEnabled}
+                                                    onCheckedChange={onAutoPullEnabledChange}
+                                                    disabled={!isSimulatorActive}
+                                                />
+                                            </div>
+
+                                            {/* Interval Slider */}
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-xs text-zinc-400">
+                                                        Pull Interval
+                                                    </Label>
+                                                    <span className="text-sm font-mono font-bold text-orange-400">
+                                                        {autoPullInterval}s
+                                                    </span>
+                                                </div>
+                                                <Slider
+                                                    value={[autoPullInterval]}
+                                                    onValueChange={([v]) => onAutoPullIntervalChange(v)}
+                                                    min={5}
+                                                    max={60}
+                                                    step={5}
+                                                    disabled={!autoPullEnabled || !isSimulatorActive}
+                                                    className="flex-1"
+                                                />
+                                                <p className="text-[10px] text-zinc-600">
+                                                    Time between automatic pull triggers (5-60 seconds)
+                                                </p>
+                                            </div>
+
+                                            {/* Info Alert */}
+                                            {autoPullEnabled && isSimulatorActive && (
+                                                <Alert className="bg-orange-500/10 border-orange-500/30">
+                                                    <Play className="h-4 w-4 text-orange-400" />
+                                                    <AlertDescription className="text-xs text-orange-300">
+                                                        Auto-pull is active. The simulator will automatically trigger pulls every {autoPullInterval} seconds to build coverage data.
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+
+                                            {!isSimulatorActive && (
+                                                <Alert className="bg-zinc-800/50 border-zinc-700">
+                                                    <Info className="h-4 w-4 text-zinc-400" />
+                                                    <AlertDescription className="text-xs text-zinc-400">
+                                                        Start the simulator to enable auto-pull mode
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )}
+
                                 {/* Transient Fuel */}
-                                <TransientFuelPanel
-                                    enabled={transientFuelEnabled}
-                                    onEnabledChange={onTransientFuelEnabledChange}
-                                    runId={selectedRun || runId}
-                                    isCapturing={isCapturing}
-                                    currentRpm={currentRpm}
-                                    currentMap={currentMap}
-                                    currentTps={currentTps}
-                                    targetAfr={currentTargetAfr}
-                                    compact={false}
-                                />
+                                <div className="pt-4 border-t border-zinc-800/50">
+                                    <TransientFuelPanel
+                                        enabled={transientFuelEnabled}
+                                        onEnabledChange={onTransientFuelEnabledChange}
+                                        runId={selectedRun || runId}
+                                        isCapturing={isCapturing}
+                                        currentRpm={currentRpm}
+                                        currentMap={currentMap}
+                                        currentTps={currentTps}
+                                        targetAfr={currentTargetAfr}
+                                        compact={false}
+                                    />
+                                </div>
 
                                 {/* Virtual ECU */}
                                 <div className="pt-4 border-t border-zinc-800/50">

@@ -90,7 +90,7 @@ class TuneConfig:
 
     # Correction limits
     max_ve_correction_pct: float = 10.0  # Max ±10% VE change
-    min_hits_per_cell: int = 3  # Minimum samples to trust cell
+    min_hits_per_cell: int = 2  # Minimum samples to trust cell (faster corrections)
 
     # VE correction factor (7% per AFR point - DynoAI v1.0.0 standard)
     # DEPRECATED: Use math_version instead. Kept for backwards compatibility.

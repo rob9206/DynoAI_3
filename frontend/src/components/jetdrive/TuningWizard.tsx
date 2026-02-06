@@ -8,13 +8,23 @@
  * - Auto-advance between steps when conditions are met
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Play, Pause, ArrowRight, Download, Check, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings, Zap } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Play, Pause, ArrowRight, Download, Check, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Settings, Zap, Upload, FileText, Flame, Thermometer, Activity, Gauge, Crosshair } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { cn } from '../../lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 
 // Types
 import type { TuneImportResult } from './TuneImport';
@@ -25,6 +35,34 @@ import type { ApplyReport, VEBoundsPreset, CoverageReport } from '../../types/ve
 import { calculateDualCylinderCoverage, getCoverageGrade, calculateApply, getApplySummary } from '../../utils/veApply';
 
 export type WizardStep = 'setup' | 'collect' | 'analyze' | 'review' | 'apply';
+
+export interface WizardLiveStatus {
+  // Engine operating state
+  engineState: 'idle' | 'cruise' | 'wot' | 'decel' | 'tip_in' | 'unknown';
+  // Run/workflow state  
+  runState: 'disconnected' | 'monitoring' | 'pull' | 'cooldown' | 'analyzing' | 'complete' | 'idle';
+  // AFR
+  afrValue: number;       // current AFR reading
+  afrTarget: number;      // current target
+  rpm: number;            // engine rpm
+  // Temperatures
+  engineTemp: number;     // Temperature 1 (F)
+  coolantTemp: number;    // Temperature 2 (F)
+  egtTemp: number;        // EGT if available (F)
+  // Throttle/Load
+  tps: number;            // Throttle position 0-100
+  loadPct: number;        // Engine load 0-100
+}
+
+export interface PullSummary {
+  peakHp: number;
+  peakTq: number;
+  peakRpm: number;
+  afrAvg: number;
+  nextAction?: string;
+  coverageGain?: number;
+  pullNumber?: number;
+}
 
 export interface WizardState {
   step: WizardStep;
@@ -37,11 +75,24 @@ export interface WizardState {
 }
 
 interface TuningWizardProps {
-  // External state
+  // External state (use isLive for mode-agnostic "has live data"; keep booleans for button logic)
   isSimulatorActive: boolean;
   isCapturing: boolean;
+  /** True when simulator or real capture is active - use this to avoid combined boolean logic */
+  isLive?: boolean;
   importedTune: TuneImportResult | null;
   liveData: LiveVEExportData | null;
+  
+  // Live status data
+  liveStatus?: WizardLiveStatus;
+
+  // Throttle control
+  onThrottleChange?: (throttlePct: number) => void;
+  pullThrottle?: number;
+
+  // Post-pull summary
+  lastPullSummary?: PullSummary | null;
+  onDismissPullSummary?: () => void;
   
   // Callbacks
   onStartSimulator: () => void;
@@ -52,6 +103,7 @@ interface TuningWizardProps {
   onAnalyze: () => Promise<void>;
   onApply: (report: ApplyReport) => void;
   onReset: () => void;
+  onShowTuneImport?: () => void; // NEW: Callback to show tune import dialog
   
   // Settings
   veBoundsPreset?: VEBoundsPreset;
@@ -82,8 +134,14 @@ const MIN_HITS_TARGET = 500;
 export function TuningWizard({
   isSimulatorActive,
   isCapturing,
+  isLive: isLiveProp,
   importedTune,
   liveData,
+  liveStatus,
+  onThrottleChange,
+  pullThrottle,
+  lastPullSummary,
+  onDismissPullSummary,
   onStartSimulator,
   onStopSimulator,
   onStartCapture,
@@ -97,13 +155,21 @@ export function TuningWizard({
   renderLiveTable,
   renderApplyPreview,
 }: TuningWizardProps) {
+  const isLive = isLiveProp ?? (isSimulatorActive || isCapturing);
   // Wizard state
   const [step, setStep] = useState<WizardStep>('setup');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
+  const [showPvvAlert, setShowPvvAlert] = useState(false);
   
-  // Calculate coverage from live data
+  // Throttled coverage state to prevent flashing
+  const [throttledCoverageReport, setThrottledCoverageReport] = useState<CoverageReport | null>(null);
+  const [throttledCoveragePct, setThrottledCoveragePct] = useState(0);
+  const [throttledTotalHits, setThrottledTotalHits] = useState(0);
+  const lastCoverageUpdateRef = useRef<number>(0);
+  
+  // Calculate coverage from live data (immediate calculation)
   const coverageReport = useMemo(() => {
     if (!liveData?.frontHitCounts || !liveData?.rearHitCounts) return null;
     return calculateDualCylinderCoverage(
@@ -114,23 +180,55 @@ export function TuningWizard({
     );
   }, [liveData]);
   
-  // Coverage percentage for display
-  const coveragePct = coverageReport?.weightedCoveragePct ?? 0;
-  const totalHits = liveData?.totalHits ?? 0;
+  // Throttle coverage updates to prevent flashing (update max every 1 second)
+  useEffect(() => {
+    if (!coverageReport) {
+      setThrottledCoverageReport(null);
+      setThrottledCoveragePct(0);
+      setThrottledTotalHits(0);
+      return;
+    }
+    
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastCoverageUpdateRef.current;
+    
+    // Only update if enough time has passed (1000ms) or if it's a significant change (>2%)
+    const newCoveragePct = coverageReport.weightedCoveragePct;
+    const newTotalHits = liveData?.totalHits ?? 0;
+    const significantChange = Math.abs(newCoveragePct - throttledCoveragePct) > 2;
+    const shouldUpdate = timeSinceLastUpdate > 1000 || significantChange || throttledCoverageReport === null;
+    
+    if (shouldUpdate) {
+      setThrottledCoverageReport(coverageReport);
+      setThrottledCoveragePct(newCoveragePct);
+      setThrottledTotalHits(newTotalHits);
+      lastCoverageUpdateRef.current = now;
+    }
+  }, [coverageReport, liveData?.totalHits, throttledCoveragePct, throttledCoverageReport]);
+  
+  // Use throttled values for display to prevent flashing
+  const coveragePct = throttledCoveragePct;
+  const totalHits = throttledTotalHits;
   const coverageGrade = useMemo(() => getCoverageGrade(coveragePct), [coveragePct]);
   
-  // Auto-advance: Setup -> Collect
+  // Auto-advance: Setup -> Collect (use isLive so mode is explicit)
   useEffect(() => {
-    if (step === 'setup' && importedTune && (isSimulatorActive || isCapturing)) {
+    if (step === 'setup' && importedTune && isLive) {
       setStep('collect');
     }
-  }, [step, importedTune, isSimulatorActive, isCapturing]);
+  }, [step, importedTune, isLive]);
   
   // Check if ready to proceed from Collect
   const canProceedToAnalyze = coveragePct >= COVERAGE_TARGET && totalHits >= MIN_HITS_TARGET;
   
-  // Handle analyze step
+  // Handle analyze step with PVV validation
   const handleAnalyze = useCallback(async () => {
+    // Check if PVV/tune is imported
+    if (!importedTune) {
+      setShowPvvAlert(true);
+      return;
+    }
+    
     setIsAnalyzing(true);
     setStep('analyze');
     
@@ -149,7 +247,16 @@ export function TuningWizard({
         );
         setApplyReport(report);
         setStep('review');
+      } else {
+        // Analysis succeeded but no live data to calculate corrections
+        // Go back to collect step so user can run more pulls
+        console.warn('[TuningWizard] Analysis succeeded but missing liveData - returning to collect');
+        setStep('collect');
       }
+    } catch (error) {
+      // Analysis failed - go back to collect step instead of getting stuck
+      console.error('[TuningWizard] Analysis failed:', error);
+      setStep('collect');
     } finally {
       setIsAnalyzing(false);
     }
@@ -162,12 +269,255 @@ export function TuningWizard({
       setStep('apply');
     }
   }, [applyReport, onApply]);
+
+  // Handle trigger pull with PVV validation
+  const handleTriggerPull = useCallback(() => {
+    // Check if PVV/tune is imported
+    if (!importedTune) {
+      setShowPvvAlert(true);
+      return;
+    }
+    
+    onTriggerPull();
+  }, [importedTune, onTriggerPull]);
+
+  // Handle start simulator with PVV validation
+  const handleStartSimulator = useCallback(() => {
+    // Check if PVV/tune is imported
+    if (!importedTune) {
+      setShowPvvAlert(true);
+      return;
+    }
+    
+    onStartSimulator();
+  }, [importedTune, onStartSimulator]);
   
   // Get apply summary
   const applySummary = useMemo(() => {
     if (!applyReport) return null;
     return getApplySummary(applyReport);
   }, [applyReport]);
+
+  const throttleTrackRef = useRef<HTMLDivElement | null>(null);
+  const [isDraggingThrottle, setIsDraggingThrottle] = useState(false);
+  const throttleValueRef = useRef(0);
+  const liveRpmRef = useRef(0);
+  const lastTargetForPullRef = useRef(0);
+
+  const currentRunState = liveStatus?.runState;
+  const isPulling = currentRunState === 'pull';
+  const minPullRpm = 1500;
+
+  useEffect(() => {
+    liveRpmRef.current = liveStatus?.rpm ?? 0;
+  }, [liveStatus?.rpm]);
+
+  // Trigger pull on roll-on to WOT (target crosses ≥98%), no hold delay
+  const updateThrottleFromClientY = useCallback((clientY: number) => {
+    if (!throttleTrackRef.current || !isSimulatorActive) return;
+    const rect = throttleTrackRef.current.getBoundingClientRect();
+    const rawPct = ((rect.bottom - clientY) / rect.height) * 100;
+    const clamped = Math.max(0, Math.min(100, rawPct));
+    throttleValueRef.current = clamped;
+    onThrottleChange?.(clamped);
+
+    const rpmOk = liveRpmRef.current >= minPullRpm;
+    const crossedWot = clamped >= 98 && lastTargetForPullRef.current < 98;
+    if (crossedWot && !isPulling && rpmOk) {
+      handleTriggerPull();
+    }
+    lastTargetForPullRef.current = clamped;
+  }, [minPullRpm, handleTriggerPull, isPulling, isSimulatorActive, onThrottleChange]);
+
+  useEffect(() => {
+    if (!isDraggingThrottle) return;
+    const onMove = (event: PointerEvent) => {
+      updateThrottleFromClientY(event.clientY);
+    };
+    const onUp = () => {
+      setIsDraggingThrottle(false);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isDraggingThrottle, updateThrottleFromClientY]);
+  
+  // Render live status strip (3-column layout: bars | pills | temps)
+  const renderLiveStatusStrip = () => {
+    if (!liveStatus || (step !== 'collect' && step !== 'analyze')) return null;
+    
+    // Color mappings
+    const engineStateColors: Record<string, string> = {
+      idle: '#a1a1aa',      // zinc-400
+      cruise: '#22d3ee',    // cyan-400
+      wot: '#f97316',       // orange-500
+      decel: '#3b82f6',     // blue-400
+      tip_in: '#f59e0b',    // amber-400
+      unknown: '#71717a',   // zinc-500
+    };
+    
+    const runStateColors: Record<string, string> = {
+      disconnected: '#71717a',  // zinc-500
+      monitoring: '#22d3ee',    // cyan-400
+      pull: '#ef4444',          // red-500 (pulsing)
+      cooldown: '#f59e0b',      // amber-500
+      analyzing: '#a78bfa',     // violet-400
+      complete: '#22c55e',      // green-500
+      idle: '#22c55e',          // green-500
+    };
+    
+    const { engineState, runState, afrValue, afrTarget, engineTemp, coolantTemp, egtTemp, tps, loadPct } = liveStatus;
+    
+    // AFR status
+    const afrDelta = afrValue - afrTarget;
+    const isLean = afrDelta > 0.3;
+    const isRich = afrDelta < -0.3;
+    const afrStatus = isLean ? 'LEAN' : isRich ? 'RICH' : 'ON TARGET';
+    const afrColor = isLean ? '#ef4444' : isRich ? '#3b82f6' : '#22c55e';
+    
+    // TPS/Load bar colors
+    const getBarColor = (value: number) => {
+      if (value >= 85) return '#f97316'; // orange-500 (WOT)
+      if (value >= 50) return '#f59e0b'; // amber-500
+      return '#4ade80'; // green-400
+    };
+    
+    // Temperature thresholds
+    const getTempColor = (temp: number, isEGT: boolean = false) => {
+      if (isEGT) {
+        if (temp >= 1600) return '#ef4444'; // red-500 critical
+        if (temp >= 1400) return '#f59e0b'; // amber-500 warning
+        return '#4ade80'; // green-400 normal
+      } else {
+        if (temp >= 240) return '#ef4444'; // red-500 critical
+        if (temp >= 220) return '#f59e0b'; // amber-500 warning
+        return '#4ade80'; // green-400 normal
+      }
+    };
+    
+    const tpsColor = getBarColor(tps);
+    const loadColor = getBarColor(loadPct);
+    const engineTempColor = getTempColor(engineTemp);
+    const coolantTempColor = getTempColor(coolantTemp);
+    const egtTempColor = getTempColor(egtTemp, true);
+    
+    // Vertical fill bar component - LARGER
+    const VerticalBar = ({ label, value, color }: { label: string; value: number; color: string }) => (
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-mono font-semibold">{label}</div>
+        <div className="relative w-6 h-24 bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700/50">
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-b-md transition-all duration-300"
+            style={{
+              height: `${Math.min(100, Math.max(0, value))}%`,
+              backgroundColor: color,
+              boxShadow: `0 0 12px ${color}50`
+            }}
+          />
+        </div>
+        <div className="text-sm font-bold tabular-nums font-mono" style={{ color }}>
+          {value.toFixed(0)}%
+        </div>
+      </div>
+    );
+    
+    return (
+      <div className="flex items-center justify-between gap-6 mb-6 px-2">
+        {/* Left: Vertical bars for TPS and Load */}
+        <div className="flex gap-4 p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/50">
+          <VerticalBar label="TPS" value={tps} color={tpsColor} />
+          <VerticalBar label="LOAD" value={loadPct} color={loadColor} />
+        </div>
+        
+        {/* Center: Status pills - LARGER */}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {/* Engine State Pill */}
+          <div
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wide"
+            style={{
+              backgroundColor: `${engineStateColors[engineState]}20`,
+              color: engineStateColors[engineState],
+              border: `1px solid ${engineStateColors[engineState]}40`
+            }}
+          >
+            <Activity className="w-4 h-4" />
+            {engineState}
+          </div>
+          
+          {/* Run State Pill */}
+          <div
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wide",
+              runState === 'pull' && "animate-pulse"
+            )}
+            style={{
+              backgroundColor: `${runStateColors[runState]}20`,
+              color: runStateColors[runState],
+              border: `1px solid ${runStateColors[runState]}40`
+            }}
+          >
+            <Gauge className="w-4 h-4" />
+            {runState}
+          </div>
+          
+          {/* AFR Pill */}
+          <div
+            className="flex items-center gap-2 px-4 py-2 rounded-full"
+            style={{
+              backgroundColor: `${afrColor}20`,
+              border: `1px solid ${afrColor}40`
+            }}
+          >
+            <Crosshair className="w-4 h-4" style={{ color: afrColor }} />
+            <span className="text-lg font-bold tabular-nums" style={{ color: afrColor }}>
+              {afrValue > 0 ? afrValue.toFixed(1) : '—'}
+            </span>
+            <Badge
+              className="text-[10px] px-1.5 py-0.5 font-mono tracking-wider border h-5"
+              style={{
+                backgroundColor: `${afrColor}25`,
+                color: afrColor,
+                borderColor: `${afrColor}50`
+              }}
+            >
+              {afrStatus}
+            </Badge>
+          </div>
+        </div>
+        
+        {/* Right: Stacked temps - LARGER */}
+        <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/50 min-w-[110px]">
+          {/* Engine Temp */}
+          <div className="flex items-center justify-between gap-3">
+            <Thermometer className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs text-zinc-400 font-mono font-semibold">ENG</span>
+            <span className="text-base font-bold tabular-nums font-mono" style={{ color: engineTempColor }}>
+              {engineTemp > 0 ? `${engineTemp.toFixed(0)}°` : '—'}
+            </span>
+          </div>
+          {/* Coolant Temp */}
+          <div className="flex items-center justify-between gap-3">
+            <Thermometer className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs text-zinc-400 font-mono font-semibold">CLT</span>
+            <span className="text-base font-bold tabular-nums font-mono" style={{ color: coolantTempColor }}>
+              {coolantTemp > 0 ? `${coolantTemp.toFixed(0)}°` : '—'}
+            </span>
+          </div>
+          {/* EGT */}
+          <div className="flex items-center justify-between gap-3">
+            <Flame className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs text-zinc-400 font-mono font-semibold">EGT</span>
+            <span className="text-base font-bold tabular-nums font-mono" style={{ color: egtTempColor }}>
+              {egtTemp > 0 ? `${egtTemp.toFixed(0)}°` : '—'}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
   
   // Render step indicator
   const renderStepIndicator = () => (
@@ -244,11 +594,68 @@ export function TuningWizard({
         
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold text-white">{coveragePct.toFixed(0)}%</span>
+          <span className="text-4xl font-bold text-white transition-all duration-500">{coveragePct.toFixed(0)}%</span>
           <span className="text-sm text-zinc-400">Coverage</span>
-          <Badge className={cn("mt-1", coverageGrade.color)}>
+          <Badge className={cn("mt-1 transition-all duration-500", coverageGrade.color)}>
             {coverageGrade.grade}
           </Badge>
+        </div>
+      </div>
+    );
+  };
+
+  const renderThrottleControl = () => {
+    if (!isSimulatorActive || !onThrottleChange || !liveStatus || step !== 'collect') return null;
+    const liveTps = liveStatus.tps ?? 0;
+    const targetTps = pullThrottle ?? 0;
+    const rpm = liveStatus.rpm ?? 0;
+    const rpmTooLow = rpm < minPullRpm;
+    const throttleColor = liveTps >= 85 ? '#f97316' : liveTps >= 50 ? '#f59e0b' : '#4ade80';
+    const targetTop = 100 - Math.min(100, Math.max(0, targetTps));
+
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <div className="text-xs uppercase tracking-wider text-zinc-400 font-mono">
+          Roll on to WOT to start pull
+        </div>
+        <div
+          ref={throttleTrackRef}
+          onPointerDown={(event) => {
+            setIsDraggingThrottle(true);
+            updateThrottleFromClientY(event.clientY);
+          }}
+          className="relative w-16 h-48 rounded-2xl bg-zinc-900/80 border border-zinc-800/60 overflow-hidden cursor-pointer"
+        >
+          {/* WOT marker */}
+          <div className="absolute left-0 right-0 top-2 h-px bg-zinc-700/80" />
+          <div
+            className="absolute bottom-0 left-0 right-0 transition-all duration-300"
+            style={{
+              height: `${Math.min(100, Math.max(0, liveTps))}%`,
+              backgroundColor: throttleColor,
+              boxShadow: `0 0 16px ${throttleColor}60`,
+            }}
+          />
+          {/* Target marker */}
+          <div
+            className="absolute left-0 right-0 h-px bg-cyan-500/70"
+            style={{ top: `${targetTop}%` }}
+          />
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] text-zinc-500 font-mono">
+            WOT
+          </div>
+        </div>
+        <div className="text-3xl font-bold font-mono tabular-nums" style={{ color: throttleColor }}>
+          {Math.round(liveTps)}%
+        </div>
+        <div className="text-[11px] text-zinc-500 font-mono">
+          Target {Math.round(targetTps)}%
+        </div>
+        <div className={cn("text-[11px] font-mono", rpmTooLow ? "text-red-400" : "text-emerald-400")}>
+          RPM {Math.round(rpm)} {rpmTooLow ? `(min ${minPullRpm})` : 'ready'}
+        </div>
+        <div className="text-xs text-zinc-500 font-mono">
+          {isPulling ? 'PULLING...' : rpmTooLow ? 'RPM TOO LOW' : 'READY'}
         </div>
       </div>
     );
@@ -260,7 +667,7 @@ export function TuningWizard({
       case 'setup':
         return (
           <Button
-            onClick={isSimulatorActive ? onStopSimulator : onStartSimulator}
+            onClick={isSimulatorActive ? onStopSimulator : handleStartSimulator}
             size="lg"
             className={cn(
               "w-64 h-20 text-xl font-bold rounded-2xl transition-all",
@@ -285,9 +692,9 @@ export function TuningWizard({
         
       case 'collect':
         return (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Primary: Trigger Pull or Analyze */}
-            {canProceedToAnalyze ? (
+            {canProceedToAnalyze && (
               <Button
                 onClick={handleAnalyze}
                 size="lg"
@@ -295,15 +702,6 @@ export function TuningWizard({
               >
                 <ArrowRight className="w-6 h-6 mr-3" />
                 ANALYZE
-              </Button>
-            ) : (
-              <Button
-                onClick={onTriggerPull}
-                size="lg"
-                className="w-64 h-20 text-xl font-bold rounded-2xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-500/25"
-              >
-                <Zap className="w-6 h-6 mr-3" />
-                RUN PULL
               </Button>
             )}
             
@@ -423,6 +821,83 @@ export function TuningWizard({
     
     return null;
   };
+
+  const renderPullSummary = () => {
+    if (!lastPullSummary) return null;
+    const afrTargetValue = liveStatus?.afrTarget ?? 14.7;
+    const afrDelta = lastPullSummary.afrAvg - afrTargetValue;
+    const isLean = afrDelta > 0.3;
+    const isRich = afrDelta < -0.3;
+    const afrStatus = isLean ? 'LEAN' : isRich ? 'RICH' : 'ON TARGET';
+    const afrColor = isLean ? '#ef4444' : isRich ? '#3b82f6' : '#22c55e';
+
+    return (
+      <div className="mt-6 w-full max-w-2xl rounded-2xl bg-zinc-900/80 border border-zinc-800/60 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm uppercase tracking-wider text-zinc-400 font-mono">
+              Last Pull Summary
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-cyan-400">{lastPullSummary.peakHp.toFixed(1)}</div>
+                <div className="text-xs text-zinc-500">Peak HP</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-cyan-400">{lastPullSummary.peakTq.toFixed(1)}</div>
+                <div className="text-xs text-zinc-500">Peak TQ</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-cyan-400">{lastPullSummary.peakRpm.toFixed(0)}</div>
+                <div className="text-xs text-zinc-500">Peak RPM</div>
+              </div>
+            </div>
+          </div>
+          {onDismissPullSummary && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-zinc-700 text-zinc-400"
+              onClick={onDismissPullSummary}
+            >
+              Dismiss
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full border" style={{ borderColor: `${afrColor}40`, backgroundColor: `${afrColor}15` }}>
+            <span className="text-sm font-bold tabular-nums" style={{ color: afrColor }}>
+              AFR {lastPullSummary.afrAvg.toFixed(1)}
+            </span>
+            <Badge
+              className="text-[10px] px-1.5 py-0.5 font-mono tracking-wider border h-5"
+              style={{ backgroundColor: `${afrColor}25`, color: afrColor, borderColor: `${afrColor}50` }}
+            >
+              {afrStatus}
+            </Badge>
+          </div>
+          {typeof lastPullSummary.coverageGain === 'number' && (
+            <div className="text-sm text-zinc-400">
+              Coverage: <span className="text-emerald-400 font-semibold">+{lastPullSummary.coverageGain.toFixed(1)}%</span>
+            </div>
+          )}
+          {typeof lastPullSummary.pullNumber === 'number' && (
+            <div className="text-sm text-zinc-500">
+              Pull {lastPullSummary.pullNumber}
+            </div>
+          )}
+        </div>
+
+        {lastPullSummary.nextAction && (
+          <div className="mt-4 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-sm text-zinc-200">
+            <span className="text-zinc-400 font-mono text-xs uppercase tracking-wider">NextGen</span>
+            <div className="mt-1">{lastPullSummary.nextAction}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
   
   // Render details (expanded view)
   const renderDetails = () => {
@@ -434,9 +909,9 @@ export function TuningWizard({
         {step === 'review' && applyReport && renderApplyPreview?.(applyReport)}
         
         {/* Coverage breakdown */}
-        {step === 'collect' && coverageReport && (
+        {step === 'collect' && throttledCoverageReport && (
           <div className="grid grid-cols-2 gap-4 mt-4">
-            {coverageReport.zoneBreakdown.map(zone => (
+            {throttledCoverageReport.zoneBreakdown.map(zone => (
               <div key={zone.zone} className="flex items-center gap-2">
                 <div className="w-24 text-xs text-zinc-400 capitalize">{zone.zone}</div>
                 <Progress value={zone.coveragePct} className="flex-1 h-2" />
@@ -477,10 +952,18 @@ export function TuningWizard({
         {/* Step indicator */}
         {renderStepIndicator()}
         
+        {/* Live status strip */}
+        {renderLiveStatusStrip()}
+        
         {/* Main content area */}
         <div className="flex flex-col items-center py-8">
-          {/* Progress ring (collect step only) */}
-          {step === 'collect' && renderProgressRing()}
+          {/* Progress ring + throttle (collect step only) */}
+          {step === 'collect' && (
+            <div className="flex items-center justify-center gap-10">
+              {renderProgressRing()}
+              {renderThrottleControl()}
+            </div>
+          )}
           
           {/* Success animation (apply step) */}
           {step === 'apply' && (
@@ -494,6 +977,9 @@ export function TuningWizard({
           
           {/* Big action button */}
           {renderActionButton()}
+
+        {/* Post-pull summary */}
+        {renderPullSummary()}
         </div>
         
         {/* Details toggle */}
@@ -519,6 +1005,22 @@ export function TuningWizard({
         {/* Expandable details */}
         {renderDetails()}
       </CardContent>
+
+      {/* PVV import required alert */}
+      <AlertDialog open={showPvvAlert} onOpenChange={setShowPvvAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Import a tune first</AlertDialogTitle>
+            <AlertDialogDescription>
+              Import a base tune (PVV or preset) before analyzing or triggering pulls so corrections can be applied correctly.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setShowPvvAlert(false)}>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

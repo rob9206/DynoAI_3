@@ -60,25 +60,52 @@ export function parsePVV(xmlContent: string): ParsedPVV {
         // Find all Item elements
         const items = doc.querySelectorAll('Item');
         
+        // Candidate VE tables (may need second-pass assignment)
+        const veCandidates: PVVTable[] = [];
+        
         for (const item of items) {
             try {
                 const table = parseTableItem(item);
                 if (table) {
                     result.allTables.set(table.name, table);
                     
-                    // Identify key tables
+                    // Identify key tables by name patterns
                     const nameLower = table.name.toLowerCase();
-                    if (nameLower.includes('ve') && nameLower.includes('map') && nameLower.includes('front')) {
+                    
+                    // Front VE table - various naming conventions
+                    if (nameLower.includes('ve') && nameLower.includes('front')) {
                         result.veFront = table;
-                    } else if (nameLower.includes('ve') && nameLower.includes('map') && nameLower.includes('rear')) {
+                    }
+                    // Rear VE table - various naming conventions
+                    else if (nameLower.includes('ve') && nameLower.includes('rear')) {
                         result.veRear = table;
-                    } else if (nameLower === 'air-fuel ratio' || nameLower === 'air fuel ratio') {
+                    }
+                    // AFR target table
+                    else if (nameLower === 'air-fuel ratio' || nameLower === 'air fuel ratio' || 
+                             (nameLower.includes('afr') && nameLower.includes('target'))) {
                         result.afrTarget = table;
+                    }
+                    // Generic VE table (no front/rear designation) - collect as candidate
+                    else if (nameLower.includes('ve') && !nameLower.includes('afr') && !nameLower.includes('error')) {
+                        veCandidates.push(table);
                     }
                 }
             } catch (e) {
                 result.parseErrors.push(`Error parsing item: ${e}`);
             }
+        }
+        
+        // Second pass: if we didn't find explicit front/rear VE tables,
+        // use candidate VE tables (e.g. DynoAI correction output, single-table PVVs)
+        if (!result.veFront && !result.veRear && veCandidates.length > 0) {
+            // Use the first VE candidate for both front and rear
+            // (DynoAI outputs a single combined table; real PVV files have front/rear)
+            result.veFront = veCandidates[0];
+            result.veRear = veCandidates.length > 1 ? veCandidates[1] : veCandidates[0];
+        } else if (!result.veFront && veCandidates.length > 0) {
+            result.veFront = veCandidates[0];
+        } else if (!result.veRear && veCandidates.length > 0) {
+            result.veRear = veCandidates[0];
         }
 
     } catch (e) {

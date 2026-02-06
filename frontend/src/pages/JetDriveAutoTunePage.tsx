@@ -28,6 +28,7 @@ import {
     Award, Info, Flame, FileText
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -67,7 +68,7 @@ import PowerOpportunitiesPanel from '../components/PowerOpportunitiesPanel';
 import { SessionReplayViewer } from '../components/session-replay';
 import { useAIAssistant } from '../hooks/useAIAssistant';
 import { ConfidenceBadge } from '../components/jetdrive/ConfidenceBadge';
-import { TuningWizard } from '../components/jetdrive/TuningWizard';
+import { TuningWizard, type WizardLiveStatus, type PullSummary } from '../components/jetdrive/TuningWizard';
 import { SetupWizard } from '../components/jetdrive/SetupWizard';
 import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
 import type { BikeConfig, DynoConnectionConfig } from '../types/bikeConfig';
@@ -76,7 +77,7 @@ import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
 import { useTuningWizard } from '../hooks/useTuningWizard';
 import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
-import { getConfidenceReport } from '../lib/api';
+import { getConfidenceReport, generateNextGenAnalysis } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
 import { NextGenAnalysisPanel } from '../components/results/NextGenAnalysisPanel';
@@ -634,6 +635,7 @@ export default function JetDriveAutoTunePage() {
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
+    const [lastPullSummary, setLastPullSummary] = useState<PullSummary | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
     const [textExportContent, setTextExportContent] = useState<string>('');
     const [isStartingMonitor, setIsStartingMonitor] = useState(false);
@@ -645,6 +647,7 @@ export default function JetDriveAutoTunePage() {
     const [simThrottle, setSimThrottle] = useState<number>(0);
     const simThrottleSendRef = useRef<number | null>(null);
     const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [pullThrottle, setPullThrottle] = useState<number>(100); // Throttle % for triggered pulls
 
     // Audio capture state (real recording)
     const [audioRecording, setAudioRecording] = useState(false);
@@ -663,6 +666,10 @@ export default function JetDriveAutoTunePage() {
     const [veScenario, setVeScenario] = useState<VEScenario>('lean');
     const [veErrorPct, setVeErrorPct] = useState(-10.0);
     const [veErrorStd, setVeErrorStd] = useState(5.0);
+    
+    // Auto-pull settings for simulator
+    const [autoPullEnabled, setAutoPullEnabled] = useState(false);
+    const [autoPullInterval, setAutoPullInterval] = useState(15); // seconds
 
     // Audio engine removed (AI Assistant now used for wizard mode voice)
 
@@ -741,19 +748,26 @@ export default function JetDriveAutoTunePage() {
     const [selectedProfile, setSelectedProfile] = useState<string>('m8_114');
     const [isStartingSimulator, setIsStartingSimulator] = useState(false);
 
-    // JetDrive live hook
+    // JetDrive live hook - separate simulator vs real data; pass simulator mode so hook polls correctly
     const {
         isConnected,
         isCapturing,
         providerName,
         channelCount,
         channels,
+        dataSource,
         startCapture,
         stopCapture,
+        clearChannels,
     } = useJetDriveLive({
         apiUrl: API_BASE,
         pollInterval: 100,  // 100ms (10Hz) - fast updates for live tuning
+        isSimulatorActive,
     });
+
+    // Explicit mode: simulator vs real vs idle (no combined booleans - prevents cross-contamination)
+    const liveMode: 'simulator' | 'real' | 'idle' = isSimulatorActive ? 'simulator' : (isCapturing ? 'real' : 'idle');
+    const isLive = liveMode !== 'idle';
 
     // Extract channel values - memoized to avoid recalculation
     const currentRpm = useMemo(() => {
@@ -819,12 +833,6 @@ export default function JetDriveAutoTunePage() {
 
     const currentHp = useMemo(() => {
         const ch = channels['Horsepower'] || channels['HP'] || channels['chan_101'];
-        // Debug: Log available channels and HP value
-        if (Object.keys(channels).length > 0) {
-            console.log('[HP Debug] Available channels:', Object.keys(channels));
-            console.log('[HP Debug] HP channel:', ch);
-            console.log('[HP Debug] HP value:', ch?.value);
-        }
         return ch?.value || 0;
     }, [channels]);
 
@@ -840,6 +848,81 @@ export default function JetDriveAutoTunePage() {
         }
         return afrTargets[closest] ?? 14.0;
     }, [currentMap, afrTargets]);
+
+    // Extract temperature channels
+    const engineTemp = useMemo(() => {
+        const ch = channels['Temperature 1'] || channels['Temp 1'] || channels['Engine Temp'];
+        return ch?.value || 0;
+    }, [channels]);
+
+    const coolantTemp = useMemo(() => {
+        const ch = channels['Temperature 2'] || channels['Temp 2'] || channels['Coolant Temp'];
+        return ch?.value || 0;
+    }, [channels]);
+
+    const egtTemp = useMemo(() => {
+        // EGT might be on Temperature 2 or a separate channel
+        const ch = channels['EGT'] || channels['Exhaust Gas Temp'] || channels['Temperature 2'];
+        return ch?.value || 0;
+    }, [channels]);
+
+    // Extract TPS for engine state classification
+    const currentTps = useMemo(() => {
+        const ch = channels['TPS'] || channels['Throttle Position'] || channels['TP'];
+        return ch?.value || 0;
+    }, [channels]);
+
+    // Derive engine operating state from simState + TPS/MAP/RPM
+    const engineState = useMemo((): WizardLiveStatus['engineState'] => {
+        // Priority: use simState if in simulator mode
+        if (isSimulatorActive) {
+            if (simState === 'pull') return 'wot';
+            if (simState === 'decel') return 'decel';
+            if (simState === 'idle') return 'idle';
+            if (simState === 'cooldown') return 'cruise';
+        }
+
+        // Otherwise classify from TPS/MAP/RPM thresholds
+        const rpm = currentRpm;
+        const tps = currentTps;
+        const map = currentMap;
+
+        // WOT: TPS >=85% OR MAP >=85 kPa
+        if (tps >= 85 || map >= 85) return 'wot';
+
+        // Idle: RPM <1200 AND TPS <5% AND MAP <45 kPa
+        if (rpm < 1200 && tps < 5 && map < 45) return 'idle';
+
+        // Decel: TPS <=3%, RPM >1500
+        if (tps <= 3 && rpm > 1500) return 'decel';
+
+        // Tip-in: TPS rate would require derivative; approximate with high TPS but not WOT
+        if (tps > 50 && tps < 85) return 'tip_in';
+
+        // Default: cruise
+        if (rpm >= 1500) return 'cruise';
+
+        return 'unknown';
+    }, [isSimulatorActive, simState, currentRpm, currentTps, currentMap]);
+
+    // Derive run state from workflowState and simState
+    const runState = useMemo((): WizardLiveStatus['runState'] => {
+        // Map workflowState to runState
+        if (workflowState === 'disconnected') return 'disconnected';
+        if (workflowState === 'monitoring') return 'monitoring';
+        if (workflowState === 'capturing') return 'pull';
+        if (workflowState === 'analyzing') return 'analyzing';
+        if (workflowState === 'complete') return 'complete';
+
+        // If simulator is active, use simState
+        if (isSimulatorActive) {
+            if (simState === 'pull') return 'pull';
+            if (simState === 'decel' || simState === 'cooldown') return 'cooldown';
+            if (simState === 'idle') return 'idle';
+        }
+
+        return 'idle';
+    }, [workflowState, isSimulatorActive, simState]);
 
     // Legacy getter functions for backward compatibility
     const getRpmValue = useCallback(() => currentRpm, [currentRpm]);
@@ -1041,6 +1124,12 @@ export default function JetDriveAutoTunePage() {
         }, 80);
     }, [sendSimThrottle]);
 
+    const handleWizardThrottleChange = useCallback((value: number) => {
+        const rounded = Math.round(value);
+        setPullThrottle(rounded);
+        onSimThrottleChange(rounded);
+    }, [onSimThrottleChange]);
+
     // Start simulator
     const handleStartSimulator = async () => {
         setIsStartingSimulator(true);
@@ -1059,6 +1148,8 @@ export default function JetDriveAutoTunePage() {
                         barometric_pressure_inhg: 29.92,
                         ambient_temp_f: 75.0,
                     } : { enabled: false },
+                    auto_pull: autoPullEnabled,
+                    auto_pull_interval: autoPullInterval,
                 }),
             });
 
@@ -1076,8 +1167,7 @@ export default function JetDriveAutoTunePage() {
                 toast.success(`Simulator started${ecuStatus}: ${data.profile?.name}`, {
                     description: `${data.profile?.max_hp} HP @ ${data.profile?.redline_rpm} RPM redline${veScenarioSuffix}`
                 });
-                // Also start live capture
-                await startCapture();
+                // Simulator uses its own data path - do NOT start real hardware capture
             } else {
                 toast.error('Failed to start simulator', {
                     description: data.error || 'Unknown error occurred'
@@ -1094,11 +1184,11 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
-    // Stop simulator
+    // Stop simulator - clear all channel data to prevent real mode from seeing stale sim data
     const handleStopSimulator = async () => {
         try {
             await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' });
-            await stopCapture();
+            await clearChannels();
             setIsSimulatorActive(false);
             setSimState('stopped');
             toast.info('Simulator stopped');
@@ -1107,19 +1197,35 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
+    // Start real hardware capture - guard against running while simulator is active
+    const handleStartCapture = async () => {
+        if (isSimulatorActive) {
+            toast.error('Stop simulator before starting real capture');
+            return;
+        }
+        await startCapture();
+    };
+
     // Trigger a simulated pull
     const handleTriggerPull = async () => {
         try {
-            // Ensure WOT for pulls unless user intentionally holds lower TPS
-            // (Operator can always drag the slider back down mid-pull.)
-            await sendSimThrottle(Math.max(0, Math.min(100, simThrottle)));
-            const res = await fetch(`${API_BASE}/simulator/pull`, { method: 'POST' });
+            setLastPullSummary(null);
+            console.log(`[JetDrive] Triggering pull with pullThrottle=${pullThrottle}`);
+            const res = await fetch(`${API_BASE}/simulator/pull`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ throttle: pullThrottle }),
+            });
             const data = await res.json();
+            console.log(`[JetDrive] Pull response:`, data);
             if (!data.success) {
                 toast.warning(data.error || 'Cannot start pull');
             } else {
+                setSimThrottle(pullThrottle);
+                simThrottleSendRef.current = pullThrottle;
                 console.log('[JetDrive] Calling aiAssistant.onPullStart()');
                 aiAssistant.onPullStart(); // 🎤 AI: "Let's go!"
+                toast.success(`Pull started at ${pullThrottle}% throttle`);
             }
         } catch {
             toast.error('Failed to trigger pull');
@@ -1173,18 +1279,6 @@ export default function JetDriveAutoTunePage() {
             setWorkflowState((prev) => prev === 'complete' ? 'complete' : 'idle');
         }
     }, [isConnected, isCapturing, currentRpm, rpmThreshold, isSimulatorActive, simState]);
-
-    // Track previous simState to detect pull end
-    const prevSimStateRef = useRef<string>('stopped');
-    useEffect(() => {
-        // Detect pull end: transitioning from 'pull' to 'decel' or 'cooldown'
-        if (prevSimStateRef.current === 'pull' && (simState === 'decel' || simState === 'cooldown')) {
-            // Pull just ended, announce with peak HP
-            aiAssistant.onPullEnd(currentHp);
-        }
-        prevSimStateRef.current = simState;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [simState, currentHp]);
 
     // AI Assistant triggers removed (audio/voice features disabled)
 
@@ -1312,18 +1406,20 @@ export default function JetDriveAutoTunePage() {
     // Analyze mutation
     const analyzeMutation = useMutation({
         mutationFn: async ({ mode }: { mode: string }) => {
-            // If simulator is active and mode is 'simulate', use simulator_pull instead
-            const actualMode = (isSimulatorActive && mode === 'simulate') ? 'simulator_pull' : mode;
+            // If simulator is active and has pull data, use simulator_pull mode.
+            // Otherwise fall back to 'simulate' mode (synthetic data) so analysis always succeeds.
+            let actualMode = mode;
+            if (isSimulatorActive && mode === 'simulate') {
+                if (pullDataStatus?.has_data) {
+                    actualMode = 'simulator_pull';
+                } else {
+                    console.log('[Analyze] Simulator active but no pull data - using simulate mode');
+                    actualMode = 'simulate';
+                }
+            }
 
             console.log('[Analyze] Mode:', mode, 'Actual mode:', actualMode, 'Simulator active:', isSimulatorActive);
             console.log('[Analyze] Pull data status:', pullDataStatus);
-
-            // If using simulator_pull mode, check if pull data is available
-            // Note: We allow the backend to validate as well, since the frontend check might be stale
-            if (actualMode === 'simulator_pull' && pullDataStatus && !pullDataStatus.has_data) {
-                console.warn('[Analyze] No pull data detected in frontend, but allowing backend to validate');
-                // Don't throw here - let backend handle validation for more accurate error messages
-            }
 
             const res = await fetch(`${API_BASE}/analyze`, {
                 method: 'POST',
@@ -1362,6 +1458,38 @@ export default function JetDriveAutoTunePage() {
                 void refetchStatus();
                 // Generate new run ID for next run
                 setRunId(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
+
+                if (wizardMode) {
+                    void (async () => {
+                        try {
+                            const nextGen = await generateNextGenAnalysis(data.run_id, { includeFull: true });
+                            const nextStep = nextGen.payload?.next_tests?.steps?.[0];
+                            const nextAction = nextStep
+                                ? `${nextStep.name}: ${nextStep.goal}`
+                                : 'Run another pull to build coverage';
+                            const coveragePct = coverageComputed?.weightedCoveragePct ?? 0;
+                            const pullNumber = (statusData?.runs_count ?? 0) + 1;
+
+                            setLastPullSummary({
+                                peakHp: data.analysis?.peak_hp ?? 0,
+                                peakTq: data.analysis?.peak_tq ?? 0,
+                                peakRpm: data.analysis?.peak_hp_rpm ?? 0,
+                                afrAvg: data.analysis?.avg_afr ?? 0,
+                                nextAction,
+                                coverageGain: coveragePct,
+                                pullNumber,
+                            });
+                        } catch {
+                            setLastPullSummary({
+                                peakHp: data.analysis?.peak_hp ?? 0,
+                                peakTq: data.analysis?.peak_tq ?? 0,
+                                peakRpm: data.analysis?.peak_hp_rpm ?? 0,
+                                afrAvg: data.analysis?.avg_afr ?? 0,
+                                nextAction: 'Run another pull to build coverage',
+                            });
+                        }
+                    })();
+                }
             } else {
                 toast.error('Analysis failed', { description: data.error });
             }
@@ -1392,6 +1520,21 @@ export default function JetDriveAutoTunePage() {
         aiAssistant.onStepChange?.('analyze');
         await analyzeMutation.mutateAsync({ mode: 'simulate' });
     }, [aiAssistant, analyzeMutation]);
+
+    // Track previous simState to detect pull end
+    const prevSimStateRef = useRef<string>('stopped');
+    useEffect(() => {
+        // Detect pull end: transitioning from 'pull' to 'decel' or 'cooldown'
+        if (prevSimStateRef.current === 'pull' && (simState === 'decel' || simState === 'cooldown')) {
+            // Pull just ended, announce with peak HP
+            aiAssistant.onPullEnd(currentHp);
+
+            if (wizardMode && !canProceedToAnalyze && !analyzeMutation.isPending) {
+                void handleAnalyze();
+            }
+        }
+        prevSimStateRef.current = simState;
+    }, [aiAssistant, analyzeMutation.isPending, canProceedToAnalyze, currentHp, handleAnalyze, simState, wizardMode]);
 
     // Start hardware monitor
     const handleStartMonitor = async () => {
@@ -1610,7 +1753,16 @@ function SmartPromptBanner({
     const veGrid = runData?.ve_grid || [];
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900/95 to-zinc-950 relative">
+        <div className={cn(
+            'min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900/95 to-zinc-950 relative',
+            isSimulatorActive && 'ring-4 ring-orange-500/70 ring-inset'
+        )}>
+            {/* SIMULATOR MODE banner - only when simulator is active */}
+            {isSimulatorActive && (
+                <div className="sticky top-0 z-50 bg-orange-500/90 text-black font-bold text-center py-2 text-sm tracking-wider">
+                    SIMULATOR MODE — Data is synthetic, not from real hardware
+                </div>
+            )}
             {/* Setup Wizard Modal */}
             <AnimatePresence>
                 {showSetupWizard && (
@@ -1648,11 +1800,13 @@ function SmartPromptBanner({
                         <WorkflowIndicator state={workflowState} rpmThreshold={rpmThreshold} />
                         
                         {/* Tune Import - Compact */}
-                        <TuneImport 
-                            onImport={handleTuneImport}
-                            currentPreset="harley_m8"
-                            compact={true}
-                        />
+                        <div data-testid="tune-import">
+                            <TuneImport 
+                                onImport={handleTuneImport}
+                                currentPreset="harley_m8"
+                                compact={true}
+                            />
+                        </div>
 
                         {/* Quick Decel Pop Fix Sheet */}
                         <Sheet>
@@ -1710,7 +1864,7 @@ function SmartPromptBanner({
                                     </SheetDescription>
                                 </SheetHeader>
                                 <AudioCapturePanel
-                                    isDynoCapturing={isCapturing || isSimulatorActive}
+                                    isDynoCapturing={isLive}
                                     currentRpm={currentRpm}
                                     rpmThreshold={rpmThreshold}
                                     onRecordingStart={() => {
@@ -1766,7 +1920,7 @@ function SmartPromptBanner({
                     transientFuelEnabled={transientFuelEnabled}
                     onTransientFuelEnabledChange={setTransientFuelEnabled}
                     selectedRun={selectedRun}
-                    isCapturing={isCapturing || isSimulatorActive}
+                    isCapturing={isLive}
                     currentTps={channels['TPS']?.value || channels['Throttle Position']?.value || 0}
                     currentTargetAfr={currentTargetAfr}
                     virtualECUEnabled={virtualECUEnabled}
@@ -1777,6 +1931,11 @@ function SmartPromptBanner({
                     onVeErrorPctChange={setVeErrorPct}
                     veErrorStd={veErrorStd}
                     onVeErrorStdChange={setVeErrorStd}
+                    autoPullEnabled={autoPullEnabled}
+                    onAutoPullEnabledChange={setAutoPullEnabled}
+                    autoPullInterval={autoPullInterval}
+                    onAutoPullIntervalChange={setAutoPullInterval}
+                    isSimulatorActive={isSimulatorActive}
                     selectedProfile={selectedProfile}
                 />
 
@@ -1829,7 +1988,7 @@ function SmartPromptBanner({
                             <div className="space-y-4">
                                 {/* Smart Prompt Banner */}
                                 <SmartPromptBanner
-                                    step={isSimulatorActive || isCapturing ? 'collect' : 'setup'}
+                                    step={isLive ? 'collect' : 'setup'}
                                     coverageReport={coverageComputed}
                                     canProceedToAnalyze={canProceedToAnalyze}
                                     onActionClick={(action) => {
@@ -1844,15 +2003,37 @@ function SmartPromptBanner({
                                 <TuningWizard
                                     isSimulatorActive={isSimulatorActive}
                                     isCapturing={isCapturing}
+                                    isLive={isLive}
                                     importedTune={importedTune}
                                     liveData={pendingExportData}
+                                    liveStatus={{
+                                        engineState,
+                                        runState,
+                                        afrValue: currentAfr,
+                                        afrTarget: currentTargetAfr,
+                                        rpm: currentRpm,
+                                        engineTemp,
+                                        coolantTemp,
+                                        egtTemp,
+                                        tps: currentTps,
+                                        loadPct: currentLoadPct,
+                                    }}
+                                    pullThrottle={pullThrottle}
+                                    onThrottleChange={handleWizardThrottleChange}
+                                    lastPullSummary={lastPullSummary}
+                                    onDismissPullSummary={() => setLastPullSummary(null)}
                                     onStartSimulator={handleStartSimulator}
                                     onStopSimulator={handleStopSimulator}
-                                    onStartCapture={startCapture}
+                                    onStartCapture={handleStartCapture}
                                     onStopCapture={stopCapture}
+                                    onTriggerPull={handleTriggerPull}
                                     onAnalyze={async () => {
                                         aiAssistant.onStepChange('analyze');
                                         await analyzeMutation.mutateAsync({ mode: 'simulate' });
+                                    }}
+                                    onShowTuneImport={() => {
+                                        // Scroll to tune import section
+                                        document.querySelector('[data-testid="tune-import"]')?.scrollIntoView({ behavior: 'smooth' });
                                     }}
                                     onApply={(report) => {
                                         aiAssistant.onStepChange('complete');
@@ -1886,7 +2067,6 @@ function SmartPromptBanner({
                                         handleStopSimulator();
                                         setPendingExportData(null);
                                     }}
-                                    runId={runId}
                                     veBoundsPreset={veBoundsPreset}
                                     onVeBoundsPresetChange={setVeBoundsPreset}
                                     renderLiveTable={() => (
@@ -1896,7 +2076,7 @@ function SmartPromptBanner({
                                             currentAfrFront={currentAfrFront}
                                             currentAfrRear={currentAfrRear}
                                             afrTargets={afrTargets}
-                                            isLive={isCapturing || isSimulatorActive}
+                                            isLive={isLive}
                                             customRpmBins={importedTune?.rpmBins}
                                             customMapBins={importedTune?.mapBins}
                                             onExport={(data) => {
@@ -2144,7 +2324,7 @@ function SmartPromptBanner({
                                         />
                                         <NeedleGauge
                                             label={analysis ? "Peak" : "Live"}
-                                            value={isSimulatorActive || isCapturing ? currentHp : (analysis?.peak_hp || 0)}
+                                            value={isLive ? currentHp : (analysis?.peak_hp || 0)}
                                             units="HP"
                                             color="#a78bfa"
                                             min={0}
@@ -2161,68 +2341,97 @@ function SmartPromptBanner({
                                         {isSimulatorActive ? (
                                             /* Simulator Controls */
                                             <>
-                                                <Button
-                                                    onClick={handleTriggerPull}
-                                                    disabled={simState !== 'idle'}
-                                                    uiSound="pull"
-                                                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
-                                                >
-                                                    <Play className="w-4 h-4 mr-2" />
-                                                    {simState === 'idle' ? 'Trigger Pull' :
-                                                        simState === 'pull' ? 'Pulling...' :
-                                                            simState === 'decel' ? 'Decelerating' : 'Cooling Down'}
-                                                </Button>
+                                                <div className="flex flex-col gap-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <Button
+                                                            onClick={handleTriggerPull}
+                                                            disabled={simState !== 'idle'}
+                                                            uiSound="pull"
+                                                            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500"
+                                                        >
+                                                            <Play className="w-4 h-4 mr-2" />
+                                                            {simState === 'idle' ? `Trigger Pull (${pullThrottle}%)` :
+                                                                simState === 'pull' ? 'Pulling...' :
+                                                                    simState === 'decel' ? 'Decelerating' : 'Cooling Down'}
+                                                        </Button>
 
-                                                <Button
-                                                    onClick={handleStopSimulator}
-                                                    variant="outline"
-                                                    className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                                                >
-                                                    <StopCircle className="w-4 h-4 mr-2" />
-                                                    Stop Simulator
-                                                </Button>
+                                                        <Button
+                                                            onClick={handleStopSimulator}
+                                                            variant="outline"
+                                                            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                        >
+                                                            <StopCircle className="w-4 h-4 mr-2" />
+                                                            Stop Simulator
+                                                        </Button>
 
-                                                <Button
-                                                    onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
-                                                    disabled={analyzeMutation.isPending || (isSimulatorActive && !pullDataStatus?.has_data)}
-                                                    variant="outline"
-                                                    className="border-zinc-700"
-                                                    title={
-                                                        isSimulatorActive && !pullDataStatus?.has_data
-                                                            ? "No pull data available. Run a pull first."
-                                                            : isSimulatorActive && pullDataStatus?.has_data
-                                                                ? `Analyze simulator pull data (${pullDataStatus.points} points, ${pullDataStatus.peak_hp?.toFixed(1)} HP)`
-                                                                : "Analyze with simulated data"
-                                                    }
-                                                >
-                                                    {analyzeMutation.isPending ? (
-                                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                                    ) : (
-                                                        <Zap className="w-4 h-4 mr-2" />
-                                                    )}
-                                                    {isSimulatorActive && pullDataStatus?.has_data
-                                                        ? `Analyze Pull (${pullDataStatus.points} pts)`
-                                                        : "Analyze"}
-                                                </Button>
+                                                        <Button
+                                                            onClick={() => analyzeMutation.mutate({ mode: 'simulate' })}
+                                                            disabled={analyzeMutation.isPending || (isSimulatorActive && !pullDataStatus?.has_data)}
+                                                            variant="outline"
+                                                            className="border-zinc-700"
+                                                            title={
+                                                                isSimulatorActive && !pullDataStatus?.has_data
+                                                                    ? "No pull data available. Run a pull first."
+                                                                    : isSimulatorActive && pullDataStatus?.has_data
+                                                                        ? `Analyze simulator pull data (${pullDataStatus.points} points, ${pullDataStatus.peak_hp?.toFixed(1)} HP)`
+                                                                        : "Analyze with simulated data"
+                                                            }
+                                                        >
+                                                            {analyzeMutation.isPending ? (
+                                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                                            ) : (
+                                                                <Zap className="w-4 h-4 mr-2" />
+                                                            )}
+                                                            {isSimulatorActive && pullDataStatus?.has_data
+                                                                ? `Analyze Pull (${pullDataStatus.points} pts)`
+                                                                : "Analyze"}
+                                                        </Button>
 
-                                                <div className="ml-auto flex items-center gap-2 text-xs">
-                                                    <Badge variant="outline" className="border-orange-500/30 bg-orange-500/10 text-orange-400">
-                                                        <Cpu className="w-3 h-3 mr-1" />
-                                                        Simulator
-                                                    </Badge>
-                                                    <span className="text-zinc-500">
-                                                        {simState === 'pull' && '🔥 WOT Pull'}
-                                                        {simState === 'idle' && '⏳ Waiting...'}
-                                                        {simState === 'decel' && '📉 Decel'}
-                                                        {simState === 'cooldown' && '❄️ Cooldown'}
-                                                    </span>
+                                                        <div className="ml-auto flex items-center gap-2 text-xs">
+                                                            <Badge variant="outline" className="border-orange-500/30 bg-orange-500/10 text-orange-400">
+                                                                <Cpu className="w-3 h-3 mr-1" />
+                                                                Simulator
+                                                            </Badge>
+                                                            <span className="text-zinc-500">
+                                                                {simState === 'pull' && '🔥 WOT Pull'}
+                                                                {simState === 'idle' && '⏳ Waiting...'}
+                                                                {simState === 'decel' && '📉 Decel'}
+                                                                {simState === 'cooldown' && '❄️ Cooldown'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Pull Throttle Setting */}
+                                                    <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-950/40 border border-zinc-800">
+                                                        <Label className="text-xs text-zinc-400 font-medium whitespace-nowrap">
+                                                            Pull Throttle:
+                                                        </Label>
+                                                        <Slider
+                                                            value={[pullThrottle]}
+                                                            onValueChange={(v) => {
+                                                                const newVal = v?.[0] ?? 100;
+                                                                console.log(`[JetDrive] Pull Throttle changed to ${newVal}%`);
+                                                                setPullThrottle(newVal);
+                                                            }}
+                                                            min={0}
+                                                            max={100}
+                                                            step={5}
+                                                            className="flex-1"
+                                                        />
+                                                        <span className="text-xs font-mono text-zinc-200 tabular-nums w-12 text-right">
+                                                            {pullThrottle}%
+                                                        </span>
+                                                        <span className="text-[10px] text-zinc-500">
+                                                            {pullThrottle === 100 ? 'WOT' : pullThrottle >= 75 ? 'High' : pullThrottle >= 50 ? 'Mid' : pullThrottle >= 25 ? 'Low' : 'Idle'}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </>
                                         ) : (
                                             /* Hardware Controls */
                                             <>
                                                 <Button
-                                                    onClick={isCapturing ? stopCapture : startCapture}
+                                                    onClick={isCapturing ? stopCapture : handleStartCapture}
                                                     variant={isCapturing ? "destructive" : "default"}
                                                     className={!isCapturing ? "bg-green-600 hover:bg-green-500" : ""}
                                                 >
@@ -2276,7 +2485,9 @@ function SmartPromptBanner({
                                             <div className="flex items-center justify-between mb-2">
                                                 <div className="text-xs text-zinc-400 font-medium">Throttle (TPS)</div>
                                                 <div className="text-xs font-mono text-zinc-200 tabular-nums">
-                                                    {Math.round(simThrottle)}%
+                                                    {simState === 'pull' && typeof simStatus?.current?.tps === 'number'
+                                                        ? `${Math.round(simStatus.current.tps)}%`
+                                                        : `${Math.round(simThrottle)}%`}
                                                 </div>
                                             </div>
                                             <Slider
@@ -2285,6 +2496,7 @@ function SmartPromptBanner({
                                                 min={0}
                                                 max={100}
                                                 step={1}
+                                                disabled={simState === 'pull'}
                                             />
                                             <div className="mt-2 text-[10px] text-zinc-500">
                                                 Drag to set throttle; you can still use <span className="font-mono">Trigger Pull</span> for a sweep.
@@ -2302,7 +2514,7 @@ function SmartPromptBanner({
                                                     currentAfrFront={currentAfrFront}
                                                     currentAfrRear={currentAfrRear}
                                                     afrTargets={afrTargets}
-                                                    isLive={isCapturing || isSimulatorActive}
+                                                    isLive={isLive}
                                                     customRpmBins={importedTune?.rpmBins}
                                                     customMapBins={importedTune?.mapBins}
                                                     onExport={(data) => {

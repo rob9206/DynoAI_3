@@ -83,6 +83,8 @@ export interface JetDriveSnapshot {
     units: Record<string, string>;
 }
 
+export type JetDriveDataSource = 'simulator' | 'hardware' | 'none';
+
 export interface UseJetDriveLiveOptions {
     /** API base URL (default: http://127.0.0.1:5001/api/jetdrive) */
     apiUrl?: string;
@@ -96,6 +98,8 @@ export interface UseJetDriveLiveOptions {
     maxHistoryPoints?: number;
     /** Enables verbose debug logging (default: false) */
     debug?: boolean;
+    /** When true, page is in simulator mode - hook will poll live data and keep simulator data separate from hardware */
+    isSimulatorActive?: boolean;
 }
 
 export interface UseJetDriveLiveReturn {
@@ -107,8 +111,10 @@ export interface UseJetDriveLiveReturn {
     connectionError: string | null;
     providerName: string | null;
     channelCount: number;
+    /** Active data source: simulator, hardware, or none (no live data) */
+    dataSource: JetDriveDataSource;
 
-    // Data - compatible with LiveLink components
+    // Data - compatible with LiveLink components (always the active source: simulator or hardware)
     channels: Record<string, JetDriveChannel>;
     snapshot: JetDriveSnapshot | null;
     history: Record<string, { time: number; value: number }[]>;
@@ -309,13 +315,14 @@ export function getChannelsByCategory(
     return grouped;
 }
 
-const DEFAULT_OPTIONS: Required<UseJetDriveLiveOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'>> & { isSimulatorActive?: boolean } = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
     pollInterval: 1000,  // 1000ms = 1 update/sec - balances responsiveness with connection pool limits
     historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
+    isSimulatorActive: false,
 };
 
 export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDriveLiveReturn {
@@ -331,8 +338,10 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const [providerName, setProviderName] = useState<string | null>(null);
     const [channelCount, setChannelCount] = useState(0);
 
-    // Data state
+    // Data state - separate simulator vs hardware to prevent cross-contamination
     const [channels, setChannels] = useState<Record<string, JetDriveChannel>>({});
+    const [simulatorChannels, setSimulatorChannels] = useState<Record<string, JetDriveChannel>>({});
+    const [dataSource, setDataSource] = useState<JetDriveDataSource>('none');
     const [snapshot, setSnapshot] = useState<JetDriveSnapshot | null>(null);
     const [history, setHistory] = useState<Record<string, { time: number; value: number }[]>>({});
 
@@ -340,6 +349,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const historyRef = useRef<Record<string, { time: number; value: number }[]>>({});
     const lastHistoryPublishAtRef = useRef<number>(0);
+    const prevSimulatedRef = useRef<boolean | null>(null);
     
     // Rate limit backoff state
     const backoffRef = useRef<number>(0); // Current backoff delay in ms
@@ -440,6 +450,19 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 setLiveConnected(true);
             }
 
+            // Detect mode transition to clear the other source and prevent cross-contamination
+            const prevSimulated = prevSimulatedRef.current;
+            if (prevSimulated === false && simulated) {
+                setChannels({});
+                historyRef.current = {};
+                lastHistoryPublishAtRef.current = 0;
+            } else if (prevSimulated === true && !simulated) {
+                setSimulatorChannels({});
+                historyRef.current = {};
+                lastHistoryPublishAtRef.current = 0;
+            }
+            prevSimulatedRef.current = simulated;
+
             const channelsRaw = isRecord(data.channels) ? data.channels : null;
             if (channelsRaw && Object.keys(channelsRaw).length > 0) {
                 setLiveConnected(true);
@@ -492,7 +515,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     console.debug('[useJetDriveLive] channels:', Object.keys(newChannels));
                 }
 
-                setChannels(newChannels);
+                if (simulated) {
+                    setSimulatorChannels(newChannels);
+                    setDataSource('simulator');
+                } else {
+                    setChannels(newChannels);
+                    setDataSource('hardware');
+                }
                 setSnapshot(newSnapshot);
 
                 // Collect chart history every poll into a ref (cheap), but publish to React state
@@ -521,6 +550,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     setHistory(published);
                 }
             } else {
+                setDataSource('none');
                 // If capturing but no channels, surface backend diagnostics (if provided).
                 const statusObj = isRecord(data.status) ? data.status : null;
                 const message = statusObj ? getString(statusObj.message) : null;
@@ -558,10 +588,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         }
     }, [opts.apiUrl]);
 
-    // Get single channel value
+    // Active channels: simulator when dataSource is simulator, otherwise hardware
+    const activeChannels = dataSource === 'simulator' ? simulatorChannels : channels;
+
+    // Get single channel value (from active source)
     const getChannelValue = useCallback((channel: string): number | null => {
-        return channels[channel]?.value ?? null;
-    }, [channels]);
+        return activeChannels[channel]?.value ?? null;
+    }, [activeChannels]);
 
     // Clear history
     const clearHistory = useCallback(() => {
@@ -570,17 +603,18 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         lastHistoryPublishAtRef.current = 0;
     }, []);
 
-    // Clear all channels (removes stale/old channel data)
+    // Clear all channels (both simulator and hardware) - use when switching modes
     const clearChannels = useCallback(async () => {
-        // Clear local state
         setChannels({});
+        setSimulatorChannels({});
+        setDataSource('none');
         setHistory({});
         historyRef.current = {};
         lastHistoryPublishAtRef.current = 0;
         setSnapshot(null);
         setChannelCount(0);
+        prevSimulatedRef.current = null;
         
-        // Also reset backend queue to clear any cached channel data
         try {
             await fetch(`${opts.apiUrl}/queue/reset`, { method: 'POST' });
         } catch {
@@ -593,13 +627,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         void checkConnection();
     }, [checkConnection]);
 
-    // Polling effect
+    // Polling effect - poll when real capture OR simulator is active (separate modes)
+    const shouldPollLive = isCapturing || opts.isSimulatorActive;
     useEffect(() => {
         // Always poll for status
         const statusInterval = setInterval(checkConnection, 5000);
 
-        // Poll live data when capturing
-        if (isCapturing) {
+        if (shouldPollLive) {
             void pollLiveData(); // Immediate poll
             pollIntervalRef.current = setInterval(pollLiveData, opts.pollInterval);
         }
@@ -610,7 +644,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 clearInterval(pollIntervalRef.current);
             }
         };
-    }, [isCapturing, checkConnection, pollLiveData, opts.pollInterval]);
+    }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval]);
 
     // Auto-connect
     useEffect(() => {
@@ -648,7 +682,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         connectionError,
         providerName,
         channelCount,
-        channels,
+        dataSource,
+        channels: activeChannels,
         snapshot,
         history,
         startCapture,

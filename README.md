@@ -82,10 +82,24 @@ python -c "import importlib.metadata as m; print(m.version('dynoai'))"
 
 ### Web Application (Recommended)
 
+**Option 1: Quick Start (Fastest - No Dependency Updates)**
+```cmd
+scripts\windows\quick-start.bat
+```
+
+**Option 2: PowerShell Script**
 ```powershell
 # Start both backend and frontend
 .\start-web.ps1
 ```
+
+**Option 3: Full Start with Dependency Updates**
+```cmd
+# Updates all dependencies, then starts services (takes longer)
+scripts\windows\start-all.bat
+```
+
+> **Troubleshooting:** If `start-all.bat` gets stuck at step 2/10, see [Quick Start Troubleshooting Guide](docs/QUICK_START_TROUBLESHOOTING.md) or use `quick-start.bat` instead.
 
 Open your browser to `http://localhost:5173`
 
@@ -107,7 +121,7 @@ npm run dev
 The JetDrive page provides a complete auto-tuning workflow:
 
 1. **Navigate to JetDrive** tab in the web UI
-2. **Connect or Simulate** - Connect to dyno or start simulator
+image.png2. **Connect or Simulate** - Connect to dyno or start simulator
 3. **Import** - Load a base tune or Engine Analyzer prediction
 4. **Collect** - Passive monitoring of pulls with live coverage progress
 5. **Analyze** - Run NextGen analysis for test planning and hypotheses

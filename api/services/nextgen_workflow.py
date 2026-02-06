@@ -179,7 +179,9 @@ class NextGenWorkflow:
         """
         Resolve the input CSV path for a run.
         
-        Tries RunManager first, then falls back to standard convention.
+        Tries RunManager first, then falls back to standard conventions.
+        Checks multiple locations since JetDrive autotune saves run.csv
+        in the run root, while JetStream saves in input/ subdirectory.
         
         Args:
             run_id: The run ID
@@ -192,18 +194,48 @@ class NextGenWorkflow:
         if csv_path and csv_path.exists():
             return csv_path
         
-        # Fallback to direct path construction
+        # Fallback to input/ subdirectory convention (JetStream runs)
         fallback_path = self._runs_dir / run_id / "input" / "dynoai_input.csv"
         if fallback_path.exists():
             return fallback_path
         
-        # Try alternative input filenames
-        run_dir = self._runs_dir / run_id / "input"
-        if run_dir.exists():
+        # Try alternative input filenames in input/ dir
+        input_dir = self._runs_dir / run_id / "input"
+        if input_dir.exists():
             for pattern in ["*.csv", "*.CSV"]:
-                csv_files = list(run_dir.glob(pattern))
+                csv_files = list(input_dir.glob(pattern))
                 if csv_files:
                     return csv_files[0]
+        
+        # Try run.csv in root of run directory (JetDrive autotune output)
+        run_csv = self._runs_dir / run_id / "run.csv"
+        if run_csv.exists():
+            return run_csv
+        
+        # Try any CSV in output/ directory as last resort
+        output_dir = self._runs_dir / run_id / "output"
+        if output_dir.exists():
+            for pattern in ["*.csv"]:
+                csv_files = [
+                    f for f in output_dir.glob(pattern) 
+                    if "VE_Correction" not in f.name 
+                    and "AFR_Error" not in f.name 
+                    and "Hit_Count" not in f.name
+                ]
+                if csv_files:
+                    return csv_files[0]
+        
+        # Try any CSV in run root directory
+        run_root = self._runs_dir / run_id
+        if run_root.exists():
+            csv_files = [
+                f for f in run_root.glob("*.csv")
+                if "VE_Correction" not in f.name
+                and "AFR_Error" not in f.name
+                and "Hit_Count" not in f.name
+            ]
+            if csv_files:
+                return csv_files[0]
         
         return None
     

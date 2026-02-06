@@ -14,6 +14,9 @@ import {
     Loader2,
     Sparkles,
     BarChart3,
+    Database,
+    Zap,
+    Search,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -23,6 +26,8 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
+import { ScrollArea } from '../components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import {
     getWizardConfig,
     previewDecelFix,
@@ -31,6 +36,33 @@ import {
     DecelPreviewResult,
     QuickHeatCheckResult,
 } from '../api/wizards';
+
+// Engine Analyzer types
+interface EAEngine {
+    name: string;
+    displacement_ci: number;
+    summary: string;
+}
+
+interface EAPrediction {
+    build_name: string;
+    displacement_ci: number;
+    peak_hp?: number;
+    peak_hp_rpm?: number;
+    peak_tq?: number;
+    peak_tq_rpm?: number;
+    prediction_notes: string[];
+    confidence_level?: string;
+}
+
+interface EALibraryStats {
+    total_components: number;
+    heads_count: number;
+    cams_count: number;
+    intakes_count: number;
+    short_blocks_count: number;
+    engines_count: number;
+}
 
 export default function TuningWizardsPage() {
     const [selectedStage, setSelectedStage] = useState<string>('stock');
@@ -43,6 +75,14 @@ export default function TuningWizardsPage() {
     // Heat soak quick check
     const [hpValues, setHpValues] = useState<string>('');
     const [heatCheckResult, setHeatCheckResult] = useState<QuickHeatCheckResult | null>(null);
+
+    // Engine Analyzer state
+    const [showEABrowser, setShowEABrowser] = useState(false);
+    const [eaStats, setEAStats] = useState<EALibraryStats | null>(null);
+    const [eaEngines, setEAEngines] = useState<EAEngine[]>([]);
+    const [eaSearchQuery, setEASearchQuery] = useState('');
+    const [eaLoading, setEALoading] = useState(false);
+    const [eaPrediction, setEAPrediction] = useState<EAPrediction | null>(null);
 
     // Fetch wizard config
     const { data: config, isLoading: configLoading } = useQuery({
@@ -121,6 +161,67 @@ export default function TuningWizardsPage() {
         heatCheckMutation.mutate(values);
     };
 
+    // Engine Analyzer functions
+    const fetchEAStats = async () => {
+        try {
+            const response = await fetch('/api/ea/library');
+            const data = await response.json();
+            if (data.stats) {
+                setEAStats(data.stats);
+            }
+        } catch (err) {
+            console.error('Failed to fetch EA stats:', err);
+        }
+    };
+
+    const fetchEAEngines = async (search?: string) => {
+        setEALoading(true);
+        try {
+            const url = search
+                ? `/api/ea/library/engines?search=${encodeURIComponent(search)}`
+                : '/api/ea/library/engines';
+            const response = await fetch(url);
+            const data = await response.json();
+            setEAEngines(data.engines || []);
+        } catch (err) {
+            console.error('Failed to fetch EA engines:', err);
+            toast.error('Failed to load Engine Analyzer library');
+        } finally {
+            setEALoading(false);
+        }
+    };
+
+    const loadEAPrediction = async (engineName: string) => {
+        setEALoading(true);
+        try {
+            const response = await fetch('/api/ea/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ engine_name: engineName }),
+            });
+            const prediction = await response.json();
+            setEAPrediction(prediction);
+            setShowEABrowser(false);
+            toast.success(`Loaded prediction for ${prediction.build_name}`);
+        } catch (err) {
+            console.error('Failed to load EA prediction:', err);
+            toast.error('Failed to generate prediction');
+        } finally {
+            setEALoading(false);
+        }
+    };
+
+    const handleOpenEABrowser = () => {
+        setShowEABrowser(true);
+        fetchEAStats();
+        fetchEAEngines();
+    };
+
+    // Filter engines by search
+    const filteredEngines = eaSearchQuery
+        ? eaEngines.filter((e) => e.name.toLowerCase().includes(eaSearchQuery.toLowerCase()))
+        : eaEngines;
+
     const selectedStagePreset = config?.stages.find((s) => s.level === selectedStage);
     const selectedCamPreset = config?.cams.find((c) => c.family === selectedCam);
 
@@ -162,6 +263,9 @@ export default function TuningWizardsPage() {
                         </Badge>
                         <Badge variant="outline" className="bg-red-500/10 text-red-300 border-red-500/30">
                             <Thermometer className="h-3 w-3 mr-1" /> Heat Soak
+                        </Badge>
+                        <Badge variant="outline" className="bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
+                            <Database className="h-3 w-3 mr-1" /> Engine Analyzer
                         </Badge>
                     </div>
                 </div>

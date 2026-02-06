@@ -228,8 +228,19 @@ export function LiveVETable({
     const config = ENGINE_GRID_CONFIGS[activePreset];
     
     // Use custom bins if provided (from imported tune), otherwise use preset bins
-    const rpmBins = customRpmBins ?? config.rpmBins;
-    const mapBins = customMapBins ?? config.mapBins;
+    // Deduplicate to prevent duplicate rows/columns in the grid
+    const rpmBins = useMemo(() => {
+        const raw = customRpmBins ?? config.rpmBins;
+        const rounded = raw.map(b => Math.round(b));
+        const unique = [...new Set(rounded)].sort((a, b) => a - b);
+        return unique;
+    }, [customRpmBins, config.rpmBins]);
+    const mapBins = useMemo(() => {
+        const raw = customMapBins ?? config.mapBins;
+        const rounded = raw.map(b => Math.round(b));
+        const unique = [...new Set(rounded)].sort((a, b) => a - b);
+        return unique;
+    }, [customMapBins, config.mapBins]);
 
     const handlePresetChange = useCallback((preset: EnginePreset) => {
         if (onEnginePresetChange) {
@@ -281,7 +292,27 @@ export function LiveVETable({
         rpmBins.map(() => mapBins.map(() => 1.0))
     );
 
-    // Reset state when engine preset changes
+    // Refs for throttled accumulation: mutate at 50Hz, flush to state every FLUSH_MS
+    const FLUSH_MS = 80;  // ~12 updates/sec for responsive corrections without 50Hz overload
+    const liveHitCountsRef = useRef<number[][]>([]);
+    const frontHitCountsRef = useRef<number[][]>([]);
+    const rearHitCountsRef = useRef<number[][]>([]);
+    const frontAfrAccumulatorRef = useRef<{ sum: number; count: number }[][]>([]);
+    const rearAfrAccumulatorRef = useRef<{ sum: number; count: number }[][]>([]);
+    const afrAccumulatorRef = useRef<{ sum: number; count: number }[][]>([]);
+
+    const initRefs = useCallback(() => {
+        const emptyHits = rpmBins.map(() => mapBins.map(() => 0));
+        const emptyAcc = rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })));
+        liveHitCountsRef.current = emptyHits.map(row => row.slice());
+        frontHitCountsRef.current = emptyHits.map(row => row.slice());
+        rearHitCountsRef.current = emptyHits.map(row => row.slice());
+        frontAfrAccumulatorRef.current = emptyAcc.map(row => row.map(c => ({ ...c })));
+        rearAfrAccumulatorRef.current = emptyAcc.map(row => row.map(c => ({ ...c })));
+        afrAccumulatorRef.current = emptyAcc.map(row => row.map(c => ({ ...c })));
+    }, [rpmBins, mapBins]);
+
+    // Reset state and refs when engine preset changes
     useEffect(() => {
         const emptyHits = rpmBins.map(() => mapBins.map(() => 0));
         const emptyAcc = rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })));
@@ -296,7 +327,8 @@ export function LiveVETable({
         setLiveVeCorrections(emptyCorr);
         setFrontVeCorrections(emptyCorr);
         setRearVeCorrections(emptyCorr);
-    }, [activePreset, rpmBins, mapBins]);
+        initRefs();
+    }, [activePreset, rpmBins, mapBins, initRefs]);
 
     // Track which cells are currently active (using kPa directly)
     const cellTrace = useMemo(() => {
@@ -304,127 +336,107 @@ export function LiveVETable({
         return calculateCellTrace(currentRpm, currentMap, rpmBins, mapBins);
     }, [currentRpm, currentMap, isLive, rpmBins, mapBins]);
 
-    // Update hit counts and AFR accumulators when operating point changes
-    // Tracks BOTH cylinders separately (Front=LC1, Rear=LC2)
+    // Ensure refs are initialized (e.g. before first accumulation)
+    useEffect(() => {
+        if (liveHitCountsRef.current.length !== rpmBins.length) initRefs();
+    }, [rpmBins.length, mapBins.length, initRefs]);
+
+    // Update hit counts and AFR accumulators in REFS only (50Hz) - no setState here
+    // Flush to state is done by the interval below to avoid 50 state updates/sec
     useEffect(() => {
         if (!isLive || !cellTrace || currentRpm < 800) return;
+        const hits = liveHitCountsRef.current;
+        const fHits = frontHitCountsRef.current;
+        const rHits = rearHitCountsRef.current;
+        const fAcc = frontAfrAccumulatorRef.current;
+        const rAcc = rearAfrAccumulatorRef.current;
+        const acc = afrAccumulatorRef.current;
+        if (hits.length !== rpmBins.length) return;
 
-        // Accumulate combined hits for active cells (legacy)
-        setLiveHitCounts(prev => {
-            const next = prev.map(row => [...row]);
-            for (const cell of cellTrace.activeCells) {
-                if (cell.weight > 0.2) {  // Only count significant contributions
-                    next[cell.rpmIdx][cell.mapIdx]++;
-                }
-            }
-            return next;
-        });
+        for (const cell of cellTrace.activeCells) {
+            if (cell.weight <= 0.2) continue;
+            const i = cell.rpmIdx;
+            const j = cell.mapIdx;
+            hits[i][j]++;
+            fHits[i][j]++;
+            rHits[i][j]++;
+        }
 
-        // Accumulate FRONT cylinder AFR (LC1 wideband) and per-cylinder hits
         if (resolvedAfrFront > 8 && resolvedAfrFront < 20) {
-            // Track front cylinder hits
-            setFrontHitCounts(prev => {
-                const next = prev.map(row => [...row]);
-                for (const cell of cellTrace.activeCells) {
-                    if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx]++;
-                    }
-                }
-                return next;
-            });
-            
-            setFrontAfrAccumulator(prev => {
-                const next = prev.map(row => row.map(cell => ({ ...cell })));
-                for (const cell of cellTrace.activeCells) {
-                    if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx].sum += resolvedAfrFront * cell.weight;
-                        next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
-                    }
-                }
-                return next;
-            });
+            for (const cell of cellTrace.activeCells) {
+                if (cell.weight <= 0.2) continue;
+                const i = cell.rpmIdx;
+                const j = cell.mapIdx;
+                fAcc[i][j].sum += resolvedAfrFront * cell.weight;
+                fAcc[i][j].count += cell.weight;
+            }
         }
-
-        // Accumulate REAR cylinder AFR (LC2 wideband) and per-cylinder hits
         if (resolvedAfrRear > 8 && resolvedAfrRear < 20) {
-            // Track rear cylinder hits
-            setRearHitCounts(prev => {
-                const next = prev.map(row => [...row]);
-                for (const cell of cellTrace.activeCells) {
-                    if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx]++;
-                    }
-                }
-                return next;
-            });
-            
-            setRearAfrAccumulator(prev => {
-                const next = prev.map(row => row.map(cell => ({ ...cell })));
-                for (const cell of cellTrace.activeCells) {
-                    if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx].sum += resolvedAfrRear * cell.weight;
-                        next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
-                    }
-                }
-                return next;
-            });
+            for (const cell of cellTrace.activeCells) {
+                if (cell.weight <= 0.2) continue;
+                const i = cell.rpmIdx;
+                const j = cell.mapIdx;
+                rAcc[i][j].sum += resolvedAfrRear * cell.weight;
+                rAcc[i][j].count += cell.weight;
+            }
         }
-
-        // Legacy combined accumulator (average of front and rear for backward compat)
         const avgAfr = (resolvedAfrFront + resolvedAfrRear) / 2;
         if (avgAfr > 8 && avgAfr < 20) {
-            setAfrAccumulator(prev => {
-                const next = prev.map(row => row.map(cell => ({ ...cell })));
-                for (const cell of cellTrace.activeCells) {
-                    if (cell.weight > 0.2) {
-                        next[cell.rpmIdx][cell.mapIdx].sum += avgAfr * cell.weight;
-                        next[cell.rpmIdx][cell.mapIdx].count += cell.weight;
-                    }
-                }
-                return next;
-            });
-        }
-    }, [cellTrace, resolvedAfrFront, resolvedAfrRear, isLive, currentRpm]);
-
-    // Calculate live VE corrections from accumulated AFR data
-    // Uses Math v2.0.0 ratio model: VE_correction = AFR_measured / AFR_target
-    // This is physically accurate - the ratio directly represents the fuel error
-    // Calculates SEPARATE corrections for Front and Rear cylinders
-    useEffect(() => {
-        // Helper to calculate corrections from an accumulator
-        const calcCorrections = (accumulator: { sum: number; count: number }[][]) => {
-            const result: number[][] = rpmBins.map(() => mapBins.map(() => 1.0));
-            for (let i = 0; i < rpmBins.length; i++) {
-                for (let j = 0; j < mapBins.length; j++) {
-                    const acc = accumulator[i]?.[j];
-                    if (acc && acc.count >= 3) {  // Need at least 3 samples
-                        const meanAfr = acc.sum / acc.count;
-                        const cellTargetAfr = getTargetAfrForMap(mapBins[j], resolvedAfrTargets);
-                        // VE_correction = AFR_measured / AFR_target
-                        const correction = meanAfr / cellTargetAfr;
-                        // Clamp to ±15% for safety
-                        result[i][j] = Math.max(0.85, Math.min(1.15, correction));
-                    }
-                }
+            for (const cell of cellTrace.activeCells) {
+                if (cell.weight <= 0.2) continue;
+                const i = cell.rpmIdx;
+                const j = cell.mapIdx;
+                acc[i][j].sum += avgAfr * cell.weight;
+                acc[i][j].count += cell.weight;
             }
-            return result;
-        };
+        }
+    }, [cellTrace, resolvedAfrFront, resolvedAfrRear, isLive, currentRpm, rpmBins.length]);
 
-        // Calculate front cylinder corrections (LC1)
-        setFrontVeCorrections(calcCorrections(frontAfrAccumulator));
-        
-        // Calculate rear cylinder corrections (LC2)
-        setRearVeCorrections(calcCorrections(rearAfrAccumulator));
-        
-        // Combined/display corrections (average for UI display)
-        setLiveVeCorrections(calcCorrections(afrAccumulator));
-    }, [frontAfrAccumulator, rearAfrAccumulator, afrAccumulator, resolvedAfrTargets, rpmBins, mapBins]);
+    // Flush refs to state every FLUSH_MS and recompute corrections (reduces 50 state updates/sec to ~6–7)
+    useEffect(() => {
+        if (!isLive) return;
+        const interval = setInterval(() => {
+            const hits = liveHitCountsRef.current;
+            const fHits = frontHitCountsRef.current;
+            const rHits = rearHitCountsRef.current;
+            const fAcc = frontAfrAccumulatorRef.current;
+            const rAcc = rearAfrAccumulatorRef.current;
+            const acc = afrAccumulatorRef.current;
+            if (hits.length !== rpmBins.length) return;
+
+            setLiveHitCounts(hits.map(row => [...row]));
+            setFrontHitCounts(fHits.map(row => [...row]));
+            setRearHitCounts(rHits.map(row => [...row]));
+            setAfrAccumulator(acc.map(row => row.map(c => ({ ...c }))));
+            setFrontAfrAccumulator(fAcc.map(row => row.map(c => ({ ...c }))));
+            setRearAfrAccumulator(rAcc.map(row => row.map(c => ({ ...c }))));
+
+            const calcCorrections = (accumulator: { sum: number; count: number }[][]) => {
+                const result: number[][] = rpmBins.map(() => mapBins.map(() => 1.0));
+                for (let i = 0; i < rpmBins.length; i++) {
+                    for (let j = 0; j < mapBins.length; j++) {
+                        const ac = accumulator[i]?.[j];
+                        if (ac && ac.count >= 3) {
+                            const meanAfr = ac.sum / ac.count;
+                            const cellTargetAfr = getTargetAfrForMap(mapBins[j], resolvedAfrTargets);
+                            result[i][j] = Math.max(0.85, Math.min(1.15, meanAfr / cellTargetAfr));
+                        }
+                    }
+                }
+                return result;
+            };
+            setFrontVeCorrections(calcCorrections(fAcc));
+            setRearVeCorrections(calcCorrections(rAcc));
+            setLiveVeCorrections(calcCorrections(acc));
+        }, FLUSH_MS);
+        return () => clearInterval(interval);
+    }, [isLive, rpmBins, mapBins, resolvedAfrTargets]);
 
     // Use external corrections if provided, otherwise use live
     const displayCorrections = veCorrections ?? liveVeCorrections;
     const displayHitCounts = externalHitCounts ?? liveHitCounts;
 
-    // Reset live tracking
+    // Reset live tracking (state + refs so flush doesn't overwrite with stale ref data)
     const handleReset = useCallback(() => {
         const emptyHits = rpmBins.map(() => mapBins.map(() => 0));
         const emptyAcc = rpmBins.map(() => mapBins.map(() => ({ sum: 0, count: 0 })));
@@ -439,7 +451,14 @@ export function LiveVETable({
         setLiveVeCorrections(emptyCorr);
         setFrontVeCorrections(emptyCorr);
         setRearVeCorrections(emptyCorr);
-    }, [rpmBins, mapBins]);
+        initRefs();
+        
+        // Clear localStorage session data
+        const STORAGE_KEY = `jetdrive-ve-hits-${activePreset}`;
+        localStorage.removeItem(STORAGE_KEY);
+        
+        console.log('[VE Table] Reset and cleared session data');
+    }, [rpmBins, mapBins, initRefs, activePreset]);
 
     // Check if a cell is currently active
     const isCellActive = useCallback((rpmIdx: number, mapIdx: number): number => {
@@ -458,13 +477,13 @@ export function LiveVETable({
     const lastLiveUpdateRef = useRef<number>(0);
     
     // Live data update effect - push data to parent for real-time coverage tracking
-    // Throttled to avoid excessive updates (every ~500ms when data changes)
+    // Throttled to avoid excessive updates (every ~200ms when data changes for better persistence)
     useEffect(() => {
-        if (!onLiveDataUpdate || !isLive || totalHits === 0) return;
+        if (!onLiveDataUpdate || !isLive) return;
         
         const now = Date.now();
-        // Throttle updates to every 500ms
-        if (now - lastLiveUpdateRef.current < 500) return;
+        // Throttle updates to every 200ms (reduced from 500ms for better hit count persistence)
+        if (now - lastLiveUpdateRef.current < 200) return;
         lastLiveUpdateRef.current = now;
         
         const liveData: LiveVEExportData = {
@@ -483,6 +502,69 @@ export function LiveVETable({
         
         onLiveDataUpdate(liveData);
     }, [onLiveDataUpdate, isLive, totalHits, frontVeCorrections, rearVeCorrections, displayHitCounts, frontHitCounts, rearHitCounts, rpmBins, mapBins, resolvedAfrTargets, activePreset]);
+    
+    // Persist hit counts to localStorage for session recovery
+    const STORAGE_KEY = `jetdrive-ve-hits-${activePreset}`;
+    
+    // Save hit counts to localStorage when they change
+    useEffect(() => {
+        if (totalHits > 0) {
+            const sessionData = {
+                liveHitCounts,
+                frontHitCounts,
+                rearHitCounts,
+                frontVeCorrections,
+                rearVeCorrections,
+                liveVeCorrections,
+                frontAfrAccumulator,
+                rearAfrAccumulator,
+                afrAccumulator,
+                timestamp: Date.now(),
+                enginePreset: activePreset
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+        }
+    }, [totalHits, liveHitCounts, frontHitCounts, rearHitCounts, frontVeCorrections, rearVeCorrections, liveVeCorrections, frontAfrAccumulator, rearAfrAccumulator, afrAccumulator, activePreset, STORAGE_KEY]);
+    
+    // Restore hit counts from localStorage on component mount
+    useEffect(() => {
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (savedData) {
+            try {
+                const sessionData = JSON.parse(savedData);
+                // Only restore if data is recent (within 1 hour) and matches current preset
+                const isRecent = Date.now() - sessionData.timestamp < 3600000; // 1 hour
+                const isMatchingPreset = sessionData.enginePreset === activePreset;
+                
+                if (isRecent && isMatchingPreset) {
+                    setLiveHitCounts(sessionData.liveHitCounts || []);
+                    setFrontHitCounts(sessionData.frontHitCounts || []);
+                    setRearHitCounts(sessionData.rearHitCounts || []);
+                    setFrontVeCorrections(sessionData.frontVeCorrections || []);
+                    setRearVeCorrections(sessionData.rearVeCorrections || []);
+                    setLiveVeCorrections(sessionData.liveVeCorrections || []);
+                    setFrontAfrAccumulator(sessionData.frontAfrAccumulator || []);
+                    setRearAfrAccumulator(sessionData.rearAfrAccumulator || []);
+                    setAfrAccumulator(sessionData.afrAccumulator || []);
+                    
+                    // Also restore to refs
+                    if (sessionData.liveHitCounts) {
+                        liveHitCountsRef.current = sessionData.liveHitCounts.map((row: number[]) => [...row]);
+                        frontHitCountsRef.current = sessionData.frontHitCounts?.map((row: number[]) => [...row]) || [];
+                        rearHitCountsRef.current = sessionData.rearHitCounts?.map((row: number[]) => [...row]) || [];
+                        frontAfrAccumulatorRef.current = sessionData.frontAfrAccumulator?.map((row: any[]) => row.map((c: any) => ({ ...c }))) || [];
+                        rearAfrAccumulatorRef.current = sessionData.rearAfrAccumulator?.map((row: any[]) => row.map((c: any) => ({ ...c }))) || [];
+                        afrAccumulatorRef.current = sessionData.afrAccumulator?.map((row: any[]) => row.map((c: any) => ({ ...c }))) || [];
+                    }
+                    
+                    console.log(`[VE Table] Restored ${sessionData.liveHitCounts?.flat().reduce((a: number, b: number) => a + b, 0) || 0} hits from session`);
+                }
+            } catch (error) {
+                console.warn('[VE Table] Failed to restore session data:', error);
+                localStorage.removeItem(STORAGE_KEY);
+            }
+        }
+    }, [activePreset, STORAGE_KEY]); // Only run when preset changes
     
     // Export handler - provides data for external export utilities
     const handleExport = useCallback(() => {
@@ -592,9 +674,9 @@ export function LiveVETable({
                                     <span className="text-[9px] text-zinc-500">MAP ↓</span>
                                 </div>
                             </th>
-                            {rpmBins.map((rpm) => (
+                            {rpmBins.map((rpm, rpmIdx) => (
                                 <th
-                                    key={rpm}
+                                    key={`rpm-${rpmIdx}`}
                                     className="min-w-[48px] w-[48px] h-10 px-1.5 py-2 text-center font-bold text-zinc-300 border-l border-zinc-800/50 whitespace-nowrap"
                                 >
                                     {rpm >= 10000 ? `${(rpm / 1000).toFixed(0)}k` : rpm}
@@ -605,7 +687,7 @@ export function LiveVETable({
                     <tbody>
                         {mapBins.map((mapKpa, mapIdx) => (
                             <tr
-                                key={mapKpa}
+                                key={`map-${mapIdx}`}
                                 className={`${mapIdx % 2 === 0 ? 'bg-zinc-900/30' : 'bg-zinc-900/10'} border-t border-zinc-800/50`}
                             >
                                 <td
@@ -628,7 +710,7 @@ export function LiveVETable({
 
                                     return (
                                         <td
-                                            key={`${rpm}-${mapKpa}`}
+                                            key={`cell-${mapIdx}-${rpmIdx}`}
                                             className={`
                                                 min-w-[48px] w-[48px] h-12 px-1 py-1.5 text-center font-mono transition-all duration-75 cursor-pointer border-l border-zinc-800/30 align-middle
                                                 ${getCellColor(veCorr, hits)}

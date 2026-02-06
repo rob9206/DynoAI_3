@@ -16,7 +16,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
-from tuning_wizards import (
+from tools.utils.tuning_wizards import (
     analyze_heat_soak,
     generate_decel_fix_overlay,
     generate_idle_ve_overlay,

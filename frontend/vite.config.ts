@@ -4,9 +4,12 @@ import { defineConfig, PluginOption } from "vite";
 
 import sparkPlugin from "@github/spark/spark-vite-plugin";
 import createIconImportProxy from "@github/spark/vitePhosphorIconProxyPlugin";
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
-const projectRoot = process.env.PROJECT_ROOT || import.meta.dirname
+const __dirname = dirname(fileURLToPath(import.meta.url))
+// Always use __dirname for alias resolution to ensure @/ points to frontend/src
+const projectRoot = __dirname
 const enableSpark = process.env.SPARK === "true" || process.env.GITHUB_SPARK === "true"
 
 // https://vite.dev/config/

@@ -98,9 +98,10 @@ export function calculateCellApply(
   // Convergence estimate (rough, linear approximation)
   // If we applied 5% and need 15% total, we need ~2 more sessions
   const remainingDeltaPct = rawDeltaPct - appliedDeltaPct;
-  const sessionsToConvergeEstimate = wasClamped
-    ? Math.ceil(Math.abs(remainingDeltaPct) / (clampLimit * 100))
-    : 0;
+  const sessionsToConvergeEstimate =
+    wasClamped && clampLimit > 0
+      ? Math.ceil(Math.abs(remainingDeltaPct) / (clampLimit * 100))
+      : 0;
 
   return {
     rpm,

@@ -206,7 +206,7 @@ class AutoTuneWorkflow:
 
     # Safety limits
     MAX_CORRECTION_PCT = 10.0  # Maximum ±10% correction
-    MIN_HITS_PER_ZONE = 3  # Minimum samples needed per zone
+    MIN_HITS_PER_ZONE = 2  # Minimum samples needed per zone (faster corrections)
     AFR_ERROR_TOLERANCE = 0.3  # AFR points considered "OK" (±0.3)
 
     # AFR targets by MAP load (kPa) - richer at higher loads
@@ -227,6 +227,7 @@ class AutoTuneWorkflow:
         rpm_axis: Optional[list[float]] = None,
         map_axis: Optional[list[float]] = None,
         max_correction_pct: float = 10.0,
+        min_hits_per_zone: int = 2,  # Configurable minimum hits threshold (faster corrections)
         afr_targets: Optional[dict[int, float]] = None,
         math_version: Optional[MathVersion] = None,
         # TuneLab-inspired filtering options
@@ -267,6 +268,7 @@ class AutoTuneWorkflow:
         self.rpm_axis = rpm_axis or self.DEFAULT_RPM_AXIS
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
         self.max_correction_pct = max_correction_pct
+        self.min_hits_per_zone = min_hits_per_zone
         self.math_version = math_version or self.DEFAULT_MATH_VERSION
         
         # Allow custom AFR targets (keyed by MAP in kPa)
@@ -664,7 +666,7 @@ class AutoTuneWorkflow:
                 x_axis=self.rpm_axis,
                 y_axis=self.map_axis,
                 weighting=self.weighting_strategy,
-                min_hits=self.MIN_HITS_PER_ZONE,
+                min_hits=self.min_hits_per_zone,
             )
             
             # Add all samples
@@ -684,7 +686,7 @@ class AutoTuneWorkflow:
             for i in range(n_rpm):
                 for j in range(n_map):
                     mean_afr = afr_table[i][j]
-                    if mean_afr is not None and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
+                    if mean_afr is not None and hit_matrix[i, j] >= self.min_hits_per_zone:
                         target_afr = self.get_target_afr(self.map_axis[j])
                         afr_error = mean_afr - target_afr
                         afr_error_matrix[i, j] = afr_error
@@ -724,7 +726,7 @@ class AutoTuneWorkflow:
             # Calculate mean AFR and error per cell
             for i in range(n_rpm):
                 for j in range(n_map):
-                    if hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
+                    if hit_matrix[i, j] >= self.min_hits_per_zone:
                         mean_afr = afr_sum[i, j] / hit_matrix[i, j]
                         target_afr = self.get_target_afr(self.map_axis[j])
 
@@ -818,7 +820,7 @@ class AutoTuneWorkflow:
         correction_matrix = np.ones_like(ve_delta_matrix, dtype=float)
 
         # Apply corrections where we have valid data
-        valid_mask = ~np.isnan(ve_delta_matrix) & (hit_matrix >= self.MIN_HITS_PER_ZONE)
+        valid_mask = ~np.isnan(ve_delta_matrix) & (hit_matrix >= self.min_hits_per_zone)
 
         # Convert percentage to multiplier
         raw_corrections = 1 + ve_delta_matrix / 100
