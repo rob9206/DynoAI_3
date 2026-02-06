@@ -102,10 +102,10 @@ class TuneConfig:
     math_version: MathVersion = MathVersion.V2_0_0
 
     # RPM bins for grid
-    rpm_bins: list[int] = field(default_factory=lambda: RPM_BINS.copy())
+    rpm_bins: list[int] = field(default_factory=RPM_BINS.copy)
 
     # MAP bins for grid
-    map_bins: list[int] = field(default_factory=lambda: KPA_BINS.copy())
+    map_bins: list[int] = field(default_factory=KPA_BINS.copy)
 
 
 # =============================================================================

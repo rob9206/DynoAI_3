@@ -73,8 +73,8 @@ class VirtualECU:
     afr_target_table: np.ndarray
     
     # Table axes
-    rpm_bins: list[int] = field(default_factory=lambda: DEFAULT_RPM_BINS.copy())
-    map_bins: list[int] = field(default_factory=lambda: DEFAULT_MAP_BINS.copy())
+    rpm_bins: list[int] = field(default_factory=DEFAULT_RPM_BINS.copy)
+    map_bins: list[int] = field(default_factory=DEFAULT_MAP_BINS.copy)
     
     # Engine specs
     displacement_ci: float = 114.0  # M8 114ci = 57ci per cylinder
