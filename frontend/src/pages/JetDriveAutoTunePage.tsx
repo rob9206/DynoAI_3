@@ -73,6 +73,7 @@ import { SetupWizard } from '../components/jetdrive/SetupWizard';
 import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
 import type { BikeConfig, DynoConnectionConfig } from '../types/bikeConfig';
 import { SmartPromptBanner } from '../components/jetdrive/SmartPromptBanner';
+import { V3TuningTab } from '../components/jetdrive/V3TuningTab';
 import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
 import { useTuningWizard } from '../hooks/useTuningWizard';
 import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
@@ -635,6 +636,7 @@ export default function JetDriveAutoTunePage() {
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);
     const [selectedRun, setSelectedRun] = useState<string | null>(null);
+    const [selectedRunMode, setSelectedRunMode] = useState<'simulator_pull' | 'simulate' | 'csv' | null>(null); // Track which mode was used for the selected run
     const [lastPullSummary, setLastPullSummary] = useState<PullSummary | null>(null);
     const [pvvContent, setPvvContent] = useState<string>('');
     const [textExportContent, setTextExportContent] = useState<string>('');
@@ -1409,17 +1411,38 @@ export default function JetDriveAutoTunePage() {
             // If simulator is active and has pull data, use simulator_pull mode.
             // Otherwise fall back to 'simulate' mode (synthetic data) so analysis always succeeds.
             let actualMode = mode;
+            let freshPullData: any = null;
+            
             if (isSimulatorActive && mode === 'simulate') {
-                if (pullDataStatus?.has_data) {
-                    actualMode = 'simulator_pull';
-                } else {
-                    console.log('[Analyze] Simulator active but no pull data - using simulate mode');
+                // CRITICAL FIX: Do a FRESH check instead of using stale pullDataStatus from React Query
+                // The pullDataStatus query only polls every 2 seconds, so it can be stale when user clicks Analyze
+                try {
+                    console.log('[Analyze] Fetching fresh pull data status...');
+                    const freshStatusRes = await fetch(`${API_BASE}/simulator/pull-data`);
+                    if (freshStatusRes.ok) {
+                        freshPullData = await freshStatusRes.json();
+                        console.log('[Analyze] Fresh pull data status:', freshPullData);
+                        
+                        if (freshPullData?.has_data) {
+                            actualMode = 'simulator_pull';
+                            console.log(`[Analyze] ✓ Using real pull data (${freshPullData.points} points, ${freshPullData.peak_hp?.toFixed(1)} HP)`);
+                        } else {
+                            console.warn('[Analyze] ⚠ No pull data available - falling back to simulate mode');
+                            actualMode = 'simulate';
+                        }
+                    } else {
+                        console.warn('[Analyze] Could not fetch pull data status, falling back to simulate');
+                        actualMode = 'simulate';
+                    }
+                } catch (err) {
+                    console.error('[Analyze] Error checking pull data status:', err);
+                    console.warn('[Analyze] Falling back to simulate mode due to error');
                     actualMode = 'simulate';
                 }
             }
 
-            console.log('[Analyze] Mode:', mode, 'Actual mode:', actualMode, 'Simulator active:', isSimulatorActive);
-            console.log('[Analyze] Pull data status:', pullDataStatus);
+            console.log('[Analyze] Mode:', mode, '→ Actual mode:', actualMode, '| Simulator active:', isSimulatorActive);
+            console.log('[Analyze] Stale pullDataStatus (for comparison):', pullDataStatus);
 
             const res = await fetch(`${API_BASE}/analyze`, {
                 method: 'POST',
@@ -1448,12 +1471,14 @@ export default function JetDriveAutoTunePage() {
                 // Safely access analysis data with null checks
                 const peakHp = data.analysis?.peak_hp ?? 0;
                 const peakHpRpm = data.analysis?.peak_hp_rpm ?? 0;
-                const modeUsed = (isSimulatorActive && data.mode === 'simulator_pull') ? 'simulator pull data' : 'simulated data';
+                const actualModeUsed = data.mode || 'unknown';
+                const modeUsed = (actualModeUsed === 'simulator_pull') ? 'simulator pull data' : 'simulated data';
 
                 toast.success('Analysis complete!', {
                     description: `${peakHp.toFixed(1)} HP @ ${peakHpRpm} RPM (from ${modeUsed})`
                 });
                 setSelectedRun(data.run_id);
+                setSelectedRunMode(actualModeUsed as 'simulator_pull' | 'simulate' | 'csv'); // Store the actual mode used
                 setWorkflowState('complete');
                 void refetchStatus();
                 // Generate new run ID for next run
@@ -1941,7 +1966,7 @@ function SmartPromptBanner({
 
                 {/* Main Tabs */}
                 <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 max-w-lg">
+                    <TabsList className="grid w-full grid-cols-4 max-w-2xl">
                         <TabsTrigger value="hardware" className="flex items-center gap-2">
                             <Radio className="h-4 w-4" />
                             Hardware
@@ -1953,6 +1978,10 @@ function SmartPromptBanner({
                         <TabsTrigger value="autotune" className="flex items-center gap-2">
                             <Zap className="h-4 w-4" />
                             Auto-Tune
+                        </TabsTrigger>
+                        <TabsTrigger value="v3" className="flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            Accelerated
                         </TabsTrigger>
                     </TabsList>
 
@@ -2544,6 +2573,19 @@ function SmartPromptBanner({
                                                         {confidenceReport && (
                                                             <ConfidenceBadge confidence={confidenceReport} compact />
                                                         )}
+                                                        {selectedRunMode && (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className={cn(
+                                                                    "text-xs",
+                                                                    selectedRunMode === 'simulator_pull' 
+                                                                        ? "bg-blue-500/10 text-blue-400 border-blue-500/30" 
+                                                                        : "bg-purple-500/10 text-purple-400 border-purple-500/30"
+                                                                )}
+                                                            >
+                                                                {selectedRunMode === 'simulator_pull' ? '📊 Real Pull Data' : '🔮 Synthetic Data'}
+                                                            </Badge>
+                                                        )}
                                                         <AFRStatusBadge status={analysis?.overall_status || 'Unknown'} />
                                                         <Button
                                                             onClick={downloadPvv}
@@ -2927,6 +2969,11 @@ function SmartPromptBanner({
                             </div>
                         )
                         )}
+                    </TabsContent>
+
+                    {/* Accelerated Calibration (v3) Tab */}
+                    <TabsContent value="v3" className="mt-6">
+                        <V3TuningTab />
                     </TabsContent>
                 </Tabs>
             </div>

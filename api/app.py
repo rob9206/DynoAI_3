@@ -222,6 +222,7 @@ try:
     from api.routes.jetdrive import jetdrive_bp
 
     app.register_blueprint(jetdrive_bp)
+    print("[+] JetDrive Auto-Tune registered at /api/jetdrive")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize JetDrive Auto-Tune: {e}")
 
@@ -285,6 +286,14 @@ try:
     print("[+] NextGen Analysis registered at /api/nextgen")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize NextGen Analysis: {e}")
+
+# Register v3 Accelerated Calibration blueprint
+try:
+    from api.routes.v3_session import v3_session_bp
+    app.register_blueprint(v3_session_bp)
+    print("[+] V3 Accelerated Calibration registered at /api/v3")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize V3 Session: {e}")
 
 # Store active analysis jobs
 active_jobs = {}

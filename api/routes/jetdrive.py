@@ -692,78 +692,84 @@ def analyze_run():
             )
 
         if not pull_data or len(pull_data) == 0:
-            logger.warning("No pull data available from simulator - falling back to simulate mode")
-            # Graceful fallback: use synthetic simulation instead of failing
-            mode = "simulate"
-            cmd.append("--simulate")
-            # Skip the rest of simulator_pull logic
-            pull_data = None
+            logger.error("No pull data available from simulator when simulator_pull mode requested")
+            # CRITICAL FIX: Don't silently fall back to synthetic data - return clear error
+            # This ensures users know they need to complete a pull before analyzing
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No pull data available. Complete a pull before analyzing.",
+                        "hint": "Trigger a WOT pull using the 'Trigger Pull' button, wait for it to complete, then click Analyze.",
+                        "mode_requested": "simulator_pull",
+                    }
+                ),
+                400,
+            )
 
-        # Only process pull data if we didn't fall back to simulate mode
-        if pull_data is not None:
-            # Check for required fields in first data point
-            first_point = pull_data[0]
-            logger.info(f"First data point keys: {list(first_point.keys())}")
-            required_fields = ["Engine RPM", "Torque", "Horsepower"]
-            missing_fields = [f for f in required_fields if f not in first_point]
-            if missing_fields:
-                logger.error(f"Missing required fields in pull data: {missing_fields}")
-                return (
-                    jsonify(
+        # Check for required fields in first data point
+        first_point = pull_data[0]
+        logger.info(f"First data point keys: {list(first_point.keys())}")
+        required_fields = ["Engine RPM", "Torque", "Horsepower"]
+        missing_fields = [f for f in required_fields if f not in first_point]
+        if missing_fields:
+            logger.error(f"Missing required fields in pull data: {missing_fields}")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
+                    }
+                ),
+                400,
+            )
+
+        # Save pull data to CSV
+        uploads_dir = project_root / "uploads"
+        uploads_dir.mkdir(exist_ok=True)
+        csv_filename = f"{run_id}_pull.csv"
+        csv_path = str(uploads_dir / csv_filename)
+
+        try:
+            with open(csv_path, "w", newline="") as f:
+                fieldnames = [
+                    "timestamp_ms",
+                    "RPM",
+                    "Torque",
+                    "Horsepower",
+                    "AFR",
+                    "MAP_kPa",
+                    "TPS",
+                    "IAT",
+                ]
+
+                writer = csv_module.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for i, row in enumerate(pull_data):
+                    # Use average of front/rear AFR
+                    afr_avg = (
+                        row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
+                    ) / 2
+
+                    writer.writerow(
                         {
-                            "success": False,
-                            "error": f"Simulator pull data is missing required fields: {', '.join(missing_fields)}",
+                            "timestamp_ms": i
+                            * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
+                            "RPM": row.get("Engine RPM", 0),
+                            "Torque": row.get("Torque", 0),
+                            "Horsepower": row.get("Horsepower", 0),
+                            "AFR": afr_avg,
+                            "MAP_kPa": row.get("MAP kPa", 0),
+                            "TPS": row.get("TPS", 0),
+                            "IAT": row.get("IAT F", 85),
                         }
-                    ),
-                    400,
-                )
+                    )
+        except Exception as e:
+            return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
 
-            # Save pull data to CSV
-            uploads_dir = project_root / "uploads"
-            uploads_dir.mkdir(exist_ok=True)
-            csv_filename = f"{run_id}_pull.csv"
-            csv_path = str(uploads_dir / csv_filename)
-
-            try:
-                with open(csv_path, "w", newline="") as f:
-                    fieldnames = [
-                        "timestamp_ms",
-                        "RPM",
-                        "Torque",
-                        "Horsepower",
-                        "AFR",
-                        "MAP_kPa",
-                        "TPS",
-                        "IAT",
-                    ]
-
-                    writer = csv_module.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-
-                    for i, row in enumerate(pull_data):
-                        # Use average of front/rear AFR
-                        afr_avg = (
-                            row.get("AFR Meas F", 14.7) + row.get("AFR Meas R", 14.7)
-                        ) / 2
-
-                        writer.writerow(
-                            {
-                                "timestamp_ms": i
-                                * 20,  # 50Hz = 20ms per sample (NOT 50ms!)
-                                "RPM": row.get("Engine RPM", 0),
-                                "Torque": row.get("Torque", 0),
-                                "Horsepower": row.get("Horsepower", 0),
-                                "AFR": afr_avg,
-                                "MAP_kPa": row.get("MAP kPa", 0),
-                                "TPS": row.get("TPS", 0),
-                                "IAT": row.get("IAT F", 85),
-                            }
-                        )
-            except Exception as e:
-                return jsonify({"error": f"Failed to save simulator data: {str(e)}"}), 500
-
-            # Now analyze the saved CSV
-            cmd.extend(["--csv", csv_path])
+        # Now analyze the saved CSV
+        cmd.extend(["--csv", csv_path])
     else:
         valid_modes = ["simulate", "csv", "simulator_pull"]
         return (

@@ -622,16 +622,23 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         }
     }, [opts.apiUrl]);
 
-    // Initial connection check
+    // Initial connection check - only if autoConnect is enabled
     useEffect(() => {
-        void checkConnection();
-    }, [checkConnection]);
+        if (opts.autoConnect) {
+            void checkConnection();
+        }
+    }, [checkConnection, opts.autoConnect]);
 
     // Polling effect - poll when real capture OR simulator is active (separate modes)
     const shouldPollLive = isCapturing || opts.isSimulatorActive;
     useEffect(() => {
-        // Always poll for status
-        const statusInterval = setInterval(checkConnection, 5000);
+        // Only poll for status when autoConnect is enabled or we're actively using the feature
+        const shouldPollStatus = opts.autoConnect || shouldPollLive;
+        let statusInterval: NodeJS.Timeout | null = null;
+        
+        if (shouldPollStatus) {
+            statusInterval = setInterval(checkConnection, 5000);
+        }
 
         if (shouldPollLive) {
             void pollLiveData(); // Immediate poll
@@ -639,12 +646,14 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         }
 
         return () => {
-            clearInterval(statusInterval);
+            if (statusInterval) {
+                clearInterval(statusInterval);
+            }
             if (pollIntervalRef.current) {
                 clearInterval(pollIntervalRef.current);
             }
         };
-    }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval]);
+    }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval, opts.autoConnect]);
 
     // Auto-connect
     useEffect(() => {
