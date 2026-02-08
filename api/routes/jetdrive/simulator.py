@@ -251,6 +251,131 @@ def set_simulator_throttle():
     return jsonify({"success": True, "tps_target": tps})
 
 
+@simulator_bp.route("/simulator/load-mode", methods=["POST"])
+def set_load_mode():
+    """Set simulator external load mode and configuration."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    data = request.get_json() or {}
+    mode = data.get("mode")
+    if not mode:
+        return jsonify({"error": "Missing 'mode'"}), 400
+
+    from api.services.simulation.dyno_simulator import (
+        DynoLoadMode,
+        EddyBrakeConfig,
+        RoadLoadConfig,
+        get_simulator,
+    )
+
+    sim = get_simulator()
+    try:
+        load_mode = DynoLoadMode(mode)
+    except Exception:
+        return jsonify({"error": f"Invalid load mode: {mode}"}), 400
+
+    eddy_cfg = sim.config.eddy_brake_config
+    road_cfg = sim.config.road_load_config
+
+    eddy_data = data.get("eddy_brake") or {}
+    if eddy_data:
+        eddy_cfg = EddyBrakeConfig(
+            max_brake_torque=float(
+                eddy_data.get("max_brake_torque", eddy_cfg.max_brake_torque)
+            ),
+            brake_response_rate=float(
+                eddy_data.get("brake_response_rate", eddy_cfg.brake_response_rate)
+            ),
+            eddy_rpm_factor=float(
+                eddy_data.get("eddy_rpm_factor", eddy_cfg.eddy_rpm_factor)
+            ),
+        )
+        sim.set_eddy_brake_config(eddy_cfg)
+
+    road_data = data.get("road_load") or {}
+    if road_data:
+        road_cfg = RoadLoadConfig(
+            rolling_a=float(road_data.get("rolling_a", road_cfg.rolling_a)),
+            speed_b=float(road_data.get("speed_b", road_cfg.speed_b)),
+            aero_c=float(road_data.get("aero_c", road_cfg.aero_c)),
+            vehicle_weight_lbs=float(
+                road_data.get("vehicle_weight_lbs", road_cfg.vehicle_weight_lbs)
+            ),
+            drivetrain_ratio=float(
+                road_data.get("drivetrain_ratio", road_cfg.drivetrain_ratio)
+            ),
+            tire_circumference_ft=float(
+                road_data.get("tire_circumference_ft", road_cfg.tire_circumference_ft)
+            ),
+            grade_pct=float(road_data.get("grade_pct", road_cfg.grade_pct)),
+        )
+        sim.set_road_load_config(road_cfg)
+
+    sim.set_load_mode(load_mode)
+
+    return jsonify({"success": True, "mode": load_mode.value})
+
+
+@simulator_bp.route("/simulator/load-target", methods=["POST"])
+def set_load_target():
+    """Set eddy brake load target percentage."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    data = request.get_json() or {}
+    try:
+        load_pct = float(data.get("load_pct"))
+    except Exception:
+        return jsonify({"error": "Missing or invalid 'load_pct' (0-100)"}), 400
+
+    if not (0.0 <= load_pct <= 100.0):
+        return jsonify({"error": "'load_pct' must be between 0 and 100"}), 400
+
+    from api.services.simulation.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    sim.set_load_target(load_pct)
+
+    return jsonify({"success": True, "load_target": load_pct})
+
+
+@simulator_bp.route("/simulator/rpm-hold", methods=["POST"])
+def set_rpm_hold():
+    """Enable/disable RPM hold mode for eddy brake."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    data = request.get_json() or {}
+    active = bool(data.get("active", False))
+    target_rpm = data.get("target_rpm")
+    target_val = None
+    if target_rpm is not None:
+        try:
+            target_val = float(target_rpm)
+        except Exception:
+            return jsonify({"error": "Invalid 'target_rpm'"}), 400
+
+    from api.services.simulation.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    sim.set_rpm_hold(active, target_val)
+
+    return jsonify({"success": True, "active": active, "target_rpm": target_val})
+
+
+@simulator_bp.route("/simulator/load-state", methods=["GET"])
+def get_load_state():
+    """Get current load state and brake torque."""
+    if not _is_simulator_active():
+        return jsonify({"error": "Simulator not running"}), 400
+
+    from api.services.simulation.dyno_simulator import get_simulator
+
+    sim = get_simulator()
+    return jsonify({"success": True, "load": sim.get_load_state()})
+
+
 @simulator_bp.route("/simulator/pull-data", methods=["GET"])
 def get_pull_data():
     """Get data from the last completed pull."""

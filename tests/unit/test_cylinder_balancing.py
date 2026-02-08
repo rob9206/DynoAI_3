@@ -11,7 +11,7 @@ Tests cover:
 """
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from unittest.mock import mock_open, patch
 
 import pytest
@@ -454,7 +454,7 @@ class TestOutputGeneration:
 
 
 class TestProcessCylinderBalancing:
-    @patch("cylinder_balancing.write_correction_csv")
+    @patch("dynoai.core.cylinder_balancing.write_correction_csv")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_process_balanced_cylinders(
@@ -479,7 +479,7 @@ class TestProcessCylinderBalancing:
         # With balanced cylinders, should have minimal corrections
         assert result["cells_imbalanced"] < result["cells_analyzed"] * 0.3
 
-    @patch("cylinder_balancing.write_correction_csv")
+    @patch("dynoai.core.cylinder_balancing.write_correction_csv")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_process_imbalanced_cylinders(
@@ -501,7 +501,7 @@ class TestProcessCylinderBalancing:
             result["front_corrections_applied"] + result["rear_corrections_applied"] > 0
         )
 
-    @patch("cylinder_balancing.write_correction_csv")
+    @patch("dynoai.core.cylinder_balancing.write_correction_csv")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_process_invalid_mode_fallback(
@@ -520,7 +520,7 @@ class TestProcessCylinderBalancing:
         # Should fallback to equalize
         assert result["mode_used"] == "equalize"
 
-    @patch("cylinder_balancing.write_correction_csv")
+    @patch("dynoai.core.cylinder_balancing.write_correction_csv")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_process_creates_output_files(
@@ -541,7 +541,7 @@ class TestProcessCylinderBalancing:
         # CSV writer should be called twice (front + rear)
         assert mock_write_csv.call_count == 2
 
-    @patch("cylinder_balancing.write_correction_csv")
+    @patch("dynoai.core.cylinder_balancing.write_correction_csv")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_process_respects_max_correction(

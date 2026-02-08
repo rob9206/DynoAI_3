@@ -268,7 +268,16 @@ class TestCrossComponentAgreement:
     @staticmethod
     def test_jetdrive_autotune_config():
         """jetdrive_autotune.py should support math version config."""
-        from scripts.jetdrive_autotune import TuneConfig
+        import importlib.util
+        import sys
+        from pathlib import Path
+
+        script_path = Path(__file__).resolve().parents[2] / "scripts" / "jetdrive" / "jetdrive_autotune.py"
+        spec = importlib.util.spec_from_file_location("jetdrive_autotune", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["jetdrive_autotune"] = mod
+        spec.loader.exec_module(mod)
+        TuneConfig = mod.TuneConfig
 
         config = TuneConfig()
         assert config.math_version == MathVersion.V2_0_0

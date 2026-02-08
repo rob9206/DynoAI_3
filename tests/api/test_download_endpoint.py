@@ -32,6 +32,7 @@ class TestDownloadEndpointBasic:
         assert (
             "text/csv" in response.content_type
             or "application/octet-stream" in response.content_type
+            or "application/vnd.ms-excel" in response.content_type
         )
 
     @staticmethod

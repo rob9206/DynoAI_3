@@ -138,6 +138,17 @@ def get_auth() -> APIKeyAuth:
     return _auth
 
 
+def reset_auth() -> None:
+    """
+    Reset the global auth instance.
+
+    Useful for testing to ensure a fresh APIKeyAuth is created
+    with current environment variables.
+    """
+    global _auth
+    _auth = None
+
+
 def require_api_key(f):
     """
     Decorator to require API key authentication on an endpoint.

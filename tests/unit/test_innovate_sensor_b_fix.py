@@ -9,11 +9,17 @@ using the proper byte positions and formula.
 import sys
 from pathlib import Path
 
-from api.services.innovate_client import InnovateClient, InnovateDeviceType
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+try:
+    import serial  # noqa: F401
+    from api.services.innovate_client import InnovateClient, InnovateDeviceType
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("pyserial not installed (optional hardware dependency)", allow_module_level=True)
 
 
 def test_mts_packet_parsing():

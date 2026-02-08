@@ -30,6 +30,8 @@ from api.services.simulation.dyno_simulator import (
     PhysicsState,
     SimulatedChannels,
     get_simulator,
+    DynoLoadMode,
+    EddyBrakeConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -419,6 +421,33 @@ class OperatorTrainingSimulator:
         
         # Callbacks
         self._on_alert: Callable[[SafetyAlert], None] | None = None
+
+        self._apply_dyno_config()
+
+    def _apply_dyno_config(self):
+        """Apply dyno type configuration to the base simulator."""
+        if self.dyno_config.dyno_type == DynoType.INERTIA:
+            self.base_sim.set_load_mode(DynoLoadMode.INERTIA)
+            self.training_state.load_target = 0.0
+            self.training_state.current_load = 0.0
+            self.training_state.brake_torque = 0.0
+            self.training_state.rpm_hold_active = False
+            return
+
+        self.base_sim.set_eddy_brake_config(
+            EddyBrakeConfig(
+                max_brake_torque=self.dyno_config.max_brake_torque,
+                brake_response_rate=self.dyno_config.brake_response_rate,
+                eddy_rpm_factor=self.dyno_config.eddy_rpm_factor,
+            )
+        )
+        self.base_sim.set_load_mode(DynoLoadMode.EDDY_BRAKE)
+        if self.dyno_config.dyno_type == DynoType.LOAD_HOLDING:
+            self.base_sim.set_rpm_hold(True, self.training_state.rpm_hold_target)
+            self.training_state.rpm_hold_active = True
+        else:
+            self.base_sim.set_rpm_hold(False)
+            self.training_state.rpm_hold_active = False
         
     def start(self):
         """Start the training simulator."""
@@ -460,12 +489,7 @@ class OperatorTrainingSimulator:
         """Change dyno type configuration."""
         with self._lock:
             self.dyno_config.dyno_type = dyno_type
-            
-            # Reset load-related state when switching types
-            if dyno_type == DynoType.INERTIA:
-                self.training_state.load_target = 0.0
-                self.training_state.rpm_hold_active = False
-                self.pid_controller.reset()
+            self._apply_dyno_config()
                 
     def set_throttle(self, tps: float):
         """Set throttle position (0-100%)."""
@@ -481,6 +505,7 @@ class OperatorTrainingSimulator:
             
         with self._lock:
             self.training_state.load_target = max(0.0, min(100.0, load))
+            self.base_sim.set_load_target(self.training_state.load_target)
             
     def set_rpm_hold(self, active: bool, target_rpm: float | None = None):
         """Enable/disable RPM hold mode."""
@@ -491,7 +516,7 @@ class OperatorTrainingSimulator:
             self.training_state.rpm_hold_active = active
             if target_rpm is not None:
                 self.training_state.rpm_hold_target = max(1500.0, min(6500.0, target_rpm))
-            
+            self.base_sim.set_rpm_hold(active, self.training_state.rpm_hold_target)
             if not active:
                 self.pid_controller.reset()
                 
@@ -589,46 +614,17 @@ class OperatorTrainingSimulator:
         self.training_state.map_kpa = base_channels.map_kpa
         self.training_state.iat = base_channels.iat_f
         
-        # Calculate brake torque based on dyno type
+        # Sync load/brake data from base simulator
         self._calculate_brake_torque(dt)
         
-        # Apply RPM hold PID if active
-        if self.training_state.rpm_hold_active:
-            pid_output = self.pid_controller.update(
-                self.training_state.rpm_hold_target,
-                self.training_state.rpm,
-                dt
-            )
-            # PID output adjusts load to maintain RPM
-            # Positive error (rpm too low) -> reduce load
-            # Negative error (rpm too high) -> increase load
-            self.training_state.load_target = max(0.0, min(100.0, 
-                self.training_state.load_target - pid_output * 0.1
-            ))
+        # RPM hold handled by base simulator
             
     def _calculate_brake_torque(self, dt: float):
-        """Calculate brake torque based on dyno type and load setting."""
-        dyno_type = self.dyno_config.dyno_type
-        
-        if dyno_type == DynoType.INERTIA:
-            self.training_state.brake_torque = 0.0
-            self.training_state.current_load = 0.0
-            return
-            
-        # Smooth load transition
-        load_diff = self.training_state.load_target - self.training_state.current_load
-        max_change = self.dyno_config.brake_response_rate * dt
-        self.training_state.current_load += max(-max_change, min(max_change, load_diff))
-        
-        # Eddy current brake model: torque proportional to RPM × load%
-        rpm_factor = min(1.0, self.training_state.rpm / 6000.0)
-        rpm_factor *= self.dyno_config.eddy_rpm_factor
-        
-        self.training_state.brake_torque = (
-            self.dyno_config.max_brake_torque *
-            (self.training_state.current_load / 100.0) *
-            rpm_factor
-        )
+        """Sync brake/load values from base simulator."""
+        load_state = self.base_sim.get_load_state()
+        self.training_state.load_target = float(load_state.get("load_target", 0.0))
+        self.training_state.current_load = float(load_state.get("current_load", 0.0))
+        self.training_state.brake_torque = float(load_state.get("brake_torque", 0.0))
         
     def _update_thermal(self, dt: float):
         """Update thermal state (EGT, oil temp, etc.)."""

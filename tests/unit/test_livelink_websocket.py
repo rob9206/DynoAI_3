@@ -3,7 +3,14 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    import flask_socketio  # noqa: F401
+except ImportError:
+    pytest.skip("flask-socketio not installed (optional dependency)", allow_module_level=True)
 
 
 def test_module_imports():

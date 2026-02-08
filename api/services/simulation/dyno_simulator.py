@@ -32,6 +32,7 @@ from typing import Any, Callable
 import numpy as np
 
 from api.config import get_config
+from api.services.simulation.load_models import EddyCurrentBrake, RoadLoadModel
 
 # Physics Constants
 # =================
@@ -40,7 +41,7 @@ from api.config import get_config
 # Torque (lb·ft) to angular acceleration (rad/s²) scaling factor.
 # Deprecated: use SimulatorConfig.torque_to_angular_accel_scale instead.
 # Kept for backward compatibility references only.
-TORQUE_TO_ANGULAR_ACCEL_SCALE = 50.0
+TORQUE_TO_ANGULAR_ACCEL_SCALE = 80.0
 
 # Drag coefficient for aerodynamic/mechanical losses
 # Quadratic drag: drag_factor = 1.0 - (DRAG_COEFF × rpm/1000) × dt
@@ -50,6 +51,8 @@ DRAG_COEFFICIENT = 0.00015
 # Angular velocity reduction: ω_new = ω × (1.0 - brake_coeff * dt)
 # Tuned so coastdown is gradual (multi-second), not an instant RPM cliff.
 DEFAULT_ENGINE_BRAKE_COEFFICIENT = 0.18
+# Legacy constant for tests/docs
+ENGINE_BRAKE_COEFFICIENT = DEFAULT_ENGINE_BRAKE_COEFFICIENT
 
 # Knock detection thresholds
 KNOCK_AFR_LEAN_THRESHOLD = 1.0  # AFR above target at high load triggers knock
@@ -62,9 +65,72 @@ class SimState(Enum):
 
     IDLE = "idle"
     PULL = "pull"
+    STEADY_STATE = "steady_state"
+    ROAD_SWEEP = "road_sweep"
     DECEL = "decel"
     COOLDOWN = "cooldown"
     STOPPED = "stopped"
+
+
+class DynoLoadMode(Enum):
+    """External load modeling modes."""
+
+    INERTIA = "inertia"
+    EDDY_BRAKE = "eddy_brake"
+    ROAD_LOAD = "road_load"
+
+
+@dataclass
+class EddyBrakeConfig:
+    """Configuration for eddy current brake model."""
+
+    max_brake_torque: float = 800.0  # ft-lb max absorption
+    brake_response_rate: float = 100.0  # ft-lb/second transition rate
+    eddy_rpm_factor: float = 0.8  # RPM scaling for eddy brake effectiveness
+
+
+@dataclass
+class RoadLoadConfig:
+    """Configuration for road load simulation (SAE J2264)."""
+
+    rolling_a: float = 80.0  # lb
+    speed_b: float = 0.6  # lb/mph
+    aero_c: float = 0.03  # lb/mph^2
+    vehicle_weight_lbs: float = 850.0
+    drivetrain_ratio: float = 1.0
+    tire_circumference_ft: float = 6.8  # ~27 in tire
+    grade_pct: float = 0.0
+
+
+class RPMHoldController:
+    """PID controller for holding RPM with brake load."""
+
+    def __init__(
+        self,
+        kp: float = 0.8,
+        ki: float = 0.05,
+        kd: float = 0.15,
+        max_integral: float = 100.0,
+    ):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.max_integral = max_integral
+        self.integral = 0.0
+        self.last_error = 0.0
+
+    def update(self, target_rpm: float, actual_rpm: float, dt: float) -> float:
+        error = target_rpm - actual_rpm
+        self.integral += error * dt
+        self.integral = max(-self.max_integral, min(self.max_integral, self.integral))
+        derivative = (error - self.last_error) / max(dt, 0.001)
+        self.last_error = error
+        output = self.kp * error + self.ki * self.integral + self.kd * derivative
+        return max(-100.0, min(100.0, output))
+
+    def reset(self):
+        self.integral = 0.0
+        self.last_error = 0.0
 
 
 @dataclass
@@ -467,6 +533,11 @@ class SimulatorConfig:
     # Coastdown / engine braking
     engine_brake_coefficient: float = DEFAULT_ENGINE_BRAKE_COEFFICIENT
 
+    # External load modeling
+    load_mode: DynoLoadMode = DynoLoadMode.INERTIA
+    eddy_brake_config: EddyBrakeConfig = field(default_factory=EddyBrakeConfig)
+    road_load_config: RoadLoadConfig = field(default_factory=RoadLoadConfig)
+
 
 @dataclass
 class PhysicsState:
@@ -483,6 +554,9 @@ class PhysicsState:
     iat_f: float = 85.0  # Intake air temp
 
     total_inertia: float = 3.3  # lb·ft²
+
+    # External load/brake torque applied at the drum (ft-lb)
+    external_brake_torque: float = 0.0
 
     # Accumulated values
     fuel_consumed_gal: float = 0.0
@@ -696,6 +770,27 @@ class DynoSimulator:
         self._physics_snapshots: list[PhysicsSnapshot] = []
         self._collect_snapshots: bool = False  # Enable/disable snapshot collection
 
+        # External load models
+        self._eddy_brake = EddyCurrentBrake(
+            max_brake_torque=self.config.eddy_brake_config.max_brake_torque,
+            brake_response_rate=self.config.eddy_brake_config.brake_response_rate,
+            eddy_rpm_factor=self.config.eddy_brake_config.eddy_rpm_factor,
+        )
+        self._road_load_model = RoadLoadModel(
+            rolling_a=self.config.road_load_config.rolling_a,
+            speed_b=self.config.road_load_config.speed_b,
+            aero_c=self.config.road_load_config.aero_c,
+            vehicle_weight_lbs=self.config.road_load_config.vehicle_weight_lbs,
+            drivetrain_ratio=self.config.road_load_config.drivetrain_ratio,
+            tire_circumference_ft=self.config.road_load_config.tire_circumference_ft,
+            grade_pct=self.config.road_load_config.grade_pct,
+        )
+        self._rpm_hold_controller = RPMHoldController()
+        self._rpm_hold_active = False
+        self._rpm_hold_target = 3500.0
+        self._last_brake_torque = 0.0
+        self._last_road_load_torque = 0.0
+
         # Pre-compute torque/HP curves
         self._precompute_curves()
 
@@ -727,6 +822,7 @@ class DynoSimulator:
 
         self.physics.engine_temp_f = profile.optimal_temp_f
         self.physics.iat_f = self.config.ambient_temp_f + 10  # Slightly warmer
+        self.physics.external_brake_torque = 0.0
 
     @staticmethod
     def _rpm_to_rad_s(rpm: float) -> float:
@@ -909,6 +1005,9 @@ class DynoSimulator:
         # At closed throttle (0%), engine barely breathes (5% VE)
         # This ensures proper deceleration with closed throttle
         throttle_ve = 0.05 + 0.95 * (tps / 100.0)  # 5% at closed, 100% at WOT
+        if tps >= 40.0:
+            # Slightly boost mid-throttle VE to keep part-throttle reasonable.
+            throttle_ve = min(1.0, throttle_ve * 1.1)
 
         return min(1.0, max(0.0, rpm_ve * throttle_ve))
 
@@ -1244,8 +1343,13 @@ class DynoSimulator:
         torque_scaled = torque * float(self.config.torque_to_angular_accel_scale)
         alpha_from_engine = torque_scaled / self.physics.total_inertia
 
-        # Update angular velocity: ω = ω + α·dt
-        self.physics.angular_velocity += alpha_from_engine * dt
+        # Apply external load/brake torque (eddy brake or road load)
+        alpha_from_load = (
+            float(self.physics.external_brake_torque) / self.physics.total_inertia
+        )
+
+        # Update angular velocity: ω = ω + (α_engine - α_load)·dt
+        self.physics.angular_velocity += (alpha_from_engine - alpha_from_load) * dt
 
         # Apply drag/friction (quadratic with RPM)
         drag_factor = 1.0 - (DRAG_COEFFICIENT * self.physics.rpm / 1000.0) * dt
@@ -1417,6 +1521,45 @@ class DynoSimulator:
                 if self._on_state_change:
                     self._on_state_change(self.state)
 
+    def trigger_steady_state(
+        self, throttle_pct: float = 40.0, target_rpm: float = 3500.0
+    ):
+        """Enter steady-state mode using eddy brake RPM hold."""
+        with self._lock:
+            if self.state == SimState.IDLE:
+                self._set_load_mode_internal(DynoLoadMode.EDDY_BRAKE)
+                self._set_rpm_hold_internal(True, target_rpm)
+                self.state = SimState.STEADY_STATE
+                self._pull_start_time = time.time()
+                self._pull_data = []
+                self._physics_snapshots = []
+                self._pull_elapsed_s = 0.0
+
+                self.physics.tps_target = max(0.0, min(100.0, throttle_pct))
+                self.physics.tps_actual = self.physics.tps_target
+
+                if self._on_state_change:
+                    self._on_state_change(self.state)
+
+    def trigger_road_sweep(self, throttle_pct: float = 80.0):
+        """Enter road sweep mode using road load model."""
+        with self._lock:
+            if self.state == SimState.IDLE:
+                self._set_load_mode_internal(DynoLoadMode.ROAD_LOAD)
+                self._set_rpm_hold_internal(False)
+                self.state = SimState.ROAD_SWEEP
+                self._pull_start_time = time.time()
+                self._pull_progress = 0.0
+                self._pull_data = []
+                self._physics_snapshots = []
+                self._pull_elapsed_s = 0.0
+
+                self.physics.tps_target = max(0.0, min(100.0, throttle_pct))
+                self.physics.tps_actual = self.physics.tps_target
+
+                if self._on_state_change:
+                    self._on_state_change(self.state)
+
     def get_state(self) -> SimState:
         """Get current simulation state."""
         with self._lock:
@@ -1479,6 +1622,114 @@ class DynoSimulator:
             self._precompute_curves()
             self._init_physics()
 
+    def set_load_mode(self, mode: DynoLoadMode):
+        """Set external load modeling mode."""
+        with self._lock:
+            self._set_load_mode_internal(mode)
+
+    def _set_load_mode_internal(self, mode: DynoLoadMode):
+        """Set load mode assuming lock already held."""
+        self.config.load_mode = mode
+        if mode == DynoLoadMode.INERTIA:
+            self.physics.external_brake_torque = 0.0
+            self._eddy_brake.set_load_target(0.0)
+            self._rpm_hold_active = False
+            self._rpm_hold_controller.reset()
+
+    def set_eddy_brake_config(self, config: EddyBrakeConfig):
+        """Update eddy brake configuration."""
+        with self._lock:
+            self.config.eddy_brake_config = config
+            self._eddy_brake = EddyCurrentBrake(
+                max_brake_torque=config.max_brake_torque,
+                brake_response_rate=config.brake_response_rate,
+                eddy_rpm_factor=config.eddy_rpm_factor,
+            )
+
+    def set_road_load_config(self, config: RoadLoadConfig):
+        """Update road load configuration."""
+        with self._lock:
+            self.config.road_load_config = config
+            self._road_load_model = RoadLoadModel(
+                rolling_a=config.rolling_a,
+                speed_b=config.speed_b,
+                aero_c=config.aero_c,
+                vehicle_weight_lbs=config.vehicle_weight_lbs,
+                drivetrain_ratio=config.drivetrain_ratio,
+                tire_circumference_ft=config.tire_circumference_ft,
+                grade_pct=config.grade_pct,
+            )
+
+    def set_load_target(self, load_pct: float):
+        """Set eddy brake load target (0-100%)."""
+        with self._lock:
+            self._eddy_brake.set_load_target(load_pct)
+
+    def set_rpm_hold(self, active: bool, target_rpm: float | None = None):
+        """Enable/disable RPM hold mode (eddy brake only)."""
+        with self._lock:
+            self._set_rpm_hold_internal(active, target_rpm)
+
+    def _set_rpm_hold_internal(self, active: bool, target_rpm: float | None = None):
+        """Set RPM hold assuming lock already held."""
+        if self.config.load_mode != DynoLoadMode.EDDY_BRAKE:
+            self._rpm_hold_active = False
+            return
+        self._rpm_hold_active = active
+        if target_rpm is not None:
+            self._rpm_hold_target = max(1500.0, min(6500.0, target_rpm))
+        if not active:
+            self._rpm_hold_controller.reset()
+
+    def get_load_state(self) -> dict[str, float | str | bool]:
+        """Get current load state for API/telemetry."""
+        speed_mph = self._road_load_model.speed_mph_from_drum(self.physics.rpm)
+        return {
+            "mode": self.config.load_mode.value,
+            "load_target": self._eddy_brake.load_target,
+            "current_load": self._eddy_brake.current_load,
+            "brake_torque": self._last_brake_torque,
+            "road_load_torque": self._last_road_load_torque,
+            "rpm_hold_active": self._rpm_hold_active,
+            "rpm_hold_target": self._rpm_hold_target,
+            "speed_mph": speed_mph,
+        }
+
+    def _update_external_load(self, dt: float):
+        """Update external load/brake torque based on mode."""
+        mode = self.config.load_mode
+        if mode == DynoLoadMode.INERTIA:
+            self.physics.external_brake_torque = 0.0
+            self._last_brake_torque = 0.0
+            self._last_road_load_torque = 0.0
+            return
+
+        if mode == DynoLoadMode.EDDY_BRAKE:
+            if self._rpm_hold_active:
+                pid_output = self._rpm_hold_controller.update(
+                    self._rpm_hold_target, self.physics.rpm, dt
+                )
+                self._eddy_brake.set_load_target(
+                    self._eddy_brake.load_target - pid_output * 0.1
+                )
+            brake_torque = self._eddy_brake.update(self.physics.rpm, dt)
+            self._last_brake_torque = brake_torque
+            self._last_road_load_torque = 0.0
+            self.physics.external_brake_torque = max(0.0, brake_torque)
+            return
+
+        if mode == DynoLoadMode.ROAD_LOAD:
+            dyno_config = get_config().dyno
+            drum_radius_ft = dyno_config.drum1.radius_ft
+            torque = 0.0
+            if drum_radius_ft > 0:
+                torque = self._road_load_model.torque_ftlb(
+                    self.physics.rpm, drum_radius_ft
+                )
+            self._last_brake_torque = 0.0
+            self._last_road_load_torque = torque
+            self.physics.external_brake_torque = torque
+
     def _handle_idle_state(self, dt: float, profile: EngineProfile):
         """Handle IDLE state behavior."""
         # Idle speed control (simulated ECU maintaining idle RPM)
@@ -1508,6 +1759,8 @@ class DynoSimulator:
             self.physics.tps_target = throttle_needed
 
         self._update_throttle(dt)
+
+        self._update_external_load(dt)
 
         # Update physics (but at idle, we want minimal torque)
         torque, hp, factors = self._update_physics(dt)
@@ -1547,6 +1800,8 @@ class DynoSimulator:
 
         # Update throttle (realistic lag)
         self._update_throttle(dt)
+
+        self._update_external_load(dt)
 
         # If the operator chops throttle during an active pull, end the power-sweep immediately
         # and transition to DECEL (coastdown). This prevents the live HP trace from flatlining
@@ -1708,7 +1963,7 @@ class DynoSimulator:
 
         # Collect physics snapshot if enabled
         if self._collect_snapshots:
-            snapshot = self._create_physics_snapshot(torque, hp, factors)
+            snapshot = self._create_physics_snapshot(engine_torque, engine_hp, factors)
             self._physics_snapshots.append(snapshot)
 
         # Update progress based on RPM
@@ -1738,6 +1993,8 @@ class DynoSimulator:
         # Close throttle immediately (no lag during decel for safety)
         self.physics.tps_target = 0.0
         self.physics.tps_actual = 0.0  # Force immediate throttle closure
+
+        self._update_external_load(dt)
 
         # Capture ω at the start of the timestep so we can compute inertial decel power.
         omega_prev = float(self.physics.angular_velocity)
@@ -1832,6 +2089,7 @@ class DynoSimulator:
             self.physics.tps_target = max(0.0, min(3.0, abs(rpm_error) * 0.03))
 
         self._update_throttle(dt)
+        self._update_external_load(dt)
         torque, hp, factors = self._update_physics(dt)
 
         self.channels.rpm = self.physics.rpm + random.gauss(0, 20)
@@ -1893,6 +2151,12 @@ class DynoSimulator:
                 elif state == SimState.PULL:
                     self._handle_pull_state(dt_sim, profile)
 
+                elif state == SimState.STEADY_STATE:
+                    self._handle_pull_state(dt_sim, profile)
+
+                elif state == SimState.ROAD_SWEEP:
+                    self._handle_pull_state(dt_sim, profile)
+
                 elif state == SimState.DECEL:
                     self._handle_decel_state(dt_sim, profile)
 
@@ -1942,6 +2206,9 @@ __all__ = [
     "DynoSimulator",
     "SimulatorConfig",
     "SimState",
+    "DynoLoadMode",
+    "EddyBrakeConfig",
+    "RoadLoadConfig",
     "EngineProfile",
     "SimulatedChannels",
     "PhysicsState",

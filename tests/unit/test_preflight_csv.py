@@ -16,13 +16,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# Add project root and tools/utils to path for imports
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "tools" / "utils"))
+
 import preflight_csv
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 # Project root for creating temp directories within the safe_path boundary
-PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class TestPreflightCSV(unittest.TestCase):
@@ -144,8 +145,9 @@ class TestPreflightCLI(unittest.TestCase):
                 f.write("rpm,map_kpa,torque\n")
                 f.write("2000,50,100\n")
 
+            tool_path = PROJECT_ROOT / "tools" / "utils" / "preflight_csv.py"
             result = subprocess.run(
-                [sys.executable, "preflight_csv.py", str(temp_csv), "--json"],
+                [sys.executable, str(tool_path), str(temp_csv), "--json"],
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
@@ -167,10 +169,11 @@ class TestPreflightCLI(unittest.TestCase):
                 f.write("rpm,map_kpa,torque\n")
                 f.write("2000,50,100\n")
 
+            tool_path = PROJECT_ROOT / "tools" / "utils" / "preflight_csv.py"
             subprocess.run(
                 [
                     sys.executable,
-                    "preflight_csv.py",
+                    str(tool_path),
                     str(temp_csv),
                     "--output",
                     str(temp_output),
