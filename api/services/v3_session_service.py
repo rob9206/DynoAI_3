@@ -46,7 +46,7 @@ def _get_session(session_id: str):
 # ---------------------------------------------------------------------------
 def _rec_to_dict(rec) -> Dict[str, Any]:
     """Convert a PullRecommendation to a plain dict."""
-    return {
+    d: Dict[str, Any] = {
         "rpm": rec.rpm,
         "map_kpa": rec.map_kpa,
         "gear": rec.gear,
@@ -58,6 +58,10 @@ def _rec_to_dict(rec) -> Dict[str, Any]:
         "throttle_pct": rec.throttle_pct,
         "alternatives": [_rec_to_dict(a) for a in (rec.alternatives or [])],
     }
+    # pull_mode was added in v3.1 — include if present
+    if hasattr(rec, "pull_mode"):
+        d["pull_mode"] = rec.pull_mode.value if hasattr(rec.pull_mode, "value") else str(rec.pull_mode)
+    return d
 
 
 def _convergence_to_dict(cs) -> Dict[str, Any]:
@@ -523,12 +527,16 @@ def simulate_pull_realistic(
     session = _get_session(session_id)
 
     # ---- 0. Resolve target from advisor if not specified ----
+    # Also capture pull_mode so we can route acceleration vs steady-state.
+    _pull_mode_value = "acceleration"  # default
     if rpm is None or map_kpa is None:
         if session.advisor is None:
             raise RuntimeError("Session not initialized")
         rec = session.advisor.suggest_next_pull()
         rpm = rpm or rec.rpm
         map_kpa = map_kpa or rec.map_kpa
+        if hasattr(rec, "pull_mode"):
+            _pull_mode_value = rec.pull_mode.value if hasattr(rec.pull_mode, "value") else str(rec.pull_mode)
 
     # ---- 1. Get session's authoritative grid ----
     rpm_bins = session.surrogate.rpm_bins.tolist()
@@ -627,19 +635,46 @@ def simulate_pull_realistic(
 
     # ---- 3. Run DynoSimulator physics pull ----
     # Guard against concurrent simulate calls on the same session.
+    # Route to acceleration (WOT sweep) or steady-state (eddy brake RPM hold)
+    # based on the advisor's pull_mode for this recommendation.
     lock = cache.get("lock") if isinstance(cache, dict) else None
     if lock is None:
         lock = threading.Lock()
     with lock:
-        simulator.trigger_pull()
-        _time.sleep(0.2)
+        if _pull_mode_value == "steady_state":
+            # Cruise / part-throttle: use eddy brake RPM hold for clean data.
+            # Steady-state won't hit redline, so we collect data for a fixed
+            # duration then close throttle to trigger the decel transition.
+            throttle_for_map = min(100.0, max(0.0, (map_kpa - 25) / 0.75))
+            logger.info(
+                "Steady-state pull: RPM=%.0f, MAP=%.0f, throttle=%.0f%%",
+                rpm, map_kpa, throttle_for_map,
+            )
+            simulator.trigger_steady_state(
+                throttle_pct=throttle_for_map,
+                target_rpm=rpm,
+            )
+            # Let the engine stabilise at the target RPM (3-5s real time)
+            _time.sleep(0.8)  # 0.8s real × 5x time_scale = ~4s sim time
 
-        # Wait for pull completion (max 15s real time)
-        max_wait = 150  # 15s at 10 checks/sec
-        for _ in range(max_wait):
-            if simulator.get_state() == SimState.IDLE:
-                break
-            _time.sleep(0.1)
+            # Close throttle to trigger PULL→DECEL transition
+            simulator.physics.tps_target = 0.0
+            _time.sleep(0.2)
+
+            # Wait for decel → cooldown → idle (max 10s)
+            for _ in range(100):
+                if simulator.get_state() == SimState.IDLE:
+                    break
+                _time.sleep(0.1)
+        else:
+            simulator.trigger_pull()
+            _time.sleep(0.2)
+
+            # Wait for pull completion (max 15s real time)
+            for _ in range(150):
+                if simulator.get_state() == SimState.IDLE:
+                    break
+                _time.sleep(0.1)
 
         pull_data = simulator.get_pull_data()
 

@@ -42,6 +42,12 @@ class PullType(Enum):
     TARGETED = "targeted"
 
 
+class PullMode(Enum):
+    """How the dyno should execute this pull."""
+    ACCELERATION = "acceleration"   # WOT or partial-throttle accel sweep
+    STEADY_STATE = "steady_state"   # RPM hold via eddy brake + throttle targeting MAP
+
+
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -53,6 +59,7 @@ class PullRecommendation:
     gear: int = 3
     pull_number: int = 1
     pull_type: PullType = PullType.TARGETED
+    pull_mode: PullMode = PullMode.ACCELERATION
     reason: str = ""
     expected_info_gain: float = 0.0
     remaining_uncertainty: float = 0.0
@@ -134,6 +141,7 @@ class PullAdvisor:
             gear=self._recommend_gear(rpm),
             pull_number=pull_number,
             pull_type=pull_type,
+            pull_mode=self._pull_mode_for_type(pull_type),
             reason=self._build_reason(rpm, map_kpa, unc_map, idx),
             expected_info_gain=float(masked[idx]),
             remaining_uncertainty=float(np.mean(unc_map)),
@@ -180,6 +188,7 @@ class PullAdvisor:
                 gear=self._recommend_gear(float(rpm)),
                 pull_number=len(sequence) + 1,
                 pull_type=PullType.WOT_SWEEP,
+                pull_mode=PullMode.ACCELERATION,
                 reason=f"WOT sweep at {rpm:.0f} RPM",
                 throttle_pct=100.0,
             ))
@@ -217,6 +226,7 @@ class PullAdvisor:
                     gear=self._recommend_gear(rpm),
                     pull_number=len(sequence) + 1,
                     pull_type=pull_type,
+                    pull_mode=self._pull_mode_for_type(pull_type),
                     reason=f"High uncertainty at {rpm:.0f}/{map_kpa:.0f}",
                     throttle_pct=self._map_to_throttle(map_kpa),
                 ))
@@ -337,11 +347,13 @@ class PullAdvisor:
             idx = np.unravel_index(flat_idx, masked.shape)
             rpm = float(self.surrogate.rpm_bins[idx[0]])
             map_kpa = float(self.surrogate.map_bins[idx[1]])
+            pt = self._classify_pull(rpm, map_kpa)
             alts.append(PullRecommendation(
                 rpm=rpm,
                 map_kpa=map_kpa,
                 gear=self._recommend_gear(rpm),
-                pull_type=self._classify_pull(rpm, map_kpa),
+                pull_type=pt,
+                pull_mode=self._pull_mode_for_type(pt),
                 reason=f"Alternative at {rpm:.0f}/{map_kpa:.0f}",
                 throttle_pct=self._map_to_throttle(map_kpa),
             ))
@@ -355,6 +367,18 @@ class PullAdvisor:
         if 40 <= map_kpa <= 70 and 2000 <= rpm <= 3500:
             return PullType.CRUISE
         return PullType.PART_THROTTLE
+
+    @staticmethod
+    def _pull_mode_for_type(pull_type: PullType) -> PullMode:
+        """Derive execution mode from pull classification.
+
+        WOT sweeps and generic targeted pulls use acceleration (inertia).
+        Cruise and part-throttle zones benefit from steady-state mapping
+        via eddy-brake RPM hold so the GP gets clean, non-transient data.
+        """
+        if pull_type in (PullType.CRUISE, PullType.PART_THROTTLE):
+            return PullMode.STEADY_STATE
+        return PullMode.ACCELERATION
 
     @staticmethod
     def _recommend_gear(rpm: float) -> int:

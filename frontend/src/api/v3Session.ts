@@ -14,6 +14,8 @@ import { encodePathSegment } from "@/lib/sanitize";
 
 export type PullType = "wot_sweep" | "part_throttle" | "cruise" | "targeted";
 
+export type PullMode = "acceleration" | "steady_state";
+
 export interface HardwareConfig {
   engine_family: string;
   displacement_ci: number;
@@ -45,6 +47,7 @@ export interface PullRecommendation {
   gear: number;
   pull_number: number;
   pull_type: PullType;
+  pull_mode?: PullMode;
   reason: string;
   expected_info_gain: number;
   remaining_uncertainty: number;

@@ -82,6 +82,7 @@ import { getConfidenceReport, generateNextGenAnalysis } from '../lib/api';
 import type { ConfidenceReport } from '../components/ConfidenceScoreCard';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
 import { NextGenAnalysisPanel } from '../components/results/NextGenAnalysisPanel';
+import { SimulatorLoadPanel } from '../components/jetdrive/SimulatorLoadPanel';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
@@ -2530,6 +2531,11 @@ function SmartPromptBanner({
                                                 Drag to set throttle; you can still use <span className="font-mono">Trigger Pull</span> for a sweep.
                                             </div>
                                         </div>
+                                    )}
+
+                                    {/* Simulator load control (eddy brake / road load) */}
+                                    {isSimulatorActive && (
+                                        <SimulatorLoadPanel apiUrl={API_BASE} />
                                     )}
 
                                     {/* Live VE Table with Cell Tracing */}

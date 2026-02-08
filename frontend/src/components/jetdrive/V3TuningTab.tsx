@@ -483,6 +483,15 @@ export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
                     <span className="text-sm text-muted-foreground ml-1">throttle</span>
                   </div>
                   <Badge variant="outline">Gear {v3.nextPull.gear}</Badge>
+                  {v3.nextPull.pull_mode === "steady_state" ? (
+                    <Badge variant="outline" className="border-blue-500/40 text-blue-400">
+                      Steady-State
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-orange-500/40 text-orange-400">
+                      Accel Pull
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">{v3.nextPull.reason}</p>
               </div>
