@@ -34,6 +34,10 @@ KNOWN_FAMILIES: List[str] = [
     "m8_114",
     "m8_117",
     "m8_131",
+    "tc_88",
+    "tc_96",
+    "tc_103",
+    "tc_110",
     "revmax_1250",
     "evo_1200",
 ]
@@ -220,11 +224,39 @@ def _default_evo(family: str) -> ConstraintMaps:
     )
 
 
+def _default_twin_cam(family: str) -> ConstraintMaps:
+    """Defaults for Twin Cam air-cooled engines (88, 96, 103, 110)."""
+    return ConstraintMaps(
+        engine_family=family,
+        cooling_type="air",
+        rpm_bins=[1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500],
+        map_bins=[30, 40, 50, 60, 70, 80, 90, 100, 105],
+        max_spark_advance_deg=26.0,
+        knock_retard_limit_deg=-8.0,
+        min_afr_wot=12.0,
+        max_afr_wot=13.0,
+        decel_min_afr=13.0,
+        ect_enrichment_trigger_f=470.0,
+        ect_enrichment_amount_pct=5.0,
+        max_egt_f=1400.0,
+        max_ve_correction_pct=7.0,
+        max_fuel_gain=0.05,
+        max_timing_offset=2.0,
+        correction_decay_rate=0.10,
+        correction_decay_threshold_hrs=30.0,
+        max_test_rpm=5500.0,
+    )
+
+
 _DEFAULT_BUILDERS = {
     "m8_107": _default_m8_air_cooled,
     "m8_114": _default_m8_air_cooled,
     "m8_117": _default_m8_air_cooled,
     "m8_131": _default_m8_oil_cooled,
+    "tc_88": _default_twin_cam,
+    "tc_96": _default_twin_cam,
+    "tc_103": _default_twin_cam,
+    "tc_110": _default_twin_cam,
     "revmax_1250": _default_revmax_liquid,
     "evo_1200": _default_evo,
 }

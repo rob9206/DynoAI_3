@@ -261,6 +261,52 @@ class EngineProfile:
         )
 
     @classmethod
+    def twin_cam_88(cls) -> "EngineProfile":
+        """Twin Cam 88 profile."""
+        return cls(
+            name="Twin Cam 88",
+            family="TwinCam",
+            displacement_ci=88.0,
+            idle_rpm=900.0,
+            redline_rpm=5500.0,
+            max_hp=70.0,
+            hp_peak_rpm=4500.0,
+            max_tq=85.0,
+            tq_peak_rpm=3000.0,
+            num_cylinders=2,
+            bore_inches=3.750,
+            stroke_inches=4.000,
+            compression_ratio=9.2,
+            engine_inertia=0.75,
+            dyno_inertia=2.8,
+            mechanical_efficiency=0.84,
+            volumetric_efficiency_peak=0.83,
+        )
+
+    @classmethod
+    def twin_cam_96(cls) -> "EngineProfile":
+        """Twin Cam 96 profile."""
+        return cls(
+            name="Twin Cam 96",
+            family="TwinCam",
+            displacement_ci=96.0,
+            idle_rpm=900.0,
+            redline_rpm=5500.0,
+            max_hp=78.0,
+            hp_peak_rpm=4700.0,
+            max_tq=95.0,
+            tq_peak_rpm=3000.0,
+            num_cylinders=2,
+            bore_inches=3.750,
+            stroke_inches=4.375,
+            compression_ratio=9.3,
+            engine_inertia=0.75,
+            dyno_inertia=2.8,
+            mechanical_efficiency=0.84,
+            volumetric_efficiency_peak=0.84,
+        )
+
+    @classmethod
     def twin_cam_103(cls) -> "EngineProfile":
         """Twin Cam 103 profile."""
         return cls(
@@ -281,6 +327,29 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.84,
             volumetric_efficiency_peak=0.85,
+        )
+
+    @classmethod
+    def twin_cam_110(cls) -> "EngineProfile":
+        """Twin Cam 110 profile."""
+        return cls(
+            name="Twin Cam 110",
+            family="TwinCam",
+            displacement_ci=110.0,
+            idle_rpm=900.0,
+            redline_rpm=5500.0,
+            max_hp=95.0,
+            hp_peak_rpm=4900.0,
+            max_tq=110.0,
+            tq_peak_rpm=3200.0,
+            num_cylinders=2,
+            bore_inches=4.000,
+            stroke_inches=4.375,
+            compression_ratio=9.7,
+            engine_inertia=0.75,
+            dyno_inertia=2.8,
+            mechanical_efficiency=0.84,
+            volumetric_efficiency_peak=0.86,
         )
 
     @classmethod
