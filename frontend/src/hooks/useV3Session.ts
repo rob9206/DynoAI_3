@@ -11,6 +11,8 @@ import {
   createSession,
   getSession,
   ingestPull,
+  importBaseVE,
+  importCorrections,
   finalizeSession,
   suggestNextPull,
   checkConvergence,
@@ -24,6 +26,8 @@ import {
   type HardwareConfig,
   type PullData,
   type FinalizeRequest,
+  type ImportVERequest,
+  type ImportCorrectionsRequest,
   type VetoRequest,
   type SimulatePullRequest,
   type AutoSimulateRequest,
@@ -130,6 +134,15 @@ export function useV3Session(sessionId?: string) {
     },
   });
 
+  const importVEMutation = useMutation({
+    mutationFn: (data: ImportVERequest) => importBaseVE(sessionId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["v3", "session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["v3", "convergence", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["v3", "uncertainty", sessionId] });
+    },
+  });
+
   const finalizeMutation = useMutation({
     mutationFn: (data: FinalizeRequest) => finalizeSession(sessionId!, data),
     onSuccess: () => {
@@ -171,6 +184,17 @@ export function useV3Session(sessionId?: string) {
     },
   });
 
+  const importCorrectionsMutation = useMutation({
+    mutationFn: (data: ImportCorrectionsRequest) =>
+      importCorrections(sessionId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["v3", "session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["v3", "convergence", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["v3", "uncertainty", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["v3", "next-pull", sessionId] });
+    },
+  });
+
   // ---- Wrapped actions ----
 
   const startSession = useCallback(
@@ -181,6 +205,11 @@ export function useV3Session(sessionId?: string) {
   const submitPull = useCallback(
     (data: PullData) => ingestMutation.mutateAsync(data),
     [ingestMutation]
+  );
+
+  const importVE = useCallback(
+    (data: ImportVERequest) => importVEMutation.mutateAsync(data),
+    [importVEMutation]
   );
 
   const finalize = useCallback(
@@ -206,6 +235,12 @@ export function useV3Session(sessionId?: string) {
   const runAutoSimulate = useCallback(
     (data?: AutoSimulateRequest) => autoSimulateMutation.mutateAsync(data),
     [autoSimulateMutation]
+  );
+
+  const importSessionCorrections = useCallback(
+    (data: ImportCorrectionsRequest) =>
+      importCorrectionsMutation.mutateAsync(data),
+    [importCorrectionsMutation]
   );
 
   // ---- Derived state ----
@@ -253,6 +288,8 @@ export function useV3Session(sessionId?: string) {
     isLoadingNextPull,
     isCreating: createMutation.isPending,
     isIngesting: ingestMutation.isPending,
+    isImportingVE: importVEMutation.isPending,
+    isImportingCorrections: importCorrectionsMutation.isPending,
     isFinalizing: finalizeMutation.isPending,
     isSimulating: simulateMutation.isPending,
     isAutoSimulating: autoSimulateMutation.isPending,
@@ -268,10 +305,12 @@ export function useV3Session(sessionId?: string) {
     // Actions
     startSession,
     submitPull,
+    importVE,
     finalize,
     veto,
     killSwitch,
     simulate,
     runAutoSimulate,
+    importSessionCorrections,
   };
 }

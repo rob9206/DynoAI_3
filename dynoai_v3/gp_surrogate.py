@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -410,6 +411,7 @@ class VESurrogate:
         Template observations (pull_number == -1) are always retained in the fit
         so template priors are not lost.
         """
+        from sklearn.exceptions import ConvergenceWarning
         from sklearn.gaussian_process import GaussianProcessRegressor
         from sklearn.gaussian_process.kernels import Matern, WhiteKernel
 
@@ -439,6 +441,8 @@ class VESurrogate:
 
         # Warm-start: reuse optimized kernel hyperparameters from previous fit.
         # This dramatically reduces fit time for incremental updates.
+        # Bounds for normalized [0,1] RPM/MAP: wide enough to avoid sklearn
+        # ConvergenceWarnings when optimal hits boundary (small noise / smooth scale).
         n_restarts = 2
         if self._gp_model is not None and self.is_fitted and hasattr(self._gp_model, "kernel_"):
             import copy
@@ -446,8 +450,13 @@ class VESurrogate:
             kernel = copy.deepcopy(self._gp_model.kernel_)
             n_restarts = 0
         else:
-            kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
-                noise_level=0.1
+            kernel = (
+                Matern(
+                    nu=2.5,
+                    length_scale=[0.3, 0.3],
+                    length_scale_bounds=(1e-3, 10.0),
+                )
+                + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 2.0))
             )
 
         self._gp_model = GaussianProcessRegressor(
@@ -456,7 +465,9 @@ class VESurrogate:
             alpha=0.05,
             normalize_y=True,
         )
-        self._gp_model.fit(X_norm, y)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+            self._gp_model.fit(X_norm, y)
         self.is_fitted = True
         self._stale = False
 

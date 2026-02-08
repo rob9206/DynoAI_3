@@ -22,11 +22,33 @@ export interface PVVTable {
     values: number[][];     // [rowIdx][colIdx]
 }
 
+/** Engine family values we can infer from PVV displacement (for V3 session config). */
+export const PVV_ENGINE_FAMILY_MAP: Record<number, string> = {
+    107: "m8_107",
+    110: "m8_107",  // common alias / rounded
+    114: "m8_114",
+    117: "m8_117",
+    131: "m8_131",
+    59: "revmax_975",   // 59.5 ci
+    60: "revmax_975",
+    76: "revmax_1250",  // 76.4 ci
+    77: "revmax_1250",
+    975: "revmax_975",   // PVV may report cc (Nightster)
+    1250: "revmax_1250", // PVV may report cc (Sportster S / Pan America)
+    1252: "revmax_1250",
+};
+
 export interface ParsedPVV {
     sourceFile?: string;
     veFront?: PVVTable;
     veRear?: PVVTable;
     afrTarget?: PVVTable;
+    /** Engine displacement from PVV "Engine Displacement" item (CID). */
+    engineDisplacementCid?: number;
+    /** Calibration/part number from PVV "Calibration ID" item (ASCII). */
+    calibrationId?: string;
+    /** Suggested V3 engine_family from displacement, if known. */
+    inferredEngineFamily?: string;
     allTables: Map<string, PVVTable>;
     parseErrors: string[];
 }
@@ -68,7 +90,20 @@ export function parsePVV(xmlContent: string): ParsedPVV {
                 const table = parseTableItem(item);
                 if (table) {
                     result.allTables.set(table.name, table);
-                    
+
+                    // Engine metadata from PVV (for V3 / motor selection)
+                    if (table.name === "Engine Displacement" && table.values[0]?.[0] != null) {
+                        const cid = Math.round(table.values[0][0]);
+                        result.engineDisplacementCid = cid;
+                        result.inferredEngineFamily = PVV_ENGINE_FAMILY_MAP[cid];
+                    }
+                    if (table.name === "Calibration ID" && table.values[0]?.length) {
+                        result.calibrationId = table.values[0]
+                            .map((v) => String.fromCharCode(Math.round(v)))
+                            .join("")
+                            .replace(/\0/g, "");
+                    }
+
                     // Identify key tables by name patterns
                     const nameLower = table.name.toLowerCase();
                     
@@ -282,11 +317,17 @@ export function extractAfrTargets(table: PVVTable): Record<number, number> {
  */
 export function getPVVSummary(parsed: ParsedPVV): string {
     const lines: string[] = [];
-    
+
     if (parsed.sourceFile) {
         lines.push(`Source: ${parsed.sourceFile}`);
     }
-    
+    if (parsed.engineDisplacementCid != null) {
+        lines.push(`Engine: ${parsed.engineDisplacementCid} CID${parsed.inferredEngineFamily ? ` (${parsed.inferredEngineFamily})` : ""}`);
+    }
+    if (parsed.calibrationId) {
+        lines.push(`Cal ID: ${parsed.calibrationId}`);
+    }
+
     if (parsed.veFront) {
         lines.push(`Front VE: ${parsed.veFront.rows.length} RPM × ${parsed.veFront.columns.length} MAP`);
     }

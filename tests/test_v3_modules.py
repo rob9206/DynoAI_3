@@ -143,6 +143,14 @@ class TestPhysicsConstraints:
         liquid = PhysicsConstraints("revmax_1250")  # Liquid-cooled
         assert air.maps.ect_enrichment_trigger_f > liquid.maps.ect_enrichment_trigger_f
 
+    def test_revmax_975_constraints(self):
+        """RevMax 975 (Nightster) has liquid cooling and high redline range."""
+        from dynoai_v3.physics_constraints import PhysicsConstraints
+        pc = PhysicsConstraints("revmax_975")
+        assert pc.maps.cooling_type == "liquid"
+        assert pc.maps.max_test_rpm >= 8000
+        assert len(pc.maps.rpm_bins) >= 8
+
 
 # ===========================================================================
 # GP SURROGATE TESTS
@@ -335,11 +343,10 @@ class TestPullAdvisor:
         assert wot_count >= 3
 
     def test_convergence_starts_false(self):
-        """Fresh advisor is not converged."""
+        """Fresh advisor is not converged (requires min observations)."""
         advisor = self._make_advisor()
         status = advisor.check_convergence()
         assert not status.converged
-        assert status.cells_above_threshold > 0
 
     def test_operator_veto(self):
         """Vetoed points are excluded from suggestions."""

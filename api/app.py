@@ -34,7 +34,6 @@ from api.metrics import init_metrics, record_analysis, record_file_upload
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all API routes
 
 # Initialize Swagger UI for API documentation (available at /api/docs)
 try:
@@ -294,6 +293,21 @@ try:
     print("[+] V3 Accelerated Calibration registered at /api/v3")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize V3 Session: {e}")
+
+# Initialize CORS after all blueprints are registered
+# Set intercept_exceptions=False and always_send=True to ensure CORS headers on all responses
+CORS(
+    app,
+    origins="*",
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    expose_headers=["Content-Type"],
+    supports_credentials=False,
+    intercept_exceptions=False,
+    always_send=True,
+    automatic_options=True,
+)
+print("[+] CORS enabled for all routes")
 
 # Store active analysis jobs
 active_jobs = {}

@@ -6,7 +6,7 @@
  */
 
 // Grid-only configuration for LiveVETable (no VE/AFR data)
-export type EnginePreset = 'harley_m8' | 'harley_tc' | 'sportbike_600' | 'sportbike_1000' | 'custom';
+export type EnginePreset = 'harley_m8' | 'harley_tc' | 'harley_revmax_1250' | 'harley_revmax_975' | 'sportbike_600' | 'sportbike_1000' | 'custom';
 
 export interface EngineConfig {
     name: string;
@@ -115,6 +115,57 @@ const HARLEY_TC: EnginePresetData = {
 };
 
 /**
+ * Harley-Davidson Revolution Max 1250 (Sportster S / Pan America)
+ * Liquid-cooled DOHC V-twin, 1252 cc, redline 9500
+ */
+const HARLEY_REVMAX_1250: EnginePresetData = {
+    name: 'Harley RevMax 1250',
+    description: 'Revolution Max 1250 (Sportster S / Pan America)',
+    rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000],
+    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    maxRpm: 9500,
+    veTableFront: [
+        [72, 74, 77, 80, 83, 86, 88, 90, 92, 94],
+        [74, 76, 79, 82, 85, 88, 91, 93, 95, 97],
+        [76, 78, 81, 84, 87, 90, 93, 95, 97, 99],
+        [78, 80, 83, 86, 89, 92, 95, 97, 99, 101],
+        [80, 82, 85, 88, 91, 94, 97, 99, 101, 103],
+        [82, 84, 87, 90, 93, 96, 99, 101, 103, 105],
+        [84, 86, 89, 92, 95, 98, 101, 103, 105, 107],
+        [85, 87, 90, 93, 96, 99, 102, 104, 106, 108],
+        [86, 88, 91, 94, 97, 100, 103, 105, 107, 109],
+    ],
+    afrTargets: {
+        20: 14.7, 30: 14.7, 40: 14.5, 50: 14.0, 60: 13.5, 70: 13.0, 80: 12.6, 90: 12.3, 100: 12.2, 110: 12.0,
+    },
+};
+
+/**
+ * Harley-Davidson Revolution Max 975T (Nightster)
+ * Liquid-cooled DOHC V-twin, 975 cc, redline 9000
+ */
+const HARLEY_REVMAX_975: EnginePresetData = {
+    name: 'Harley RevMax 975',
+    description: 'Revolution Max 975T (Nightster)',
+    rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000],
+    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    maxRpm: 9000,
+    veTableFront: [
+        [71, 73, 76, 79, 82, 85, 87, 89, 91, 93],
+        [73, 75, 78, 81, 84, 87, 90, 92, 94, 96],
+        [75, 77, 80, 83, 86, 89, 92, 94, 96, 98],
+        [77, 79, 82, 85, 88, 91, 94, 96, 98, 100],
+        [79, 81, 84, 87, 90, 93, 96, 98, 100, 102],
+        [81, 83, 86, 89, 92, 95, 98, 100, 102, 104],
+        [82, 84, 87, 90, 93, 96, 99, 101, 103, 105],
+        [83, 85, 88, 91, 94, 97, 100, 102, 104, 106],
+    ],
+    afrTargets: {
+        20: 14.7, 30: 14.7, 40: 14.5, 50: 14.0, 60: 13.5, 70: 13.0, 80: 12.6, 90: 12.3, 100: 12.2, 110: 12.0,
+    },
+};
+
+/**
  * 600cc Sportbike (generic)
  * Honda CBR600, Yamaha R6, Kawasaki ZX-6R, Suzuki GSX-R600
  */
@@ -204,6 +255,8 @@ const SPORTBIKE_1000: EnginePresetData = {
 export const ENGINE_PRESETS: Record<string, EnginePresetData> = {
     harley_m8: HARLEY_M8,
     harley_tc: HARLEY_TC,
+    harley_revmax_1250: HARLEY_REVMAX_1250,
+    harley_revmax_975: HARLEY_REVMAX_975,
     sportbike_600: SPORTBIKE_600,
     sportbike_1000: SPORTBIKE_1000,
 };
@@ -224,6 +277,18 @@ export const ENGINE_GRID_CONFIGS: Record<EnginePreset, EngineConfig> = {
         rpmBins: HARLEY_TC.rpmBins,
         mapBins: HARLEY_TC.mapBins,
         maxRpm: HARLEY_TC.maxRpm,
+    },
+    harley_revmax_1250: {
+        name: 'Harley RevMax 1250',
+        rpmBins: HARLEY_REVMAX_1250.rpmBins,
+        mapBins: HARLEY_REVMAX_1250.mapBins,
+        maxRpm: HARLEY_REVMAX_1250.maxRpm,
+    },
+    harley_revmax_975: {
+        name: 'Harley RevMax 975',
+        rpmBins: HARLEY_REVMAX_975.rpmBins,
+        mapBins: HARLEY_REVMAX_975.mapBins,
+        maxRpm: HARLEY_REVMAX_975.maxRpm,
     },
     sportbike_600: {
         name: 'Sportbike 600cc',
@@ -315,6 +380,20 @@ const PRESET_BIKE_MAPPINGS: Record<string, PresetBikeMapping> = {
         cylinders: 2,
         displacementUnit: 'ci',
         defaultDisplacement: 103,
+    },
+    harley_revmax_1250: {
+        make: 'Harley-Davidson',
+        engineType: 'v-twin',
+        cylinders: 2,
+        displacementUnit: 'cc',
+        defaultDisplacement: 1250,
+    },
+    harley_revmax_975: {
+        make: 'Harley-Davidson',
+        engineType: 'v-twin',
+        cylinders: 2,
+        displacementUnit: 'cc',
+        defaultDisplacement: 975,
     },
     sportbike_600: {
         make: 'Honda',

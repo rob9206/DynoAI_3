@@ -1051,7 +1051,6 @@ export default function JetDriveAutoTunePage() {
             setAfrTargets(result.afrTargets);
         }
         
-        console.log('[TuneImport] Imported tune:', result.sourceName);
     }, []);
 
     // Handle apply corrections (Phase 3)

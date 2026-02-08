@@ -419,6 +419,32 @@ class TestDifferentProfiles:
         assert profile.engine_inertia < 0.5  # Much lighter than V-twin
 
     @staticmethod
+    def test_revmax_1250_profile():
+        """Test RevMax 1250 profile (Sportster S / Pan America)."""
+        config = SimulatorConfig(profile=EngineProfile.revmax_1250())
+        sim = DynoSimulator(config)
+        profile = sim.config.profile
+        assert profile.name == "RevMax 1250"
+        assert profile.family == "RevMax"
+        assert profile.displacement_ci == 76.4
+        assert profile.redline_rpm == 9500.0
+        assert profile.max_hp == 121.0
+        assert profile.num_cylinders == 2
+
+    @staticmethod
+    def test_revmax_975_profile():
+        """Test RevMax 975 profile (Nightster)."""
+        config = SimulatorConfig(profile=EngineProfile.revmax_975())
+        sim = DynoSimulator(config)
+        profile = sim.config.profile
+        assert profile.name == "RevMax 975"
+        assert profile.family == "RevMax"
+        assert profile.displacement_ci == 59.5
+        assert profile.redline_rpm == 9000.0
+        assert profile.max_hp == 90.0
+        assert profile.num_cylinders == 2
+
+    @staticmethod
     def test_different_inertias():
         """Test that different inertias affect acceleration."""
         # Heavy V-twin

@@ -28,7 +28,7 @@ interface VEPreviewTableProps {
 /**
  * Compact preview table for VE data with color-coded cells
  */
-function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
+export function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
     const { rows, columns, values } = table;
     
     // Sample rows and columns for preview
@@ -110,7 +110,7 @@ function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTab
 /**
  * AFR targets preview as a simple row
  */
-function AFRPreviewTable({ table }: { table: PVVTable }) {
+export function AFRPreviewTable({ table }: { table: PVVTable }) {
     const { columns, values } = table;
     
     // Use middle row for AFR targets (typical operating RPM)
@@ -159,6 +159,10 @@ export interface TuneImportResult {
     afrTargets: Record<number, number>;
     rpmBins: number[];
     mapBins: number[];
+    /** From PVV "Engine Displacement" (CID); used to suggest motor config. */
+    engineDisplacementCid?: number;
+    /** Suggested V3 engine_family from PVV displacement (e.g. m8_107, m8_114). */
+    inferredEngineFamily?: string;
 }
 
 interface TuneImportProps {
@@ -188,28 +192,6 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
         try {
             const content = await file.text();
             const parsed = parsePVV(content);
-            
-            console.log('[TuneImport] Parsed PVV file:', {
-                sourceFile: parsed.sourceFile,
-                veFront: parsed.veFront ? {
-                    name: parsed.veFront.name,
-                    rows: parsed.veFront.rows.length,
-                    columns: parsed.veFront.columns.length,
-                    sampleValues: parsed.veFront.values[0]?.slice(0, 3),
-                } : null,
-                veRear: parsed.veRear ? {
-                    name: parsed.veRear.name,
-                    rows: parsed.veRear.rows.length,
-                    columns: parsed.veRear.columns.length,
-                } : null,
-                afrTarget: parsed.afrTarget ? {
-                    name: parsed.afrTarget.name,
-                    rows: parsed.afrTarget.rows.length,
-                    columns: parsed.afrTarget.columns.length,
-                } : null,
-                allTables: Array.from(parsed.allTables.keys()),
-                parseErrors: parsed.parseErrors,
-            });
             
             if (parsed.parseErrors.length > 0 && !parsed.veFront && !parsed.afrTarget) {
                 setImportError(`Parse errors: ${parsed.parseErrors.join(', ')}`);
@@ -265,17 +247,9 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                 afrTargets,
                 rpmBins: deduplicateBins(rawRpmBins),
                 mapBins: deduplicateBins(rawMapBins),
+                engineDisplacementCid: parsed.engineDisplacementCid,
+                inferredEngineFamily: parsed.inferredEngineFamily,
             };
-
-            console.log('[TuneImport] Sending result to parent:', {
-                source: result.source,
-                sourceName: result.sourceName,
-                hasVeFront: !!result.veFront,
-                hasVeRear: !!result.veRear,
-                rpmBins: result.rpmBins,
-                mapBins: result.mapBins,
-                afrTargetKeys: Object.keys(result.afrTargets),
-            });
 
             onImport(result);
         } catch (e) {
