@@ -58,12 +58,12 @@ def uncertainty_to_confidence(std: float) -> float:
     Aligns with existing H/M/L/skip badge system.
     """
     if std < 0.5:
-        return 95.0   # High
+        return 95.0  # High
     if std < 1.0:
-        return 80.0   # Medium
+        return 80.0  # Medium
     if std < 2.0:
-        return 60.0   # Low
-    return 20.0        # Skip / insufficient
+        return 60.0  # Low
+    return 20.0  # Skip / insufficient
 
 
 def confidence_to_badge(confidence: float) -> str:
@@ -102,6 +102,7 @@ def _uncertainty_map_to_confidence(unc_map: NDArray[np.float64]) -> NDArray[np.f
 @dataclass
 class Observation:
     """A single measured data point from a dyno pull."""
+
     rpm: float
     map_kpa: float
     ve_delta: float
@@ -112,6 +113,7 @@ class Observation:
 @dataclass
 class PointPrediction:
     """Prediction at a single operating point."""
+
     ve_delta: float
     uncertainty: float
     confidence: float
@@ -121,6 +123,7 @@ class PointPrediction:
 @dataclass
 class FullMapPrediction:
     """Prediction across the entire VE grid."""
+
     ve_map: NDArray[np.float64]
     uncertainty_map: NDArray[np.float64]
     confidence_map: NDArray[np.float64]
@@ -169,7 +172,9 @@ class VESurrogate:
 
         logger.info(
             "VESurrogate initialized: %s, %d RPM bins x %d MAP bins",
-            engine_family, len(rpm_bins), len(map_bins),
+            engine_family,
+            len(rpm_bins),
+            len(map_bins),
         )
 
     # ------------------------------------------------------------------
@@ -247,16 +252,20 @@ class VESurrogate:
             if abs(ve[i]) > _MAX_VE_DELTA:
                 logger.debug(
                     "Rejected extreme VE delta: %.2f at RPM=%.0f MAP=%.0f",
-                    ve[i], rpm[i], map_kpa[i],
+                    ve[i],
+                    rpm[i],
+                    map_kpa[i],
                 )
                 continue
-            self.observations.append(Observation(
-                rpm=float(rpm[i]),
-                map_kpa=float(map_kpa[i]),
-                ve_delta=float(ve[i]),
-                pull_number=pull_number,
-                timestamp=ts,
-            ))
+            self.observations.append(
+                Observation(
+                    rpm=float(rpm[i]),
+                    map_kpa=float(map_kpa[i]),
+                    ve_delta=float(ve[i]),
+                    pull_number=pull_number,
+                    timestamp=ts,
+                )
+            )
             accepted += 1
 
         if accepted > 0:
@@ -265,7 +274,8 @@ class VESurrogate:
 
         logger.info(
             "Pull data ingested: %d/%d accepted (pull #%s)",
-            accepted, len(rpm),
+            accepted,
+            len(rpm),
             pull_number if pull_number is not None else "?",
         )
         return accepted
@@ -300,13 +310,15 @@ class VESurrogate:
         for r_idx, rpm in enumerate(rpm_bins):
             for m_idx, map_kpa in enumerate(map_bins):
                 if r_idx < template_ve.shape[0] and m_idx < template_ve.shape[1]:
-                    self.observations.append(Observation(
-                        rpm=float(rpm),
-                        map_kpa=float(map_kpa),
-                        ve_delta=float(template_ve[r_idx, m_idx]),
-                        pull_number=-1,  # Sentinel for template data
-                        timestamp=ts,
-                    ))
+                    self.observations.append(
+                        Observation(
+                            rpm=float(rpm),
+                            map_kpa=float(map_kpa),
+                            ve_delta=float(template_ve[r_idx, m_idx]),
+                            pull_number=-1,  # Sentinel for template data
+                            timestamp=ts,
+                        )
+                    )
                     count += 1
 
         self.template_observation_count = count
@@ -316,7 +328,8 @@ class VESurrogate:
             self._stale = True
 
         logger.info(
-            "Template seeded: %d synthetic observations added", count,
+            "Template seeded: %d synthetic observations added",
+            count,
         )
 
     # ------------------------------------------------------------------
@@ -440,7 +453,11 @@ class VESurrogate:
         # Warm-start: reuse optimized kernel hyperparameters from previous fit.
         # This dramatically reduces fit time for incremental updates.
         n_restarts = 2
-        if self._gp_model is not None and self.is_fitted and hasattr(self._gp_model, "kernel_"):
+        if (
+            self._gp_model is not None
+            and self.is_fitted
+            and hasattr(self._gp_model, "kernel_")
+        ):
             import copy
 
             kernel = copy.deepcopy(self._gp_model.kernel_)
@@ -507,7 +524,8 @@ class VESurrogate:
             json.dump(state, f, indent=2)
         logger.info(
             "GP state saved to %s (%d observations)",
-            path, len(self.observations),
+            path,
+            len(self.observations),
         )
 
     @classmethod
@@ -522,13 +540,15 @@ class VESurrogate:
         s.template_observation_count = state.get("template_observation_count", 0)
 
         for od in state["observations"]:
-            s.observations.append(Observation(
-                rpm=od["rpm"],
-                map_kpa=od["map_kpa"],
-                ve_delta=od["ve_delta"],
-                pull_number=od.get("pull_number"),
-                timestamp=od.get("timestamp"),
-            ))
+            s.observations.append(
+                Observation(
+                    rpm=od["rpm"],
+                    map_kpa=od["map_kpa"],
+                    ve_delta=od["ve_delta"],
+                    pull_number=od.get("pull_number"),
+                    timestamp=od.get("timestamp"),
+                )
+            )
 
         if len(s.observations) >= 3:
             s._refit()

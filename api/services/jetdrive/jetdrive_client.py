@@ -291,7 +291,12 @@ def _resolve_iface_address(iface: str) -> str:
 
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
-    logger.debug("Creating socket: iface=%s, group=%s, port=%d", cfg.iface, cfg.multicast_group, cfg.port)
+    logger.debug(
+        "Creating socket: iface=%s, group=%s, port=%d",
+        cfg.iface,
+        cfg.multicast_group,
+        cfg.port,
+    )
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     reuseport = getattr(socket, "SO_REUSEPORT", None)
@@ -320,9 +325,16 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(multicast_iface)
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        logger.debug("Joined multicast: group=%s iface=%s", cfg.multicast_group, multicast_iface)
+        logger.debug(
+            "Joined multicast: group=%s iface=%s", cfg.multicast_group, multicast_iface
+        )
     except OSError as exc:
-        logger.debug("Multicast join failed: group=%s iface=%s error=%s", cfg.multicast_group, multicast_iface, exc)
+        logger.debug(
+            "Multicast join failed: group=%s iface=%s error=%s",
+            cfg.multicast_group,
+            multicast_iface,
+            exc,
+        )
         sock.close()
         raise RuntimeError(
             f"Failed to join multicast group {cfg.multicast_group} on {multicast_iface}: {exc}"

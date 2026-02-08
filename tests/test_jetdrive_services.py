@@ -34,11 +34,11 @@ from api.services.jetdrive.jetdrive_client import (
     JetDriveConfig,
     JetDriveProviderInfo,
     JetDriveSample,
-    _Wire,
     _clean_utf8,
     _parse_channel_info,
     _parse_channel_values,
     _resolve_iface_address,
+    _Wire,
     get_all_cached_channels,
     get_channel_info_from_registry,
     merge_all_providers,
@@ -82,6 +82,7 @@ from api.services.jetdrive.jetdrive_realtime_analysis import (
 # ---------------------------------------------------------------------------
 # Helper factories
 # ---------------------------------------------------------------------------
+
 
 def _make_sample(
     *,
@@ -388,12 +389,14 @@ class TestParseChannelValues:
 
     def test_force_registry_channels_35_to_38(self):
         """Channels 35-38 should always use CHANNEL_REGISTRY names, not hardware metadata."""
-        payload = _make_channel_values_payload([
-            (35, 100, 29.33),
-            (36, 100, 28.75),
-            (37, 100, 100.58),
-            (38, 100, 13.68),
-        ])
+        payload = _make_channel_values_payload(
+            [
+                (35, 100, 29.33),
+                (36, 100, 28.75),
+                (37, 100, 100.58),
+                (38, 100, 13.68),
+            ]
+        )
         # Provide wrong names via lookup to verify registry wins
         wrong_lookup = {
             35: ChannelInfo(chan_id=35, name="WRONG NAME", unit=6),
@@ -670,50 +673,69 @@ class TestProviderMappingMethods:
     """ProviderMapping.get_source_to_canonical_map() and get_missing_required()."""
 
     def test_get_source_to_canonical_map_excludes_disabled(self):
-        pm = ProviderMapping(channels={
-            "rpm": ChannelMapping(
-                canonical_name="rpm", source_id=10, source_name="RPM", enabled=True
-            ),
-            "afr_front": ChannelMapping(
-                canonical_name="afr_front", source_id=20, source_name="AFR", enabled=False
-            ),
-        })
+        pm = ProviderMapping(
+            channels={
+                "rpm": ChannelMapping(
+                    canonical_name="rpm", source_id=10, source_name="RPM", enabled=True
+                ),
+                "afr_front": ChannelMapping(
+                    canonical_name="afr_front",
+                    source_id=20,
+                    source_name="AFR",
+                    enabled=False,
+                ),
+            }
+        )
         m = pm.get_source_to_canonical_map()
         assert 10 in m
         assert 20 not in m  # disabled
 
     def test_get_missing_required_all_present(self):
-        pm = ProviderMapping(channels={
-            "rpm": ChannelMapping(canonical_name="rpm", source_id=10, source_name="RPM"),
-            "afr_front": ChannelMapping(
-                canonical_name="afr_front", source_id=20, source_name="AFR"
-            ),
-        })
+        pm = ProviderMapping(
+            channels={
+                "rpm": ChannelMapping(
+                    canonical_name="rpm", source_id=10, source_name="RPM"
+                ),
+                "afr_front": ChannelMapping(
+                    canonical_name="afr_front", source_id=20, source_name="AFR"
+                ),
+            }
+        )
         assert pm.get_missing_required() == []
 
     def test_get_missing_required_no_rpm(self):
-        pm = ProviderMapping(channels={
-            "afr_front": ChannelMapping(
-                canonical_name="afr_front", source_id=20, source_name="AFR"
-            ),
-        })
+        pm = ProviderMapping(
+            channels={
+                "afr_front": ChannelMapping(
+                    canonical_name="afr_front", source_id=20, source_name="AFR"
+                ),
+            }
+        )
         missing = pm.get_missing_required()
         assert "rpm" in missing
 
     def test_get_missing_required_no_afr(self):
-        pm = ProviderMapping(channels={
-            "rpm": ChannelMapping(canonical_name="rpm", source_id=10, source_name="RPM"),
-        })
+        pm = ProviderMapping(
+            channels={
+                "rpm": ChannelMapping(
+                    canonical_name="rpm", source_id=10, source_name="RPM"
+                ),
+            }
+        )
         missing = pm.get_missing_required()
         assert "afr (any)" in missing
 
     def test_get_missing_required_lambda_counts_as_afr(self):
-        pm = ProviderMapping(channels={
-            "rpm": ChannelMapping(canonical_name="rpm", source_id=10, source_name="RPM"),
-            "lambda_front": ChannelMapping(
-                canonical_name="lambda_front", source_id=26, source_name="Lambda 1"
-            ),
-        })
+        pm = ProviderMapping(
+            channels={
+                "rpm": ChannelMapping(
+                    canonical_name="rpm", source_id=10, source_name="RPM"
+                ),
+                "lambda_front": ChannelMapping(
+                    canonical_name="lambda_front", source_id=26, source_name="Lambda 1"
+                ),
+            }
+        )
         assert pm.get_missing_required() == []
 
     def test_get_missing_required_empty(self):
