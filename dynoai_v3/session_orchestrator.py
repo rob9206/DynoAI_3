@@ -129,9 +129,13 @@ class TuningSession:
     # ------------------------------------------------------------------
     # Phase 1: Initialize
     # ------------------------------------------------------------------
-    def initialize(self) -> SessionInit:
+    def initialize(self, skip_template_seed: bool = False) -> SessionInit:
         """
         Phase 1: Find template, init GP surrogate, generate test plan.
+
+        Args:
+            skip_template_seed: If True, skip seeding from template library
+                (used when user provides initial_ve_table import)
 
         Returns:
             SessionInit with template match info and initial pull plan
@@ -161,9 +165,10 @@ class TuningSession:
             engine_family=self.config.engine_family,
         )
 
-        # 4. If template found with good match, seed GP
+        # 4. If template found with good match, seed GP (unless user provided import)
         if (
-            self._template_match is not None
+            not skip_template_seed
+            and self._template_match is not None
             and self._template_match.is_usable
         ):
             cal = self._template_match.calibration
@@ -184,6 +189,11 @@ class TuningSession:
                     self._template_match.template_id,
                     self._template_match.similarity_score,
                 )
+        elif skip_template_seed and self._template_match is not None:
+            logger.info(
+                "Skipping template seed (user provided import); template %s available for reference",
+                self._template_match.template_id,
+            )
 
         # 5. Initialize Pull Advisor
         self.advisor = PullAdvisor(self.surrogate, self.constraints)

@@ -411,7 +411,7 @@ def analyze_run():
         )
 
         project_root = get_project_root()
-        script_path = project_root / "scripts" / "jetdrive_autotune.py"
+        script_path = project_root / "scripts" / "jetdrive" / "jetdrive_autotune.py"
 
         if not script_path.exists():
             logger.error(f"Autotune script not found at: {script_path}")

@@ -2972,7 +2972,7 @@ function SmartPromptBanner({
 
                     {/* Accelerated Calibration (v3) Tab */}
                     <TabsContent value="v3" className="mt-6">
-                        <V3TuningTab />
+                        <V3TuningTab importedTune={importedTune} />
                     </TabsContent>
                 </Tabs>
             </div>

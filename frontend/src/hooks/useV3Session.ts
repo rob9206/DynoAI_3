@@ -23,6 +23,7 @@ import {
   listTemplates,
   simulatePull,
   autoSimulate,
+  type CreateSessionPayload,
   type HardwareConfig,
   type PullData,
   type FinalizeRequest,
@@ -198,7 +199,7 @@ export function useV3Session(sessionId?: string) {
   // ---- Wrapped actions ----
 
   const startSession = useCallback(
-    (config: HardwareConfig) => createMutation.mutateAsync(config),
+    (payload: CreateSessionPayload) => createMutation.mutateAsync(payload),
     [createMutation]
   );
 

@@ -4,7 +4,10 @@ import re
 from dataclasses import replace
 from typing import Dict, List
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    Image = None  # type: ignore[misc, assignment]  # Pillow not installed (e.g. Python 3.14 on Windows)
 
 from external_scrapers import get_stdout_logger
 from external_scrapers.dyno_models import DynoChartMeta
@@ -35,6 +38,9 @@ def extract_dynostar_overlays(
         "max_torque_ftlb": None,
         "max_torque_rpm": None,
     }
+    if Image is None:
+        logger.warning("Pillow (PIL) is not installed; curve OCR is disabled (e.g. Python 3.14 without wheel)")
+        return results
     try:
         img = Image.open(image_path)
     except Exception as exc:

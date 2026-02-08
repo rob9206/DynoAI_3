@@ -5,6 +5,7 @@ Provides REST API endpoints for the React frontend to interact with the Python t
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -31,6 +32,12 @@ from api.errors import (
     with_error_handling,
 )
 from api.metrics import init_metrics, record_analysis, record_file_upload
+
+# Configure logging to INFO level so logger.info() calls are visible
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)

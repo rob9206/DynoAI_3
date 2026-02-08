@@ -23,16 +23,17 @@ MAP_BINS = np.array([30, 40, 50, 60, 70, 80, 90, 100, 105], dtype=np.float64)
 
 
 def _synthetic_ve_table(rpm_bins=RPM_BINS, map_bins=MAP_BINS, noise=0.0):
-    """Generate a realistic synthetic VE correction table."""
+    """Generate a realistic synthetic VE table with absolute percentages (70-110%)."""
     rng = np.random.RandomState(42)
     n_rpm, n_map = len(rpm_bins), len(map_bins)
     table = np.zeros((n_rpm, n_map))
     for r in range(n_rpm):
         for m in range(n_map):
-            # VE corrections tend to be larger at higher loads
-            base = (map_bins[m] - 60) / 40 * 3.0  # -2.25 to +3.375
-            rpm_effect = np.sin(rpm_bins[r] / 1500) * 1.5
-            table[r, m] = base + rpm_effect
+            # VE increases with load; typical range 70-110%
+            # Base VE around 75-85% at low load, 95-105% at high load
+            base_ve = 75 + (map_bins[m] - 30) / 75 * 25  # 75% at 30kPa, 100% at 105kPa
+            rpm_effect = np.sin(rpm_bins[r] / 1500) * 5  # ±5% variation with RPM
+            table[r, m] = base_ve + rpm_effect
     if noise > 0:
         table += rng.randn(n_rpm, n_map) * noise
     return table
@@ -174,20 +175,25 @@ class TestGPSurrogate:
         assert pred.confidence <= 20.0
 
     def test_add_observations_and_fit(self):
-        """Adding observations triggers GP fit."""
+        """Adding observations marks model stale; fit happens on first prediction."""
         from dynoai_v3.gp_surrogate import VESurrogate, Observation
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
+        assert not s.is_fitted
         for rpm in [2500, 3000, 3500, 4000, 4500]:
-            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=2.0 + rpm / 5000))
-        assert s.is_fitted
+            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=85.0 + rpm / 5000))
         assert s.observation_count == 5
+        assert s._stale  # Model is marked stale, not yet fitted
+        # First prediction triggers lazy fit
+        pred = s.predict(3500, 100)
+        assert s.is_fitted
+        assert pred.uncertainty < 1.0  # Should be low uncertainty near data
 
     def test_prediction_near_data(self):
         """Predictions near measured data have low uncertainty."""
         from dynoai_v3.gp_surrogate import VESurrogate, Observation
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         for rpm in [2500, 3000, 3500, 4000, 4500]:
-            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=3.0))
+            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=95.0))
         pred = s.predict(3500, 100)
         assert pred.uncertainty < 1.0
         assert pred.confidence > 80
@@ -198,18 +204,22 @@ class TestGPSurrogate:
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         # Only add data at WOT
         for rpm in [2500, 3000, 3500, 4000, 4500]:
-            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=3.0))
+            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=95.0))
         pred_far = s.predict(2000, 40)  # Far from data
         pred_near = s.predict(3500, 100)  # Near data
         assert pred_far.uncertainty > pred_near.uncertainty
 
     def test_add_pull_data(self):
-        """Bulk pull data ingestion works."""
+        """Bulk pull data ingestion works; fit happens on first prediction."""
         from dynoai_v3.gp_surrogate import VESurrogate
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         rpm, map_kpa, ve = _synthetic_pull_data(3500, 100, n_points=10)
         n = s.add_pull_data(rpm, map_kpa, ve, pull_number=1)
         assert n == 10
+        assert s._stale  # Model marked stale after ingestion
+        assert not s.is_fitted  # Not fitted until first prediction
+        # First prediction triggers lazy fit
+        pred = s.predict_full_map()
         assert s.is_fitted
 
     def test_rejects_extreme_data(self):
@@ -218,7 +228,7 @@ class TestGPSurrogate:
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         rpm = np.array([3000, 3500, 4000])
         map_kpa = np.array([100, 100, 100])
-        ve = np.array([2.0, 30.0, 1.5])  # 30% is extreme
+        ve = np.array([85.0, 200.0, 90.0])  # 200% is extreme (outside 35-135% range)
         n = s.add_pull_data(rpm, map_kpa, ve)
         assert n == 2  # Only 2 accepted
 
@@ -228,7 +238,7 @@ class TestGPSurrogate:
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         for rpm in [2500, 3000, 3500, 4000]:
             for map_kpa in [50, 70, 90, 100]:
-                s.add_observation(Observation(rpm=rpm, map_kpa=map_kpa, ve_delta=2.0))
+                s.add_observation(Observation(rpm=rpm, map_kpa=map_kpa, ve_delta=85.0))
         pred = s.predict_full_map()
         assert pred.ve_map.shape == (len(RPM_BINS), len(MAP_BINS))
         assert pred.uncertainty_map.shape == pred.ve_map.shape
@@ -242,18 +252,18 @@ class TestGPSurrogate:
         s1 = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         s1.add_observation(
             __import__("dynoai_v3.gp_surrogate", fromlist=["Observation"]).Observation(
-                rpm=3500, map_kpa=100, ve_delta=2.0
+                rpm=3500, map_kpa=100, ve_delta=95.0
             )
         )
         # Additional observations to ensure it's fitted
         s1.add_observation(
             __import__("dynoai_v3.gp_surrogate", fromlist=["Observation"]).Observation(
-                rpm=4000, map_kpa=90, ve_delta=1.5
+                rpm=4000, map_kpa=90, ve_delta=90.0
             )
         )
         s1.add_observation(
             __import__("dynoai_v3.gp_surrogate", fromlist=["Observation"]).Observation(
-                rpm=3000, map_kpa=80, ve_delta=1.8
+                rpm=3000, map_kpa=80, ve_delta=88.0
             )
         )
         unc1 = s1.get_uncertainty_map()
@@ -267,13 +277,54 @@ class TestGPSurrogate:
         # Seeded model should have lower mean uncertainty
         assert np.mean(unc2) < np.mean(unc1)
 
+    def test_seed_table_returned_exactly(self):
+        """When only template data exists, predict_full_map returns exact 1:1 PVV values."""
+        from dynoai_v3.gp_surrogate import VESurrogate
+        s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
+        template_ve = _synthetic_ve_table()
+        
+        # Seed with template
+        s.seed_from_template(template_ve, RPM_BINS, MAP_BINS)
+        
+        # Predict full map (no real pull data yet)
+        pred = s.predict_full_map()
+        
+        # VE map should match template exactly (1:1)
+        np.testing.assert_array_equal(pred.ve_map, template_ve)
+        
+        # Uncertainty map should still be computed from GP
+        assert pred.uncertainty_map.shape == template_ve.shape
+        assert np.all(pred.uncertainty_map > 0)  # Should have some uncertainty
+    
+    def test_seed_table_blends_with_real_data(self):
+        """After adding real pull data, GP blends seed with real observations."""
+        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
+        template_ve = _synthetic_ve_table()
+        
+        # Seed with template
+        s.seed_from_template(template_ve, RPM_BINS, MAP_BINS)
+        
+        # Add a real observation with different value
+        s.add_observation(Observation(rpm=3500, map_kpa=100, ve_delta=99.0, pull_number=1))
+        
+        # Predict full map
+        pred = s.predict_full_map()
+        
+        # VE map should NOT exactly match template anymore (GP blends)
+        assert not np.array_equal(pred.ve_map, template_ve)
+        
+        # But should still be close to template in most places
+        diff = np.abs(pred.ve_map - template_ve)
+        assert np.mean(diff) < 5.0  # Mean difference less than 5%
+
     def test_save_load_state(self):
         """Surrogate state survives JSON round-trip."""
         from dynoai_v3.gp_surrogate import VESurrogate, Observation
         with tempfile.TemporaryDirectory() as tmpdir:
             s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
             for rpm in [3000, 3500, 4000]:
-                s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=2.5))
+                s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=92.0))
             path = Path(tmpdir) / "gp_state.json"
             s.save_state(path)
 
@@ -298,7 +349,7 @@ class TestGPSurrogate:
             s.observations.append(Observation(
                 rpm=float(rng.choice(RPM_BINS)),
                 map_kpa=float(rng.choice(MAP_BINS)),
-                ve_delta=float(rng.randn() * 2 + 2),
+                ve_delta=float(rng.randn() * 10 + 85),  # Mean 85%, stdev 10%
             ))
         s._refit()
         assert s._last_fit_time_ms < 5000  # 5 second budget for 100 obs
@@ -317,7 +368,7 @@ class TestPullAdvisor:
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         # Seed with some data
         for rpm in [3000, 4000, 5000]:
-            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=2.0))
+            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=95.0))
         pc = PhysicsConstraints("m8_114")
         return PullAdvisor(s, pc)
 

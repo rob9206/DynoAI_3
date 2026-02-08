@@ -105,14 +105,105 @@ def _ensure_bins_match(
 # Public API (called by routes)
 # ---------------------------------------------------------------------------
 
+def _import_ve_table_to_delta(table: List[List[float]]) -> Optional[np.ndarray]:
+    """
+    Convert imported VE table to absolute VE percentages.
+
+    Power Vision PVV stores absolute VE as percentages (70-113%). Templates may store
+    correction factors (~0.5-1.5). This function normalizes both to absolute VE %.
+    
+    Note: Despite the function name, this now returns absolute VE values, not deltas.
+    The GP model predicts absolute VE percentages directly.
+    
+    Returns:
+        Absolute VE array (70-113%), or None if table is all zeros (invalid import)
+    """
+    arr = np.asarray(table, dtype=np.float64)
+    
+    # Debug logging
+    logger.info(
+        "Import VE conversion: shape=%s, min=%.2f, max=%.2f, mean=%.2f, sample(top-left 3x3)=%s",
+        arr.shape,
+        np.min(arr),
+        np.max(arr),
+        np.mean(arr),
+        arr[:3, :3].tolist() if arr.size > 0 else "empty",
+    )
+    
+    # Skip all-zero table (failed parse)
+    if np.all(arr == 0):
+        logger.warning("Imported VE table is all zeros; skipping seed")
+        return None
+    
+    # If values are large (> 2), treat as absolute VE percentages (70-113%)
+    if np.max(np.abs(arr)) > 2.0:
+        logger.info(
+            "Treating as absolute VE %% (values > 2): min=%.2f, max=%.2f, mean=%.2f",
+            np.min(arr), np.max(arr), np.mean(arr),
+        )
+        return arr  # Return absolute VE values directly
+    
+    # If values are small (<= 2), treat as correction factors (0.7-1.13) → convert to %
+    absolute_ve = arr * 100.0  # correction factor → absolute VE %
+    logger.info(
+        "Converted correction factor to absolute VE %%: min=%.2f, max=%.2f, mean=%.2f",
+        np.min(absolute_ve), np.max(absolute_ve), np.mean(absolute_ve),
+    )
+    return absolute_ve
+
+
 def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new TuningSession, initialize it, and return status."""
     from dynoai_v3.template_library import HardwareConfig
     from dynoai_v3.session_orchestrator import TuningSession
 
     config = HardwareConfig.from_dict(config_dict)
+    
+    # Explicit bin extraction (in case from_dict filtering drops them)
+    if config.rpm_bins is None and 'rpm_bins' in config_dict:
+        config.rpm_bins = config_dict['rpm_bins']
+    if config.map_bins is None and 'map_bins' in config_dict:
+        config.map_bins = config_dict['map_bins']
+    
+    # Diagnostic logging to confirm PVV bins are flowing through
+    logger.info(
+        "Session config: engine=%s, rpm_bins=%s, map_bins=%s, has_import=%s",
+        config.engine_family,
+        f"{len(config.rpm_bins)} bins" if config.rpm_bins else "None",
+        f"{len(config.map_bins)} bins" if config.map_bins else "None",
+        bool(config_dict.get("initial_ve_table")),
+    )
+    
     session = TuningSession(config, templates_dir=_TEMPLATES_DIR)
-    init = session.initialize()
+    
+    # Check if user provided an import; if so, skip template seeding
+    has_import = bool(config_dict.get("initial_ve_table"))
+    init = session.initialize(skip_template_seed=has_import)
+
+    # Seed GP from imported tune if provided (so Uncertainty Map shows it, not zeros)
+    initial_ve = config_dict.get("initial_ve_table")
+    if initial_ve and session.surrogate is not None:
+        try:
+            delta = _import_ve_table_to_delta(initial_ve)
+            if delta is not None:
+                # Validate shape matches session grid
+                expected_shape = (len(session.surrogate.rpm_bins), len(session.surrogate.map_bins))
+                actual_shape = delta.shape
+                if actual_shape != expected_shape:
+                    logger.warning(
+                        "initial_ve_table shape %s does not match session grid %s; "
+                        "will use overlapping region only",
+                        actual_shape, expected_shape,
+                    )
+                
+                session.surrogate.seed_from_template(
+                    delta,
+                    session.surrogate.rpm_bins,
+                    session.surrogate.map_bins,
+                )
+                logger.info("GP seeded from imported tune (%d cells)", int(delta.size))
+        except Exception as e:
+            logger.warning("Could not seed from initial_ve_table: %s", e)
 
     with _sessions_lock:
         _sessions[session.session_id] = session
@@ -519,6 +610,7 @@ def simulate_pull_realistic(
             "ecu": ecu,
             "simulator": simulator,
             "workflow": workflow,
+            "wrong_ve": wrong_ve,  # Store for VE conversion later
             "lock": threading.Lock(),
         }
         setattr(session, "_realistic_sim_cache", cache)
@@ -564,13 +656,33 @@ def simulate_pull_realistic(
     # ---- 4. Pipe through AutoTuneWorkflow on SESSION grid ----
     df = pd.DataFrame(pull_data)
 
-    ws = workflow.create_session()
-    workflow.import_dataframe(ws, df)
-    afr_result = workflow.analyze_afr(ws)
-    corrections = workflow.calculate_corrections(ws)
+    try:
+        ws = workflow.create_session()
+        workflow.import_dataframe(ws, df)
+        afr_result = workflow.analyze_afr(ws)
+        corrections = workflow.calculate_corrections(ws)
 
-    if corrections is None:
-        logger.warning("AutoTuneWorkflow produced no corrections, using quick mode")
+        if corrections is None:
+            logger.warning("AutoTuneWorkflow produced no corrections, using quick mode")
+            return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
+        
+        # Validate corrections table shape
+        expected_shape = (len(rpm_bins), len(map_bins))
+        if corrections.correction_table.shape != expected_shape:
+            logger.error(
+                "Correction table shape %s != expected %s; falling back to quick mode",
+                corrections.correction_table.shape,
+                expected_shape,
+            )
+            return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
+        
+        logger.info(
+            "AutoTuneWorkflow complete: correction range [%.3f, %.3f]",
+            np.min(corrections.correction_table),
+            np.max(corrections.correction_table),
+        )
+    except Exception as e:
+        logger.error("AutoTuneWorkflow failed: %s; falling back to quick mode", e, exc_info=True)
         return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
 
     # ---- 5. Convert grid corrections → per-observation VE deltas ----
@@ -594,10 +706,61 @@ def simulate_pull_realistic(
 
     r_idx = _nearest_bin_indices(rpm_arr, rpm_bins_arr)
     m_idx = _nearest_bin_indices(map_arr, map_bins_arr)
-    ve_deltas = (corrections.correction_table[r_idx, m_idx] - 1.0) * 100.0
+    
+    # Get baseline VE from the "wrong" ECU table (the one being corrected)
+    # wrong_ve is stored as fractions (0.7-1.1), corrections are multipliers (~0.95-1.05)
+    # GP model expects absolute VE percentages (70-113%)
+    # Strategy: Convert wrong_ve to %, then apply correction multiplier
+    wrong_ve_baseline = cache.get("wrong_ve") if cache else None
+    if wrong_ve_baseline is not None:
+        # Validate shapes before indexing
+        if wrong_ve_baseline.shape != corrections.correction_table.shape:
+            logger.error(
+                "Shape mismatch: wrong_ve %s != correction_table %s; using fallback",
+                wrong_ve_baseline.shape,
+                corrections.correction_table.shape,
+            )
+            wrong_ve_baseline = None  # Fall through to fallback
+        else:
+            # Convert wrong_ve fractions to percentages, then apply correction multiplier
+            wrong_ve_pct = wrong_ve_baseline[r_idx, m_idx] * 100.0  # 0.85 → 85%
+            ve_values = wrong_ve_pct * corrections.correction_table[r_idx, m_idx]  # 85% * 1.05 = 89.25%
+            logger.debug(
+                "VE conversion: wrong_ve range [%.2f, %.2f], corrected range [%.2f, %.2f]",
+                wrong_ve_pct.min(), wrong_ve_pct.max(),
+                ve_values.min(), ve_values.max(),
+            )
+    
+    if wrong_ve_baseline is None:
+        # Fallback: assume wrong_ve was around 85% and corrections fix it
+        logger.warning("No baseline VE available, using estimated absolute values")
+        base_ve_pct = 85.0
+        ve_values = base_ve_pct * corrections.correction_table[r_idx, m_idx]
 
     # ---- 6. Ingest into v3 session ----
-    result = session.ingest_pull(rpm_arr, map_arr, ve_deltas)
+    # Validate VE values are in reasonable range (GP expects 35-135%)
+    if not isinstance(ve_values, np.ndarray):
+        ve_values = np.asarray(ve_values, dtype=np.float64)
+    
+    if len(ve_values) == 0:
+        logger.error("No VE values to ingest; falling back to quick mode")
+        return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
+    
+    # Clip extreme values to acceptable range (safety check)
+    ve_min, ve_max = ve_values.min(), ve_values.max()
+    if ve_min < 35 or ve_max > 135:
+        logger.warning(
+            "VE values outside expected range [35, 135]: [%.2f, %.2f]; clipping",
+            ve_min, ve_max,
+        )
+        ve_values = np.clip(ve_values, 35.0, 135.0)
+    
+    logger.info(
+        "Ingesting %d observations with VE range [%.2f, %.2f]%%",
+        len(ve_values), ve_values.min(), ve_values.max(),
+    )
+    
+    result = session.ingest_pull(rpm_arr, map_arr, ve_values)
 
     # AFR metrics for frontend display
     afr_metrics = None
@@ -672,10 +835,10 @@ def simulate_pull(
     # MAP scatter: +/- 5 kPa around target
     map_arr = map_kpa + rng.randn(n_points) * 5
 
-    # VE deltas: realistic base value + noise
-    # Base value varies by load (higher MAP = more correction needed)
-    base_ve = (map_kpa - 60) / 40 * 3.0  # -2.25 to +3.375 range
-    rpm_effect = np.sin(rpm / 1500) * 1.5
+    # VE values: realistic absolute VE percentages (70-110%)
+    # Base value varies by load (higher MAP = higher VE)
+    base_ve = 75 + (map_kpa - 30) / 75 * 25  # 75% at 30kPa, 100% at 105kPa
+    rpm_effect = np.sin(rpm / 1500) * 5  # ±5% variation with RPM
     ve_base = base_ve + rpm_effect
 
     # Add noise

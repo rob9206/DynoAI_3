@@ -33,6 +33,12 @@ export interface HardwareConfig {
   map_bins?: number[];
 }
 
+/** Payload for creating a session; may include imported VE table to seed the GP. */
+export interface CreateSessionPayload extends HardwareConfig {
+  /** Optional 2D VE table from PVV import; seeds Uncertainty Map so it shows imported tune. */
+  initial_ve_table?: number[][];
+}
+
 export interface PullRecommendation {
   rpm: number;
   map_kpa: number;
@@ -206,9 +212,9 @@ export interface ImportCorrectionsResult {
 // ---------------------------------------------------------------------------
 
 export async function createSession(
-  config: HardwareConfig
+  payload: CreateSessionPayload
 ): Promise<SessionInitResult> {
-  const response = await api.post<SessionInitResult>("/api/v3/session", config);
+  const response = await api.post<SessionInitResult>("/api/v3/session", payload);
   return response.data;
 }
 

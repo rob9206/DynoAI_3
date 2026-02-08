@@ -15,6 +15,8 @@ import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 import { parsePVV, getPVVSummary, extractAfrTargets, type ParsedPVV, type PVVTable } from '../../utils/pvvParser';
 import { listEnginePresets, getEnginePreset } from '../../utils/enginePresets';
+import { resampleVETable } from '../../utils/veResampler';
+import { toast } from '../../lib/toast';
 
 // ==================== VE Preview Table Component ====================
 
@@ -28,7 +30,7 @@ interface VEPreviewTableProps {
 /**
  * Compact preview table for VE data with color-coded cells
  */
-export function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
+function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
     const { rows, columns, values } = table;
     
     // Sample rows and columns for preview
@@ -110,7 +112,7 @@ export function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPre
 /**
  * AFR targets preview as a simple row
  */
-export function AFRPreviewTable({ table }: { table: PVVTable }) {
+function AFRPreviewTable({ table }: { table: PVVTable }) {
     const { columns, values } = table;
     
     // Use middle row for AFR targets (typical operating RPM)
@@ -159,10 +161,6 @@ export interface TuneImportResult {
     afrTargets: Record<number, number>;
     rpmBins: number[];
     mapBins: number[];
-    /** From PVV "Engine Displacement" (CID); used to suggest motor config. */
-    engineDisplacementCid?: number;
-    /** Suggested V3 engine_family from PVV displacement (e.g. m8_107, m8_114). */
-    inferredEngineFamily?: string;
 }
 
 interface TuneImportProps {
@@ -189,9 +187,32 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
         }
 
         setIsParsing(true);
+        setShowPreview(false);  // Reset preview state
         try {
             const content = await file.text();
             const parsed = parsePVV(content);
+            
+            console.log('[TuneImport] Parsed PVV file:', {
+                sourceFile: parsed.sourceFile,
+                veFront: parsed.veFront ? {
+                    name: parsed.veFront.name,
+                    rows: parsed.veFront.rows.length,
+                    columns: parsed.veFront.columns.length,
+                    sampleValues: parsed.veFront.values[0]?.slice(0, 3),
+                } : null,
+                veRear: parsed.veRear ? {
+                    name: parsed.veRear.name,
+                    rows: parsed.veRear.rows.length,
+                    columns: parsed.veRear.columns.length,
+                } : null,
+                afrTarget: parsed.afrTarget ? {
+                    name: parsed.afrTarget.name,
+                    rows: parsed.afrTarget.rows.length,
+                    columns: parsed.afrTarget.columns.length,
+                } : null,
+                allTables: Array.from(parsed.allTables.keys()),
+                parseErrors: parsed.parseErrors,
+            });
             
             if (parsed.parseErrors.length > 0 && !parsed.veFront && !parsed.afrTarget) {
                 setImportError(`Parse errors: ${parsed.parseErrors.join(', ')}`);
@@ -223,6 +244,7 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
             }
 
             setImportedPVV(parsed);
+            setShowPreview(true);  // Auto-expand preview on successful import
 
             // Extract and send data to parent
             const afrTargets = parsed.afrTarget 
@@ -239,17 +261,94 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
             const rawRpmBins = parsed.veFront?.rows ?? getEnginePreset(currentPreset)?.rpmBins ?? [];
             const rawMapBins = parsed.veFront?.columns ?? getEnginePreset(currentPreset)?.mapBins ?? [];
 
+            console.log('[TuneImport] Before deduplication:', {
+                rawRpmBins: rawRpmBins.length,
+                rawMapBins: rawMapBins.length,
+                usingPresetRpm: !parsed.veFront?.rows,
+                usingPresetMap: !parsed.veFront?.columns,
+            });
+
+            const deduplicatedRpmBins = deduplicateBins(rawRpmBins);
+            const deduplicatedMapBins = deduplicateBins(rawMapBins);
+
+            // Resample VE tables if deduplication changed dimensions
+            let veFrontToUse = parsed.veFront;
+            let veRearToUse = parsed.veRear;
+            
+            if (parsed.veFront && 
+                (parsed.veFront.rows.length !== deduplicatedRpmBins.length ||
+                 parsed.veFront.columns.length !== deduplicatedMapBins.length)) {
+                try {
+                    const resampledFront = resampleVETable(
+                        parsed.veFront.values,
+                        parsed.veFront.rows,
+                        parsed.veFront.columns,
+                        deduplicatedRpmBins,
+                        deduplicatedMapBins
+                    );
+                    
+                    veFrontToUse = {
+                        ...parsed.veFront,
+                        rows: deduplicatedRpmBins,
+                        columns: deduplicatedMapBins,
+                        values: resampledFront,
+                    };
+                    
+                    toast.info('VE table resampled', {
+                        description: `Adjusted grid from ${parsed.veFront.rows.length}×${parsed.veFront.columns.length} to ${deduplicatedRpmBins.length}×${deduplicatedMapBins.length} (duplicate bins removed)`
+                    });
+                } catch (e) {
+                    console.error('[TuneImport] Failed to resample front VE:', e);
+                    toast.error('Failed to resample VE table', {
+                        description: String(e)
+                    });
+                }
+            }
+            
+            // Also resample rear cylinder if present
+            if (parsed.veRear && 
+                (parsed.veRear.rows.length !== deduplicatedRpmBins.length ||
+                 parsed.veRear.columns.length !== deduplicatedMapBins.length)) {
+                
+                try {
+                    const resampledRear = resampleVETable(
+                        parsed.veRear.values,
+                        parsed.veRear.rows,
+                        parsed.veRear.columns,
+                        deduplicatedRpmBins,
+                        deduplicatedMapBins
+                    );
+                    
+                    veRearToUse = {
+                        ...parsed.veRear,
+                        rows: deduplicatedRpmBins,
+                        columns: deduplicatedMapBins,
+                        values: resampledRear,
+                    };
+                } catch (e) {
+                    console.error('[TuneImport] Failed to resample rear VE:', e);
+                }
+            }
+
             const result: TuneImportResult = {
                 source: 'pvv',
                 sourceName: parsed.sourceFile || file.name,
-                veFront: parsed.veFront,
-                veRear: parsed.veRear,
+                veFront: veFrontToUse,
+                veRear: veRearToUse,
                 afrTargets,
-                rpmBins: deduplicateBins(rawRpmBins),
-                mapBins: deduplicateBins(rawMapBins),
-                engineDisplacementCid: parsed.engineDisplacementCid,
-                inferredEngineFamily: parsed.inferredEngineFamily,
+                rpmBins: deduplicatedRpmBins,
+                mapBins: deduplicatedMapBins,
             };
+
+            console.log('[TuneImport] Sending result to parent:', {
+                source: result.source,
+                sourceName: result.sourceName,
+                hasVeFront: !!result.veFront,
+                hasVeRear: !!result.veRear,
+                rpmBins: result.rpmBins,
+                mapBins: result.mapBins,
+                afrTargetKeys: Object.keys(result.afrTargets),
+            });
 
             onImport(result);
         } catch (e) {
@@ -399,6 +498,36 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                                         <div className="text-zinc-400 mt-1 whitespace-pre-line">
                                             {getPVVSummary(importedPVV)}
                                         </div>
+                                        
+                                        {/* Display table types and warn if TPS-based */}
+                                        {importedPVV.veFront && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-zinc-400">
+                                                    <span className="text-zinc-500">Front VE: </span>
+                                                    <span className="text-zinc-300 font-mono">{importedPVV.veFront.name}</span>
+                                                    {importedPVV.veFront.name.toLowerCase().includes('tps') && (
+                                                        <div className="text-amber-400 text-[11px] mt-1 flex items-start gap-1">
+                                                            <span>⚠</span>
+                                                            <span>This is a TPS-based table (throttle %), not MAP-based (kPa)</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {importedPVV.veRear && (
+                                            <div className="mt-1">
+                                                <div className="text-xs text-zinc-400">
+                                                    <span className="text-zinc-500">Rear VE: </span>
+                                                    <span className="text-zinc-300 font-mono">{importedPVV.veRear.name}</span>
+                                                    {importedPVV.veRear.name.toLowerCase().includes('tps') && (
+                                                        <div className="text-amber-400 text-[11px] mt-1 flex items-start gap-1">
+                                                            <span>⚠</span>
+                                                            <span>This is a TPS-based table (throttle %), not MAP-based (kPa)</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

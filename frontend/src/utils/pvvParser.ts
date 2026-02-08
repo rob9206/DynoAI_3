@@ -107,13 +107,28 @@ export function parsePVV(xmlContent: string): ParsedPVV {
                     // Identify key tables by name patterns
                     const nameLower = table.name.toLowerCase();
                     
-                    // Front VE table - various naming conventions
+                    // Front VE table - prefer MAP-based over TPS-based
                     if (nameLower.includes('ve') && nameLower.includes('front')) {
-                        result.veFront = table;
+                        // Prefer MAP-based tables (check both name and column units)
+                        const isMapBased = nameLower.includes('map') || 
+                                          table.columnUnits.toLowerCase().includes('kilopascal');
+                        const isTpsBased = nameLower.includes('tps') || 
+                                          table.columnUnits === '%';
+                        
+                        if (isMapBased || (!isTpsBased && !result.veFront)) {
+                            result.veFront = table;
+                        }
                     }
-                    // Rear VE table - various naming conventions
+                    // Rear VE table - prefer MAP-based over TPS-based
                     else if (nameLower.includes('ve') && nameLower.includes('rear')) {
-                        result.veRear = table;
+                        const isMapBased = nameLower.includes('map') || 
+                                          table.columnUnits.toLowerCase().includes('kilopascal');
+                        const isTpsBased = nameLower.includes('tps') || 
+                                          table.columnUnits === '%';
+                        
+                        if (isMapBased || (!isTpsBased && !result.veRear)) {
+                            result.veRear = table;
+                        }
                     }
                     // AFR target table
                     else if (nameLower === 'air-fuel ratio' || nameLower === 'air fuel ratio' || 
@@ -141,6 +156,29 @@ export function parsePVV(xmlContent: string): ParsedPVV {
             result.veFront = veCandidates[0];
         } else if (!result.veRear && veCandidates.length > 0) {
             result.veRear = veCandidates[0];
+        }
+        
+        // Validate we got MAP-based tables, not TPS-based
+        if (result.veFront) {
+            const frontName = result.veFront.name.toLowerCase();
+            if (frontName.includes('tps')) {
+                result.parseErrors.push(
+                    'Warning: Using TPS-based VE table. MAP-based table not found. ' +
+                    'TPS-based tables use throttle position (%) instead of MAP (kPa).'
+                );
+            }
+            // Log what we selected for debugging
+            console.log('[pvvParser] Selected VE Front table:', result.veFront.name);
+        }
+
+        if (result.veRear) {
+            const rearName = result.veRear.name.toLowerCase();
+            if (rearName.includes('tps')) {
+                result.parseErrors.push(
+                    'Warning: Using TPS-based VE table (rear). MAP-based table not found.'
+                );
+            }
+            console.log('[pvvParser] Selected VE Rear table:', result.veRear.name);
         }
 
     } catch (e) {
@@ -192,18 +230,19 @@ function parseTableItem(item: Element): PVVTable | null {
             }
             rows.push(rpmValue);
 
-            // Parse cell values
+            // Parse cell values (Power Vision may use attribute "value" or text content)
             const cellEls = row.querySelectorAll('Cell');
             const rowValues: number[] = [];
             for (const cell of cellEls) {
-                const value = cell.getAttribute('value');
-                rowValues.push(value ? parseFloat(value) : 0);
+                const value = cell.getAttribute('value') ?? cell.textContent?.trim() ?? '';
+                const num = value ? parseFloat(value) : NaN;
+                rowValues.push(Number.isFinite(num) ? num : 0);
             }
             values.push(rowValues);
         }
     }
 
-    return {
+    const table = {
         name,
         units,
         columnUnits,
@@ -212,6 +251,21 @@ function parseTableItem(item: Element): PVVTable | null {
         rows,
         values,
     };
+    
+    // DIAGNOSTIC: Log parsed table structure
+    if (name.toLowerCase().includes('ve') && name.toLowerCase().includes('front')) {
+        console.log('[pvvParser] Parsed VE Front table:', {
+            name,
+            rowsCount: rows.length,
+            columnsCount: columns.length,
+            rowsSample: rows.slice(0, 5),
+            columnsSample: columns.slice(0, 5),
+            columnsFull: columns,
+            valuesShape: `${values.length}x${values[0]?.length}`,
+        });
+    }
+    
+    return table;
 }
 
 /**

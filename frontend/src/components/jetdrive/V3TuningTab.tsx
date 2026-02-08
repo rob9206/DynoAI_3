@@ -6,10 +6,10 @@
  * Heatmap, Pull History, Overlay Status.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Zap, Target, BarChart3, ShieldCheck, Play, FastForward,
-  ChevronRight, AlertTriangle, CheckCircle2, XCircle, Upload
+  ChevronRight, AlertTriangle, CheckCircle2, XCircle, Check, FileUp
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -25,15 +25,10 @@ import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
 
 import { useV3Session } from "@/hooks/useV3Session";
-import type { HardwareConfig, PullRecommendation } from "@/api/v3Session";
-import { TuneImport, VEPreviewTable, type TuneImportResult } from "@/components/jetdrive/TuneImport";
-import { parsePVV, tableToGrid, type PVVTable } from "@/utils/pvvParser";
-import { parseDynoAICSV, parseDynoAIJSON } from "@/utils/veImportParser";
+import type { CreateSessionPayload, HardwareConfig, PullRecommendation } from "@/api/v3Session";
+import { TuneImport, type TuneImportResult } from "./TuneImport";
 
 // ---------------------------------------------------------------------------
 // Engine family options
@@ -47,8 +42,7 @@ const ENGINE_FAMILIES = [
   { value: "tc_96", label: "TC 96 (Air-Cooled)" },
   { value: "tc_103", label: "TC 103 (Air-Cooled)" },
   { value: "tc_110", label: "TC 110 (Air-Cooled)" },
-  { value: "revmax_975", label: "RevMax 975 (Nightster)" },
-  { value: "revmax_1250", label: "RevMax 1250 (Sportster S / Pan America)" },
+  { value: "revmax_1250", label: "RevMax 1250 (Liquid)" },
   { value: "evo_1200", label: "Evo 1200 (Air-Cooled)" },
 ] as const;
 
@@ -68,9 +62,17 @@ const AIR_CLEANER_OPTIONS = [
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export function V3TuningTab() {
+export interface V3TuningTabProps {
+  /** When set, session can be seeded with this tune so the Uncertainty Map shows it. */
+  importedTune?: TuneImportResult | null;
+}
+
+export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
   // ---- Local form state ----
   const [sessionId, setSessionId] = useState<string | undefined>();
+  const [localImportedTune, setLocalImportedTune] = useState<TuneImportResult | null>(
+    importedTune || null  // Use prop if provided, otherwise null
+  );
   const [config, setConfig] = useState<HardwareConfig>({
     engine_family: "m8_114",
     displacement_ci: 114,
@@ -78,64 +80,25 @@ export function V3TuningTab() {
     exhaust_type: "stock",
     air_cleaner: "stock",
   });
-  const [baseVeSeed, setBaseVeSeed] = useState<{
-    veTable: number[][];
-    rpmBins: number[];
-    mapBins: number[];
-    sourceName: string;
-  } | null>(null);
-  const [baseVeSeedPending, setBaseVeSeedPending] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importPreview, setImportPreview] = useState<{
-    corrections: number[][];
-    rpmBins: number[];
-    mapBins: number[];
-    format: "multiplier" | "percentage";
-    sourceName: string;
-  } | null>(null);
-  const importFileRef = useRef<HTMLInputElement>(null);
   const [simMode, setSimMode] = useState<"quick" | "realistic">("realistic");
-  const baseVeImportedForSessionRef = useRef<string | null>(null);
 
   const v3 = useV3Session(sessionId);
-
-  // ---- Effects ----
-  useEffect(() => {
-    if (!sessionId || !baseVeSeed || !baseVeSeedPending) return;
-    // Only import once per session; clear pending immediately so re-runs (e.g. from v3 ref change) bail out
-    if (baseVeImportedForSessionRef.current === sessionId) return;
-    baseVeImportedForSessionRef.current = sessionId;
-    setBaseVeSeedPending(false);
-
-    const veTable = baseVeSeed.veTable;
-    const rpmBins = baseVeSeed.rpmBins;
-    const mapBins = baseVeSeed.mapBins;
-    const sourceName = baseVeSeed.sourceName;
-
-    (async () => {
-      try {
-        await v3.importVE({
-          ve_table: veTable,
-          rpm_bins: rpmBins,
-          map_bins: mapBins,
-        });
-        toast.success(`Base VE imported from ${sourceName}`);
-      } catch (err) {
-        toast.error("Failed to import base VE table");
-        baseVeImportedForSessionRef.current = null; // allow retry
-      }
-    })();
-  }, [sessionId, baseVeSeed, baseVeSeedPending, v3]);
 
   // ---- Handlers ----
   const handleStartSession = useCallback(async () => {
     try {
-      const result = await v3.startSession(config);
-      setSessionId(result.session_id);
-      if (baseVeSeed) {
-        setBaseVeSeedPending(true);
+      const payload: CreateSessionPayload = { ...config };
+      const tuneToUse = localImportedTune || importedTune;
+      
+      if (tuneToUse?.veFront?.values?.length) {
+        payload.initial_ve_table = tuneToUse.veFront.values;
+        // Use deduplicated bins (fixes "strictly ascending" scipy error)
+        payload.rpm_bins = tuneToUse.rpmBins;
+        payload.map_bins = tuneToUse.mapBins;
       }
+      
+      const result = await v3.startSession(payload);
+      setSessionId(result.session_id);
       const matchLabel = result.template_match
         ? `Template match: ${(result.template_match.similarity_score * 100).toFixed(0)}%`
         : "No template match (fresh session)";
@@ -143,7 +106,7 @@ export function V3TuningTab() {
     } catch (err) {
       toast.error("Failed to start session");
     }
-  }, [config, v3, baseVeSeed]);
+  }, [config, localImportedTune, importedTune, v3]);
 
   const handleVeto = useCallback(
     (rec: PullRecommendation) => {
@@ -169,137 +132,6 @@ export function V3TuningTab() {
       toast.error("Failed to simulate pull");
     }
   }, [v3, simMode]);
-
-  const handleBaseVeImport = useCallback((result: TuneImportResult) => {
-    const engineFamily = result.inferredEngineFamily && ENGINE_FAMILIES.some((e) => e.value === result.inferredEngineFamily)
-      ? result.inferredEngineFamily
-      : undefined;
-    const displacementCi = result.engineDisplacementCid;
-    setConfig((c) => ({
-      ...c,
-      ...(engineFamily && { engine_family: engineFamily }),
-      ...(displacementCi != null && displacementCi > 0 && { displacement_ci: displacementCi }),
-      rpm_bins: result.rpmBins,
-      map_bins: result.mapBins,
-    }));
-
-    const frontGrid = result.veFront
-      ? tableToGrid(result.veFront, result.rpmBins, result.mapBins)
-      : null;
-    const rearGrid = result.veRear
-      ? tableToGrid(result.veRear, result.rpmBins, result.mapBins)
-      : null;
-
-    if (!frontGrid && !rearGrid) {
-      setBaseVeSeed(null);
-      return;
-    }
-
-    let combined = frontGrid ?? rearGrid ?? [];
-    if (frontGrid && rearGrid) {
-      combined = frontGrid.map((row, i) =>
-        row.map((value, j) => (value + rearGrid[i][j]) / 2)
-      );
-    }
-
-    setBaseVeSeed({
-      veTable: combined,
-      rpmBins: result.rpmBins,
-      mapBins: result.mapBins,
-      sourceName: result.sourceName,
-    });
-  }, []);
-
-  const buildPreviewTable = useCallback((): PVVTable | null => {
-    if (!importPreview) return null;
-    const values = importPreview.format === "multiplier"
-      ? importPreview.corrections.map((row) =>
-          row.map((value) => (value - 1) * 100)
-        )
-      : importPreview.corrections;
-    return {
-      name: "Corrections",
-      units: "%",
-      columnUnits: "Kilopascals",
-      rowUnits: "RPM",
-      columns: importPreview.mapBins,
-      rows: importPreview.rpmBins,
-      values,
-    };
-  }, [importPreview]);
-
-  const handleCorrectionsFile = useCallback(async (file: File) => {
-    setImportError(null);
-    setImportPreview(null);
-
-    const lower = file.name.toLowerCase();
-    try {
-      if (lower.endsWith(".json")) {
-        const parsed = parseDynoAIJSON(await file.text());
-        setImportPreview({ ...parsed, sourceName: file.name });
-        return;
-      }
-
-      if (lower.endsWith(".csv")) {
-        const parsed = parseDynoAICSV(await file.text());
-        setImportPreview({ ...parsed, sourceName: file.name });
-        return;
-      }
-
-      if (lower.endsWith(".pvv")) {
-        const parsed = parsePVV(await file.text());
-        const baseTable = parsed.veFront ?? parsed.veRear;
-        if (!baseTable) {
-          throw new Error("PVV file missing VE correction tables");
-        }
-
-        const rpmBins = baseTable.rows;
-        const mapBins = baseTable.columns;
-        const frontGrid = parsed.veFront
-          ? tableToGrid(parsed.veFront, rpmBins, mapBins)
-          : null;
-        const rearGrid = parsed.veRear
-          ? tableToGrid(parsed.veRear, rpmBins, mapBins)
-          : null;
-
-        let combined = frontGrid ?? rearGrid ?? [];
-        if (frontGrid && rearGrid) {
-          combined = frontGrid.map((row, i) =>
-            row.map((value, j) => (value + rearGrid[i][j]) / 2)
-          );
-        }
-
-        setImportPreview({
-          corrections: combined,
-          rpmBins,
-          mapBins,
-          format: "percentage",
-          sourceName: file.name,
-        });
-        return;
-      }
-
-      throw new Error("Unsupported file type (use .json, .csv, or .pvv)");
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : "Failed to parse file");
-    }
-  }, []);
-
-  const handleImportCorrections = useCallback(async () => {
-    if (!importPreview) return;
-    try {
-      await v3.importSessionCorrections({
-        corrections: importPreview.corrections,
-        rpm_bins: importPreview.rpmBins,
-        map_bins: importPreview.mapBins,
-        format: importPreview.format,
-      });
-      toast.success(`Corrections imported from ${importPreview.sourceName}`);
-      setImportDialogOpen(false);
-    } catch (err) {
-      toast.error("Failed to import corrections");
-    }
-  }, [importPreview, v3]);
 
   const handleAutoSimulate = useCallback(async () => {
     try {
@@ -332,6 +164,80 @@ export function V3TuningTab() {
       toast.error("Failed to finalize session");
     }
   }, [v3]);
+
+  // ---- Memos (must run on every render to satisfy Rules of Hooks) ----
+  const convergencePct = useMemo(() => {
+    if (!v3.convergence) return 0;
+    return Math.round(
+      ((v3.convergence.total_cells - v3.convergence.cells_above_threshold) /
+        Math.max(v3.convergence.total_cells, 1)) *
+        100
+    );
+  }, [v3.convergence]);
+
+  const uncertaintyMapCard = useMemo(() => {
+    const um = v3.uncertaintyMap;
+    if (!um) return null;
+
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-purple-500" />
+            Uncertainty Map
+            <span className="text-xs font-normal text-muted-foreground ml-auto">
+              {um.predict_time_ms.toFixed(0)}ms GP predict
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left p-1 text-muted-foreground">RPM\MAP</th>
+                  {um.map_bins.map((m) => (
+                    <th key={m} className="p-1 text-center text-muted-foreground">{m}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {um.rpm_bins.map((rpm, ri) => (
+                  <tr key={rpm}>
+                    <td className="p-1 font-medium text-muted-foreground">{rpm}</td>
+                    {um.uncertainty_map[ri].map((unc, ci) => {
+                      const bg =
+                        unc < 0.5 ? "bg-green-900/40" :
+                        unc < 1.0 ? "bg-yellow-900/40" :
+                        unc < 2.0 ? "bg-orange-900/40" :
+                        "bg-red-900/40";
+                      // ve_map contains absolute VE percentages (70-113%)
+                      const veAbsolute = um.ve_map[ri][ci];
+                      return (
+                        <td
+                          key={ci}
+                          className={cn("p-1 text-center rounded-sm", bg)}
+                          title={`VE: ${veAbsolute.toFixed(1)}% | Unc: ${unc.toFixed(2)}`}
+                        >
+                          {veAbsolute.toFixed(0)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-3 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/40" /> &lt;0.5 (High)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-900/40" /> 0.5-1.0 (Med)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-900/40" /> 1.0-2.0 (Low)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-900/40" /> &gt;2.0 (Skip)</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }, [v3.uncertaintyMap]);
 
   // ---- Render: Idle / Setup ----
   if (v3.sessionPhase === "idle") {
@@ -434,17 +340,6 @@ export function V3TuningTab() {
               </Select>
             </div>
 
-            {/* Base VE Import */}
-            <div className="space-y-2">
-              <Label>Base VE Import (optional)</Label>
-              <TuneImport compact onImport={handleBaseVeImport} />
-              {baseVeSeed && (
-                <p className="text-xs text-muted-foreground">
-                  Using base VE from {baseVeSeed.sourceName}
-                </p>
-              )}
-            </div>
-
             <Button
               onClick={handleStartSession}
               disabled={v3.isCreating}
@@ -458,6 +353,39 @@ export function V3TuningTab() {
                 </>
               )}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* PVV Import Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileUp className="h-5 w-5 text-purple-500" />
+              Import Base Tune (Optional)
+            </CardTitle>
+            <CardDescription>
+              Upload a Power Vision .pvv file to seed the uncertainty map with your base VE values.
+              If not provided, the session will start from template or default priors.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TuneImport 
+              onImport={setLocalImportedTune}
+              compact={true}
+            />
+            {localImportedTune && (
+              <div className="mt-3 p-3 bg-green-900/20 rounded-lg text-sm flex items-center gap-2">
+                <Check className="h-4 w-4 text-green-400" />
+                <div>
+                  <div className="font-medium text-green-300">
+                    Imported: {localImportedTune.sourceName}
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    Grid: {localImportedTune.rpmBins.length}×{localImportedTune.mapBins.length} cells
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -476,79 +404,6 @@ export function V3TuningTab() {
   }
 
   // ---- Render: Active session ----
-  const convergencePct = useMemo(() => {
-    if (!v3.convergence) return 0;
-    return Math.round(
-      ((v3.convergence.total_cells - v3.convergence.cells_above_threshold) /
-        Math.max(v3.convergence.total_cells, 1)) *
-        100
-    );
-  }, [v3.convergence]);
-
-  const uncertaintyMapCard = useMemo(() => {
-    const um = v3.uncertaintyMap;
-    if (!um) return null;
-
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-purple-500" />
-            Uncertainty Map
-            <span className="text-xs font-normal text-muted-foreground ml-auto">
-              {um.predict_time_ms.toFixed(0)}ms GP predict
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr>
-                  <th className="text-left p-1 text-muted-foreground">RPM\MAP</th>
-                  {um.map_bins.map((m) => (
-                    <th key={m} className="p-1 text-center text-muted-foreground">{m}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {um.rpm_bins.map((rpm, ri) => (
-                  <tr key={rpm}>
-                    <td className="p-1 font-medium text-muted-foreground">{rpm}</td>
-                    {um.uncertainty_map[ri].map((unc, ci) => {
-                      const bg =
-                        unc < 0.5 ? "bg-green-900/40" :
-                        unc < 1.0 ? "bg-yellow-900/40" :
-                        unc < 2.0 ? "bg-orange-900/40" :
-                        "bg-red-900/40";
-                      return (
-                        <td
-                          key={ci}
-                          className={cn("p-1 text-center rounded-sm", bg)}
-                          title={`VE: ${um.ve_map[ri][ci].toFixed(1)}% | Unc: ${unc.toFixed(2)}`}
-                        >
-                          {unc.toFixed(1)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex gap-3 mt-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/40" /> &lt;0.5 (High)</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-900/40" /> 0.5-1.0 (Med)</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-900/40" /> 1.0-2.0 (Low)</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-900/40" /> &gt;2.0 (Skip)</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }, [v3.uncertaintyMap]);
-
-  const previewTable = buildPreviewTable();
-
   return (
     <div className="space-y-6">
       {/* Session header */}
@@ -578,16 +433,6 @@ export function V3TuningTab() {
             <Badge variant="outline">
               Template {(v3.initResult.template_match.similarity_score * 100).toFixed(0)}%
             </Badge>
-          )}
-          {(v3.sessionPhase === "ready" || v3.sessionPhase === "tuning") && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportDialogOpen(true)}
-            >
-              <Upload className="h-3 w-3 mr-1" />
-              Import Corrections
-            </Button>
           )}
         </div>
       </div>
@@ -777,87 +622,6 @@ export function V3TuningTab() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-white">Import VE Corrections</DialogTitle>
-            <DialogDescription className="text-zinc-400">
-              Load a DynoAI corrections export (CSV/JSON) or a PVV correction file.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".csv,.json,.pvv"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    handleCorrectionsFile(file);
-                  }
-                }}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => importFileRef.current?.click()}
-              >
-                <Upload className="h-3 w-3 mr-1" />
-                Choose File
-              </Button>
-              {importPreview && (
-                <Badge variant="outline" className="text-green-400 border-green-500/30">
-                  {importPreview.sourceName}
-                </Badge>
-              )}
-            </div>
-
-            {importError && (
-              <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded p-2">
-                {importError}
-              </div>
-            )}
-
-            {importPreview && (
-              <div className="space-y-3">
-                <div className="text-xs text-zinc-400">
-                  Grid: {importPreview.rpmBins.length} RPM × {importPreview.mapBins.length} MAP
-                  {" "}• Format: {importPreview.format}
-                </div>
-                {previewTable && (
-                  <VEPreviewTable
-                    table={previewTable}
-                    title="Corrections (%)"
-                    maxRows={6}
-                    maxCols={8}
-                  />
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setImportDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleImportCorrections}
-                disabled={!importPreview || v3.isImportingCorrections}
-              >
-                {v3.isImportingCorrections ? "Importing..." : "Import Corrections"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

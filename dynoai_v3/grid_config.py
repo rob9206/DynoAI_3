@@ -113,7 +113,15 @@ class GridConfig:
             2. Wizard custom bins (if both provided)
             3. Engine family preset (fallback)
         """
-        if pvv_rpm_bins and pvv_map_bins:
+        # Check PVV bins (must have both and be non-empty)
+        has_pvv = (
+            pvv_rpm_bins is not None 
+            and pvv_map_bins is not None 
+            and len(pvv_rpm_bins) > 0 
+            and len(pvv_map_bins) > 0
+        )
+        
+        if has_pvv:
             gc = cls.from_pvv(pvv_rpm_bins, pvv_map_bins)
             logger.info(
                 "Grid resolved from PVV: %d RPM x %d MAP bins",
@@ -121,7 +129,15 @@ class GridConfig:
             )
             return gc
 
-        if wizard_rpm_bins and wizard_map_bins:
+        # Check wizard bins
+        has_wizard = (
+            wizard_rpm_bins is not None
+            and wizard_map_bins is not None
+            and len(wizard_rpm_bins) > 0
+            and len(wizard_map_bins) > 0
+        )
+        
+        if has_wizard:
             gc = cls(
                 rpm_bins=sorted(float(r) for r in wizard_rpm_bins),
                 map_bins=sorted(float(m) for m in wizard_map_bins),
@@ -133,6 +149,14 @@ class GridConfig:
             )
             return gc
 
+        # Fallback to preset with diagnostic logging
+        logger.warning(
+            "Grid falling back to preset: pvv_rpm=%s, pvv_map=%s, wizard_rpm=%s, wizard_map=%s",
+            f"{len(pvv_rpm_bins)} bins" if pvv_rpm_bins else "None/empty",
+            f"{len(pvv_map_bins)} bins" if pvv_map_bins else "None/empty",
+            f"{len(wizard_rpm_bins)} bins" if wizard_rpm_bins else "None/empty",
+            f"{len(wizard_map_bins)} bins" if wizard_map_bins else "None/empty",
+        )
         gc = cls.from_preset(engine_family)
         logger.info(
             "Grid resolved from preset (%s): %d RPM x %d MAP bins",

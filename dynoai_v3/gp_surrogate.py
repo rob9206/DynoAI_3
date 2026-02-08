@@ -6,6 +6,10 @@ Maintains a live probabilistic model of the entire VE map that updates
 after each pull, providing both predictions and uncertainty estimates at
 every cell.
 
+The GP model predicts absolute VE percentages (70-113%), not deltas or
+corrections. This aligns with Power Vision PVV format and provides intuitive
+display values.
+
 Why GP, Not Neural Network:
     1. Calibrated uncertainty estimates out of the box
     2. Works well with small datasets (10-30 pulls)
@@ -26,7 +30,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,8 +39,9 @@ from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
-# Extreme VE delta threshold — observations beyond this are rejected
-_MAX_VE_DELTA = 15.0
+# Extreme VE value threshold — observations beyond reasonable VE range are rejected
+# Typical VE range is 60-120%, so values outside ±50% from 85% mean are suspicious
+_MAX_VE_DEVIATION = 50.0  # Reject if |VE - 85| > 50 (i.e., VE < 35 or VE > 135)
 
 # Cap observations used for GP fit so refit stays fast (GP is O(n^3)).
 # Without this, 500+ obs can take minutes and freeze the UI.
@@ -102,18 +106,25 @@ def _uncertainty_map_to_confidence(unc_map: NDArray[np.float64]) -> NDArray[np.f
 # ---------------------------------------------------------------------------
 @dataclass
 class Observation:
-    """A single measured data point from a dyno pull."""
+    """A single measured data point from a dyno pull.
+    
+    Note: Despite the field name 've_delta', this stores absolute VE percentage values
+    (70-113%), not deltas. The naming is historical but the semantics are absolute VE.
+    """
     rpm: float
     map_kpa: float
-    ve_delta: float
+    ve_delta: float  # Absolute VE percentage (e.g., 85.5%)
     pull_number: Optional[int] = None
     timestamp: Optional[float] = None
 
 
 @dataclass
 class PointPrediction:
-    """Prediction at a single operating point."""
-    ve_delta: float
+    """Prediction at a single operating point.
+    
+    Note: ve_delta stores absolute VE percentage (70-113%), not a delta.
+    """
+    ve_delta: float  # Absolute VE percentage (e.g., 92.3%)
     uncertainty: float
     confidence: float
     badge: str
@@ -121,8 +132,11 @@ class PointPrediction:
 
 @dataclass
 class FullMapPrediction:
-    """Prediction across the entire VE grid."""
-    ve_map: NDArray[np.float64]
+    """Prediction across the entire VE grid.
+    
+    Note: ve_map contains absolute VE percentages (70-113%), not deltas.
+    """
+    ve_map: NDArray[np.float64]  # Absolute VE percentages
     uncertainty_map: NDArray[np.float64]
     confidence_map: NDArray[np.float64]
     predict_time_ms: float
@@ -156,6 +170,9 @@ class VESurrogate:
         self.engine_family = engine_family
         self.observations: List[Observation] = []
         self.template_observation_count: int = 0
+        
+        # Store raw seed VE table for exact 1:1 reproduction (PVV import)
+        self._seed_ve_table: Optional[NDArray[np.float64]] = None
 
         self._gp_model = None
         self.is_fitted = False
@@ -226,12 +243,12 @@ class VESurrogate:
         """
         Ingest an entire pull's worth of data.
 
-        Rejects extreme VE values (|ve_delta| > _MAX_VE_DELTA).
+        Rejects extreme VE values outside reasonable range (35-135%).
 
         Args:
             rpm: Array of RPM values
             map_kpa: Array of MAP values
-            ve: Array of VE delta values
+            ve: Array of absolute VE percentage values (70-113%)
             pull_number: Optional pull sequence number
 
         Returns:
@@ -245,16 +262,17 @@ class VESurrogate:
         ts = time.time()
 
         for i in range(len(rpm)):
-            if abs(ve[i]) > _MAX_VE_DELTA:
+            # Reject unrealistic VE values (typical range 60-120%)
+            if abs(ve[i] - 85.0) > _MAX_VE_DEVIATION:
                 logger.debug(
-                    "Rejected extreme VE delta: %.2f at RPM=%.0f MAP=%.0f",
+                    "Rejected extreme VE value: %.2f%% at RPM=%.0f MAP=%.0f",
                     ve[i], rpm[i], map_kpa[i],
                 )
                 continue
             self.observations.append(Observation(
                 rpm=float(rpm[i]),
                 map_kpa=float(map_kpa[i]),
-                ve_delta=float(ve[i]),
+                ve_delta=float(ve[i]),  # Stores absolute VE %
                 pull_number=pull_number,
                 timestamp=ts,
             ))
@@ -288,13 +306,24 @@ class VESurrogate:
         can override them.
 
         Args:
-            template_ve: 2D array of VE corrections from the template
+            template_ve: 2D array of absolute VE percentages (70-113%) from the template
             rpm_bins: RPM bins corresponding to template rows
             map_bins: MAP bins corresponding to template columns
         """
         template_ve = np.asarray(template_ve, dtype=np.float64)
         rpm_bins = np.asarray(rpm_bins, dtype=np.float64)
         map_bins = np.asarray(map_bins, dtype=np.float64)
+        
+        # Store raw seed table for exact 1:1 reproduction when no real pulls exist
+        self._seed_ve_table = template_ve.copy()
+        
+        logger.info(
+            "Storing seed VE table: shape=%s, min=%.1f%%, max=%.1f%%, mean=%.1f%%",
+            self._seed_ve_table.shape,
+            np.min(self._seed_ve_table),
+            np.max(self._seed_ve_table),
+            np.mean(self._seed_ve_table),
+        )
 
         count = 0
         ts = time.time()
@@ -376,6 +405,43 @@ class VESurrogate:
                 predict_time_ms=elapsed,
             )
 
+        # If we only have template data, return raw seed values for accuracy
+        if hasattr(self, '_seed_ve_table') and self._seed_ve_table is not None:
+            all_template = all(o.pull_number == -1 for o in self.observations)
+            if all_template and self._seed_ve_table.shape == (n_rpm, n_map):
+                # Use constant uncertainty (no GP predict) to avoid sklearn 1.8+
+                # AttributeError when alpha_ is not set after fit
+                unc_map = np.full((n_rpm, n_map), 1.0)  # Medium uncertainty until real pulls
+                conf_map = _uncertainty_map_to_confidence(unc_map)
+                elapsed = (time.time() - t0) * 1000
+                
+                logger.info(
+                    "Returning raw seed VE table (template-only, no real pulls): "
+                    "shape=%s, min=%.1f%%, max=%.1f%%, mean=%.1f%%",
+                    self._seed_ve_table.shape,
+                    np.min(self._seed_ve_table),
+                    np.max(self._seed_ve_table),
+                    np.mean(self._seed_ve_table),
+                )
+                return FullMapPrediction(
+                    ve_map=self._seed_ve_table.copy(),  # Exact 1:1 PVV values
+                    uncertainty_map=unc_map,
+                    confidence_map=conf_map,
+                    predict_time_ms=elapsed,
+                )
+
+        # Guard: sklearn 1.8+ can leave GPR without alpha_ after fit in edge cases
+        if not hasattr(self._gp_model, "alpha_") or self._gp_model.alpha_ is None:
+            logger.warning("GP model not properly fitted (missing alpha_); returning prior")
+            elapsed = (time.time() - t0) * 1000
+            unc_map = np.full((n_rpm, n_map), 10.0)
+            return FullMapPrediction(
+                ve_map=np.zeros((n_rpm, n_map)),
+                uncertainty_map=unc_map,
+                confidence_map=_uncertainty_map_to_confidence(unc_map),
+                predict_time_ms=elapsed,
+            )
+
         # Build an (n_rpm*n_map, 2) grid without Python loops.
         rr, mm = np.meshgrid(self.rpm_bins, self.map_bins, indexing="ij")
         grid = np.stack((rr.ravel(), mm.ravel()), axis=1)
@@ -411,7 +477,6 @@ class VESurrogate:
         Template observations (pull_number == -1) are always retained in the fit
         so template priors are not lost.
         """
-        from sklearn.exceptions import ConvergenceWarning
         from sklearn.gaussian_process import GaussianProcessRegressor
         from sklearn.gaussian_process.kernels import Matern, WhiteKernel
 
@@ -439,25 +504,14 @@ class VESurrogate:
 
         X_norm = self._normalize(X)
 
-        # Warm-start: reuse optimized kernel hyperparameters from previous fit.
-        # This dramatically reduces fit time for incremental updates.
-        # Bounds for normalized [0,1] RPM/MAP: wide enough to avoid sklearn
-        # ConvergenceWarnings when optimal hits boundary (small noise / smooth scale).
+        # Create fresh kernel for each fit
+        # Note: Warm-start kernel copying causes issues with sklearn 1.8+
+        # (missing alpha_ attribute after prediction). Fresh fit is fast enough
+        # with sklearn 1.8.0 and avoids compatibility issues.
+        kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
+            noise_level=0.1
+        )
         n_restarts = 2
-        if self._gp_model is not None and self.is_fitted and hasattr(self._gp_model, "kernel_"):
-            import copy
-
-            kernel = copy.deepcopy(self._gp_model.kernel_)
-            n_restarts = 0
-        else:
-            kernel = (
-                Matern(
-                    nu=2.5,
-                    length_scale=[0.3, 0.3],
-                    length_scale_bounds=(1e-3, 10.0),
-                )
-                + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 2.0))
-            )
 
         self._gp_model = GaussianProcessRegressor(
             kernel=kernel,
@@ -465,9 +519,7 @@ class VESurrogate:
             alpha=0.05,
             normalize_y=True,
         )
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ConvergenceWarning)
-            self._gp_model.fit(X_norm, y)
+        self._gp_model.fit(X_norm, y)
         self.is_fitted = True
         self._stale = False
 
