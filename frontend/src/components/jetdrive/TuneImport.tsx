@@ -530,6 +530,86 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                                         )}
                                     </div>
                                 </div>
+                                
+                                {/* Validation Warnings */}
+                                {importedPVV.validationWarnings && (
+                                    <>
+                                        {/* Grid Warnings */}
+                                        {importedPVV.validationWarnings.grid && importedPVV.validationWarnings.grid.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-blue-400 space-y-1">
+                                                    <div className="font-medium">Grid Validation:</div>
+                                                    {importedPVV.validationWarnings.grid.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-blue-300">
+                                                            <span className="text-blue-400">ℹ</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Bin Warnings */}
+                                        {importedPVV.validationWarnings.bins && importedPVV.validationWarnings.bins.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-amber-400 space-y-1">
+                                                    <div className="font-medium">Bin Validation:</div>
+                                                    {importedPVV.validationWarnings.bins.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-amber-300">
+                                                            <span className="text-amber-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Value Warnings */}
+                                        {importedPVV.validationWarnings.values && importedPVV.validationWarnings.values.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-amber-400 space-y-1">
+                                                    <div className="font-medium">Value Validation:</div>
+                                                    {importedPVV.validationWarnings.values.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-amber-300">
+                                                            <span className="text-amber-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Quality Warnings */}
+                                        {importedPVV.validationWarnings.quality && importedPVV.validationWarnings.quality.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-orange-400 space-y-1">
+                                                    <div className="font-medium">Data Quality:</div>
+                                                    {importedPVV.validationWarnings.quality.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-orange-300">
+                                                            <span className="text-orange-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Comparison Warnings */}
+                                        {importedPVV.validationWarnings.comparison && importedPVV.validationWarnings.comparison.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-purple-400 space-y-1">
+                                                    <div className="font-medium">Table Comparison:</div>
+                                                    {importedPVV.validationWarnings.comparison.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-purple-300">
+                                                            <span className="text-purple-400">ℹ</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                             
                             {/* Preview Data Toggle */}

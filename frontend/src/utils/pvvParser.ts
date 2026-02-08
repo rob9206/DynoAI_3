@@ -51,7 +51,380 @@ export interface ParsedPVV {
     inferredEngineFamily?: string;
     allTables: Map<string, PVVTable>;
     parseErrors: string[];
+    /** Structured validation warnings by category */
+    validationWarnings?: {
+        grid?: string[];
+        values?: string[];
+        bins?: string[];
+        quality?: string[];
+        comparison?: string[];
+    };
+    /** Table selection scores for debugging */
+    tableScores?: Map<string, number>;
 }
+
+// Validation result interfaces
+interface GridValidation {
+    isValid: boolean;
+    warnings: string[];
+}
+
+interface ValueValidation {
+    isValid: boolean;
+    warnings: string[];
+    outliers: Array<{rpm: number, map: number, value: number}>;
+}
+
+interface BinValidation {
+    isValid: boolean;
+    warnings: string[];
+    duplicates: number[];
+}
+
+interface QualityCheck {
+    hasNaN: boolean;
+    hasInfinity: boolean;
+    hasNegative: boolean;
+    zeroPercent: number;
+    warnings: string[];
+}
+
+interface VECandidate {
+    table: PVVTable;
+    score: number;
+    reasons: string[];
+}
+
+// ============================================================================
+// Validation Functions
+// ============================================================================
+
+/**
+ * Validate grid dimensions for a PVV table
+ */
+function validateGridDimensions(table: PVVTable): GridValidation {
+    const warnings: string[] = [];
+    const rows = table.rows.length;
+    const cols = table.columns.length;
+    
+    // Check minimum grid size
+    if (rows < 5 || cols < 5) {
+        warnings.push(`Grid too small: ${rows}×${cols}. Minimum recommended: 5×5`);
+    }
+    
+    // Check maximum grid size
+    if (rows > 50 || cols > 50) {
+        warnings.push(`Grid unusually large: ${rows}×${cols}. May cause performance issues.`);
+    }
+    
+    // Check if rectangular
+    const allRowsSameLength = table.values.every(row => row.length === cols);
+    if (!allRowsSameLength) {
+        warnings.push(`Grid is not rectangular. Some rows have inconsistent column counts.`);
+    }
+    
+    // Common Harley ECU patterns (17 MAP bins × 21 RPM bins is typical)
+    const isCommonPattern = (rows === 21 && cols === 17) || 
+                           (rows === 27 && cols === 17) ||
+                           (rows === 13 && cols === 13);
+    if (!isCommonPattern && rows > 10 && cols > 10) {
+        warnings.push(`Uncommon grid size: ${rows}×${cols}. Expected patterns: 21×17, 27×17, or 13×13`);
+    }
+    
+    return { isValid: warnings.length === 0, warnings };
+}
+
+/**
+ * Validate VE values are within reasonable range
+ */
+function validateVEValues(table: PVVTable): ValueValidation {
+    const warnings: string[] = [];
+    const outliers: Array<{rpm: number, map: number, value: number}> = [];
+    
+    // Based on gp_surrogate.py: VE range 35-135% is reasonable
+    const MIN_VE = 35;
+    const MAX_VE = 135;
+    const WARN_MIN_VE = 50;  // Warn below this
+    const WARN_MAX_VE = 120; // Warn above this
+    
+    let minVE = Infinity;
+    let maxVE = -Infinity;
+    let invalidCount = 0;
+    
+    table.values.forEach((row, rIdx) => {
+        row.forEach((value, cIdx) => {
+            if (!Number.isFinite(value)) {
+                invalidCount++;
+                return;
+            }
+            
+            minVE = Math.min(minVE, value);
+            maxVE = Math.max(maxVE, value);
+            
+            // Track extreme outliers
+            if (value < MIN_VE || value > MAX_VE) {
+                outliers.push({
+                    rpm: table.rows[rIdx],
+                    map: table.columns[cIdx],
+                    value
+                });
+            }
+        });
+    });
+    
+    if (invalidCount > 0) {
+        warnings.push(`Found ${invalidCount} invalid/NaN VE values`);
+    }
+    
+    if (minVE < WARN_MIN_VE) {
+        warnings.push(`Unusually low VE values detected (min: ${minVE.toFixed(1)}%). Normal range: 50-120%`);
+    }
+    
+    if (maxVE > WARN_MAX_VE) {
+        warnings.push(`Unusually high VE values detected (max: ${maxVE.toFixed(1)}%). Normal range: 50-120%`);
+    }
+    
+    if (outliers.length > 0) {
+        warnings.push(`${outliers.length} VE values outside safe range (35-135%). May indicate data corruption.`);
+    }
+    
+    return { isValid: warnings.length === 0, warnings, outliers };
+}
+
+/**
+ * Validate AFR values are within reasonable range
+ */
+function validateAFRValues(table: PVVTable): ValueValidation {
+    const warnings: string[] = [];
+    const outliers: Array<{rpm: number, map: number, value: number}> = [];
+    
+    // Based on physics_constraints.py: AFR 11.0-16.0 is reasonable, 12.2-13.2 for WOT
+    const MIN_AFR = 11.0;
+    const MAX_AFR = 16.0;
+    const WARN_MIN_AFR = 11.5;
+    const WARN_MAX_AFR = 15.0;
+    
+    let minAFR = Infinity;
+    let maxAFR = -Infinity;
+    
+    table.values.forEach((row, rIdx) => {
+        row.forEach((value, cIdx) => {
+            if (!Number.isFinite(value)) return;
+            
+            minAFR = Math.min(minAFR, value);
+            maxAFR = Math.max(maxAFR, value);
+            
+            if (value < MIN_AFR || value > MAX_AFR) {
+                outliers.push({
+                    rpm: table.rows[rIdx],
+                    map: table.columns[cIdx],
+                    value
+                });
+            }
+        });
+    });
+    
+    if (minAFR < WARN_MIN_AFR) {
+        warnings.push(`Very rich AFR detected (min: ${minAFR.toFixed(1)}). Below ${WARN_MIN_AFR} may cause fouling.`);
+    }
+    
+    if (maxAFR > WARN_MAX_AFR) {
+        warnings.push(`Very lean AFR detected (max: ${maxAFR.toFixed(1)}). Above ${WARN_MAX_AFR} may cause overheating.`);
+    }
+    
+    if (outliers.length > 0) {
+        warnings.push(`${outliers.length} AFR values outside safe range (${MIN_AFR}-${MAX_AFR})`);
+    }
+    
+    return { isValid: warnings.length === 0, warnings, outliers };
+}
+
+/**
+ * Validate bin values are in ascending order
+ */
+function validateBinMonotonicity(bins: number[], binType: 'RPM' | 'MAP'): BinValidation {
+    const warnings: string[] = [];
+    const duplicates: number[] = [];
+    
+    // Check ascending order
+    for (let i = 0; i < bins.length - 1; i++) {
+        if (bins[i] >= bins[i + 1]) {
+            if (bins[i] === bins[i + 1]) {
+                duplicates.push(bins[i]);
+            } else {
+                warnings.push(`${binType} bins not in ascending order at index ${i}: ${bins[i]} >= ${bins[i + 1]}`);
+            }
+        }
+    }
+    
+    if (duplicates.length > 0) {
+        warnings.push(`${binType} has ${duplicates.length} duplicate values: ${duplicates.slice(0, 5).join(', ')}${duplicates.length > 5 ? '...' : ''}`);
+    }
+    
+    // Check for unusual gaps
+    const gaps: number[] = [];
+    for (let i = 0; i < bins.length - 1; i++) {
+        gaps.push(bins[i + 1] - bins[i]);
+    }
+    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const largeGaps = gaps.filter(g => g > avgGap * 3);
+    
+    if (largeGaps.length > 0) {
+        warnings.push(`${binType} has ${largeGaps.length} unusually large gaps (>3× average spacing)`);
+    }
+    
+    return { isValid: warnings.length === 0, warnings, duplicates };
+}
+
+/**
+ * Score a VE table for smart selection when multiple candidates exist
+ */
+function scoreVETable(table: PVVTable): VECandidate {
+    const nameLower = table.name.toLowerCase();
+    let score = 0;
+    const reasons: string[] = [];
+    
+    // Prefer MAP-based (highest priority)
+    const isMapBased = nameLower.includes('map') || 
+                      table.columnUnits.toLowerCase().includes('kilopascal');
+    const isTpsBased = nameLower.includes('tps') || table.columnUnits === '%';
+    
+    if (isMapBased) {
+        score += 100;
+        reasons.push('MAP-based (preferred)');
+    } else if (isTpsBased) {
+        score -= 50;
+        reasons.push('TPS-based (not preferred)');
+    }
+    
+    // Prefer larger grids (more resolution)
+    const gridSize = table.rows.length * table.columns.length;
+    if (gridSize > 300) {
+        score += 20;
+        reasons.push('High resolution grid');
+    } else if (gridSize < 100) {
+        score -= 10;
+        reasons.push('Low resolution grid');
+    }
+    
+    // Prefer tables with variance (actually tuned vs stock/zeros)
+    const allValues = table.values.flat();
+    const mean = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+    const variance = allValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allValues.length;
+    const stdDev = Math.sqrt(variance);
+    
+    if (stdDev > 10) {
+        score += 10;
+        reasons.push('Has variance (tuned)');
+    } else if (stdDev < 2) {
+        score -= 20;
+        reasons.push('Low variance (may be stock/untuned)');
+    }
+    
+    // Check for mostly zeros
+    const zeroCount = allValues.filter(v => v === 0).length;
+    const zeroPercent = (zeroCount / allValues.length) * 100;
+    if (zeroPercent > 50) {
+        score -= 30;
+        reasons.push(`${zeroPercent.toFixed(0)}% zeros (suspicious)`);
+    }
+    
+    return { table, score, reasons };
+}
+
+/**
+ * Check data quality of a table
+ */
+function checkDataQuality(table: PVVTable, expectedRange: [number, number]): QualityCheck {
+    const warnings: string[] = [];
+    let nanCount = 0;
+    let infCount = 0;
+    let negCount = 0;
+    let zeroCount = 0;
+    let totalCells = 0;
+    
+    table.values.forEach(row => {
+        row.forEach(value => {
+            totalCells++;
+            if (Number.isNaN(value)) nanCount++;
+            else if (!Number.isFinite(value)) infCount++;
+            else if (value < 0) negCount++;
+            else if (value === 0) zeroCount++;
+        });
+    });
+    
+    const zeroPercent = (zeroCount / totalCells) * 100;
+    
+    if (nanCount > 0) {
+        warnings.push(`Table contains ${nanCount} NaN values`);
+    }
+    if (infCount > 0) {
+        warnings.push(`Table contains ${infCount} Infinity values`);
+    }
+    if (negCount > 0) {
+        warnings.push(`Table contains ${negCount} negative values (unexpected for VE/AFR)`);
+    }
+    if (zeroPercent > 20) {
+        warnings.push(`${zeroPercent.toFixed(1)}% of cells are zero (may indicate incomplete tune)`);
+    }
+    
+    return {
+        hasNaN: nanCount > 0,
+        hasInfinity: infCount > 0,
+        hasNegative: negCount > 0,
+        zeroPercent,
+        warnings
+    };
+}
+
+/**
+ * Compare front and rear VE tables for suspicious differences
+ */
+function compareFrontRearTables(front: PVVTable, rear: PVVTable): string[] {
+    const warnings: string[] = [];
+    
+    // Check if same dimensions
+    if (front.rows.length !== rear.rows.length || 
+        front.columns.length !== rear.columns.length) {
+        warnings.push('Front and rear VE tables have different dimensions');
+        return warnings;
+    }
+    
+    // Calculate average difference
+    let sumDiff = 0;
+    let maxDiff = 0;
+    let cellCount = 0;
+    
+    front.values.forEach((row, rIdx) => {
+        row.forEach((fVal, cIdx) => {
+            const rVal = rear.values[rIdx]?.[cIdx];
+            if (rVal !== undefined && Number.isFinite(fVal) && Number.isFinite(rVal)) {
+                const diff = Math.abs(fVal - rVal);
+                sumDiff += diff;
+                maxDiff = Math.max(maxDiff, diff);
+                cellCount++;
+            }
+        });
+    });
+    
+    const avgDiff = sumDiff / cellCount;
+    
+    // Warn if tables are very different (may indicate wrong tables selected)
+    if (avgDiff > 15) {
+        warnings.push(`Front/rear VE tables differ significantly (avg: ${avgDiff.toFixed(1)}%). Verify correct tables selected.`);
+    }
+    
+    // Warn if tables are identical (suspicious for V-twin)
+    if (avgDiff < 0.5 && maxDiff < 1) {
+        warnings.push('Front and rear VE tables are nearly identical (unusual for V-twin)');
+    }
+    
+    return warnings;
+}
+
+// ============================================================================
+// Main Parser
+// ============================================================================
 
 /**
  * Parse a Power Vision PVV XML file
@@ -60,6 +433,14 @@ export function parsePVV(xmlContent: string): ParsedPVV {
     const result: ParsedPVV = {
         allTables: new Map(),
         parseErrors: [],
+        validationWarnings: {
+            grid: [],
+            values: [],
+            bins: [],
+            quality: [],
+            comparison: [],
+        },
+        tableScores: new Map(),
     };
 
     try {
@@ -169,6 +550,20 @@ export function parsePVV(xmlContent: string): ParsedPVV {
             }
             // Log what we selected for debugging
             console.log('[pvvParser] Selected VE Front table:', result.veFront.name);
+            
+            // Validate front VE table
+            const gridVal = validateGridDimensions(result.veFront);
+            result.validationWarnings.grid?.push(...gridVal.warnings);
+            
+            const binValRpm = validateBinMonotonicity(result.veFront.rows, 'RPM');
+            const binValMap = validateBinMonotonicity(result.veFront.columns, 'MAP');
+            result.validationWarnings.bins?.push(...binValRpm.warnings, ...binValMap.warnings);
+            
+            const valueVal = validateVEValues(result.veFront);
+            result.validationWarnings.values?.push(...valueVal.warnings);
+            
+            const qualityVal = checkDataQuality(result.veFront, [35, 135]);
+            result.validationWarnings.quality?.push(...qualityVal.warnings);
         }
 
         if (result.veRear) {
@@ -179,7 +574,53 @@ export function parsePVV(xmlContent: string): ParsedPVV {
                 );
             }
             console.log('[pvvParser] Selected VE Rear table:', result.veRear.name);
+            
+            // Validate rear VE table
+            const gridVal = validateGridDimensions(result.veRear);
+            result.validationWarnings.grid?.push(...gridVal.warnings);
+            
+            const binValRpm = validateBinMonotonicity(result.veRear.rows, 'RPM');
+            const binValMap = validateBinMonotonicity(result.veRear.columns, 'MAP');
+            result.validationWarnings.bins?.push(...binValRpm.warnings, ...binValMap.warnings);
+            
+            const valueVal = validateVEValues(result.veRear);
+            result.validationWarnings.values?.push(...valueVal.warnings);
+            
+            const qualityVal = checkDataQuality(result.veRear, [35, 135]);
+            result.validationWarnings.quality?.push(...qualityVal.warnings);
         }
+        
+        // Compare front and rear tables if both exist
+        if (result.veFront && result.veRear) {
+            const comparisonWarnings = compareFrontRearTables(result.veFront, result.veRear);
+            result.validationWarnings.comparison?.push(...comparisonWarnings);
+        }
+        
+        // Validate AFR table if present
+        if (result.afrTarget) {
+            const gridVal = validateGridDimensions(result.afrTarget);
+            result.validationWarnings.grid?.push(...gridVal.warnings);
+            
+            const binValRpm = validateBinMonotonicity(result.afrTarget.rows, 'RPM');
+            const binValMap = validateBinMonotonicity(result.afrTarget.columns, 'MAP');
+            result.validationWarnings.bins?.push(...binValRpm.warnings, ...binValMap.warnings);
+            
+            const valueVal = validateAFRValues(result.afrTarget);
+            result.validationWarnings.values?.push(...valueVal.warnings);
+            
+            const qualityVal = checkDataQuality(result.afrTarget, [11, 16]);
+            result.validationWarnings.quality?.push(...qualityVal.warnings);
+        }
+        
+        // Collect all validation warnings into parseErrors for backwards compatibility
+        const allValidationWarnings = [
+            ...(result.validationWarnings.grid || []),
+            ...(result.validationWarnings.values || []),
+            ...(result.validationWarnings.bins || []),
+            ...(result.validationWarnings.quality || []),
+            ...(result.validationWarnings.comparison || []),
+        ];
+        result.parseErrors.push(...allValidationWarnings);
 
     } catch (e) {
         result.parseErrors.push(`Failed to parse PVV: ${e}`);
