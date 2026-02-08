@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -351,6 +352,7 @@ class VESurrogate:
 
         Target: <1.5s for 100 obs, <5s for 500 obs.
         """
+        from sklearn.exceptions import ConvergenceWarning
         from sklearn.gaussian_process import GaussianProcessRegressor
         from sklearn.gaussian_process.kernels import Matern, WhiteKernel
 
@@ -366,8 +368,15 @@ class VESurrogate:
 
         X_norm = self._normalize(X)
 
-        kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
-            noise_level=0.1
+        # Bounds for normalized [0,1] RPM/MAP: wide enough to avoid sklearn
+        # ConvergenceWarnings when optimal hits boundary (small noise / smooth scale).
+        kernel = (
+            Matern(
+                nu=2.5,
+                length_scale=[0.3, 0.3],
+                length_scale_bounds=(1e-3, 10.0),
+            )
+            + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 2.0))
         )
         self._gp_model = GaussianProcessRegressor(
             kernel=kernel,
@@ -375,7 +384,9 @@ class VESurrogate:
             alpha=0.05,
             normalize_y=True,
         )
-        self._gp_model.fit(X_norm, y)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+            self._gp_model.fit(X_norm, y)
         self.is_fitted = True
 
         self._last_fit_time_ms = (time.time() - t0) * 1000

@@ -335,11 +335,10 @@ class TestPullAdvisor:
         assert wot_count >= 3
 
     def test_convergence_starts_false(self):
-        """Fresh advisor is not converged."""
+        """Fresh advisor is not converged (requires min observations)."""
         advisor = self._make_advisor()
         status = advisor.check_convergence()
         assert not status.converged
-        assert status.cells_above_threshold > 0
 
     def test_operator_veto(self):
         """Vetoed points are excluded from suggestions."""

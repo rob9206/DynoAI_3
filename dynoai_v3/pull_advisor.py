@@ -249,8 +249,15 @@ class PullAdvisor:
         # Estimate remaining pulls: ~1 pull per 3 cells above threshold
         est_remaining = max(0, (above + 2) // 3)
 
+        # Require both low uncertainty and enough pulls before declaring converged
+        min_observations = 6
+        converged = (
+            max_unc < threshold
+            and len(self.surrogate.observations) >= min_observations
+        )
+
         return ConvergenceStatus(
-            converged=max_unc < threshold,
+            converged=converged,
             max_uncertainty=max_unc,
             mean_uncertainty=mean_unc,
             cells_above_threshold=above,
