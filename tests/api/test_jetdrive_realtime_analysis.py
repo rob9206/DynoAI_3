@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.services.jetdrive_realtime_analysis import (
+from api.services.jetdrive.jetdrive_realtime_analysis import (
     AFR_MAX_PLAUSIBLE,
     AFR_MIN_PLAUSIBLE,
     FROZEN_RPM_THRESHOLD_SEC,

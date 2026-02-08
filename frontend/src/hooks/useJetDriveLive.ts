@@ -98,7 +98,9 @@ export interface UseJetDriveLiveOptions {
     maxHistoryPoints?: number;
     /** Enables verbose debug logging (default: false) */
     debug?: boolean;
-    /** Prefer Server-Sent Events over polling when available (default: false) */
+    /** Prefer Server-Sent Events over polling when available (default: true).
+     *  SSE reduces latency and server load compared to polling.
+     *  Falls back to polling if SSE connection fails. */
     useSse?: boolean;
     /** When true, page is in simulator mode - hook will poll live data and keep simulator data separate from hardware */
     isSimulatorActive?: boolean;
@@ -324,7 +326,7 @@ const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'
     historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
-    useSse: false,
+    useSse: true,
     isSimulatorActive: false,
 };
 

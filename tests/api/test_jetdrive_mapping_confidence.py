@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.services.jetdrive_mapping import (
+from api.services.jetdrive.jetdrive_mapping import (
     MAPPING_DIR,
     ChannelMapping,
     MappingConfidence,
@@ -488,7 +488,7 @@ class TestPersistence:
         )
 
         # Save (using real save_mapping function)
-        with patch("api.services.jetdrive_mapping.MAPPING_DIR", tmp_path):
+        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", tmp_path):
             success = save_mapping(mapping)
             assert success
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import random
 import socket
@@ -10,6 +11,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["FALLBACK_CHANNEL_NAMES"]
 
@@ -288,28 +291,7 @@ def _resolve_iface_address(iface: str) -> str:
 
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
-    # #region agent log
-    import json as _json
-
-    _log_path = r"c:\Users\dawso\OneDrive\Documents\GitHub\DynoAI_3\.cursor\debug.log"
-    with open(_log_path, "a") as _f:
-        _f.write(
-            _json.dumps(
-                {
-                    "location": "jetdrive_client.py:_make_socket:entry",
-                    "message": "Creating socket",
-                    "data": {
-                        "iface": cfg.iface,
-                        "multicast_group": cfg.multicast_group,
-                        "port": cfg.port,
-                    },
-                    "hypothesisId": "H5",
-                    "timestamp": __import__("time").time(),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
+    logger.debug("Creating socket: iface=%s, group=%s, port=%d", cfg.iface, cfg.multicast_group, cfg.port)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     reuseport = getattr(socket, "SO_REUSEPORT", None)
@@ -318,67 +300,15 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
             sock.setsockopt(socket.SOL_SOCKET, reuseport, 1)
 
     iface_ip = _resolve_iface_address(cfg.iface)
-    # #region agent log
-    with open(_log_path, "a") as _f:
-        _f.write(
-            _json.dumps(
-                {
-                    "location": "jetdrive_client.py:_make_socket:resolved_iface",
-                    "message": "Resolved interface",
-                    "data": {"cfg_iface": cfg.iface, "resolved_ip": iface_ip},
-                    "hypothesisId": "H5",
-                    "timestamp": __import__("time").time(),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
+    logger.debug("Resolved interface: %s -> %s", cfg.iface, iface_ip)
     # On Windows, bind to 0.0.0.0 but join multicast on the specific interface
     # This allows receiving from all sources while directing multicast traffic correctly
     bind_ip = "0.0.0.0"
     try:
         sock.bind((bind_ip, cfg.port))
-        # #region agent log
-        with open(_log_path, "a") as _f:
-            _f.write(
-                _json.dumps(
-                    {
-                        "location": "jetdrive_client.py:_make_socket:bind_success",
-                        "message": "Socket bound successfully",
-                        "data": {
-                            "bind_ip": bind_ip,
-                            "iface_ip": iface_ip,
-                            "port": cfg.port,
-                        },
-                        "hypothesisId": "H5",
-                        "timestamp": __import__("time").time(),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
+        logger.debug("Socket bound: %s:%d (iface=%s)", bind_ip, cfg.port, iface_ip)
     except OSError as exc:
-        # #region agent log
-        with open(_log_path, "a") as _f:
-            _f.write(
-                _json.dumps(
-                    {
-                        "location": "jetdrive_client.py:_make_socket:bind_failed",
-                        "message": "BIND FAILED",
-                        "data": {
-                            "bind_ip": bind_ip,
-                            "iface_ip": iface_ip,
-                            "port": cfg.port,
-                            "error": str(exc),
-                            "errno": exc.errno,
-                        },
-                        "hypothesisId": "H5",
-                        "timestamp": __import__("time").time(),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
+        logger.debug("Bind failed: %s:%d error=%s", bind_ip, cfg.port, exc)
         sock.close()
         raise RuntimeError(
             f"Failed to bind JetDrive socket on {bind_ip}:{cfg.port}: {exc}"
@@ -390,46 +320,9 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(multicast_iface)
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        # #region agent log
-        with open(_log_path, "a") as _f:
-            _f.write(
-                _json.dumps(
-                    {
-                        "location": "jetdrive_client.py:_make_socket:multicast_joined",
-                        "message": "Joined multicast group",
-                        "data": {
-                            "group": cfg.multicast_group,
-                            "multicast_iface": multicast_iface,
-                            "cfg_iface": iface_ip,
-                        },
-                        "hypothesisId": "H6",
-                        "timestamp": __import__("time").time(),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
+        logger.debug("Joined multicast: group=%s iface=%s", cfg.multicast_group, multicast_iface)
     except OSError as exc:
-        # #region agent log
-        with open(_log_path, "a") as _f:
-            _f.write(
-                _json.dumps(
-                    {
-                        "location": "jetdrive_client.py:_make_socket:multicast_failed",
-                        "message": "MULTICAST JOIN FAILED",
-                        "data": {
-                            "group": cfg.multicast_group,
-                            "multicast_iface": multicast_iface,
-                            "error": str(exc),
-                            "errno": exc.errno,
-                        },
-                        "hypothesisId": "H6",
-                        "timestamp": __import__("time").time(),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
+        logger.debug("Multicast join failed: group=%s iface=%s error=%s", cfg.multicast_group, multicast_iface, exc)
         sock.close()
         raise RuntimeError(
             f"Failed to join multicast group {cfg.multicast_group} on {multicast_iface}: {exc}"

@@ -20,7 +20,7 @@ from enum import Enum
 from threading import Lock
 from typing import Any
 
-from api.services.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_client import JetDriveSample
 
 logger = logging.getLogger(__name__)
 

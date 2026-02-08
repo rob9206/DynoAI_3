@@ -8,7 +8,7 @@ Provides persistent channel mappings per provider, allowing:
 - Per-run override capability
 
 Usage:
-    from api.services.jetdrive_mapping import (
+    from api.services.jetdrive.jetdrive_mapping import (
         compute_provider_signature,
         get_mapping,
         save_mapping,
@@ -683,7 +683,7 @@ def score_channel_for_canonical(
     expected_units = CANONICAL_UNIT_TYPES.get(canonical_name, [])
     if expected_units and channel_unit in expected_units:
         score += 0.5
-        from api.services.jetdrive_client import JDUnit
+        from api.services.jetdrive.jetdrive_client import JDUnit
 
         try:
             unit_name = JDUnit(channel_unit).name

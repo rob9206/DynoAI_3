@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.services.jetdrive_client import JetDriveSample
-from api.services.jetdrive_live_queue import (
+from api.services.jetdrive.jetdrive_client import JetDriveSample
+from api.services.jetdrive.jetdrive_live_queue import (
     AGGREGATION_WINDOW_MS,
     LiveCaptureQueueManager,
     LiveCaptureQueueStats,
