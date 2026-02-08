@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from api.errors import ValidationError
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,25 @@ def _template_match_to_dict(tm) -> Optional[Dict[str, Any]]:
     }
 
 
+def _validate_bins(label: str, bins: List[float]) -> np.ndarray:
+    if not isinstance(bins, list) or len(bins) == 0:
+        raise ValidationError(f"{label} must be a non-empty list")
+    return np.array(bins, dtype=np.float64)
+
+
+def _ensure_bins_match(
+    label: str,
+    session_bins: np.ndarray,
+    provided_bins: np.ndarray,
+    *,
+    atol: float = 1e-3,
+) -> None:
+    if session_bins.shape != provided_bins.shape:
+        raise ValidationError(f"{label} bins do not match the session grid")
+    if not np.allclose(session_bins, provided_bins, atol=atol):
+        raise ValidationError(f"{label} bins do not match the session grid")
+
+
 # ---------------------------------------------------------------------------
 # Public API (called by routes)
 # ---------------------------------------------------------------------------
@@ -119,6 +140,51 @@ def list_sessions() -> List[Dict[str, Any]]:
         return [s.get_status() for s in _sessions.values()]
 
 
+def import_base_ve(
+    session_id: str,
+    ve_table: List[List[float]],
+    rpm_bins: List[float],
+    map_bins: List[float],
+) -> Dict[str, Any]:
+    """Seed the GP surrogate with an imported base VE table."""
+    from dynoai_v3.session_orchestrator import SessionState
+
+    session = _get_session(session_id)
+    if session.surrogate is None:
+        raise ValidationError("Session not initialized")
+    if session.state != SessionState.READY:
+        raise ValidationError("Base VE import is only allowed before the first pull")
+
+    if not isinstance(ve_table, list) or len(ve_table) == 0:
+        raise ValidationError("ve_table must be a non-empty 2D array")
+
+    rpm_bins_arr = _validate_bins("rpm_bins", rpm_bins)
+    map_bins_arr = _validate_bins("map_bins", map_bins)
+    _ensure_bins_match("RPM", session.surrogate.rpm_bins, rpm_bins_arr)
+    _ensure_bins_match("MAP", session.surrogate.map_bins, map_bins_arr)
+
+    ve_array = np.array(ve_table, dtype=np.float64)
+    if ve_array.ndim != 2:
+        raise ValidationError("ve_table must be a 2D array")
+
+    # Replace any template observations with the imported base VE table.
+    session.surrogate.observations = []
+    session.surrogate.template_observation_count = 0
+    session.surrogate.is_fitted = False
+    session.surrogate._gp_model = None
+
+    session.surrogate.seed_from_template(
+        ve_array,
+        rpm_bins_arr,
+        map_bins_arr,
+    )
+
+    return {
+        "status": "seeded",
+        "observations_added": session.surrogate.template_observation_count,
+    }
+
+
 def ingest_pull(
     session_id: str,
     rpm: List[float],
@@ -134,6 +200,78 @@ def ingest_pull(
     )
     return {
         "pull_number": result.pull_number,
+        "observations_added": result.observations_added,
+        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
+        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+    }
+
+
+def import_corrections(
+    session_id: str,
+    corrections: List[List[float]],
+    rpm_bins: List[float],
+    map_bins: List[float],
+    fmt: str,
+) -> Dict[str, Any]:
+    """Import correction grid into the session as synthetic observations."""
+    from dynoai_v3.session_orchestrator import SessionState
+
+    session = _get_session(session_id)
+    if session.surrogate is None:
+        raise ValidationError("Session not initialized")
+    if session.state == SessionState.COMPLETE:
+        raise ValidationError("Corrections cannot be imported after completion")
+
+    if fmt not in ("multiplier", "percentage"):
+        raise ValidationError("format must be 'multiplier' or 'percentage'")
+    if not isinstance(corrections, list) or len(corrections) == 0:
+        raise ValidationError("corrections must be a non-empty 2D array")
+
+    rpm_bins_arr = _validate_bins("rpm_bins", rpm_bins)
+    map_bins_arr = _validate_bins("map_bins", map_bins)
+    _ensure_bins_match("RPM", session.surrogate.rpm_bins, rpm_bins_arr)
+    _ensure_bins_match("MAP", session.surrogate.map_bins, map_bins_arr)
+
+    corr_array = np.array(corrections, dtype=np.float64)
+    if corr_array.ndim != 2:
+        raise ValidationError("corrections must be a 2D array")
+
+    rpm_values: List[float] = []
+    map_values: List[float] = []
+    ve_deltas: List[float] = []
+
+    for r_idx, rpm in enumerate(rpm_bins_arr):
+        for m_idx, map_kpa in enumerate(map_bins_arr):
+            if r_idx >= corr_array.shape[0] or m_idx >= corr_array.shape[1]:
+                continue
+            raw = float(corr_array[r_idx, m_idx])
+            if fmt == "multiplier":
+                delta_pct = (raw - 1.0) * 100.0
+            else:
+                delta_pct = raw
+
+            if abs(delta_pct) < 1e-6:
+                continue
+
+            rpm_values.append(float(rpm))
+            map_values.append(float(map_kpa))
+            ve_deltas.append(delta_pct)
+
+    if len(ve_deltas) == 0:
+        return {
+            "status": "imported",
+            "observations_added": 0,
+            "convergence": _convergence_to_dict(session._convergence) if session._convergence else None,
+        }
+
+    result = session.ingest_pull(
+        np.array(rpm_values, dtype=np.float64),
+        np.array(map_values, dtype=np.float64),
+        np.array(ve_deltas, dtype=np.float64),
+    )
+
+    return {
+        "status": "imported",
         "observations_added": result.observations_added,
         "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
         "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
@@ -302,7 +440,8 @@ def simulate_pull_realistic(
         "m8_117": EngineProfile.m8_114,
         "m8_131": EngineProfile.m8_131,
         "evo_1200": EngineProfile.twin_cam_103,
-        "revmax_1250": EngineProfile.m8_131,
+        "revmax_975": EngineProfile.revmax_975,
+        "revmax_1250": EngineProfile.revmax_1250,
     }
     profile_fn = _PROFILE_MAP.get(session.config.engine_family, EngineProfile.m8_114)
     profile = profile_fn()

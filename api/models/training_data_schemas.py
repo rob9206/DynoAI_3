@@ -35,6 +35,7 @@ class EngineFamily(str, Enum):
     MILWAUKEE_EIGHT = "milwaukee_eight"  # M8 107/114/117 (2017+)
     EVOLUTION = "evolution"  # Evo 80/88 (1984-1999)
     REVOLUTION = "revolution"  # V-Rod (2001-2017)
+    REVOLUTION_MAX = "revolution_max"  # RevMax 975/1250 (2021+)
     SPORTSTER = "sportster"  # 883/1200 (1986+)
 
 

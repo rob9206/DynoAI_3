@@ -90,6 +90,61 @@ def ingest_pull(session_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Imports (base VE + corrections)
+# ---------------------------------------------------------------------------
+
+@v3_session_bp.route("/session/<session_id>/import-ve", methods=["POST"])
+@with_error_handling
+def import_base_ve(session_id: str):
+    """Import a base VE table and seed the GP surrogate."""
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body required (base VE import)")
+
+    for field in ("ve_table", "rpm_bins", "map_bins"):
+        if field not in data:
+            raise ValidationError(f"'{field}' is required")
+
+    from api.services.v3_session_service import import_base_ve as _import
+    try:
+        result = _import(
+            session_id,
+            ve_table=data["ve_table"],
+            rpm_bins=data["rpm_bins"],
+            map_bins=data["map_bins"],
+        )
+    except KeyError:
+        raise NotFoundError(resource="V3 Session", identifier=session_id)
+    return jsonify(result)
+
+
+@v3_session_bp.route("/session/<session_id>/import-corrections", methods=["POST"])
+@with_error_handling
+def import_corrections(session_id: str):
+    """Import correction grid into an active session."""
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body required (corrections import)")
+
+    for field in ("corrections", "rpm_bins", "map_bins", "format"):
+        if field not in data:
+            raise ValidationError(f"'{field}' is required")
+
+    from api.services.v3_session_service import import_corrections as _import
+    try:
+        result = _import(
+            session_id,
+            corrections=data["corrections"],
+            rpm_bins=data["rpm_bins"],
+            map_bins=data["map_bins"],
+            fmt=data["format"],
+        )
+    except KeyError:
+        raise NotFoundError(resource="V3 Session", identifier=session_id)
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
 # Finalize
 # ---------------------------------------------------------------------------
 

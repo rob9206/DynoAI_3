@@ -284,6 +284,54 @@ class EngineProfile:
         )
 
     @classmethod
+    def revmax_1250(cls) -> "EngineProfile":
+        """Revolution Max 1250 (Sportster S / Pan America)."""
+        return cls(
+            name="RevMax 1250",
+            family="RevMax",
+            displacement_ci=76.4,  # 1252 cc
+            idle_rpm=1000.0,
+            redline_rpm=9500.0,
+            max_hp=121.0,
+            hp_peak_rpm=7500.0,
+            max_tq=92.0,
+            tq_peak_rpm=6000.0,
+            target_afr_wot=12.2,
+            num_cylinders=2,
+            bore_inches=4.13,  # 105 mm
+            stroke_inches=2.83,  # 72 mm
+            compression_ratio=12.0,
+            engine_inertia=0.70,
+            dyno_inertia=3.0,
+            mechanical_efficiency=0.88,
+            volumetric_efficiency_peak=0.92,
+        )
+
+    @classmethod
+    def revmax_975(cls) -> "EngineProfile":
+        """Revolution Max 975T (Nightster)."""
+        return cls(
+            name="RevMax 975",
+            family="RevMax",
+            displacement_ci=59.5,  # 975 cc
+            idle_rpm=1000.0,
+            redline_rpm=9000.0,
+            max_hp=90.0,
+            hp_peak_rpm=7500.0,
+            max_tq=70.0,
+            tq_peak_rpm=5500.0,
+            target_afr_wot=12.2,
+            num_cylinders=2,
+            bore_inches=3.82,  # ~97 mm
+            stroke_inches=2.60,  # ~66 mm
+            compression_ratio=12.0,
+            engine_inertia=0.65,
+            dyno_inertia=2.8,
+            mechanical_efficiency=0.87,
+            volumetric_efficiency_peak=0.90,
+        )
+
+    @classmethod
     def sportbike_600(cls) -> "EngineProfile":
         """Sport bike 600cc profile."""
         return cls(

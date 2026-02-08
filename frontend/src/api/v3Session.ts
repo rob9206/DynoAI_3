@@ -125,6 +125,19 @@ export interface PullData {
   ve: number[];
 }
 
+export interface ImportVERequest {
+  ve_table: number[][];
+  rpm_bins: number[];
+  map_bins: number[];
+}
+
+export interface ImportCorrectionsRequest {
+  corrections: number[][];
+  rpm_bins: number[];
+  map_bins: number[];
+  format: "multiplier" | "percentage";
+}
+
 export interface FinalizeRequest {
   ve_table_front: number[][];
   operator?: string;
@@ -176,6 +189,18 @@ export interface AutoSimulateResult {
   pull_summary: AutoSimulatePullSummary[];
 }
 
+export interface ImportBaseVEResult {
+  status: string;
+  observations_added: number;
+}
+
+export interface ImportCorrectionsResult {
+  status: string;
+  observations_added: number;
+  convergence: ConvergenceStatus | null;
+  next_suggestion?: PullRecommendation | null;
+}
+
 // ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------
@@ -212,12 +237,34 @@ export async function ingestPull(
   return response.data;
 }
 
+export async function importBaseVE(
+  sessionId: string,
+  data: ImportVERequest
+): Promise<ImportBaseVEResult> {
+  const response = await api.post<ImportBaseVEResult>(
+    `/api/v3/session/${encodePathSegment(sessionId)}/import-ve`,
+    data
+  );
+  return response.data;
+}
+
 export async function finalizeSession(
   sessionId: string,
   data: FinalizeRequest
 ): Promise<FinalResult> {
   const response = await api.post<FinalResult>(
     `/api/v3/session/${encodePathSegment(sessionId)}/finalize`,
+    data
+  );
+  return response.data;
+}
+
+export async function importCorrections(
+  sessionId: string,
+  data: ImportCorrectionsRequest
+): Promise<ImportCorrectionsResult> {
+  const response = await api.post<ImportCorrectionsResult>(
+    `/api/v3/session/${encodePathSegment(sessionId)}/import-corrections`,
     data
   );
   return response.data;
