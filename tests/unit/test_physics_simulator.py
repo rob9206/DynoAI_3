@@ -5,6 +5,7 @@ Validates that physics improvements work correctly.
 """
 
 import time
+
 import pytest
 
 from api.services.simulation.dyno_simulator import (

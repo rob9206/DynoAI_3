@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # In-memory session store (thread-safe)
 # ---------------------------------------------------------------------------
-_sessions: Dict[str, Any] = {}          # session_id → TuningSession
+_sessions: Dict[str, Any] = {}  # session_id → TuningSession
 _sessions_lock = threading.Lock()
 
 _TEMPLATES_DIR = Path("data/v3_templates")
@@ -51,7 +51,11 @@ def _rec_to_dict(rec) -> Dict[str, Any]:
         "map_kpa": rec.map_kpa,
         "gear": rec.gear,
         "pull_number": rec.pull_number,
-        "pull_type": rec.pull_type.value if hasattr(rec.pull_type, "value") else str(rec.pull_type),
+        "pull_type": (
+            rec.pull_type.value
+            if hasattr(rec.pull_type, "value")
+            else str(rec.pull_type)
+        ),
         "reason": rec.reason,
         "expected_info_gain": rec.expected_info_gain,
         "remaining_uncertainty": rec.remaining_uncertainty,
@@ -105,21 +109,22 @@ def _ensure_bins_match(
 # Public API (called by routes)
 # ---------------------------------------------------------------------------
 
+
 def _import_ve_table_to_delta(table: List[List[float]]) -> Optional[np.ndarray]:
     """
     Convert imported VE table to absolute VE percentages.
 
     Power Vision PVV stores absolute VE as percentages (70-113%). Templates may store
     correction factors (~0.5-1.5). This function normalizes both to absolute VE %.
-    
+
     Note: Despite the function name, this now returns absolute VE values, not deltas.
     The GP model predicts absolute VE percentages directly.
-    
+
     Returns:
         Absolute VE array (70-113%), or None if table is all zeros (invalid import)
     """
     arr = np.asarray(table, dtype=np.float64)
-    
+
     # Debug logging
     logger.info(
         "Import VE conversion: shape=%s, min=%.2f, max=%.2f, mean=%.2f, sample(top-left 3x3)=%s",
@@ -129,42 +134,46 @@ def _import_ve_table_to_delta(table: List[List[float]]) -> Optional[np.ndarray]:
         np.mean(arr),
         arr[:3, :3].tolist() if arr.size > 0 else "empty",
     )
-    
+
     # Skip all-zero table (failed parse)
     if np.all(arr == 0):
         logger.warning("Imported VE table is all zeros; skipping seed")
         return None
-    
+
     # If values are large (> 2), treat as absolute VE percentages (70-113%)
     if np.max(np.abs(arr)) > 2.0:
         logger.info(
             "Treating as absolute VE %% (values > 2): min=%.2f, max=%.2f, mean=%.2f",
-            np.min(arr), np.max(arr), np.mean(arr),
+            np.min(arr),
+            np.max(arr),
+            np.mean(arr),
         )
         return arr  # Return absolute VE values directly
-    
+
     # If values are small (<= 2), treat as correction factors (0.7-1.13) → convert to %
     absolute_ve = arr * 100.0  # correction factor → absolute VE %
     logger.info(
         "Converted correction factor to absolute VE %%: min=%.2f, max=%.2f, mean=%.2f",
-        np.min(absolute_ve), np.max(absolute_ve), np.mean(absolute_ve),
+        np.min(absolute_ve),
+        np.max(absolute_ve),
+        np.mean(absolute_ve),
     )
     return absolute_ve
 
 
 def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new TuningSession, initialize it, and return status."""
-    from dynoai_v3.template_library import HardwareConfig
     from dynoai_v3.session_orchestrator import TuningSession
+    from dynoai_v3.template_library import HardwareConfig
 
     config = HardwareConfig.from_dict(config_dict)
-    
+
     # Explicit bin extraction (in case from_dict filtering drops them)
-    if config.rpm_bins is None and 'rpm_bins' in config_dict:
-        config.rpm_bins = config_dict['rpm_bins']
-    if config.map_bins is None and 'map_bins' in config_dict:
-        config.map_bins = config_dict['map_bins']
-    
+    if config.rpm_bins is None and "rpm_bins" in config_dict:
+        config.rpm_bins = config_dict["rpm_bins"]
+    if config.map_bins is None and "map_bins" in config_dict:
+        config.map_bins = config_dict["map_bins"]
+
     # Diagnostic logging to confirm PVV bins are flowing through
     logger.info(
         "Session config: engine=%s, rpm_bins=%s, map_bins=%s, has_import=%s",
@@ -173,9 +182,9 @@ def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         f"{len(config.map_bins)} bins" if config.map_bins else "None",
         bool(config_dict.get("initial_ve_table")),
     )
-    
+
     session = TuningSession(config, templates_dir=_TEMPLATES_DIR)
-    
+
     # Check if user provided an import; if so, skip template seeding
     has_import = bool(config_dict.get("initial_ve_table"))
     init = session.initialize(skip_template_seed=has_import)
@@ -187,15 +196,19 @@ def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             delta = _import_ve_table_to_delta(initial_ve)
             if delta is not None:
                 # Validate shape matches session grid
-                expected_shape = (len(session.surrogate.rpm_bins), len(session.surrogate.map_bins))
+                expected_shape = (
+                    len(session.surrogate.rpm_bins),
+                    len(session.surrogate.map_bins),
+                )
                 actual_shape = delta.shape
                 if actual_shape != expected_shape:
                     logger.warning(
                         "initial_ve_table shape %s does not match session grid %s; "
                         "will use overlapping region only",
-                        actual_shape, expected_shape,
+                        actual_shape,
+                        expected_shape,
                     )
-                
+
                 session.surrogate.seed_from_template(
                     delta,
                     session.surrogate.rpm_bins,
@@ -292,8 +305,12 @@ def ingest_pull(
     return {
         "pull_number": result.pull_number,
         "observations_added": result.observations_added,
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
     }
 
 
@@ -352,7 +369,11 @@ def import_corrections(
         return {
             "status": "imported",
             "observations_added": 0,
-            "convergence": _convergence_to_dict(session._convergence) if session._convergence else None,
+            "convergence": (
+                _convergence_to_dict(session._convergence)
+                if session._convergence
+                else None
+            ),
         }
 
     result = session.ingest_pull(
@@ -364,8 +385,12 @@ def import_corrections(
     return {
         "status": "imported",
         "observations_added": result.observations_added,
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
     }
 
 
@@ -510,8 +535,8 @@ def simulate_pull_realistic(
     from api.services.simulation.dyno_simulator import (
         DynoSimulator,
         EngineProfile,
-        SimulatorConfig,
         SimState,
+        SimulatorConfig,
     )
     from api.services.simulation.virtual_ecu import (
         VirtualECU,
@@ -558,7 +583,12 @@ def simulate_pull_realistic(
     rpm_bins_int = tuple(int(r) for r in rpm_bins)
     map_bins_int = tuple(int(m) for m in map_bins)
     displacement_ci = float(session.config.displacement_ci or 114)
-    cache_key = (session.config.engine_family, rpm_bins_int, map_bins_int, displacement_ci)
+    cache_key = (
+        session.config.engine_family,
+        rpm_bins_int,
+        map_bins_int,
+        displacement_ci,
+    )
 
     cache = getattr(session, "_realistic_sim_cache", None)
     if not isinstance(cache, dict) or cache.get("key") != cache_key:
@@ -570,7 +600,9 @@ def simulate_pull_realistic(
         except Exception:
             pass
 
-        baseline_ve = create_baseline_ve_table(list(rpm_bins_int), list(map_bins_int), peak_ve=0.85)
+        baseline_ve = create_baseline_ve_table(
+            list(rpm_bins_int), list(map_bins_int), peak_ve=0.85
+        )
         # Seed once per session so VirtualECU interpolators can be reused.
         seed = abs(hash(getattr(session, "session_id", session_id))) % (2**31 - 1)
         wrong_ve = create_intentionally_wrong_ve_table(
@@ -665,7 +697,7 @@ def simulate_pull_realistic(
         if corrections is None:
             logger.warning("AutoTuneWorkflow produced no corrections, using quick mode")
             return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
-        
+
         # Validate corrections table shape
         expected_shape = (len(rpm_bins), len(map_bins))
         if corrections.correction_table.shape != expected_shape:
@@ -675,14 +707,16 @@ def simulate_pull_realistic(
                 expected_shape,
             )
             return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
-        
+
         logger.info(
             "AutoTuneWorkflow complete: correction range [%.3f, %.3f]",
             np.min(corrections.correction_table),
             np.max(corrections.correction_table),
         )
     except Exception as e:
-        logger.error("AutoTuneWorkflow failed: %s; falling back to quick mode", e, exc_info=True)
+        logger.error(
+            "AutoTuneWorkflow failed: %s; falling back to quick mode", e, exc_info=True
+        )
         return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
 
     # ---- 5. Convert grid corrections → per-observation VE deltas ----
@@ -706,7 +740,7 @@ def simulate_pull_realistic(
 
     r_idx = _nearest_bin_indices(rpm_arr, rpm_bins_arr)
     m_idx = _nearest_bin_indices(map_arr, map_bins_arr)
-    
+
     # Get baseline VE from the "wrong" ECU table (the one being corrected)
     # wrong_ve is stored as fractions (0.7-1.1), corrections are multipliers (~0.95-1.05)
     # GP model expects absolute VE percentages (70-113%)
@@ -724,13 +758,17 @@ def simulate_pull_realistic(
         else:
             # Convert wrong_ve fractions to percentages, then apply correction multiplier
             wrong_ve_pct = wrong_ve_baseline[r_idx, m_idx] * 100.0  # 0.85 → 85%
-            ve_values = wrong_ve_pct * corrections.correction_table[r_idx, m_idx]  # 85% * 1.05 = 89.25%
+            ve_values = (
+                wrong_ve_pct * corrections.correction_table[r_idx, m_idx]
+            )  # 85% * 1.05 = 89.25%
             logger.debug(
                 "VE conversion: wrong_ve range [%.2f, %.2f], corrected range [%.2f, %.2f]",
-                wrong_ve_pct.min(), wrong_ve_pct.max(),
-                ve_values.min(), ve_values.max(),
+                wrong_ve_pct.min(),
+                wrong_ve_pct.max(),
+                ve_values.min(),
+                ve_values.max(),
             )
-    
+
     if wrong_ve_baseline is None:
         # Fallback: assume wrong_ve was around 85% and corrections fix it
         logger.warning("No baseline VE available, using estimated absolute values")
@@ -741,25 +779,28 @@ def simulate_pull_realistic(
     # Validate VE values are in reasonable range (GP expects 35-135%)
     if not isinstance(ve_values, np.ndarray):
         ve_values = np.asarray(ve_values, dtype=np.float64)
-    
+
     if len(ve_values) == 0:
         logger.error("No VE values to ingest; falling back to quick mode")
         return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
-    
+
     # Clip extreme values to acceptable range (safety check)
     ve_min, ve_max = ve_values.min(), ve_values.max()
     if ve_min < 35 or ve_max > 135:
         logger.warning(
             "VE values outside expected range [35, 135]: [%.2f, %.2f]; clipping",
-            ve_min, ve_max,
+            ve_min,
+            ve_max,
         )
         ve_values = np.clip(ve_values, 35.0, 135.0)
-    
+
     logger.info(
         "Ingesting %d observations with VE range [%.2f, %.2f]%%",
-        len(ve_values), ve_values.min(), ve_values.max(),
+        len(ve_values),
+        ve_values.min(),
+        ve_values.max(),
     )
-    
+
     result = session.ingest_pull(rpm_arr, map_arr, ve_values)
 
     # AFR metrics for frontend display
@@ -779,7 +820,10 @@ def simulate_pull_realistic(
 
     logger.info(
         "Realistic sim pull at RPM=%.0f MAP=%.0f: %d points, %d zones corrected",
-        rpm, map_kpa, len(df), corrections.zones_adjusted,
+        rpm,
+        map_kpa,
+        len(df),
+        corrections.zones_adjusted,
     )
 
     return {
@@ -787,8 +831,12 @@ def simulate_pull_realistic(
         "observations_added": result.observations_added,
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
         "mode": "realistic",
         "afr_metrics": afr_metrics,
     }
@@ -827,7 +875,9 @@ def simulate_pull(
         map_kpa = map_kpa or rec.map_kpa
 
     # Generate synthetic data with realistic scatter
-    rng = np.random.RandomState(int(rpm + map_kpa + len(session.surrogate.observations)))
+    rng = np.random.RandomState(
+        int(rpm + map_kpa + len(session.surrogate.observations))
+    )
 
     # RPM scatter: +/- 100 RPM around target
     rpm_arr = rpm + rng.randn(n_points) * 100
@@ -849,7 +899,9 @@ def simulate_pull(
 
     logger.info(
         "Simulated pull at RPM=%.0f MAP=%.0f: %d points generated",
-        rpm, map_kpa, n_points,
+        rpm,
+        map_kpa,
+        n_points,
     )
 
     return {
@@ -857,8 +909,12 @@ def simulate_pull(
         "observations_added": result.observations_added,
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
         "mode": "quick",
         "afr_metrics": None,
     }

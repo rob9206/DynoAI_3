@@ -39,7 +39,9 @@ def extract_dynostar_overlays(
         "max_torque_rpm": None,
     }
     if Image is None:
-        logger.warning("Pillow (PIL) is not installed; curve OCR is disabled (e.g. Python 3.14 without wheel)")
+        logger.warning(
+            "Pillow (PIL) is not installed; curve OCR is disabled (e.g. Python 3.14 without wheel)"
+        )
         return results
     try:
         img = Image.open(image_path)

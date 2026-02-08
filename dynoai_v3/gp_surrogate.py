@@ -63,12 +63,12 @@ def uncertainty_to_confidence(std: float) -> float:
     Aligns with existing H/M/L/skip badge system.
     """
     if std < 0.5:
-        return 95.0   # High
+        return 95.0  # High
     if std < 1.0:
-        return 80.0   # Medium
+        return 80.0  # Medium
     if std < 2.0:
-        return 60.0   # Low
-    return 20.0        # Skip / insufficient
+        return 60.0  # Low
+    return 20.0  # Skip / insufficient
 
 
 def confidence_to_badge(confidence: float) -> str:
@@ -107,10 +107,11 @@ def _uncertainty_map_to_confidence(unc_map: NDArray[np.float64]) -> NDArray[np.f
 @dataclass
 class Observation:
     """A single measured data point from a dyno pull.
-    
+
     Note: Despite the field name 've_delta', this stores absolute VE percentage values
     (70-113%), not deltas. The naming is historical but the semantics are absolute VE.
     """
+
     rpm: float
     map_kpa: float
     ve_delta: float  # Absolute VE percentage (e.g., 85.5%)
@@ -121,9 +122,10 @@ class Observation:
 @dataclass
 class PointPrediction:
     """Prediction at a single operating point.
-    
+
     Note: ve_delta stores absolute VE percentage (70-113%), not a delta.
     """
+
     ve_delta: float  # Absolute VE percentage (e.g., 92.3%)
     uncertainty: float
     confidence: float
@@ -133,9 +135,10 @@ class PointPrediction:
 @dataclass
 class FullMapPrediction:
     """Prediction across the entire VE grid.
-    
+
     Note: ve_map contains absolute VE percentages (70-113%), not deltas.
     """
+
     ve_map: NDArray[np.float64]  # Absolute VE percentages
     uncertainty_map: NDArray[np.float64]
     confidence_map: NDArray[np.float64]
@@ -170,7 +173,7 @@ class VESurrogate:
         self.engine_family = engine_family
         self.observations: List[Observation] = []
         self.template_observation_count: int = 0
-        
+
         # Store raw seed VE table for exact 1:1 reproduction (PVV import)
         self._seed_ve_table: Optional[NDArray[np.float64]] = None
 
@@ -187,7 +190,9 @@ class VESurrogate:
 
         logger.info(
             "VESurrogate initialized: %s, %d RPM bins x %d MAP bins",
-            engine_family, len(rpm_bins), len(map_bins),
+            engine_family,
+            len(rpm_bins),
+            len(map_bins),
         )
 
     # ------------------------------------------------------------------
@@ -266,16 +271,20 @@ class VESurrogate:
             if abs(ve[i] - 85.0) > _MAX_VE_DEVIATION:
                 logger.debug(
                     "Rejected extreme VE value: %.2f%% at RPM=%.0f MAP=%.0f",
-                    ve[i], rpm[i], map_kpa[i],
+                    ve[i],
+                    rpm[i],
+                    map_kpa[i],
                 )
                 continue
-            self.observations.append(Observation(
-                rpm=float(rpm[i]),
-                map_kpa=float(map_kpa[i]),
-                ve_delta=float(ve[i]),  # Stores absolute VE %
-                pull_number=pull_number,
-                timestamp=ts,
-            ))
+            self.observations.append(
+                Observation(
+                    rpm=float(rpm[i]),
+                    map_kpa=float(map_kpa[i]),
+                    ve_delta=float(ve[i]),  # Stores absolute VE %
+                    pull_number=pull_number,
+                    timestamp=ts,
+                )
+            )
             accepted += 1
 
         if accepted > 0:
@@ -284,7 +293,8 @@ class VESurrogate:
 
         logger.info(
             "Pull data ingested: %d/%d accepted (pull #%s)",
-            accepted, len(rpm),
+            accepted,
+            len(rpm),
             pull_number if pull_number is not None else "?",
         )
         return accepted
@@ -313,10 +323,10 @@ class VESurrogate:
         template_ve = np.asarray(template_ve, dtype=np.float64)
         rpm_bins = np.asarray(rpm_bins, dtype=np.float64)
         map_bins = np.asarray(map_bins, dtype=np.float64)
-        
+
         # Store raw seed table for exact 1:1 reproduction when no real pulls exist
         self._seed_ve_table = template_ve.copy()
-        
+
         logger.info(
             "Storing seed VE table: shape=%s, min=%.1f%%, max=%.1f%%, mean=%.1f%%",
             self._seed_ve_table.shape,
@@ -330,13 +340,15 @@ class VESurrogate:
         for r_idx, rpm in enumerate(rpm_bins):
             for m_idx, map_kpa in enumerate(map_bins):
                 if r_idx < template_ve.shape[0] and m_idx < template_ve.shape[1]:
-                    self.observations.append(Observation(
-                        rpm=float(rpm),
-                        map_kpa=float(map_kpa),
-                        ve_delta=float(template_ve[r_idx, m_idx]),
-                        pull_number=-1,  # Sentinel for template data
-                        timestamp=ts,
-                    ))
+                    self.observations.append(
+                        Observation(
+                            rpm=float(rpm),
+                            map_kpa=float(map_kpa),
+                            ve_delta=float(template_ve[r_idx, m_idx]),
+                            pull_number=-1,  # Sentinel for template data
+                            timestamp=ts,
+                        )
+                    )
                     count += 1
 
         self.template_observation_count = count
@@ -346,7 +358,8 @@ class VESurrogate:
             self._stale = True
 
         logger.info(
-            "Template seeded: %d synthetic observations added", count,
+            "Template seeded: %d synthetic observations added",
+            count,
         )
 
     # ------------------------------------------------------------------
@@ -406,15 +419,17 @@ class VESurrogate:
             )
 
         # If we only have template data, return raw seed values for accuracy
-        if hasattr(self, '_seed_ve_table') and self._seed_ve_table is not None:
+        if hasattr(self, "_seed_ve_table") and self._seed_ve_table is not None:
             all_template = all(o.pull_number == -1 for o in self.observations)
             if all_template and self._seed_ve_table.shape == (n_rpm, n_map):
                 # Use constant uncertainty (no GP predict) to avoid sklearn 1.8+
                 # AttributeError when alpha_ is not set after fit
-                unc_map = np.full((n_rpm, n_map), 1.0)  # Medium uncertainty until real pulls
+                unc_map = np.full(
+                    (n_rpm, n_map), 1.0
+                )  # Medium uncertainty until real pulls
                 conf_map = _uncertainty_map_to_confidence(unc_map)
                 elapsed = (time.time() - t0) * 1000
-                
+
                 logger.info(
                     "Returning raw seed VE table (template-only, no real pulls): "
                     "shape=%s, min=%.1f%%, max=%.1f%%, mean=%.1f%%",
@@ -432,7 +447,9 @@ class VESurrogate:
 
         # Guard: sklearn 1.8+ can leave GPR without alpha_ after fit in edge cases
         if not hasattr(self._gp_model, "alpha_") or self._gp_model.alpha_ is None:
-            logger.warning("GP model not properly fitted (missing alpha_); returning prior")
+            logger.warning(
+                "GP model not properly fitted (missing alpha_); returning prior"
+            )
             elapsed = (time.time() - t0) * 1000
             unc_map = np.full((n_rpm, n_map), 10.0)
             return FullMapPrediction(
@@ -508,9 +525,7 @@ class VESurrogate:
         # Note: Warm-start kernel copying causes issues with sklearn 1.8+
         # (missing alpha_ attribute after prediction). Fresh fit is fast enough
         # with sklearn 1.8.0 and avoids compatibility issues.
-        kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
-            noise_level=0.1
-        )
+        kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(noise_level=0.1)
         n_restarts = 2
 
         self._gp_model = GaussianProcessRegressor(
@@ -570,7 +585,8 @@ class VESurrogate:
             json.dump(state, f, indent=2)
         logger.info(
             "GP state saved to %s (%d observations)",
-            path, len(self.observations),
+            path,
+            len(self.observations),
         )
 
     @classmethod
@@ -585,13 +601,15 @@ class VESurrogate:
         s.template_observation_count = state.get("template_observation_count", 0)
 
         for od in state["observations"]:
-            s.observations.append(Observation(
-                rpm=od["rpm"],
-                map_kpa=od["map_kpa"],
-                ve_delta=od["ve_delta"],
-                pull_number=od.get("pull_number"),
-                timestamp=od.get("timestamp"),
-            ))
+            s.observations.append(
+                Observation(
+                    rpm=od["rpm"],
+                    map_kpa=od["map_kpa"],
+                    ve_delta=od["ve_delta"],
+                    pull_number=od.get("pull_number"),
+                    timestamp=od.get("timestamp"),
+                )
+            )
 
         if len(s.observations) >= 3:
             s._refit()
