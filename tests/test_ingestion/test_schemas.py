@@ -40,7 +40,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 class TestDataSample:
     """Tests for DataSample base class."""
 
-    def test_create_sample(self):
+    @staticmethod
+    def test_create_sample():
         """Test creating a basic sample."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -53,7 +54,8 @@ class TestDataSample:
         assert sample.value == 3500.0
         assert sample.quality == "good"
 
-    def test_validate_valid_sample(self):
+    @staticmethod
+    def test_validate_valid_sample():
         """Test validation of a valid sample."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -65,7 +67,8 @@ class TestDataSample:
         assert result.is_valid
         assert len(result.errors) == 0
 
-    def test_validate_negative_timestamp(self):
+    @staticmethod
+    def test_validate_negative_timestamp():
         """Test validation rejects negative timestamp."""
         sample = DataSample(
             timestamp_ms=-100,
@@ -77,7 +80,8 @@ class TestDataSample:
         assert not result.is_valid
         assert any("timestamp" in e.field for e in result.errors)
 
-    def test_validate_nan_value(self):
+    @staticmethod
+    def test_validate_nan_value():
         """Test validation rejects NaN value."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -89,7 +93,8 @@ class TestDataSample:
         assert not result.is_valid
         assert any("NaN" in e.message for e in result.errors)
 
-    def test_validate_inf_value(self):
+    @staticmethod
+    def test_validate_inf_value():
         """Test validation rejects infinite value."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -101,7 +106,8 @@ class TestDataSample:
         assert not result.is_valid
         assert any("infinite" in e.message for e in result.errors)
 
-    def test_validate_out_of_range_rpm(self):
+    @staticmethod
+    def test_validate_out_of_range_rpm():
         """Test validation detects out-of-range RPM."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -112,7 +118,8 @@ class TestDataSample:
         result = sample.validate()
         assert not result.is_valid
 
-    def test_from_raw_coercion(self):
+    @staticmethod
+    def test_from_raw_coercion():
         """Test creating sample from raw values with coercion."""
         # String to float
         sample = DataSample.from_raw(
@@ -124,7 +131,8 @@ class TestDataSample:
         assert sample.value == 3500.5
         assert sample.quality == "good"
 
-    def test_from_raw_handles_nan_string(self):
+    @staticmethod
+    def test_from_raw_handles_nan_string():
         """Test handling of 'nan' string."""
         sample = DataSample.from_raw(
             timestamp_ms=1000,
@@ -135,7 +143,8 @@ class TestDataSample:
         assert math.isnan(sample.value)
         assert sample.quality == "bad"
 
-    def test_from_raw_handles_none(self):
+    @staticmethod
+    def test_from_raw_handles_none():
         """Test handling of None value."""
         sample = DataSample.from_raw(
             timestamp_ms=1000,
@@ -146,7 +155,8 @@ class TestDataSample:
         assert math.isnan(sample.value)
         assert sample.quality == "bad"
 
-    def test_to_dict(self):
+    @staticmethod
+    def test_to_dict():
         """Test conversion to dictionary."""
         sample = DataSample(
             timestamp_ms=1000,
@@ -164,26 +174,30 @@ class TestDataSample:
 class TestValueRange:
     """Tests for ValueRange validation."""
 
-    def test_valid_range(self):
+    @staticmethod
+    def test_valid_range():
         """Test value within range."""
         range_def = ValueRange(min_value=0, max_value=100)
         is_valid, warning = range_def.validate(50.0)
         assert is_valid
         assert warning is None
 
-    def test_below_minimum(self):
+    @staticmethod
+    def test_below_minimum():
         """Test value below minimum."""
         range_def = ValueRange(min_value=0, max_value=100)
         is_valid, warning = range_def.validate(-10.0)
         assert not is_valid
 
-    def test_above_maximum(self):
+    @staticmethod
+    def test_above_maximum():
         """Test value above maximum."""
         range_def = ValueRange(min_value=0, max_value=100)
         is_valid, warning = range_def.validate(150.0)
         assert not is_valid
 
-    def test_warning_thresholds(self):
+    @staticmethod
+    def test_warning_thresholds():
         """Test warning thresholds."""
         range_def = ValueRange(min_value=0, max_value=100, warn_min=20, warn_max=80)
 
@@ -199,7 +213,8 @@ class TestValueRange:
         assert warning is not None
         assert "above" in warning
 
-    def test_nan_rejected(self):
+    @staticmethod
+    def test_nan_rejected():
         """Test NaN is rejected."""
         range_def = ValueRange(min_value=0, max_value=100)
         is_valid, _ = range_def.validate(float("nan"))
@@ -209,32 +224,37 @@ class TestValueRange:
 class TestSensorRanges:
     """Tests for predefined sensor ranges."""
 
-    def test_rpm_range(self):
+    @staticmethod
+    def test_rpm_range():
         """Test RPM range detection."""
         rpm_range = get_range_for_channel("Engine RPM")
         assert rpm_range is not None
         assert rpm_range.max_value == 20000
 
-    def test_afr_range(self):
+    @staticmethod
+    def test_afr_range():
         """Test AFR range detection."""
         afr_range = get_range_for_channel("AFR")
         assert afr_range is not None
         assert afr_range.min_value == 6.0
         assert afr_range.max_value == 35.0
 
-    def test_map_range(self):
+    @staticmethod
+    def test_map_range():
         """Test MAP range detection."""
         map_range = get_range_for_channel("MAP kPa")
         assert map_range is not None
         assert map_range.max_value == 300
 
-    def test_horsepower_range(self):
+    @staticmethod
+    def test_horsepower_range():
         """Test horsepower range detection."""
         hp_range = get_range_for_channel("Horsepower")
         assert hp_range is not None
         assert hp_range.max_value == 2000
 
-    def test_unknown_channel(self):
+    @staticmethod
+    def test_unknown_channel():
         """Test unknown channel returns None."""
         unknown_range = get_range_for_channel("UnknownChannel123")
         assert unknown_range is None
@@ -243,7 +263,8 @@ class TestSensorRanges:
 class TestJetDriveSchemas:
     """Tests for JetDrive-specific schemas."""
 
-    def test_channel_schema_valid(self):
+    @staticmethod
+    def test_channel_schema_valid():
         """Test valid channel schema."""
         channel = JetDriveChannelSchema(
             chan_id=1,
@@ -254,7 +275,8 @@ class TestJetDriveSchemas:
         result = channel.validate()
         assert result.is_valid
 
-    def test_channel_schema_invalid_id(self):
+    @staticmethod
+    def test_channel_schema_invalid_id():
         """Test invalid channel ID."""
         channel = JetDriveChannelSchema(
             chan_id=70000,  # Out of range
@@ -264,7 +286,8 @@ class TestJetDriveSchemas:
         result = channel.validate()
         assert not result.is_valid
 
-    def test_channel_schema_name_too_long(self):
+    @staticmethod
+    def test_channel_schema_name_too_long():
         """Test name too long."""
         channel = JetDriveChannelSchema(
             chan_id=1,
@@ -274,7 +297,8 @@ class TestJetDriveSchemas:
         result = channel.validate()
         assert not result.is_valid
 
-    def test_sample_schema_valid(self):
+    @staticmethod
+    def test_sample_schema_valid():
         """Test valid sample schema."""
         sample = JetDriveSampleSchema(
             timestamp_ms=1000,
@@ -287,7 +311,8 @@ class TestJetDriveSchemas:
         result = sample.validate()
         assert result.is_valid
 
-    def test_provider_schema_valid(self):
+    @staticmethod
+    def test_provider_schema_valid():
         """Test valid provider schema."""
         provider = JetDriveProviderSchema(
             provider_id=100,
@@ -305,7 +330,8 @@ class TestJetDriveSchemas:
 class TestInnovateSampleSchema:
     """Tests for Innovate AFR schemas."""
 
-    def test_valid_afr_sample(self):
+    @staticmethod
+    def test_valid_afr_sample():
         """Test valid AFR sample."""
         sample = InnovateSampleSchema(
             timestamp_ms=1000,
@@ -319,7 +345,8 @@ class TestInnovateSampleSchema:
         result = sample.validate()
         assert result.is_valid
 
-    def test_afr_out_of_range(self):
+    @staticmethod
+    def test_afr_out_of_range():
         """Test AFR out of range."""
         sample = InnovateSampleSchema(
             timestamp_ms=1000,
@@ -331,7 +358,8 @@ class TestInnovateSampleSchema:
         result = sample.validate()
         assert not result.is_valid
 
-    def test_lambda_out_of_range(self):
+    @staticmethod
+    def test_lambda_out_of_range():
         """Test lambda out of range."""
         sample = InnovateSampleSchema(
             timestamp_ms=1000,
@@ -348,7 +376,8 @@ class TestInnovateSampleSchema:
 class TestDynoDataPointSchema:
     """Tests for dyno data point schema."""
 
-    def test_valid_data_point(self):
+    @staticmethod
+    def test_valid_data_point():
         """Test valid data point."""
         point = DynoDataPointSchema(
             timestamp_ms=1000,
@@ -360,7 +389,8 @@ class TestDynoDataPointSchema:
         result = point.validate()
         assert result.is_valid
 
-    def test_negative_rpm(self):
+    @staticmethod
+    def test_negative_rpm():
         """Test negative RPM validation."""
         point = DynoDataPointSchema(
             timestamp_ms=1000,
@@ -369,7 +399,8 @@ class TestDynoDataPointSchema:
         result = point.validate()
         assert not result.is_valid
 
-    def test_excessive_horsepower(self):
+    @staticmethod
+    def test_excessive_horsepower():
         """Test excessive HP validation."""
         point = DynoDataPointSchema(
             timestamp_ms=1000,
@@ -379,7 +410,8 @@ class TestDynoDataPointSchema:
         result = point.validate()
         assert not result.is_valid
 
-    def test_from_dict_mapping(self):
+    @staticmethod
+    def test_from_dict_mapping():
         """Test creating from dict with column mapping."""
         data = {
             "timestamp_ms": 1000,
@@ -393,7 +425,8 @@ class TestDynoDataPointSchema:
         assert point.horsepower == 85
         assert point.afr == 13.5
 
-    def test_to_dict(self):
+    @staticmethod
+    def test_to_dict():
         """Test conversion to dict."""
         point = DynoDataPointSchema(
             timestamp_ms=1000,
@@ -409,7 +442,8 @@ class TestDynoDataPointSchema:
 class TestDynoRunSchema:
     """Tests for complete dyno run schema."""
 
-    def test_valid_run(self):
+    @staticmethod
+    def test_valid_run():
         """Test valid run schema."""
         points = [
             DynoDataPointSchema(timestamp_ms=i * 50, rpm=2000 + i * 10, horsepower=i)
@@ -424,7 +458,8 @@ class TestDynoRunSchema:
         result = run.validate()
         assert result.is_valid
 
-    def test_empty_run_warning(self):
+    @staticmethod
+    def test_empty_run_warning():
         """Test empty run produces warning."""
         run = DynoRunSchema(
             run_id="test_run",
@@ -436,7 +471,8 @@ class TestDynoRunSchema:
         assert result.is_valid  # Empty is valid but warning
         assert len(result.warnings) > 0
 
-    def test_compute_summary(self):
+    @staticmethod
+    def test_compute_summary():
         """Test summary computation."""
         points = [
             DynoDataPointSchema(
@@ -460,7 +496,8 @@ class TestDynoRunSchema:
 class TestValidationError:
     """Tests for ValidationError class."""
 
-    def test_error_formatting(self):
+    @staticmethod
+    def test_error_formatting():
         """Test error message formatting."""
         error = ValidationError(
             message="Value out of range",
@@ -473,7 +510,8 @@ class TestValidationError:
         assert "rpm" in msg
         assert "50000" in msg
 
-    def test_error_to_dict(self):
+    @staticmethod
+    def test_error_to_dict():
         """Test error conversion to dict."""
         error = ValidationError(
             message="Test error",
@@ -488,24 +526,28 @@ class TestValidationError:
 class TestSanitizeValue:
     """Tests for value sanitization."""
 
-    def test_sanitize_float(self):
+    @staticmethod
+    def test_sanitize_float():
         """Test float sanitization."""
         assert sanitize_value(3.14, float) == 3.14
         assert sanitize_value("3.14", float) == 3.14
         assert sanitize_value(3, float) == 3.0
 
-    def test_sanitize_int(self):
+    @staticmethod
+    def test_sanitize_int():
         """Test int sanitization."""
         assert sanitize_value(3, int) == 3
         assert sanitize_value(3.7, int) == 3
         assert sanitize_value("5", int) == 5
 
-    def test_sanitize_handles_nan(self):
+    @staticmethod
+    def test_sanitize_handles_nan():
         """Test NaN handling."""
         assert sanitize_value(float("nan"), float) is None
         assert sanitize_value("nan", float) is None
 
-    def test_sanitize_handles_none(self):
+    @staticmethod
+    def test_sanitize_handles_none():
         """Test None handling."""
         assert sanitize_value(None, float) is None
         assert sanitize_value(None, int) is None
@@ -514,7 +556,8 @@ class TestSanitizeValue:
 class TestBatchValidate:
     """Tests for batch validation."""
 
-    def test_batch_validate_all_valid(self):
+    @staticmethod
+    def test_batch_validate_all_valid():
         """Test batch validation with all valid items."""
         items = [
             DataSample(timestamp_ms=i, source="test", channel="rpm", value=3000.0)
@@ -524,7 +567,8 @@ class TestBatchValidate:
         assert result.is_valid
         assert len(result.errors) == 0
 
-    def test_batch_validate_some_invalid(self):
+    @staticmethod
+    def test_batch_validate_some_invalid():
         """Test batch validation with some invalid items."""
         items = [
             DataSample(timestamp_ms=1, source="test", channel="rpm", value=3000.0),
@@ -540,7 +584,8 @@ class TestBatchValidate:
         # Note: NaN triggers both "NaN" and "out of range" errors, so 3 total
         assert len(result.errors) >= 2
 
-    def test_batch_validate_max_errors(self):
+    @staticmethod
+    def test_batch_validate_max_errors():
         """Test batch validation stops at max errors."""
         items = [
             DataSample(timestamp_ms=-i, source="test", channel="rpm", value=3000.0)

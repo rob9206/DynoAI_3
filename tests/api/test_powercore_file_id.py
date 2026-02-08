@@ -53,7 +53,8 @@ class TestFileIndexService:
         wp8_file.write_bytes(b"\xfe\xce\xfa\xce" + b"\x00" * 100)
         return wp8_file
 
-    def test_register_file_returns_id(self, temp_csv_file):
+    @staticmethod
+    def test_register_file_returns_id(temp_csv_file):
         """Registering a file returns a non-empty file ID."""
         index = FileIndex()
         file_id = index.register(temp_csv_file, FileType.LOG)
@@ -62,7 +63,8 @@ class TestFileIndexService:
         assert len(file_id) > 0
         assert isinstance(file_id, str)
 
-    def test_register_same_file_returns_same_id(self, temp_csv_file):
+    @staticmethod
+    def test_register_same_file_returns_same_id(temp_csv_file):
         """Registering the same file twice returns the same ID."""
         index = FileIndex()
         id1 = index.register(temp_csv_file, FileType.LOG)
@@ -70,7 +72,8 @@ class TestFileIndexService:
 
         assert id1 == id2
 
-    def test_resolve_returns_correct_path(self, temp_csv_file):
+    @staticmethod
+    def test_resolve_returns_correct_path(temp_csv_file):
         """Resolving a valid file_id returns the correct path."""
         index = FileIndex()
         file_id = index.register(temp_csv_file, FileType.LOG)
@@ -78,14 +81,16 @@ class TestFileIndexService:
 
         assert resolved == temp_csv_file.resolve()
 
-    def test_resolve_nonexistent_id_raises_keyerror(self):
+    @staticmethod
+    def test_resolve_nonexistent_id_raises_keyerror():
         """Resolving a non-existent file_id raises KeyError."""
         index = FileIndex()
 
         with pytest.raises(KeyError, match="not found or expired"):
             index.resolve("nonexistent_id_12345")
 
-    def test_resolve_expired_id_raises_keyerror(self, temp_csv_file):
+    @staticmethod
+    def test_resolve_expired_id_raises_keyerror(temp_csv_file):
         """Resolving an expired file_id raises KeyError."""
         index = FileIndex(ttl_seconds=0)  # Immediate expiry
         file_id = index.register(temp_csv_file, FileType.LOG)
@@ -95,7 +100,8 @@ class TestFileIndexService:
         with pytest.raises(KeyError, match="expired"):
             index.resolve(file_id)
 
-    def test_resolve_type_mismatch_raises_valueerror(self, temp_csv_file):
+    @staticmethod
+    def test_resolve_type_mismatch_raises_valueerror(temp_csv_file):
         """Resolving with wrong expected_type raises ValueError."""
         index = FileIndex()
         file_id = index.register(temp_csv_file, FileType.LOG)
@@ -103,7 +109,8 @@ class TestFileIndexService:
         with pytest.raises(ValueError, match="type mismatch"):
             index.resolve(file_id, expected_type=FileType.TUNE)
 
-    def test_resolve_deleted_file_raises_filenotfounderror(self, tmp_path):
+    @staticmethod
+    def test_resolve_deleted_file_raises_filenotfounderror(tmp_path):
         """Resolving a file_id for a deleted file raises FileNotFoundError."""
         temp_file = tmp_path / "deleted.csv"
         temp_file.write_text("data")
@@ -117,7 +124,8 @@ class TestFileIndexService:
         with pytest.raises(FileNotFoundError, match="no longer exists"):
             index.resolve(file_id)
 
-    def test_register_nonexistent_file_raises_filenotfounderror(self, tmp_path):
+    @staticmethod
+    def test_register_nonexistent_file_raises_filenotfounderror(tmp_path):
         """Registering a non-existent file raises FileNotFoundError."""
         index = FileIndex()
         nonexistent = tmp_path / "does_not_exist.csv"
@@ -125,14 +133,16 @@ class TestFileIndexService:
         with pytest.raises(FileNotFoundError):
             index.register(nonexistent, FileType.LOG)
 
-    def test_register_directory_raises_valueerror(self, tmp_path):
+    @staticmethod
+    def test_register_directory_raises_valueerror(tmp_path):
         """Registering a directory raises ValueError."""
         index = FileIndex()
 
         with pytest.raises(ValueError, match="not a file"):
             index.register(tmp_path, FileType.LOG)
 
-    def test_file_id_is_not_guessable(self, temp_csv_file, temp_pvv_file):
+    @staticmethod
+    def test_file_id_is_not_guessable(temp_csv_file, temp_pvv_file):
         """File IDs should not be easily guessable from file paths."""
         index = FileIndex()
         id1 = index.register(temp_csv_file, FileType.LOG)
@@ -144,7 +154,8 @@ class TestFileIndexService:
         assert ".csv" not in id1
         assert ".pvv" not in id2
 
-    def test_to_api_response_excludes_path(self, temp_csv_file):
+    @staticmethod
+    def test_to_api_response_excludes_path(temp_csv_file):
         """API response format should not include the raw path."""
         index = FileIndex()
         file_id = index.register(temp_csv_file, FileType.LOG)
@@ -160,8 +171,9 @@ class TestFileIndexService:
         assert "path" not in response
         assert str(temp_csv_file.parent) not in str(response)
 
+    @staticmethod
     def test_list_by_type_filters_correctly(
-        self, temp_csv_file, temp_pvv_file, temp_wp8_file
+        temp_csv_file, temp_pvv_file, temp_wp8_file
     ):
         """list_by_type returns only entries of the specified type."""
         index = FileIndex()
@@ -180,7 +192,8 @@ class TestFileIndexService:
         assert tunes[0].file_type == FileType.TUNE
         assert wp8s[0].file_type == FileType.WP8
 
-    def test_clear_removes_all_entries(self, temp_csv_file, temp_pvv_file):
+    @staticmethod
+    def test_clear_removes_all_entries(temp_csv_file, temp_pvv_file):
         """clear() removes all entries from the index."""
         index = FileIndex()
         id1 = index.register(temp_csv_file, FileType.LOG)
@@ -226,7 +239,8 @@ class TestPowerCoreFileIdEndpoints:
             "api.routes.powercore.find_powercore_data_dirs", lambda *args, **kwargs: []
         )
 
-    def test_discover_logs_returns_file_ids(self, client):
+    @staticmethod
+    def test_discover_logs_returns_file_ids(client):
         """Discovery endpoint returns file IDs, not paths."""
         response = client.get("/api/powercore/discover/logs")
 
@@ -246,7 +260,8 @@ class TestPowerCoreFileIdEndpoints:
             # Should NOT have raw path
             assert "path" not in file_info
 
-    def test_discover_tunes_returns_file_ids(self, client):
+    @staticmethod
+    def test_discover_tunes_returns_file_ids(client):
         """Discovery endpoint returns file IDs, not paths."""
         response = client.get("/api/powercore/discover/tunes")
 
@@ -260,7 +275,8 @@ class TestPowerCoreFileIdEndpoints:
             assert "id" in file_info
             assert "path" not in file_info
 
-    def test_discover_wp8_returns_file_ids(self, client):
+    @staticmethod
+    def test_discover_wp8_returns_file_ids(client):
         """Discovery endpoint returns file IDs, not paths."""
         response = client.get("/api/powercore/discover/wp8")
 
@@ -274,7 +290,8 @@ class TestPowerCoreFileIdEndpoints:
             assert "id" in file_info
             assert "path" not in file_info
 
-    def test_parse_log_rejects_invalid_file_id(self, client):
+    @staticmethod
+    def test_parse_log_rejects_invalid_file_id(client):
         """Parse endpoint rejects invalid file_id."""
         response = client.post(
             "/api/powercore/parse/log", json={"file_id": "invalid_nonexistent_id"}
@@ -285,7 +302,8 @@ class TestPowerCoreFileIdEndpoints:
         assert "error" in data
         assert "Invalid" in data["error"] or "expired" in data["error"]
 
-    def test_parse_tune_rejects_invalid_file_id(self, client):
+    @staticmethod
+    def test_parse_tune_rejects_invalid_file_id(client):
         """Parse endpoint rejects invalid file_id."""
         response = client.post(
             "/api/powercore/parse/tune", json={"file_id": "invalid_nonexistent_id"}
@@ -295,7 +313,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "error" in data
 
-    def test_parse_wp8_rejects_invalid_file_id(self, client):
+    @staticmethod
+    def test_parse_wp8_rejects_invalid_file_id(client):
         """Parse endpoint rejects invalid file_id."""
         response = client.post(
             "/api/powercore/parse/wp8", json={"file_id": "invalid_nonexistent_id"}
@@ -305,7 +324,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "error" in data
 
-    def test_parse_log_rejects_type_mismatch(self, client, tmp_path):
+    @staticmethod
+    def test_parse_log_rejects_type_mismatch(client, tmp_path):
         """Parse log endpoint rejects file_id registered as different type."""
         # Register a file as TUNE type
         tune_file = tmp_path / "test.pvv"
@@ -321,7 +341,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "mismatch" in data["error"].lower()
 
-    def test_parse_tune_rejects_type_mismatch(self, client, tmp_path):
+    @staticmethod
+    def test_parse_tune_rejects_type_mismatch(client, tmp_path):
         """Parse tune endpoint rejects file_id registered as different type."""
         # Register a file as LOG type
         log_file = tmp_path / "test.csv"
@@ -337,7 +358,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "mismatch" in data["error"].lower()
 
-    def test_parse_wp8_rejects_type_mismatch(self, client, tmp_path):
+    @staticmethod
+    def test_parse_wp8_rejects_type_mismatch(client, tmp_path):
         """Parse WP8 endpoint rejects file_id registered as different type."""
         # Register a file as LOG type
         log_file = tmp_path / "test.csv"
@@ -353,7 +375,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "mismatch" in data["error"].lower()
 
-    def test_parse_rejects_missing_file_id(self, client):
+    @staticmethod
+    def test_parse_rejects_missing_file_id(client):
         """Parse endpoint requires file_id or path parameter."""
         response = client.post("/api/powercore/parse/log", json={})
 
@@ -361,7 +384,8 @@ class TestPowerCoreFileIdEndpoints:
         data = response.get_json()
         assert "Missing" in data["error"]
 
-    def test_parse_rejects_empty_body(self, client):
+    @staticmethod
+    def test_parse_rejects_empty_body(client):
         """Parse endpoint rejects empty request body."""
         response = client.post(
             "/api/powercore/parse/log", content_type="application/json"
@@ -373,7 +397,8 @@ class TestPowerCoreFileIdEndpoints:
 class TestLegacyPathSupportSecurity:
     """Security tests for legacy path parameter support."""
 
-    def test_legacy_path_rejects_traversal(self, client):
+    @staticmethod
+    def test_legacy_path_rejects_traversal(client):
         """Legacy path parameter still rejects path traversal."""
         response = client.post(
             "/api/powercore/parse/log", json={"path": "../../../etc/passwd"}
@@ -386,13 +411,15 @@ class TestLegacyPathSupportSecurity:
         assert "C:\\" not in str(data)
         assert "/home/" not in str(data)
 
-    def test_legacy_path_rejects_absolute_system_path(self, client):
+    @staticmethod
+    def test_legacy_path_rejects_absolute_system_path(client):
         """Legacy path parameter rejects absolute system paths."""
         response = client.post("/api/powercore/parse/log", json={"path": "/etc/passwd"})
 
         assert response.status_code in (400, 404, 500)
 
-    def test_legacy_path_rejects_backslash_traversal(self, client):
+    @staticmethod
+    def test_legacy_path_rejects_backslash_traversal(client):
         """Legacy path parameter rejects backslash traversal."""
         response = client.post(
             "/api/powercore/parse/log",
@@ -401,7 +428,8 @@ class TestLegacyPathSupportSecurity:
 
         assert response.status_code in (400, 404, 500)
 
-    def test_legacy_path_rejects_wrong_extension(self, client, tmp_path):
+    @staticmethod
+    def test_legacy_path_rejects_wrong_extension(client, tmp_path):
         """Legacy path parameter validates file extension."""
         # Create a file with wrong extension
         wrong_ext = tmp_path / "test.exe"

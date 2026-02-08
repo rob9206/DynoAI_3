@@ -111,7 +111,8 @@ class VEHeatmapWidget(QWidget):
         # Connect mouse events
         self.heatmap_item.hoverEvent = self._on_hover
 
-    def _create_diff_colormap(self) -> "ColorMap":
+    @staticmethod
+    def _create_diff_colormap() -> "ColorMap":
         """Create blue-white-red colormap for diff view."""
         if not HAS_PYQTGRAPH:
             return None
@@ -124,7 +125,8 @@ class VEHeatmapWidget(QWidget):
         ]
         return ColorMap(positions, colors)
 
-    def _create_value_colormap(self) -> "ColorMap":
+    @staticmethod
+    def _create_value_colormap() -> "ColorMap":
         """Create colormap for absolute values."""
         if not HAS_PYQTGRAPH:
             return None

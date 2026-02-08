@@ -18,8 +18,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.services.jetdrive.jetdrive_mapping import (  # Signature; Transforms; Data classes; Persistence; Templates; Auto-mapping; Application
+from api.services.jetdrive_mapping import (  # Signature; Transforms; Data classes; Persistence; Templates; Auto-mapping; Application
     BUILTIN_TEMPLATES,
+    MAPPING_DIR,
     TRANSFORMS,
     ChannelMapping,
     ProviderMapping,
@@ -106,24 +107,28 @@ def temp_mapping_dir(tmp_path):
 class TestProviderSignature:
     """Test provider signature computation."""
 
-    def test_signature_includes_provider_id(self, mock_provider):
+    @staticmethod
+    def test_signature_includes_provider_id(mock_provider):
         """Signature should include provider ID."""
         sig = compute_provider_signature(mock_provider)
         assert sig.startswith("4097_")  # 0x1001 = 4097
 
-    def test_signature_includes_host(self, mock_provider):
+    @staticmethod
+    def test_signature_includes_host(mock_provider):
         """Signature should include host IP."""
         sig = compute_provider_signature(mock_provider)
         assert "192.168.1.100" in sig
 
-    def test_signature_includes_channel_hash(self, mock_provider):
+    @staticmethod
+    def test_signature_includes_channel_hash(mock_provider):
         """Signature should include channel config hash."""
         sig = compute_provider_signature(mock_provider)
         parts = sig.split("_")
         assert len(parts) == 3
         assert len(parts[2]) == 12  # 12-char hash
 
-    def test_signature_changes_with_channels(self, mock_provider):
+    @staticmethod
+    def test_signature_changes_with_channels(mock_provider):
         """Signature should change when channels change."""
         sig1 = compute_provider_signature(mock_provider)
 
@@ -133,13 +138,15 @@ class TestProviderSignature:
 
         assert sig1 != sig2, "Signature should change when channels are added"
 
-    def test_signature_stable_for_same_config(self, mock_provider):
+    @staticmethod
+    def test_signature_stable_for_same_config(mock_provider):
         """Signature should be deterministic for same config."""
         sig1 = compute_provider_signature(mock_provider)
         sig2 = compute_provider_signature(mock_provider)
         assert sig1 == sig2
 
-    def test_parse_signature(self, mock_provider):
+    @staticmethod
+    def test_parse_signature(mock_provider):
         """Test parsing signature back to components."""
         sig = compute_provider_signature(mock_provider)
         provider_id, host, channel_hash = parse_provider_signature(sig)
@@ -148,7 +155,8 @@ class TestProviderSignature:
         assert host == "192.168.1.100"
         assert len(channel_hash) == 12
 
-    def test_parse_invalid_signature(self):
+    @staticmethod
+    def test_parse_invalid_signature():
         """Test parsing invalid signature raises error."""
         with pytest.raises(ValueError):
             parse_provider_signature("invalid")
@@ -162,44 +170,53 @@ class TestProviderSignature:
 class TestTransforms:
     """Test value transform functions."""
 
-    def test_lambda_to_afr(self):
+    @staticmethod
+    def test_lambda_to_afr():
         """Lambda 1.0 = AFR 14.7 (stoich for gasoline)."""
         assert lambda_to_afr(1.0) == pytest.approx(14.7)
         assert lambda_to_afr(0.9) == pytest.approx(13.23)
         assert lambda_to_afr(1.1) == pytest.approx(16.17)
 
-    def test_afr_to_lambda(self):
+    @staticmethod
+    def test_afr_to_lambda():
         """AFR 14.7 = Lambda 1.0."""
         assert afr_to_lambda(14.7) == pytest.approx(1.0)
         assert afr_to_lambda(12.0) == pytest.approx(0.816, rel=0.01)
 
-    def test_nm_to_ftlb(self):
+    @staticmethod
+    def test_nm_to_ftlb():
         """100 Nm ≈ 73.76 ft-lb."""
         assert nm_to_ftlb(100) == pytest.approx(73.76, rel=0.01)
 
-    def test_ftlb_to_nm(self):
+    @staticmethod
+    def test_ftlb_to_nm():
         """100 ft-lb ≈ 135.6 Nm."""
         assert ftlb_to_nm(100) == pytest.approx(135.6, rel=0.01)
 
-    def test_kw_to_hp(self):
+    @staticmethod
+    def test_kw_to_hp():
         """100 kW ≈ 134.1 HP."""
         assert kw_to_hp(100) == pytest.approx(134.1, rel=0.01)
 
-    def test_hp_to_kw(self):
+    @staticmethod
+    def test_hp_to_kw():
         """100 HP ≈ 74.57 kW."""
         assert hp_to_kw(100) == pytest.approx(74.57, rel=0.01)
 
-    def test_celsius_to_fahrenheit(self):
+    @staticmethod
+    def test_celsius_to_fahrenheit():
         """0°C = 32°F, 100°C = 212°F."""
         assert celsius_to_fahrenheit(0) == 32
         assert celsius_to_fahrenheit(100) == 212
 
-    def test_fahrenheit_to_celsius(self):
+    @staticmethod
+    def test_fahrenheit_to_celsius():
         """32°F = 0°C, 212°F = 100°C."""
         assert fahrenheit_to_celsius(32) == 0
         assert fahrenheit_to_celsius(212) == 100
 
-    def test_apply_transform(self):
+    @staticmethod
+    def test_apply_transform():
         """Test apply_transform function."""
         assert apply_transform(1.0, "lambda_to_afr") == pytest.approx(14.7)
         assert apply_transform(100, "identity") == 100
@@ -207,7 +224,8 @@ class TestTransforms:
             apply_transform(100, "unknown_transform") == 100
         )  # Falls back to identity
 
-    def test_all_transforms_registered(self):
+    @staticmethod
+    def test_all_transforms_registered():
         """All documented transforms should be in registry."""
         expected = [
             "lambda_to_afr",
@@ -232,7 +250,8 @@ class TestTransforms:
 class TestDataClasses:
     """Test mapping data classes."""
 
-    def test_channel_mapping_to_dict(self):
+    @staticmethod
+    def test_channel_mapping_to_dict():
         """Test ChannelMapping serialization."""
         mapping = ChannelMapping(
             canonical_name="rpm",
@@ -248,7 +267,8 @@ class TestDataClasses:
         assert d["transform"] == "identity"
         assert d["enabled"] is True
 
-    def test_channel_mapping_from_dict(self):
+    @staticmethod
+    def test_channel_mapping_from_dict():
         """Test ChannelMapping deserialization."""
         data = {
             "source_id": 15,
@@ -262,7 +282,8 @@ class TestDataClasses:
         assert mapping.source_id == 15
         assert mapping.transform == "lambda_to_afr"
 
-    def test_provider_mapping_roundtrip(self, mock_provider):
+    @staticmethod
+    def test_provider_mapping_roundtrip(mock_provider):
         """Test ProviderMapping serialization/deserialization roundtrip."""
         original = ProviderMapping(
             provider_signature="4097_192.168.1.100_abc123",
@@ -289,7 +310,8 @@ class TestDataClasses:
         assert len(restored.channels) == 2
         assert restored.channels["rpm"].source_id == 10
 
-    def test_get_missing_required(self):
+    @staticmethod
+    def test_get_missing_required():
         """Test detection of missing required channels."""
         # Only RPM mapped
         mapping = ProviderMapping(
@@ -312,11 +334,10 @@ class TestDataClasses:
 class TestMappingPersistence:
     """Test mapping file persistence."""
 
-    def test_save_and_load_mapping(self, mock_provider, temp_mapping_dir):
+    @staticmethod
+    def test_save_and_load_mapping(mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
-        with patch(
-            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
-        ):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             sig = "4097_192.168.1.100_abc123"
             mapping = ProviderMapping(
                 provider_signature=sig,
@@ -337,19 +358,17 @@ class TestMappingPersistence:
             assert loaded.provider_signature == sig
             assert "rpm" in loaded.channels
 
-    def test_get_nonexistent_mapping(self, temp_mapping_dir):
+    @staticmethod
+    def test_get_nonexistent_mapping(temp_mapping_dir):
         """Test loading a mapping that doesn't exist."""
-        with patch(
-            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
-        ):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             mapping = get_mapping("nonexistent_signature")
             assert mapping is None
 
-    def test_delete_mapping(self, temp_mapping_dir):
+    @staticmethod
+    def test_delete_mapping(temp_mapping_dir):
         """Test deleting a mapping file."""
-        with patch(
-            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
-        ):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             sig = "to_delete"
             mapping = ProviderMapping(provider_signature=sig)
             save_mapping(mapping)
@@ -363,11 +382,10 @@ class TestMappingPersistence:
             # Verify it's gone
             assert get_mapping(sig) is None
 
-    def test_list_mappings(self, temp_mapping_dir):
+    @staticmethod
+    def test_list_mappings(temp_mapping_dir):
         """Test listing all mappings."""
-        with patch(
-            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
-        ):
+        with patch("api.services.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
             # Save a few mappings
             for i in range(3):
                 mapping = ProviderMapping(
@@ -388,7 +406,8 @@ class TestMappingPersistence:
 class TestTemplates:
     """Test mapping template system."""
 
-    def test_builtin_templates_exist(self):
+    @staticmethod
+    def test_builtin_templates_exist():
         """Built-in templates should be available."""
         templates = get_templates()
         assert len(templates) >= len(BUILTIN_TEMPLATES)
@@ -398,14 +417,16 @@ class TestTemplates:
         assert "dynojet_rt150" in template_ids
         assert "dynojet_424x" in template_ids
 
-    def test_get_builtin_template(self):
+    @staticmethod
+    def test_get_builtin_template():
         """Test getting a built-in template."""
         template = get_template("dynojet_rt150")
         assert template is not None
         assert "channels" in template
         assert "rpm" in template["channels"]
 
-    def test_create_mapping_from_template(self, mock_provider):
+    @staticmethod
+    def test_create_mapping_from_template(mock_provider):
         """Test creating a mapping from a template."""
         sig = compute_provider_signature(mock_provider)
         mapping = create_mapping_from_template("dynojet_rt150", mock_provider, sig)
@@ -414,7 +435,8 @@ class TestTemplates:
         assert mapping.provider_signature == sig
         assert "rpm" in mapping.channels
 
-    def test_nonexistent_template(self):
+    @staticmethod
+    def test_nonexistent_template():
         """Test getting a template that doesn't exist."""
         template = get_template("nonexistent_template")
         assert template is None
@@ -428,25 +450,29 @@ class TestTemplates:
 class TestAutoMapping:
     """Test automatic channel mapping heuristics."""
 
-    def test_auto_map_rpm(self, mock_provider):
+    @staticmethod
+    def test_auto_map_rpm(mock_provider):
         """RPM channel should be auto-detected."""
         mappings = auto_map_channels(mock_provider)
         assert "rpm" in mappings
         assert mappings["rpm"].source_name == "Digital RPM 1"
 
-    def test_auto_map_afr(self, mock_provider):
+    @staticmethod
+    def test_auto_map_afr(mock_provider):
         """AFR channels should be auto-detected."""
         mappings = auto_map_channels(mock_provider)
         # Should detect afr_front from "Air/Fuel Ratio 1"
         assert "afr_front" in mappings or "afr_rear" in mappings
 
-    def test_auto_map_torque_power(self, mock_provider):
+    @staticmethod
+    def test_auto_map_torque_power(mock_provider):
         """Torque and Power should be auto-detected."""
         mappings = auto_map_channels(mock_provider)
         assert "torque" in mappings
         assert "power" in mappings
 
-    def test_auto_map_creates_mapping(self, mock_provider):
+    @staticmethod
+    def test_auto_map_creates_mapping(mock_provider):
         """create_auto_mapping should return valid ProviderMapping."""
         sig = compute_provider_signature(mock_provider)
         mapping = create_auto_mapping(mock_provider, sig)
@@ -464,7 +490,8 @@ class TestAutoMapping:
 class TestMappingApplication:
     """Test applying mappings to samples."""
 
-    def test_apply_mapping_direct(self):
+    @staticmethod
+    def test_apply_mapping_direct():
         """Test applying mapping without transform."""
         mapping = ProviderMapping(
             channels={
@@ -477,7 +504,8 @@ class TestMappingApplication:
         assert canonical == "rpm"
         assert value == 3500
 
-    def test_apply_mapping_with_transform(self):
+    @staticmethod
+    def test_apply_mapping_with_transform():
         """Test applying mapping with transform."""
         mapping = ProviderMapping(
             channels={
@@ -492,7 +520,8 @@ class TestMappingApplication:
         assert canonical == "afr_front"
         assert value == pytest.approx(14.7)
 
-    def test_apply_mapping_unmapped_channel(self):
+    @staticmethod
+    def test_apply_mapping_unmapped_channel():
         """Unmapped channels should return original value."""
         mapping = ProviderMapping(
             channels={
@@ -514,7 +543,8 @@ class TestMappingApplication:
 class TestSignatureChangeDetection:
     """Test detection of provider config changes."""
 
-    def test_adding_channel_changes_signature(self, mock_provider):
+    @staticmethod
+    def test_adding_channel_changes_signature(mock_provider):
         """Adding a channel should change the signature."""
         sig1 = compute_provider_signature(mock_provider)
 
@@ -523,7 +553,8 @@ class TestSignatureChangeDetection:
 
         assert sig1 != sig2, "Signature should change when channel added"
 
-    def test_removing_channel_changes_signature(self, mock_provider):
+    @staticmethod
+    def test_removing_channel_changes_signature(mock_provider):
         """Removing a channel should change the signature."""
         sig1 = compute_provider_signature(mock_provider)
 
@@ -532,7 +563,8 @@ class TestSignatureChangeDetection:
 
         assert sig1 != sig2, "Signature should change when channel removed"
 
-    def test_renaming_channel_changes_signature(self, mock_provider):
+    @staticmethod
+    def test_renaming_channel_changes_signature(mock_provider):
         """Renaming a channel should change the signature."""
         sig1 = compute_provider_signature(mock_provider)
 
@@ -541,7 +573,8 @@ class TestSignatureChangeDetection:
 
         assert sig1 != sig2, "Signature should change when channel renamed"
 
-    def test_host_change_changes_signature(self, mock_provider):
+    @staticmethod
+    def test_host_change_changes_signature(mock_provider):
         """Different host should produce different signature."""
         sig1 = compute_provider_signature(mock_provider)
 

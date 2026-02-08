@@ -665,9 +665,7 @@ class TestIATCompensation:
     """Tests for IAT compensation throughout the analysis."""
 
     @staticmethod
-    def test_cold_iat_increases_enrichment(
-        sample_cold_iat_data, sample_accel_data
-    ):
+    def test_cold_iat_increases_enrichment(sample_cold_iat_data, sample_accel_data):
         """Test that cold IAT produces higher enrichment recommendations."""
         analyzer = TransientFuelAnalyzer()
 

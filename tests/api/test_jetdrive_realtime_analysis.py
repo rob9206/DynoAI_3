@@ -14,12 +14,24 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.services.jetdrive.jetdrive_realtime_analysis import (
+from api.services.jetdrive_realtime_analysis import (
+    AFR_MAX_PLAUSIBLE,
+    AFR_MIN_PLAUSIBLE,
     FROZEN_RPM_THRESHOLD_SEC,
+    MAP_BIN_SIZE,
+    MAP_MAX,
+    MAP_MIN,
+    RPM_BIN_SIZE,
+    RPM_MAX,
+    RPM_MIN,
     TOTAL_CELLS,
+    Alert,
     AlertSeverity,
     AlertType,
+    CoverageCell,
+    QualityMetrics,
     RealtimeAnalysisEngine,
+    VEDeltaCell,
     get_realtime_engine,
     reset_realtime_engine,
 )
@@ -76,14 +88,16 @@ def make_sample(
 class TestCoverageBinning:
     """Test RPM x MAP coverage binning."""
 
-    def test_rpm_map_binning_correct(self, engine):
+    @staticmethod
+    def test_rpm_map_binning_correct(engine):
         """Verify bin calculation for RPM and MAP."""
         # RPM 3500 with 500 bin size starting at 0 = bin 7
         # MAP 85 with 10 bin size starting at 20 = bin 6
         bin_key = engine._bin_rpm_map(3500.0, 85.0)
         assert bin_key == (7, 6)
 
-    def test_binning_at_boundaries(self, engine):
+    @staticmethod
+    def test_binning_at_boundaries(engine):
         """Test binning at exact boundaries."""
         # RPM 0 = bin 0
         assert engine._bin_rpm_map(0.0, 20.0) == (0, 0)
@@ -94,7 +108,8 @@ class TestCoverageBinning:
         # MAP 30 = bin 1
         assert engine._bin_rpm_map(0.0, 30.0) == (0, 1)
 
-    def test_binning_out_of_range_returns_none(self, engine):
+    @staticmethod
+    def test_binning_out_of_range_returns_none(engine):
         """Out of range values should return None."""
         # RPM too high
         assert engine._bin_rpm_map(15000.0, 85.0) is None
@@ -105,7 +120,8 @@ class TestCoverageBinning:
         # MAP too high
         assert engine._bin_rpm_map(3500.0, 150.0) is None
 
-    def test_coverage_accumulation(self, engine):
+    @staticmethod
+    def test_coverage_accumulation(engine):
         """Hit counts should increment correctly."""
         sample = make_sample(rpm=3500.0, map_kpa=85.0)
 
@@ -118,7 +134,8 @@ class TestCoverageBinning:
         assert bin_key in engine.coverage_map
         assert engine.coverage_map[bin_key].hit_count == 5
 
-    def test_coverage_percentage_calculation(self, engine):
+    @staticmethod
+    def test_coverage_percentage_calculation(engine):
         """Coverage percentage should be calculated correctly."""
         # Hit 10 different cells
         for i in range(10):
@@ -133,7 +150,8 @@ class TestCoverageBinning:
         assert stats["cells_hit"] == 10
         assert abs(stats["coverage_pct"] - expected_pct) < 0.1
 
-    def test_active_cell_tracking(self, engine):
+    @staticmethod
+    def test_active_cell_tracking(engine):
         """Active cell should track the most recent sample."""
         engine.on_aggregated_sample(make_sample(rpm=2000.0, map_kpa=60.0))
         engine.on_aggregated_sample(make_sample(rpm=4000.0, map_kpa=90.0))
@@ -157,7 +175,8 @@ class TestCoverageBinning:
 class TestVEDelta:
     """Test AFR error calculation."""
 
-    def test_afr_error_calculation(self, engine):
+    @staticmethod
+    def test_afr_error_calculation(engine):
         """AFR error should be AFR - target."""
         sample = make_sample(rpm=3500.0, map_kpa=85.0, afr=15.0)
         engine.on_aggregated_sample(sample)
@@ -169,7 +188,8 @@ class TestVEDelta:
         cell = engine.ve_delta_map[bin_key]
         assert abs(cell.afr_error_mean - 0.3) < 0.001
 
-    def test_running_average_update(self, engine):
+    @staticmethod
+    def test_running_average_update(engine):
         """Running average should update correctly."""
         # First sample: AFR 15.0, error = 0.3
         engine.on_aggregated_sample(make_sample(afr=15.0))
@@ -184,7 +204,8 @@ class TestVEDelta:
         assert abs(cell.afr_error_mean) < 0.001
         assert cell.afr_error_count == 2
 
-    def test_missing_afr_graceful(self, engine):
+    @staticmethod
+    def test_missing_afr_graceful(engine):
         """Missing AFR should not crash or create VE delta entry."""
         sample = make_sample()
         sample["afr"] = None
@@ -197,7 +218,8 @@ class TestVEDelta:
         # VE delta should NOT be updated
         assert len(engine.ve_delta_map) == 0
 
-    def test_ve_delta_stats(self, engine):
+    @staticmethod
+    def test_ve_delta_stats(engine):
         """VE delta stats should aggregate correctly."""
         # Rich sample
         engine.on_aggregated_sample(make_sample(rpm=2000.0, map_kpa=50.0, afr=13.0))
@@ -221,7 +243,8 @@ class TestVEDelta:
 class TestQualityMetrics:
     """Test data quality tracking."""
 
-    def test_channel_freshness_tracking(self, engine):
+    @staticmethod
+    def test_channel_freshness_tracking(engine):
         """Channel freshness should track time since last update."""
         sample = make_sample()
         engine.on_aggregated_sample(sample)
@@ -238,7 +261,8 @@ class TestQualityMetrics:
         assert "afr" in freshness
         assert freshness["rpm"] >= 0.4  # Should be ~0.5s
 
-    def test_missing_channels_detected(self, engine):
+    @staticmethod
+    def test_missing_channels_detected(engine):
         """Missing required channels should be flagged."""
         sample = {
             "timestamp_ms": 1000,
@@ -256,7 +280,8 @@ class TestQualityMetrics:
         assert "afr" in missing
         assert "rpm" not in missing  # RPM is present
 
-    def test_overall_score_calculation(self, engine):
+    @staticmethod
+    def test_overall_score_calculation(engine):
         """Overall quality score should be weighted composite."""
         # Good data with all channels
         for i in range(10):
@@ -268,7 +293,8 @@ class TestQualityMetrics:
         # Score should be reasonable (not 0, not 100)
         assert 0 < score <= 100
 
-    def test_variance_tracking(self, engine):
+    @staticmethod
+    def test_variance_tracking(engine):
         """Channel variance should be tracked."""
         # Send samples with varying RPM
         for i in range(25):
@@ -291,7 +317,8 @@ class TestQualityMetrics:
 class TestAlertDetection:
     """Test anomaly detection and alerts."""
 
-    def test_frozen_rpm_alert(self, engine):
+    @staticmethod
+    def test_frozen_rpm_alert(engine):
         """Frozen RPM with high TPS should trigger alert."""
         # Simulate frozen RPM by manipulating internal state
         sample = make_sample(rpm=3500.0, tps=50.0)
@@ -310,7 +337,8 @@ class TestAlertDetection:
         assert len(alerts) >= 1
         assert alerts[0].severity == AlertSeverity.WARNING
 
-    def test_implausible_afr_low_alert(self, engine):
+    @staticmethod
+    def test_implausible_afr_low_alert(engine):
         """AFR below minimum should trigger critical alert."""
         sample = make_sample(afr=8.0)  # Too low
         engine.on_aggregated_sample(sample)
@@ -320,7 +348,8 @@ class TestAlertDetection:
         assert alerts[0].severity == AlertSeverity.CRITICAL
         assert "too low" in alerts[0].message.lower()
 
-    def test_implausible_afr_high_alert(self, engine):
+    @staticmethod
+    def test_implausible_afr_high_alert(engine):
         """AFR above maximum should trigger warning alert."""
         sample = make_sample(afr=20.0)  # Too high
         engine.on_aggregated_sample(sample)
@@ -330,7 +359,8 @@ class TestAlertDetection:
         assert alerts[0].severity == AlertSeverity.WARNING
         assert "too high" in alerts[0].message.lower()
 
-    def test_missing_channel_alert(self):
+    @staticmethod
+    def test_missing_channel_alert():
         """Stale required channel should trigger alert."""
         engine = RealtimeAnalysisEngine()
 
@@ -346,7 +376,8 @@ class TestAlertDetection:
         stale_alerts = [a for a in engine.alerts if a.type == AlertType.STALE_CHANNEL]
         assert len(stale_alerts) == 0
 
-    def test_alert_queue_bounded(self, engine):
+    @staticmethod
+    def test_alert_queue_bounded(engine):
         """Alert queue should not exceed max size."""
         # Generate many alerts
         for i in range(100):
@@ -356,7 +387,8 @@ class TestAlertDetection:
         # Queue should be bounded
         assert len(engine.alerts) <= 50
 
-    def test_duplicate_alerts_suppressed(self, engine):
+    @staticmethod
+    def test_duplicate_alerts_suppressed(engine):
         """Duplicate alerts within 5 seconds should be suppressed."""
         sample = make_sample(afr=8.0)  # Implausible
 
@@ -377,7 +409,8 @@ class TestAlertDetection:
 class TestGracefulDegradation:
     """Test handling of missing/invalid data."""
 
-    def test_missing_map_continues(self, engine):
+    @staticmethod
+    def test_missing_map_continues(engine):
         """Missing MAP should not crash, just skip coverage binning."""
         sample = make_sample()
         sample["map_kpa"] = None
@@ -392,7 +425,8 @@ class TestGracefulDegradation:
         state = engine.get_state()
         assert "rpm" in state["quality"]["channel_freshness"]
 
-    def test_missing_afr_continues(self, engine):
+    @staticmethod
+    def test_missing_afr_continues(engine):
         """Missing AFR should not crash, just skip VE delta."""
         sample = make_sample()
         sample["afr"] = None
@@ -405,7 +439,8 @@ class TestGracefulDegradation:
         # VE delta should be empty
         assert len(engine.ve_delta_map) == 0
 
-    def test_missing_rpm_continues(self, engine):
+    @staticmethod
+    def test_missing_rpm_continues(engine):
         """Missing RPM should not crash."""
         sample = make_sample()
         sample["rpm"] = None
@@ -416,7 +451,8 @@ class TestGracefulDegradation:
         state = engine.get_state()
         assert state["enabled"] is True
 
-    def test_zero_rpm_skips_coverage(self, engine):
+    @staticmethod
+    def test_zero_rpm_skips_coverage(engine):
         """Zero RPM should skip coverage (engine not running)."""
         sample = make_sample(rpm=0.0)
         engine.on_aggregated_sample(sample)
@@ -424,7 +460,8 @@ class TestGracefulDegradation:
         # Coverage should be empty
         assert len(engine.coverage_map) == 0
 
-    def test_nan_values_handled(self, engine):
+    @staticmethod
+    def test_nan_values_handled(engine):
         """NaN values should be handled gracefully."""
         sample = make_sample()
         sample["afr"] = float("nan")
@@ -436,7 +473,8 @@ class TestGracefulDegradation:
         state = engine.get_state()
         assert "afr" in state["quality"]["missing_channels"]
 
-    def test_empty_sample_handled(self, engine):
+    @staticmethod
+    def test_empty_sample_handled(engine):
         """Empty sample dict should not crash."""
         engine.on_aggregated_sample({})
 
@@ -452,7 +490,8 @@ class TestGracefulDegradation:
 class TestStateAndReset:
     """Test state serialization and reset."""
 
-    def test_get_state_returns_complete_dict(self, engine):
+    @staticmethod
+    def test_get_state_returns_complete_dict(engine):
         """get_state() should return all required fields."""
         engine.on_aggregated_sample(make_sample())
 
@@ -465,7 +504,8 @@ class TestStateAndReset:
         assert "alerts" in state
         assert "uptime_sec" in state
 
-    def test_reset_clears_all_state(self, engine):
+    @staticmethod
+    def test_reset_clears_all_state(engine):
         """reset() should clear all accumulated data."""
         # Accumulate some data
         for i in range(10):
@@ -481,7 +521,8 @@ class TestStateAndReset:
         assert len(engine.ve_delta_map) == 0
         assert len(engine.alerts) == 0
 
-    def test_global_engine_singleton(self):
+    @staticmethod
+    def test_global_engine_singleton():
         """Global engine should be singleton."""
         engine1 = get_realtime_engine()
         engine2 = get_realtime_engine()
@@ -500,7 +541,8 @@ class TestStateAndReset:
 class TestPerformance:
     """Test performance requirements."""
 
-    def test_on_aggregated_sample_fast(self, engine):
+    @staticmethod
+    def test_on_aggregated_sample_fast(engine):
         """on_aggregated_sample should complete in <1ms."""
         sample = make_sample()
 
@@ -517,7 +559,8 @@ class TestPerformance:
         avg_ms = (elapsed / 100) * 1000
         assert avg_ms < 1.0, f"Average time {avg_ms:.3f}ms exceeds 1ms limit"
 
-    def test_get_state_fast(self, engine):
+    @staticmethod
+    def test_get_state_fast(engine):
         """get_state() should complete quickly even with data."""
         # Accumulate data
         for i in range(100):

@@ -11,6 +11,8 @@ This test suite validates:
 
 Run with: pytest tests/test_ve_math.py -v
 """
+
+import math
 import random
 from typing import List, Tuple
 
@@ -22,6 +24,7 @@ from dynoai.core.ve_math import (
     AFRValidationError,
     MathConfig,
     MathVersion,
+    VEMathError,
     calculate_ve_correction,
     calculate_ve_correction_batch,
     compare_versions,

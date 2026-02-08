@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from dynoai.core.io_contracts import safe_path
 from external_scrapers import get_stdout_logger
 from external_scrapers.dyno_models import (
     META_FIELD_ORDER,
@@ -16,7 +17,6 @@ from external_scrapers.dyno_models import (
     slugify_title,
 )
 from external_scrapers.http_utils import fetch
-from dynoai.core.io_contracts import safe_path
 
 logger = get_stdout_logger(__name__)
 
@@ -127,7 +127,8 @@ class FuelMotoUniversityScraper:
             max_torque_rpm=None,
         )
 
-    def _select_best_image(self, soup: BeautifulSoup, base_url: str) -> Optional[str]:
+    @staticmethod
+    def _select_best_image(soup: BeautifulSoup, base_url: str) -> Optional[str]:
         content_root = soup.find("article") or soup.find(class_="entry-content")
         search_scope = content_root or soup
         images = search_scope.find_all("img")

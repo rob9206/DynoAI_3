@@ -155,7 +155,8 @@ class InnovateClient:
         # Calibration data
         self._calibration = self._load_calibration(calibration_file)
 
-    def _load_calibration(self, calibration_file: str | None = None) -> dict:
+    @staticmethod
+    def _load_calibration(calibration_file: str | None = None) -> dict:
         """
         Load AFR calibration data from JSON file.
 
@@ -275,7 +276,9 @@ class InnovateClient:
             self.port = self._auto_detect_port()
             if self.port is None:
                 logger.error("No Innovate device found. Please specify port manually.")
-                self.last_error = "No Innovate device found (auto-detect returned no ports)"
+                self.last_error = (
+                    "No Innovate device found (auto-detect returned no ports)"
+                )
                 return False
 
         try:
@@ -767,7 +770,8 @@ class InnovateClient:
             device_type=self.device_type.value,
         )
 
-    def _auto_detect_port(self) -> str | None:
+    @staticmethod
+    def _auto_detect_port() -> str | None:
         """
         Attempt to auto-detect Innovate device port.
 

@@ -14,7 +14,8 @@ try:
 except ImportError:  # pragma: no cover - exercised in environments without binary
 
     class _MissingPytesseract:
-        def image_to_string(self, *args, **kwargs):
+        @staticmethod
+        def image_to_string(*args, **kwargs):
             raise RuntimeError("pytesseract is not installed")
 
     pytesseract = _MissingPytesseract()  # type: ignore

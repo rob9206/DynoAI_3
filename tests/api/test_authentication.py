@@ -21,7 +21,8 @@ from flask import Flask
 class TestAPIKeyAuthClass:
     """Tests for the APIKeyAuth class."""
 
-    def test_auth_disabled_by_default(self):
+    @staticmethod
+    def test_auth_disabled_by_default():
         """Authentication is disabled by default."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -33,7 +34,8 @@ class TestAPIKeyAuthClass:
             auth = APIKeyAuth()
             assert auth.enabled is False
 
-    def test_auth_enabled_via_env(self):
+    @staticmethod
+    def test_auth_enabled_via_env():
         """Authentication can be enabled via environment variable."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -42,7 +44,8 @@ class TestAPIKeyAuthClass:
             auth = APIKeyAuth()
             assert auth.enabled is True
 
-    def test_load_keys_from_env(self):
+    @staticmethod
+    def test_load_keys_from_env():
         """API keys can be loaded from API_KEYS environment variable."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -56,7 +59,8 @@ class TestAPIKeyAuthClass:
             assert auth.validate_key("key3") is True
             assert auth.validate_key("invalid") is False
 
-    def test_load_keys_from_env_with_whitespace(self):
+    @staticmethod
+    def test_load_keys_from_env_with_whitespace():
         """API keys are trimmed of whitespace."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -68,7 +72,8 @@ class TestAPIKeyAuthClass:
             assert auth.validate_key("key1") is True
             assert auth.validate_key(" key1 ") is False  # Not trimmed input
 
-    def test_load_keys_from_file(self):
+    @staticmethod
+    def test_load_keys_from_file():
         """API keys can be loaded from a file."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -93,7 +98,8 @@ class TestAPIKeyAuthClass:
         finally:
             os.unlink(filepath)
 
-    def test_load_keys_from_env_and_file(self):
+    @staticmethod
+    def test_load_keys_from_env_and_file():
         """API keys can be loaded from both env and file."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -118,7 +124,8 @@ class TestAPIKeyAuthClass:
         finally:
             os.unlink(filepath)
 
-    def test_validate_key_when_disabled(self):
+    @staticmethod
+    def test_validate_key_when_disabled():
         """When auth disabled, all keys are valid."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -128,7 +135,8 @@ class TestAPIKeyAuthClass:
             assert auth.validate_key("any_key") is True
             assert auth.validate_key("another_key") is True
 
-    def test_generate_key_format(self):
+    @staticmethod
+    def test_generate_key_format():
         """Generated keys have correct format."""
         from api.auth import APIKeyAuth
 
@@ -136,14 +144,16 @@ class TestAPIKeyAuthClass:
         assert key.startswith("dynoai_")
         assert len(key) > 20  # Should be reasonably long
 
-    def test_generate_key_uniqueness(self):
+    @staticmethod
+    def test_generate_key_uniqueness():
         """Generated keys are unique."""
         from api.auth import APIKeyAuth
 
         keys = [APIKeyAuth.generate_key() for _ in range(100)]
         assert len(keys) == len(set(keys))  # All unique
 
-    def test_reload_keys(self):
+    @staticmethod
+    def test_reload_keys():
         """Keys can be reloaded at runtime."""
         from api.auth import APIKeyAuth, reset_auth
 
@@ -212,7 +222,8 @@ class TestRequireApiKeyDecorator:
 
         reset_auth()
 
-    def test_returns_401_when_key_missing(self, app_with_auth_enabled):
+    @staticmethod
+    def test_returns_401_when_key_missing(app_with_auth_enabled):
         """Returns 401 when X-API-Key header is missing."""
         response = app_with_auth_enabled.get("/protected")
         assert response.status_code == 401
@@ -220,7 +231,8 @@ class TestRequireApiKeyDecorator:
         assert data["error"]["code"] == "AUTH_REQUIRED"
         assert "X-API-Key" in data["error"]["message"]
 
-    def test_returns_403_when_key_invalid(self, app_with_auth_enabled):
+    @staticmethod
+    def test_returns_403_when_key_invalid(app_with_auth_enabled):
         """Returns 403 when X-API-Key is invalid."""
         response = app_with_auth_enabled.get(
             "/protected", headers={"X-API-Key": "wrong_key"}
@@ -229,7 +241,8 @@ class TestRequireApiKeyDecorator:
         data = response.get_json()
         assert data["error"]["code"] == "INVALID_API_KEY"
 
-    def test_returns_200_when_key_valid(self, app_with_auth_enabled):
+    @staticmethod
+    def test_returns_200_when_key_valid(app_with_auth_enabled):
         """Returns 200 when X-API-Key is valid."""
         response = app_with_auth_enabled.get(
             "/protected", headers={"X-API-Key": "valid_key"}
@@ -238,7 +251,8 @@ class TestRequireApiKeyDecorator:
         data = response.get_json()
         assert data["message"] == "success"
 
-    def test_accepts_multiple_valid_keys(self, app_with_auth_enabled):
+    @staticmethod
+    def test_accepts_multiple_valid_keys(app_with_auth_enabled):
         """Accepts any of the configured valid keys."""
         response1 = app_with_auth_enabled.get(
             "/protected", headers={"X-API-Key": "valid_key"}
@@ -250,19 +264,22 @@ class TestRequireApiKeyDecorator:
         )
         assert response2.status_code == 200
 
-    def test_works_with_post_requests(self, app_with_auth_enabled):
+    @staticmethod
+    def test_works_with_post_requests(app_with_auth_enabled):
         """Works with POST requests."""
         response = app_with_auth_enabled.post(
             "/protected", headers={"X-API-Key": "valid_key"}
         )
         assert response.status_code == 200
 
-    def test_public_endpoints_unaffected(self, app_with_auth_enabled):
+    @staticmethod
+    def test_public_endpoints_unaffected(app_with_auth_enabled):
         """Endpoints without decorator are unaffected."""
         response = app_with_auth_enabled.get("/public")
         assert response.status_code == 200
 
-    def test_auth_disabled_allows_all(self, app_with_auth_disabled):
+    @staticmethod
+    def test_auth_disabled_allows_all(app_with_auth_disabled):
         """When auth disabled, all requests pass through."""
         # No header
         response = app_with_auth_disabled.get("/protected")
@@ -313,27 +330,32 @@ class TestAuthIntegrationWithMainApp:
 
         reset_auth()
 
-    def test_health_endpoint_always_public(self, client_auth_enabled):
+    @staticmethod
+    def test_health_endpoint_always_public(client_auth_enabled):
         """Health endpoint works without authentication."""
         response = client_auth_enabled.get("/api/health")
         assert response.status_code == 200
 
-    def test_health_live_endpoint_always_public(self, client_auth_enabled):
+    @staticmethod
+    def test_health_live_endpoint_always_public(client_auth_enabled):
         """Health live endpoint works without authentication."""
         response = client_auth_enabled.get("/api/health/live")
         assert response.status_code == 200
 
-    def test_health_ready_endpoint_always_public(self, client_auth_enabled):
+    @staticmethod
+    def test_health_ready_endpoint_always_public(client_auth_enabled):
         """Health ready endpoint works without authentication."""
         response = client_auth_enabled.get("/api/health/ready")
         assert response.status_code == 200
 
-    def test_runs_endpoint_public(self, client_auth_disabled):
+    @staticmethod
+    def test_runs_endpoint_public(client_auth_disabled):
         """Runs endpoint works without authentication (read-only)."""
         response = client_auth_disabled.get("/api/runs")
         assert response.status_code == 200
 
-    def test_analyze_requires_auth_when_enabled(self, client_auth_enabled):
+    @staticmethod
+    def test_analyze_requires_auth_when_enabled(client_auth_enabled):
         """Analyze endpoint processes requests even when auth enabled."""
         # Note: Current implementation checks file before auth
         # Without key - will return 400 (no file) before auth check
@@ -348,7 +370,8 @@ class TestAuthIntegrationWithMainApp:
         # Either 400 (file check first) or 403 (auth check first) is acceptable
         assert response.status_code in (400, 403)
 
-    def test_analyze_works_with_valid_key(self, client_auth_enabled, tmp_path):
+    @staticmethod
+    def test_analyze_works_with_valid_key(client_auth_enabled, tmp_path):
         """Analyze endpoint works with valid API key."""
         # Create a sample CSV file
         csv_content = "timestamp,rpm,afr_front,afr_rear\n0,1000,14.7,14.7"
@@ -365,7 +388,8 @@ class TestAuthIntegrationWithMainApp:
         # Should be 202 (accepted) or similar, not auth error
         assert response.status_code in [200, 202, 400, 500]  # Not 401 or 403
 
-    def test_analyze_works_when_auth_disabled(self, client_auth_disabled):
+    @staticmethod
+    def test_analyze_works_when_auth_disabled(client_auth_disabled):
         """Analyze endpoint works without key when auth disabled."""
         response = client_auth_disabled.post("/api/analyze")
         # May fail for other reasons (no file), but not auth
@@ -398,7 +422,8 @@ class TestAuthErrorResponses:
 
         reset_auth()
 
-    def test_401_response_structure(self, client):
+    @staticmethod
+    def test_401_response_structure(client):
         """401 response has proper error structure."""
         response = client.get("/test")
         assert response.status_code == 401
@@ -410,7 +435,8 @@ class TestAuthErrorResponses:
         assert "message" in data["error"]
         assert data["error"]["code"] == "AUTH_REQUIRED"
 
-    def test_403_response_structure(self, client):
+    @staticmethod
+    def test_403_response_structure(client):
         """403 response has proper error structure."""
         response = client.get("/test", headers={"X-API-Key": "invalid"})
         assert response.status_code == 403
@@ -426,7 +452,8 @@ class TestAuthErrorResponses:
 class TestGlobalAuthInstance:
     """Tests for global auth instance management."""
 
-    def test_get_auth_returns_singleton(self):
+    @staticmethod
+    def test_get_auth_returns_singleton():
         """get_auth returns the same instance."""
         from api.auth import get_auth, reset_auth
 
@@ -435,7 +462,8 @@ class TestGlobalAuthInstance:
         auth2 = get_auth()
         assert auth1 is auth2
 
-    def test_reset_auth_clears_instance(self):
+    @staticmethod
+    def test_reset_auth_clears_instance():
         """reset_auth clears the global instance."""
         from api.auth import get_auth, reset_auth
 

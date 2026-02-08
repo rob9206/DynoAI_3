@@ -244,8 +244,8 @@ def detect_decel_events(
     in_event = False
     event_start = 0
 
-    for i in range(len(records)):
-        rpm = records[i].get("rpm")
+    for i, item in enumerate(records):
+        rpm = item.get("rpm")
         tps_val = tps_values[i]
         rate = tps_rate[i]
 
@@ -408,7 +408,7 @@ def calculate_decel_enrichment(
             continue  # Skip low-likelihood events
 
         # Find which zone this event falls into
-        for zone in BASE_ENRICHMENT.keys():
+        for zone in BASE_ENRICHMENT:
             rpm_min, rpm_max, tps_min, tps_max = zone
 
             # Check if event's end point is in this zone

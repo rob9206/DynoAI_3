@@ -97,7 +97,8 @@ class APIKeyAuth:
         # Constant-time comparison to prevent timing attacks
         return api_key in self._valid_keys
 
-    def generate_key(self) -> str:
+    @staticmethod
+    def generate_key() -> str:
         """
         Generate a new API key.
 
