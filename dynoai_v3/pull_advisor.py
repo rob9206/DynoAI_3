@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class PullType(Enum):
     """Classification of pull types."""
+
     WOT_SWEEP = "wot_sweep"
     PART_THROTTLE = "part_throttle"
     CRUISE = "cruise"
@@ -44,8 +45,9 @@ class PullType(Enum):
 
 class PullMode(Enum):
     """How the dyno should execute this pull."""
-    ACCELERATION = "acceleration"   # WOT or partial-throttle accel sweep
-    STEADY_STATE = "steady_state"   # RPM hold via eddy brake + throttle targeting MAP
+
+    ACCELERATION = "acceleration"  # WOT or partial-throttle accel sweep
+    STEADY_STATE = "steady_state"  # RPM hold via eddy brake + throttle targeting MAP
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,7 @@ class PullMode(Enum):
 @dataclass
 class PullRecommendation:
     """A single pull recommendation from the advisor."""
+
     rpm: float
     map_kpa: float
     gear: int = 3
@@ -70,6 +73,7 @@ class PullRecommendation:
 @dataclass
 class ConvergenceStatus:
     """Convergence status of the current session."""
+
     converged: bool
     max_uncertainty: float = 0.0
     mean_uncertainty: float = 0.0
@@ -171,7 +175,8 @@ class PullAdvisor:
 
         # Phase 1: WOT sweep across safe RPM range
         wot_rpms = [
-            r for r in self.surrogate.rpm_bins
+            r
+            for r in self.surrogate.rpm_bins
             if r <= self.constraints.maps.max_test_rpm
         ]
         # Select a representative subset if too many
@@ -182,16 +187,18 @@ class PullAdvisor:
         for rpm in wot_rpms:
             if len(sequence) >= max_pulls:
                 break
-            sequence.append(PullRecommendation(
-                rpm=float(rpm),
-                map_kpa=100.0,
-                gear=self._recommend_gear(float(rpm)),
-                pull_number=len(sequence) + 1,
-                pull_type=PullType.WOT_SWEEP,
-                pull_mode=PullMode.ACCELERATION,
-                reason=f"WOT sweep at {rpm:.0f} RPM",
-                throttle_pct=100.0,
-            ))
+            sequence.append(
+                PullRecommendation(
+                    rpm=float(rpm),
+                    map_kpa=100.0,
+                    gear=self._recommend_gear(float(rpm)),
+                    pull_number=len(sequence) + 1,
+                    pull_type=PullType.WOT_SWEEP,
+                    pull_mode=PullMode.ACCELERATION,
+                    reason=f"WOT sweep at {rpm:.0f} RPM",
+                    throttle_pct=100.0,
+                )
+            )
 
         # Phase 2: Fill remaining with highest-uncertainty cells
         remaining = max_pulls - len(sequence)
@@ -220,16 +227,18 @@ class PullAdvisor:
                     continue
 
                 pull_type = self._classify_pull(rpm, map_kpa)
-                sequence.append(PullRecommendation(
-                    rpm=rpm,
-                    map_kpa=map_kpa,
-                    gear=self._recommend_gear(rpm),
-                    pull_number=len(sequence) + 1,
-                    pull_type=pull_type,
-                    pull_mode=self._pull_mode_for_type(pull_type),
-                    reason=f"High uncertainty at {rpm:.0f}/{map_kpa:.0f}",
-                    throttle_pct=self._map_to_throttle(map_kpa),
-                ))
+                sequence.append(
+                    PullRecommendation(
+                        rpm=rpm,
+                        map_kpa=map_kpa,
+                        gear=self._recommend_gear(rpm),
+                        pull_number=len(sequence) + 1,
+                        pull_type=pull_type,
+                        pull_mode=self._pull_mode_for_type(pull_type),
+                        reason=f"High uncertainty at {rpm:.0f}/{map_kpa:.0f}",
+                        throttle_pct=self._map_to_throttle(map_kpa),
+                    )
+                )
                 weighted[idx] = 0.0
 
         return sequence
@@ -262,8 +271,7 @@ class PullAdvisor:
         # Require both low uncertainty and enough pulls before declaring converged
         min_observations = 6
         converged = (
-            max_unc < threshold
-            and len(self.surrogate.observations) >= min_observations
+            max_unc < threshold and len(self.surrogate.observations) >= min_observations
         )
 
         return ConvergenceStatus(
@@ -287,7 +295,9 @@ class PullAdvisor:
         self._vetoed_points.append((rpm, map_kpa, reason))
         logger.info(
             "Operator vetoed point: RPM=%.0f MAP=%.0f (%s)",
-            rpm, map_kpa, reason or "no reason",
+            rpm,
+            map_kpa,
+            reason or "no reason",
         )
 
     # ------------------------------------------------------------------
@@ -348,15 +358,17 @@ class PullAdvisor:
             rpm = float(self.surrogate.rpm_bins[idx[0]])
             map_kpa = float(self.surrogate.map_bins[idx[1]])
             pt = self._classify_pull(rpm, map_kpa)
-            alts.append(PullRecommendation(
-                rpm=rpm,
-                map_kpa=map_kpa,
-                gear=self._recommend_gear(rpm),
-                pull_type=pt,
-                pull_mode=self._pull_mode_for_type(pt),
-                reason=f"Alternative at {rpm:.0f}/{map_kpa:.0f}",
-                throttle_pct=self._map_to_throttle(map_kpa),
-            ))
+            alts.append(
+                PullRecommendation(
+                    rpm=rpm,
+                    map_kpa=map_kpa,
+                    gear=self._recommend_gear(rpm),
+                    pull_type=pt,
+                    pull_mode=self._pull_mode_for_type(pt),
+                    reason=f"Alternative at {rpm:.0f}/{map_kpa:.0f}",
+                    throttle_pct=self._map_to_throttle(map_kpa),
+                )
+            )
 
         return alts
 
