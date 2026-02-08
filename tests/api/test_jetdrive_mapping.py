@@ -337,7 +337,9 @@ class TestMappingPersistence:
     @staticmethod
     def test_save_and_load_mapping(mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             sig = "4097_192.168.1.100_abc123"
             mapping = ProviderMapping(
                 provider_signature=sig,
@@ -361,14 +363,18 @@ class TestMappingPersistence:
     @staticmethod
     def test_get_nonexistent_mapping(temp_mapping_dir):
         """Test loading a mapping that doesn't exist."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             mapping = get_mapping("nonexistent_signature")
             assert mapping is None
 
     @staticmethod
     def test_delete_mapping(temp_mapping_dir):
         """Test deleting a mapping file."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             sig = "to_delete"
             mapping = ProviderMapping(provider_signature=sig)
             save_mapping(mapping)
@@ -385,7 +391,9 @@ class TestMappingPersistence:
     @staticmethod
     def test_list_mappings(temp_mapping_dir):
         """Test listing all mappings."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             # Save a few mappings
             for i in range(3):
                 mapping = ProviderMapping(

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # In-memory session store (thread-safe)
 # ---------------------------------------------------------------------------
-_sessions: Dict[str, Any] = {}          # session_id → TuningSession
+_sessions: Dict[str, Any] = {}  # session_id → TuningSession
 _sessions_lock = threading.Lock()
 
 _TEMPLATES_DIR = Path("data/v3_templates")
@@ -49,7 +49,11 @@ def _rec_to_dict(rec) -> Dict[str, Any]:
         "map_kpa": rec.map_kpa,
         "gear": rec.gear,
         "pull_number": rec.pull_number,
-        "pull_type": rec.pull_type.value if hasattr(rec.pull_type, "value") else str(rec.pull_type),
+        "pull_type": (
+            rec.pull_type.value
+            if hasattr(rec.pull_type, "value")
+            else str(rec.pull_type)
+        ),
         "reason": rec.reason,
         "expected_info_gain": rec.expected_info_gain,
         "remaining_uncertainty": rec.remaining_uncertainty,
@@ -84,10 +88,11 @@ def _template_match_to_dict(tm) -> Optional[Dict[str, Any]]:
 # Public API (called by routes)
 # ---------------------------------------------------------------------------
 
+
 def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new TuningSession, initialize it, and return status."""
-    from dynoai_v3.template_library import HardwareConfig
     from dynoai_v3.session_orchestrator import TuningSession
+    from dynoai_v3.template_library import HardwareConfig
 
     config = HardwareConfig.from_dict(config_dict)
     session = TuningSession(config, templates_dir=_TEMPLATES_DIR)
@@ -135,8 +140,12 @@ def ingest_pull(
     return {
         "pull_number": result.pull_number,
         "observations_added": result.observations_added,
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
     }
 
 
@@ -281,8 +290,8 @@ def simulate_pull_realistic(
     from api.services.simulation.dyno_simulator import (
         DynoSimulator,
         EngineProfile,
-        SimulatorConfig,
         SimState,
+        SimulatorConfig,
     )
     from api.services.simulation.virtual_ecu import (
         VirtualECU,
@@ -328,7 +337,12 @@ def simulate_pull_realistic(
     rpm_bins_int = tuple(int(r) for r in rpm_bins)
     map_bins_int = tuple(int(m) for m in map_bins)
     displacement_ci = float(session.config.displacement_ci or 114)
-    cache_key = (session.config.engine_family, rpm_bins_int, map_bins_int, displacement_ci)
+    cache_key = (
+        session.config.engine_family,
+        rpm_bins_int,
+        map_bins_int,
+        displacement_ci,
+    )
 
     cache = getattr(session, "_realistic_sim_cache", None)
     if not isinstance(cache, dict) or cache.get("key") != cache_key:
@@ -340,7 +354,9 @@ def simulate_pull_realistic(
         except Exception:
             pass
 
-        baseline_ve = create_baseline_ve_table(list(rpm_bins_int), list(map_bins_int), peak_ve=0.85)
+        baseline_ve = create_baseline_ve_table(
+            list(rpm_bins_int), list(map_bins_int), peak_ve=0.85
+        )
         # Seed once per session so VirtualECU interpolators can be reused.
         seed = abs(hash(getattr(session, "session_id", session_id))) % (2**31 - 1)
         wrong_ve = create_intentionally_wrong_ve_table(
@@ -477,7 +493,10 @@ def simulate_pull_realistic(
 
     logger.info(
         "Realistic sim pull at RPM=%.0f MAP=%.0f: %d points, %d zones corrected",
-        rpm, map_kpa, len(df), corrections.zones_adjusted,
+        rpm,
+        map_kpa,
+        len(df),
+        corrections.zones_adjusted,
     )
 
     return {
@@ -485,8 +504,12 @@ def simulate_pull_realistic(
         "observations_added": result.observations_added,
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
         "mode": "realistic",
         "afr_metrics": afr_metrics,
     }
@@ -525,7 +548,9 @@ def simulate_pull(
         map_kpa = map_kpa or rec.map_kpa
 
     # Generate synthetic data with realistic scatter
-    rng = np.random.RandomState(int(rpm + map_kpa + len(session.surrogate.observations)))
+    rng = np.random.RandomState(
+        int(rpm + map_kpa + len(session.surrogate.observations))
+    )
 
     # RPM scatter: +/- 100 RPM around target
     rpm_arr = rpm + rng.randn(n_points) * 100
@@ -547,7 +572,9 @@ def simulate_pull(
 
     logger.info(
         "Simulated pull at RPM=%.0f MAP=%.0f: %d points generated",
-        rpm, map_kpa, n_points,
+        rpm,
+        map_kpa,
+        n_points,
     )
 
     return {
@@ -555,8 +582,12 @@ def simulate_pull(
         "observations_added": result.observations_added,
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": _convergence_to_dict(result.convergence) if result.convergence else None,
-        "next_suggestion": _rec_to_dict(result.next_suggestion) if result.next_suggestion else None,
+        "convergence": (
+            _convergence_to_dict(result.convergence) if result.convergence else None
+        ),
+        "next_suggestion": (
+            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
+        ),
         "mode": "quick",
         "afr_metrics": None,
     }

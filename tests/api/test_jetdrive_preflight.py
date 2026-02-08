@@ -476,7 +476,8 @@ class TestPreflightIntegration:
 
         # Patch at the jetdrive_client module level since it's imported inside the function
         with patch(
-            "api.services.jetdrive.jetdrive_client.discover_providers", new_callable=AsyncMock
+            "api.services.jetdrive.jetdrive_client.discover_providers",
+            new_callable=AsyncMock,
         ) as mock_discover:
             mock_discover.return_value = []
 
@@ -495,7 +496,10 @@ class TestPreflightIntegration:
         """Test preflight passes with valid provider and data."""
         import asyncio
 
-        from api.services.jetdrive.jetdrive_client import ChannelInfo, JetDriveProviderInfo
+        from api.services.jetdrive.jetdrive_client import (
+            ChannelInfo,
+            JetDriveProviderInfo,
+        )
         from api.services.jetdrive.jetdrive_preflight import run_preflight
 
         # Mock provider with good channels
@@ -514,7 +518,8 @@ class TestPreflightIntegration:
 
         # Patch at the jetdrive_client module level
         with patch(
-            "api.services.jetdrive.jetdrive_client.discover_providers", new_callable=AsyncMock
+            "api.services.jetdrive.jetdrive_client.discover_providers",
+            new_callable=AsyncMock,
         ) as mock_discover:
             mock_discover.return_value = [mock_provider]
 
@@ -526,7 +531,8 @@ class TestPreflightIntegration:
                     callback(make_sample(0x1001, 15, "Air/Fuel Ratio 1", 13.5))
 
             with patch(
-                "api.services.jetdrive.jetdrive_client.subscribe", side_effect=mock_subscribe
+                "api.services.jetdrive.jetdrive_client.subscribe",
+                side_effect=mock_subscribe,
             ):
                 result = asyncio.run(run_preflight(sample_seconds=1))
 

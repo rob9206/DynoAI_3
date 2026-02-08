@@ -21,7 +21,6 @@ from ._shared import logger
 
 mapping_bp = Blueprint("jetdrive_mapping", __name__)
 
-
 # ---------------------------------------------------------------------------
 # Preflight Validation
 # ---------------------------------------------------------------------------
@@ -585,7 +584,11 @@ def import_mapping():
     """Import a mapping from JSON file."""
     import json
 
-    from api.services.jetdrive.jetdrive_mapping import ChannelMapping, ProviderMapping, save_mapping
+    from api.services.jetdrive.jetdrive_mapping import (
+        ChannelMapping,
+        ProviderMapping,
+        save_mapping,
+    )
 
     try:
         mapping_data = None
@@ -794,9 +797,7 @@ def reset_realtime_analysis():
 
         if not queue_mgr.realtime_analysis_enabled:
             return (
-                jsonify(
-                    {"success": False, "error": "Realtime analysis not enabled"}
-                ),
+                jsonify({"success": False, "error": "Realtime analysis not enabled"}),
                 400,
             )
 

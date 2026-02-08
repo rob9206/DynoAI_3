@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -49,15 +49,17 @@ KNOWN_FAMILIES: List[str] = [
 @dataclass
 class Violation:
     """A single safety violation."""
-    parameter: str       # e.g. "afr", "timing", "rpm"
-    reason: str          # Human-readable explanation
-    value: float         # The offending value
-    limit: float         # The boundary that was exceeded
+
+    parameter: str  # e.g. "afr", "timing", "rpm"
+    reason: str  # Human-readable explanation
+    value: float  # The offending value
+    limit: float  # The boundary that was exceeded
 
 
 @dataclass
 class SafetyVerdict:
     """Result of a safety check on a single operating point."""
+
     safe: bool
     violations: List[Violation] = field(default_factory=list)
 
@@ -69,6 +71,7 @@ class SafetyVerdict:
 @dataclass
 class ClampEvent:
     """Record of a clamped cell during table validation."""
+
     rpm_idx: int
     map_idx: int
     original_value: float
@@ -82,38 +85,39 @@ class ClampEvent:
 @dataclass
 class ConstraintMaps:
     """All per-family safety limits in one inspectable structure."""
+
     engine_family: str
-    cooling_type: str            # "air", "oil", "liquid"
+    cooling_type: str  # "air", "oil", "liquid"
 
     # Grid definition
     rpm_bins: List[float] = field(default_factory=list)
     map_bins: List[float] = field(default_factory=list)
 
     # Timing limits
-    max_spark_advance_deg: float = 28.0    # Max base advance (BTDC)
-    knock_retard_limit_deg: float = -8.0   # Max retard from base
+    max_spark_advance_deg: float = 28.0  # Max base advance (BTDC)
+    knock_retard_limit_deg: float = -8.0  # Max retard from base
 
     # AFR limits
-    min_afr_wot: float = 12.2              # Minimum AFR at WOT
-    max_afr_wot: float = 13.2              # Maximum AFR at WOT
-    decel_min_afr: float = 13.0            # Minimum AFR during decel
+    min_afr_wot: float = 12.2  # Minimum AFR at WOT
+    max_afr_wot: float = 13.2  # Maximum AFR at WOT
+    decel_min_afr: float = 13.0  # Minimum AFR during decel
 
     # Thermal limits
-    ect_enrichment_trigger_f: float = 475.0   # ECT that triggers enrichment
-    ect_enrichment_amount_pct: float = 5.0    # Enrichment percentage
-    max_egt_f: float = 1450.0                 # Maximum EGT
+    ect_enrichment_trigger_f: float = 475.0  # ECT that triggers enrichment
+    ect_enrichment_amount_pct: float = 5.0  # Enrichment percentage
+    max_egt_f: float = 1450.0  # Maximum EGT
 
     # Correction limits
-    max_ve_correction_pct: float = 7.0        # Standard VE clamp (±%)
-    max_fuel_gain: float = 0.05               # Adaptive overlay max (±5%)
-    max_timing_offset: float = 2.0            # Adaptive timing max (±degrees)
+    max_ve_correction_pct: float = 7.0  # Standard VE clamp (±%)
+    max_fuel_gain: float = 0.05  # Adaptive overlay max (±5%)
+    max_timing_offset: float = 2.0  # Adaptive timing max (±degrees)
 
     # Decay parameters
-    correction_decay_rate: float = 0.10       # 10% per hour past threshold
+    correction_decay_rate: float = 0.10  # 10% per hour past threshold
     correction_decay_threshold_hrs: float = 30.0
 
     # Operating envelope
-    max_test_rpm: float = 6000.0              # Max RPM for testing
+    max_test_rpm: float = 6000.0  # Max RPM for testing
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -188,7 +192,7 @@ def _default_revmax_liquid(family: str) -> ConstraintMaps:
         min_afr_wot=12.6,
         max_afr_wot=13.5,
         decel_min_afr=13.5,
-        ect_enrichment_trigger_f=230.0,   # Coolant temp, much lower
+        ect_enrichment_trigger_f=230.0,  # Coolant temp, much lower
         ect_enrichment_amount_pct=5.0,
         max_egt_f=1550.0,
         max_ve_correction_pct=7.0,
@@ -339,51 +343,59 @@ class PhysicsConstraints:
 
         # RPM check
         if rpm > self.maps.max_test_rpm:
-            violations.append(Violation(
-                parameter="rpm",
-                reason=f"RPM {rpm:.0f} exceeds max test RPM {self.maps.max_test_rpm:.0f}",
-                value=rpm,
-                limit=self.maps.max_test_rpm,
-            ))
+            violations.append(
+                Violation(
+                    parameter="rpm",
+                    reason=f"RPM {rpm:.0f} exceeds max test RPM {self.maps.max_test_rpm:.0f}",
+                    value=rpm,
+                    limit=self.maps.max_test_rpm,
+                )
+            )
 
         # Timing check
         if timing is not None:
             max_allowed = self.maps.max_spark_advance_deg
             if timing > max_allowed:
-                violations.append(Violation(
-                    parameter="timing",
-                    reason=(
-                        f"Timing {timing:.1f}° exceeds max spark advance "
-                        f"{max_allowed:.1f}°"
-                    ),
-                    value=timing,
-                    limit=max_allowed,
-                ))
+                violations.append(
+                    Violation(
+                        parameter="timing",
+                        reason=(
+                            f"Timing {timing:.1f}° exceeds max spark advance "
+                            f"{max_allowed:.1f}°"
+                        ),
+                        value=timing,
+                        limit=max_allowed,
+                    )
+                )
 
         # AFR check (varies by load)
         if afr is not None:
             is_wot = map_kpa >= 90
             if is_wot:
                 if afr > self.maps.max_afr_wot:
-                    violations.append(Violation(
-                        parameter="afr",
-                        reason=(
-                            f"LEAN at WOT: AFR {afr:.1f} exceeds max "
-                            f"{self.maps.max_afr_wot:.1f}"
-                        ),
-                        value=afr,
-                        limit=self.maps.max_afr_wot,
-                    ))
+                    violations.append(
+                        Violation(
+                            parameter="afr",
+                            reason=(
+                                f"LEAN at WOT: AFR {afr:.1f} exceeds max "
+                                f"{self.maps.max_afr_wot:.1f}"
+                            ),
+                            value=afr,
+                            limit=self.maps.max_afr_wot,
+                        )
+                    )
                 if afr < self.maps.min_afr_wot:
-                    violations.append(Violation(
-                        parameter="afr",
-                        reason=(
-                            f"RICH at WOT: AFR {afr:.1f} below min "
-                            f"{self.maps.min_afr_wot:.1f}"
-                        ),
-                        value=afr,
-                        limit=self.maps.min_afr_wot,
-                    ))
+                    violations.append(
+                        Violation(
+                            parameter="afr",
+                            reason=(
+                                f"RICH at WOT: AFR {afr:.1f} below min "
+                                f"{self.maps.min_afr_wot:.1f}"
+                            ),
+                            value=afr,
+                            limit=self.maps.min_afr_wot,
+                        )
+                    )
 
         return SafetyVerdict(
             safe=len(violations) == 0,
@@ -405,7 +417,10 @@ class PhysicsConstraints:
             (safe: bool, reason: str) — reason is "OK" if safe
         """
         if rpm > self.maps.max_test_rpm:
-            return False, f"RPM {rpm:.0f} exceeds max test RPM {self.maps.max_test_rpm:.0f}"
+            return (
+                False,
+                f"RPM {rpm:.0f} exceeds max test RPM {self.maps.max_test_rpm:.0f}",
+            )
 
         if map_kpa > 110:
             return False, f"MAP {map_kpa:.0f} kPa exceeds safe test range"
@@ -445,13 +460,15 @@ class PhysicsConstraints:
         clamped_mask = np.abs(diff) > 0.001
         rows, cols = np.where(clamped_mask)
         for r, c in zip(rows, cols):
-            events.append(ClampEvent(
-                rpm_idx=int(r),
-                map_idx=int(c),
-                original_value=float(table[r, c]),
-                clamped_value=float(clamped[r, c]),
-                limit=limit,
-            ))
+            events.append(
+                ClampEvent(
+                    rpm_idx=int(r),
+                    map_idx=int(c),
+                    original_value=float(table[r, c]),
+                    clamped_value=float(clamped[r, c]),
+                    limit=limit,
+                )
+            )
 
         if events:
             logger.info(
