@@ -30,7 +30,7 @@ from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 from werkzeug.utils import secure_filename
 
 if TYPE_CHECKING:
@@ -1874,7 +1874,10 @@ def get_monitor_status():
 # Store for live channel values
 _live_data: dict[str, Any] = {
     "channels": {},
-    "last_update": None,
+    # Store as epoch seconds to avoid per-sample ISO formatting/allocation.
+    # ISO formatting is done on read (endpoints) for backward compatibility.
+    "last_update_ts": None,
+    "last_update": None,  # deprecated internal field; kept for response compatibility
     "capturing": False,
     "provider_id": None,  # Pinned provider ID
     "provider_name": None,  # Pinned provider name
@@ -1932,7 +1935,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             )
             with _live_data_lock:
                 _live_data["channels"] = {}
-                _live_data["last_update"] = datetime.now().isoformat()
+                _live_data["last_update_ts"] = time.time()
                 _live_data["error"] = "No providers found"
                 _live_data["provider_id"] = None
                 _live_data["provider_name"] = None
@@ -2114,7 +2117,8 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 "name": canonical_name,
                 "value": canonical_value,
                 "timestamp": s.timestamp_ms,
-                "updated_at": datetime.now().isoformat(),
+                # Keep per-entry timestamp numeric; UI can format if needed.
+                "updated_at_ts": time.time(),
                 "category": canonical_category,
                 "units": canonical_units,
             }
@@ -2164,12 +2168,23 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             chan_alias = f"chan_{s.channel_id}"
             channel_values.setdefault(chan_alias, entry)
 
-            # Update live data immediately (with lock for thread safety)
+            # Update shared live state with minimal lock hold time:
+            # - update in-place to avoid full dict allocation per sample
+            # - store numeric timestamp (avoid isoformat() alloc on hot path)
+            now_ts = time.time()
             with _live_data_lock:
-                _live_data["channels"] = dict(
-                    channel_values
-                )  # Copy to avoid race conditions
-                _live_data["last_update"] = datetime.now().isoformat()
+                live_channels = _live_data.get("channels")
+                if not isinstance(live_channels, dict):
+                    live_channels = {}
+                    _live_data["channels"] = live_channels
+                # Only mutate the keys affected by this sample. This keeps the
+                # shared dict stable and reduces allocations.
+                live_channels[canonical_name] = entry
+                # Add/refresh alias if it doesn't exist (collision-safe fallback).
+                if chan_alias not in live_channels:
+                    live_channels[chan_alias] = entry
+
+                _live_data["last_update_ts"] = now_ts
                 if "error" in _live_data:
                     del _live_data["error"]
 
@@ -2298,7 +2313,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         logger.error(f"Live capture loop error: {e}", exc_info=True)
         with _live_data_lock:
             _live_data["channels"] = {}
-            _live_data["last_update"] = datetime.now().isoformat()
+            _live_data["last_update_ts"] = time.time()
             _live_data["error"] = str(e)
     finally:
         # Clean up the event loop
@@ -2373,6 +2388,7 @@ def start_live_capture():
 
         _live_data["capturing"] = True
         _live_data["channels"] = {}
+        _live_data["last_update_ts"] = None
         _live_data["provider_id"] = None
         _live_data["provider_name"] = None
         _live_data["provider_host"] = None
@@ -2415,14 +2431,12 @@ def stop_live_capture():
 
 @jetdrive_bp.route("/hardware/live/data", methods=["GET"])
 def get_live_data():
-    """Get current live channel data.
+    """Get current live channel data (polling-friendly JSON)."""
+    return jsonify(_build_live_data_payload())
 
-    This endpoint is exempt from rate limiting to support real-time polling
-    at 100-250ms intervals for live dyno data visualization.
 
-    Note: Rate limit exemption is handled by conditional limiter in app.py.
-    The default rate limit (1200/minute) is sufficient for multiple pollers.
-    """
+def _build_live_data_payload() -> dict[str, Any]:
+    """Shared payload builder for polling + SSE."""
     global _live_data
 
     # Check if simulator is active first
@@ -2432,16 +2446,15 @@ def get_live_data():
         sim = get_simulator()
         channels = sim.get_channels()
         state = sim.get_state().value
-        return jsonify(
-            {
-                "capturing": True,
-                "simulated": True,
-                "sim_state": state,
-                "last_update": datetime.now().isoformat(),
-                "channels": channels,
-                "channel_count": len(channels),
-            }
-        )
+        return {
+            "capturing": True,
+            "simulated": True,
+            "sim_state": state,
+            "last_update_ts": time.time(),
+            "last_update": datetime.now().isoformat(),
+            "channels": channels,
+            "channel_count": len(channels),
+        }
 
     def _get_value(channels_dict: dict[str, Any], keys: list[str]) -> float | None:
         for k in keys:
@@ -2458,19 +2471,16 @@ def get_live_data():
         channels: dict[str, Any] = dict(_live_data.get("channels", {}) or {})
         capturing = _live_data.get("capturing", False)
         error = _live_data.get("error")
-        last_update = _live_data.get("last_update")
+        last_update_ts = _live_data.get("last_update_ts")
         provider_id = _live_data.get("provider_id")
         provider_name = _live_data.get("provider_name")
         provider_host = _live_data.get("provider_host")
 
     # Check if data is stale (older than 10 seconds)
     is_stale = False
-    if last_update:
+    if last_update_ts:
         try:
-            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
-            age_seconds = (
-                datetime.now() - last_update_dt.replace(tzinfo=None)
-            ).total_seconds()
+            age_seconds = float(time.time() - float(last_update_ts))
             if age_seconds > 10:
                 is_stale = True
                 if not error:
@@ -2482,7 +2492,6 @@ def get_live_data():
     try:
         from api.config import get_config
 
-        # Channel IDs from Power Core: ID 39=Digital RPM 1, ID 9=Engine RPM, ID 36=Force Drum 1, ID 32=Force
         rpm = _get_value(
             channels, ["Digital RPM 1", "Engine RPM", "RPM", "chan_39", "chan_9"]
         )
@@ -2493,13 +2502,9 @@ def get_live_data():
 
         if rpm is not None and force is not None and rpm > 0:
             cfg = get_config().dyno
-            # During throttle lift / coastdown, Force Drum can go negative (engine braking),
-            # which would otherwise produce 0 HP due to guardrails in calculate_hp_from_force.
-            # For live display, use magnitude so the trace doesn't instantly flatline.
             force_mag = abs(float(force))
             hp = cfg.calculate_hp_from_force(force_mag, rpm)
             tq = cfg.calculate_torque_from_force(force_mag)
-            # Only add if not already provided by hardware
             channels.setdefault("Horsepower", {"value": hp})
             channels.setdefault("Torque", {"value": tq})
     except Exception:
@@ -2508,16 +2513,25 @@ def get_live_data():
     # Sanitize channel values - replace Infinity/NaN with None (valid JSON)
     import math
 
-    for ch_name, ch_data in channels.items():
+    for _ch_name, ch_data in channels.items():
         if isinstance(ch_data, dict) and "value" in ch_data:
             val = ch_data["value"]
             if isinstance(val, float) and (math.isinf(val) or math.isnan(val)):
                 ch_data["value"] = None  # Replace invalid floats with null
 
-    response = {
+    # Backward compatible ISO timestamp for callers that expect a string.
+    last_update_iso = None
+    if last_update_ts:
+        try:
+            last_update_iso = datetime.fromtimestamp(float(last_update_ts)).isoformat()
+        except Exception:
+            last_update_iso = None
+
+    response: dict[str, Any] = {
         "capturing": capturing,
         "simulated": False,
-        "last_update": _live_data.get("last_update"),
+        "last_update_ts": last_update_ts,
+        "last_update": last_update_iso,
         "channels": channels,
         "channel_count": len(channels),
         "is_stale": is_stale,
@@ -2530,7 +2544,51 @@ def get_live_data():
     if error:
         response["error"] = error
 
-    return jsonify(response)
+    return response
+
+
+@jetdrive_bp.route("/hardware/live/stream", methods=["GET"])
+def stream_live_data():
+    """
+    Server-Sent Events (SSE) stream for live channel data.
+
+    This reduces HTTP polling overhead and provides lower-latency updates.
+    The payload matches `/hardware/live/data`.
+    """
+
+    def _event_stream():
+        last_sent_key: tuple[Any, ...] | None = None
+        last_keepalive = time.time()
+        while True:
+            payload = _build_live_data_payload()
+            key = (
+                payload.get("simulated", False),
+                payload.get("capturing", False),
+                payload.get("sim_state"),
+                payload.get("last_update_ts"),
+            )
+            if key != last_sent_key:
+                last_sent_key = key
+                yield f"data: {json.dumps(payload)}\n\n"
+                last_keepalive = time.time()
+            else:
+                # Keep the connection alive even when idle.
+                now = time.time()
+                if now - last_keepalive > 10.0:
+                    yield ": keepalive\n\n"
+                    last_keepalive = now
+            time.sleep(0.25)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
+    return Response(
+        stream_with_context(_event_stream()),
+        mimetype="text/event-stream",
+        headers=headers,
+    )
 
 
 @jetdrive_bp.route("/hardware/live/debug", methods=["GET"])
@@ -2546,7 +2604,7 @@ def get_live_debug():
     with _live_data_lock:
         capturing = _live_data.get("capturing", False)
         channels = dict(_live_data.get("channels", {}) or {})
-        last_update = _live_data.get("last_update")
+        last_update_ts = _live_data.get("last_update_ts")
         error = _live_data.get("error")
 
     # Try to discover providers
@@ -2586,14 +2644,18 @@ def get_live_debug():
 
     # Calculate data freshness
     data_age = None
-    if last_update:
+    if last_update_ts:
         try:
-            last_update_dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
-            data_age = (
-                datetime.now() - last_update_dt.replace(tzinfo=None)
-            ).total_seconds()
+            data_age = float(time.time() - float(last_update_ts))
         except Exception:
             pass
+
+    last_update_iso = None
+    if last_update_ts:
+        try:
+            last_update_iso = datetime.fromtimestamp(float(last_update_ts)).isoformat()
+        except Exception:
+            last_update_iso = None
 
     # Get network interfaces
     interfaces = []
@@ -2610,7 +2672,8 @@ def get_live_debug():
         {
             "capturing": capturing,
             "channels_received": len(channels),
-            "last_update": last_update,
+            "last_update_ts": last_update_ts,
+            "last_update": last_update_iso,
             "data_age_seconds": data_age,
             "error": error,
             "provider_count": len(providers),

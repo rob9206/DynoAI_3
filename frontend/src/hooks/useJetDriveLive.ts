@@ -98,6 +98,8 @@ export interface UseJetDriveLiveOptions {
     maxHistoryPoints?: number;
     /** Enables verbose debug logging (default: false) */
     debug?: boolean;
+    /** Prefer Server-Sent Events over polling when available (default: false) */
+    useSse?: boolean;
     /** When true, page is in simulator mode - hook will poll live data and keep simulator data separate from hardware */
     isSimulatorActive?: boolean;
 }
@@ -322,6 +324,7 @@ const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'
     historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
     maxHistoryPoints: 300,
     debug: false,
+    useSse: false,
     isSimulatorActive: false,
 };
 
@@ -350,6 +353,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const historyRef = useRef<Record<string, { time: number; value: number }[]>>({});
     const lastHistoryPublishAtRef = useRef<number>(0);
     const prevSimulatedRef = useRef<boolean | null>(null);
+    const lastUpdateTsRef = useRef<number | null>(null);
     
     // Rate limit backoff state
     const backoffRef = useRef<number>(0); // Current backoff delay in ms
@@ -408,6 +412,146 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         }
     }, [opts.apiUrl]);
 
+    // Shared payload processor for polling and SSE
+    const processLivePayload = useCallback((raw: unknown) => {
+        const data = isRecord(raw) ? raw : {};
+
+        const capturing = getBoolean(data.capturing) ?? false;
+        const simulated = getBoolean(data.simulated) ?? false;
+        const simStateValue = getString(data.sim_state);
+        const lastUpdateTs = getNumber(data.last_update_ts);
+
+        setIsCapturing(capturing);
+        setIsSimulated(simulated);
+        setSimState(simStateValue);
+
+        // If simulated, we're always "connected"
+        if (simulated) {
+            setLiveConnected(true);
+        }
+
+        // Detect mode transition to clear the other source and prevent cross-contamination
+        const prevSimulated = prevSimulatedRef.current;
+        if (prevSimulated === false && simulated) {
+            setChannels({});
+            historyRef.current = {};
+            lastHistoryPublishAtRef.current = 0;
+            lastUpdateTsRef.current = null;
+        } else if (prevSimulated === true && !simulated) {
+            setSimulatorChannels({});
+            historyRef.current = {};
+            lastHistoryPublishAtRef.current = 0;
+            lastUpdateTsRef.current = null;
+        }
+        prevSimulatedRef.current = simulated;
+
+        // Skip heavy allocations if backend indicates nothing changed since last poll.
+        // (This matters when the UI is polling but capture is idle/stale.)
+        if (!simulated && lastUpdateTs !== null) {
+            const prev = lastUpdateTsRef.current;
+            if (prev !== null && prev === lastUpdateTs) {
+                return;
+            }
+            lastUpdateTsRef.current = lastUpdateTs;
+        }
+
+        const channelsRaw = isRecord(data.channels) ? data.channels : null;
+        if (channelsRaw && Object.keys(channelsRaw).length > 0) {
+            setLiveConnected(true);
+            setConnectionError(null);
+            // Convert to LiveLink-compatible format
+            const newChannels: Record<string, JetDriveChannel> = {};
+            const newSnapshot: JetDriveSnapshot = {
+                timestamp: Date.now(),
+                channels: {},
+                units: {},
+            };
+
+            for (const [key, chRaw] of Object.entries(channelsRaw)) {
+                if (!isRecord(chRaw)) continue;
+                const value = getNumber(chRaw.value);
+                const timestamp = getNumber(chRaw.timestamp);
+                if (value === null || timestamp === null) continue;
+                
+                // Parse the channel key (format: "0xPPPP:CC:Name")
+                // or fall back to legacy format for backwards compatibility
+                const parsed = parseChannelKey(key);
+                const channelKey = getString(chRaw.key) ?? key;
+                const providerId = getNumber(chRaw.provider_id) ?? parsed?.providerId;
+                const channelId = getNumber(chRaw.id) ?? parsed?.channelId;
+                const displayName = getString(chRaw.name) ?? parsed?.name ?? key;
+                
+                const config = getChannelConfig(displayName);
+                const apiCategory = getString(chRaw.category);
+                const category = getChannelCategory(displayName, apiCategory ?? undefined);
+                
+                // Store by DISPLAY NAME (not composite key) so dashboard lookups work.
+                // The composite key is retained inside the object for debugging.
+                newChannels[displayName] = {
+                    key: channelKey,
+                    name: displayName,
+                    value,
+                    units: config?.units ?? getString(chRaw.units) ?? '',
+                    timestamp,
+                    providerId,
+                    id: channelId,
+                    category,
+                };
+
+                newSnapshot.channels[displayName] = value;
+                newSnapshot.units[displayName] = config?.units ?? '';
+            }
+            if (opts.debug) {
+                // Keep any verbose logging behind a flag: logging inside a 20Hz polling loop
+                // can severely degrade UI performance.
+                console.debug('[useJetDriveLive] channels:', Object.keys(newChannels));
+            }
+
+            if (simulated) {
+                setSimulatorChannels(newChannels);
+                setDataSource('simulator');
+            } else {
+                setChannels(newChannels);
+                setDataSource('hardware');
+            }
+            setSnapshot(newSnapshot);
+
+            // Collect chart history every poll into a ref (cheap), but publish to React state
+            // less frequently to reduce allocations and full-dashboard rerenders.
+            const now = Date.now();
+            const nextHistory = historyRef.current;
+
+            for (const [name, ch] of Object.entries(newChannels)) {
+                const arr = nextHistory[name] ?? (nextHistory[name] = []);
+                arr.push({ time: now, value: ch.value });
+                if (arr.length > opts.maxHistoryPoints) {
+                    // Drop the oldest points without allocating a new array
+                    arr.splice(0, arr.length - opts.maxHistoryPoints);
+                }
+            }
+            const shouldPublish =
+                opts.historyPublishIntervalMs <= opts.pollInterval ||
+                now - lastHistoryPublishAtRef.current >= opts.historyPublishIntervalMs;
+            if (shouldPublish) {
+                lastHistoryPublishAtRef.current = now;
+                // Clone shallowly to keep React state immutable and avoid downstream mutation surprises.
+                const published: Record<string, { time: number; value: number }[]> = {};
+                for (const [k, v] of Object.entries(nextHistory)) {
+                    published[k] = v.slice();
+                }
+                setHistory(published);
+            }
+        } else {
+            setDataSource('none');
+            // If capturing but no channels, surface backend diagnostics (if provided).
+            const statusObj = isRecord(data.status) ? data.status : null;
+            const message = statusObj ? getString(statusObj.message) : null;
+            if (capturing && message) {
+                setConnectionError(message);
+            }
+        }
+    }, [opts.debug, opts.historyPublishIntervalMs, opts.maxHistoryPoints, opts.pollInterval]);
+
     // Poll live data
     const pollLiveData = useCallback(async () => {
         // Skip polling if in backoff period
@@ -435,133 +579,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             if (!res.ok) throw new Error('Live data unavailable');
 
             const raw: unknown = await res.json();
-            const data = isRecord(raw) ? raw : {};
-
-            const capturing = getBoolean(data.capturing) ?? false;
-            const simulated = getBoolean(data.simulated) ?? false;
-            const simStateValue = getString(data.sim_state);
-
-            setIsCapturing(capturing);
-            setIsSimulated(simulated);
-            setSimState(simStateValue);
-
-            // If simulated, we're always "connected"
-            if (simulated) {
-                setLiveConnected(true);
-            }
-
-            // Detect mode transition to clear the other source and prevent cross-contamination
-            const prevSimulated = prevSimulatedRef.current;
-            if (prevSimulated === false && simulated) {
-                setChannels({});
-                historyRef.current = {};
-                lastHistoryPublishAtRef.current = 0;
-            } else if (prevSimulated === true && !simulated) {
-                setSimulatorChannels({});
-                historyRef.current = {};
-                lastHistoryPublishAtRef.current = 0;
-            }
-            prevSimulatedRef.current = simulated;
-
-            const channelsRaw = isRecord(data.channels) ? data.channels : null;
-            if (channelsRaw && Object.keys(channelsRaw).length > 0) {
-                setLiveConnected(true);
-                setConnectionError(null);
-                // Convert to LiveLink-compatible format
-                const newChannels: Record<string, JetDriveChannel> = {};
-                const newSnapshot: JetDriveSnapshot = {
-                    timestamp: Date.now(),
-                    channels: {},
-                    units: {},
-                };
-
-                for (const [key, chRaw] of Object.entries(channelsRaw)) {
-                    if (!isRecord(chRaw)) continue;
-                    const value = getNumber(chRaw.value);
-                    const timestamp = getNumber(chRaw.timestamp);
-                    if (value === null || timestamp === null) continue;
-                    
-                    // Parse the channel key (format: "0xPPPP:CC:Name")
-                    // or fall back to legacy format for backwards compatibility
-                    const parsed = parseChannelKey(key);
-                    const channelKey = getString(chRaw.key) ?? key;
-                    const providerId = getNumber(chRaw.provider_id) ?? parsed?.providerId;
-                    const channelId = getNumber(chRaw.id) ?? parsed?.channelId;
-                    const displayName = getString(chRaw.name) ?? parsed?.name ?? key;
-                    
-                    const config = getChannelConfig(displayName);
-                    const apiCategory = getString(chRaw.category);
-                    const category = getChannelCategory(displayName, apiCategory ?? undefined);
-                    
-                    // Store by DISPLAY NAME (not composite key) so dashboard lookups work.
-                    // The composite key is retained inside the object for debugging.
-                    newChannels[displayName] = {
-                        key: channelKey,
-                        name: displayName,
-                        value,
-                        units: config?.units ?? getString(chRaw.units) ?? '',
-                        timestamp,
-                        providerId,
-                        id: channelId,
-                        category,
-                    };
-
-                    newSnapshot.channels[displayName] = value;
-                    newSnapshot.units[displayName] = config?.units ?? '';
-                }
-                if (opts.debug) {
-                    // Keep any verbose logging behind a flag: logging inside a 20Hz polling loop
-                    // can severely degrade UI performance.
-                    console.debug('[useJetDriveLive] channels:', Object.keys(newChannels));
-                }
-
-                if (simulated) {
-                    setSimulatorChannels(newChannels);
-                    setDataSource('simulator');
-                } else {
-                    setChannels(newChannels);
-                    setDataSource('hardware');
-                }
-                setSnapshot(newSnapshot);
-
-                // Collect chart history every poll into a ref (cheap), but publish to React state
-                // less frequently to reduce allocations and full-dashboard rerenders.
-                const now = Date.now();
-                const nextHistory = historyRef.current;
-
-                for (const [name, ch] of Object.entries(newChannels)) {
-                    const arr = nextHistory[name] ?? (nextHistory[name] = []);
-                    arr.push({ time: now, value: ch.value });
-                    if (arr.length > opts.maxHistoryPoints) {
-                        // Drop the oldest points without allocating a new array
-                        arr.splice(0, arr.length - opts.maxHistoryPoints);
-                    }
-                }
-                const shouldPublish =
-                    opts.historyPublishIntervalMs <= opts.pollInterval ||
-                    now - lastHistoryPublishAtRef.current >= opts.historyPublishIntervalMs;
-                if (shouldPublish) {
-                    lastHistoryPublishAtRef.current = now;
-                    // Clone shallowly to keep React state immutable and avoid downstream mutation surprises.
-                    const published: Record<string, { time: number; value: number }[]> = {};
-                    for (const [k, v] of Object.entries(nextHistory)) {
-                        published[k] = v.slice();
-                    }
-                    setHistory(published);
-                }
-            } else {
-                setDataSource('none');
-                // If capturing but no channels, surface backend diagnostics (if provided).
-                const statusObj = isRecord(data.status) ? data.status : null;
-                const message = statusObj ? getString(statusObj.message) : null;
-                if (capturing && message) {
-                    setConnectionError(message);
-                }
-            }
+            processLivePayload(raw);
         } catch {
             // Silent fail for polling
         }
-    }, [opts.apiUrl, opts.debug, opts.historyPublishIntervalMs, opts.maxHistoryPoints, opts.pollInterval]);
+    }, [opts.apiUrl, opts.debug, processLivePayload]);
 
     // Start capture
     const startCapture = useCallback(async () => {
@@ -611,6 +633,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         setHistory({});
         historyRef.current = {};
         lastHistoryPublishAtRef.current = 0;
+        lastUpdateTsRef.current = null;
         setSnapshot(null);
         setChannelCount(0);
         prevSimulatedRef.current = null;
@@ -640,7 +663,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             statusInterval = setInterval(checkConnection, 5000);
         }
 
-        if (shouldPollLive) {
+        if (shouldPollLive && !opts.useSse) {
             void pollLiveData(); // Immediate poll
             pollIntervalRef.current = setInterval(pollLiveData, opts.pollInterval);
         }
@@ -653,7 +676,29 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 clearInterval(pollIntervalRef.current);
             }
         };
-    }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval, opts.autoConnect]);
+    }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval, opts.autoConnect, opts.useSse]);
+
+    // SSE effect (optional): prefer server push over polling
+    useEffect(() => {
+        if (!shouldPollLive || !opts.useSse) return;
+
+        const es = new EventSource(`${opts.apiUrl}/hardware/live/stream`);
+        es.onmessage = (evt) => {
+            try {
+                const parsed = JSON.parse(evt.data) as unknown;
+                processLivePayload(parsed);
+            } catch {
+                // ignore malformed events
+            }
+        };
+        es.onerror = () => {
+            // EventSource auto-reconnects; keep this non-fatal
+        };
+
+        return () => {
+            es.close();
+        };
+    }, [shouldPollLive, opts.useSse, opts.apiUrl, processLivePayload]);
 
     // Auto-connect
     useEffect(() => {

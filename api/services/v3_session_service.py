@@ -151,6 +151,17 @@ def finalize_session(
         ve_table_front=np.array(ve_table_front, dtype=np.float64),
         operator=operator,
     )
+
+    # Best-effort cleanup of any per-session simulation assets.
+    # (simulate_pull_realistic keeps a simulator running for performance.)
+    try:
+        cache = getattr(session, "_realistic_sim_cache", None)
+        sim = cache.get("simulator") if isinstance(cache, dict) else None
+        if sim is not None:
+            sim.stop()
+    except Exception:
+        pass
+
     return {
         "template_id": result.template_id,
         "total_pulls": result.total_pulls,
@@ -279,7 +290,6 @@ def simulate_pull_realistic(
         create_baseline_ve_table,
         create_intentionally_wrong_ve_table,
     )
-    from dynoai_v3.grid_utils import nearest_idx
 
     session = _get_session(session_id)
 
@@ -301,56 +311,106 @@ def simulate_pull_realistic(
         "m8_114": EngineProfile.m8_114,
         "m8_117": EngineProfile.m8_114,
         "m8_131": EngineProfile.m8_131,
+        "tc_88": EngineProfile.twin_cam_88,
+        "tc_96": EngineProfile.twin_cam_96,
+        "tc_103": EngineProfile.twin_cam_103,
+        "tc_110": EngineProfile.twin_cam_110,
         "evo_1200": EngineProfile.twin_cam_103,
         "revmax_1250": EngineProfile.m8_131,
     }
     profile_fn = _PROFILE_MAP.get(session.config.engine_family, EngineProfile.m8_114)
     profile = profile_fn()
 
-    # ---- 2. Build VirtualECU on session grid ----
-    # Use an intentionally-wrong VE table so the sim produces AFR errors
-    rpm_bins_int = [int(r) for r in rpm_bins]
-    map_bins_int = [int(m) for m in map_bins]
+    # ---- 2/3. Build/reuse per-session simulation assets ----
+    # For performance, keep the simulator (thread + physics) running across pulls.
+    # This endpoint is for development/demo; we prefer responsiveness over perfect
+    # reproducibility on every call.
+    rpm_bins_int = tuple(int(r) for r in rpm_bins)
+    map_bins_int = tuple(int(m) for m in map_bins)
+    displacement_ci = float(session.config.displacement_ci or 114)
+    cache_key = (session.config.engine_family, rpm_bins_int, map_bins_int, displacement_ci)
 
-    baseline_ve = create_baseline_ve_table(rpm_bins_int, map_bins_int, peak_ve=0.85)
-    wrong_ve = create_intentionally_wrong_ve_table(
-        baseline_ve, error_pct_mean=-8.0, error_pct_std=4.0,
-        seed=int(rpm + map_kpa),
-    )
-    afr_targets = create_afr_target_table(rpm_bins_int, map_bins_int)
+    cache = getattr(session, "_realistic_sim_cache", None)
+    if not isinstance(cache, dict) or cache.get("key") != cache_key:
+        # Tear down any old simulator
+        try:
+            old_sim = cache.get("simulator") if isinstance(cache, dict) else None
+            if old_sim is not None:
+                old_sim.stop()
+        except Exception:
+            pass
 
-    ecu = VirtualECU(
-        ve_table_front=wrong_ve,
-        ve_table_rear=wrong_ve,
-        afr_target_table=afr_targets,
-        rpm_bins=rpm_bins_int,
-        map_bins=map_bins_int,
-        displacement_ci=float(session.config.displacement_ci or 114),
-    )
+        baseline_ve = create_baseline_ve_table(list(rpm_bins_int), list(map_bins_int), peak_ve=0.85)
+        # Seed once per session so VirtualECU interpolators can be reused.
+        seed = abs(hash(getattr(session, "session_id", session_id))) % (2**31 - 1)
+        wrong_ve = create_intentionally_wrong_ve_table(
+            baseline_ve,
+            error_pct_mean=-8.0,
+            error_pct_std=4.0,
+            seed=int(seed),
+        )
+        afr_targets = create_afr_target_table(list(rpm_bins_int), list(map_bins_int))
+
+        ecu = VirtualECU(
+            ve_table_front=wrong_ve,
+            ve_table_rear=wrong_ve,
+            afr_target_table=afr_targets,
+            rpm_bins=list(rpm_bins_int),
+            map_bins=list(map_bins_int),
+            displacement_ci=displacement_ci,
+        )
+
+        sim_config = SimulatorConfig(
+            profile=profile,
+            enable_thermal_effects=True,
+            auto_pull=False,
+            time_scale=5.0,  # 5x speed for faster sim
+        )
+        simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
+        simulator.start()
+        _time.sleep(0.3)
+
+        workflow = AutoTuneWorkflow(
+            rpm_axis=[float(r) for r in rpm_bins],
+            map_axis=[float(m) for m in map_bins],
+        )
+
+        cache = {
+            "key": cache_key,
+            "ecu": ecu,
+            "simulator": simulator,
+            "workflow": workflow,
+            "lock": threading.Lock(),
+        }
+        setattr(session, "_realistic_sim_cache", cache)
+    else:
+        simulator = cache["simulator"]
+        workflow = cache["workflow"]
+        # Ensure simulator is running
+        try:
+            if simulator.get_state() == SimState.STOPPED:
+                simulator.start()
+                _time.sleep(0.3)
+        except Exception:
+            pass
 
     # ---- 3. Run DynoSimulator physics pull ----
-    sim_config = SimulatorConfig(
-        profile=profile,
-        enable_thermal_effects=True,
-        auto_pull=False,
-        time_scale=5.0,  # 5x speed for faster sim
-    )
-    simulator = DynoSimulator(config=sim_config, virtual_ecu=ecu)
-    simulator.start()
-    _time.sleep(0.3)
+    # Guard against concurrent simulate calls on the same session.
+    lock = cache.get("lock") if isinstance(cache, dict) else None
+    if lock is None:
+        lock = threading.Lock()
+    with lock:
+        simulator.trigger_pull()
+        _time.sleep(0.2)
 
-    simulator.trigger_pull()
-    _time.sleep(0.2)
+        # Wait for pull completion (max 15s real time)
+        max_wait = 150  # 15s at 10 checks/sec
+        for _ in range(max_wait):
+            if simulator.get_state() == SimState.IDLE:
+                break
+            _time.sleep(0.1)
 
-    # Wait for pull completion (max 15s real time)
-    max_wait = 150  # 15s at 10 checks/sec
-    for _ in range(max_wait):
-        if simulator.get_state() == SimState.IDLE:
-            break
-        _time.sleep(0.1)
-
-    pull_data = simulator.get_pull_data()
-    simulator.stop()
+        pull_data = simulator.get_pull_data()
 
     if not pull_data or len(pull_data) < 5:
         # Fallback: if simulator didn't produce enough data, use quick mode
@@ -365,10 +425,6 @@ def simulate_pull_realistic(
     # ---- 4. Pipe through AutoTuneWorkflow on SESSION grid ----
     df = pd.DataFrame(pull_data)
 
-    workflow = AutoTuneWorkflow(
-        rpm_axis=[float(r) for r in rpm_bins],
-        map_axis=[float(m) for m in map_bins],
-    )
     ws = workflow.create_session()
     workflow.import_dataframe(ws, df)
     afr_result = workflow.analyze_afr(ws)
@@ -381,12 +437,25 @@ def simulate_pull_realistic(
     # ---- 5. Convert grid corrections → per-observation VE deltas ----
     rpm_arr = df["Engine RPM"].values.astype(np.float64)
     map_arr = df["MAP kPa"].values.astype(np.float64)
-    ve_deltas = np.zeros(len(df), dtype=np.float64)
 
-    for i in range(len(df)):
-        r_idx = nearest_idx(rpm_arr[i], rpm_bins)
-        m_idx = nearest_idx(map_arr[i], map_bins)
-        ve_deltas[i] = (corrections.correction_table[r_idx, m_idx] - 1.0) * 100.0
+    rpm_bins_arr = np.asarray(rpm_bins, dtype=np.float64)
+    map_bins_arr = np.asarray(map_bins, dtype=np.float64)
+
+    def _nearest_bin_indices(values: np.ndarray, bins: np.ndarray) -> np.ndarray:
+        # bins must be sorted ascending
+        n = int(bins.shape[0])
+        idx_right = np.searchsorted(bins, values, side="left")
+        idx_right = np.clip(idx_right, 0, n - 1)
+        idx_left = np.clip(idx_right - 1, 0, n - 1)
+
+        left_dist = np.abs(values - bins[idx_left])
+        right_dist = np.abs(bins[idx_right] - values)
+        choose_left = left_dist <= right_dist
+        return np.where(choose_left, idx_left, idx_right).astype(np.int64)
+
+    r_idx = _nearest_bin_indices(rpm_arr, rpm_bins_arr)
+    m_idx = _nearest_bin_indices(map_arr, map_bins_arr)
+    ve_deltas = (corrections.correction_table[r_idx, m_idx] - 1.0) * 100.0
 
     # ---- 6. Ingest into v3 session ----
     result = session.ingest_pull(rpm_arr, map_arr, ve_deltas)

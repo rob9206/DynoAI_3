@@ -293,7 +293,8 @@ export function LiveVETable({
     );
 
     // Refs for throttled accumulation: mutate at 50Hz, flush to state every FLUSH_MS
-    const FLUSH_MS = 80;  // ~12 updates/sec for responsive corrections without 50Hz overload
+    // 4Hz is plenty for human perception and drastically reduces render/memory churn.
+    const FLUSH_MS = 250;
     const liveHitCountsRef = useRef<number[][]>([]);
     const frontHitCountsRef = useRef<number[][]>([]);
     const rearHitCountsRef = useRef<number[][]>([]);
@@ -505,26 +506,57 @@ export function LiveVETable({
     
     // Persist hit counts to localStorage for session recovery
     const STORAGE_KEY = `jetdrive-ve-hits-${activePreset}`;
+    const saveTimeoutRef = useRef<number | null>(null);
     
     // Save hit counts to localStorage when they change
     useEffect(() => {
-        if (totalHits > 0) {
-            const sessionData = {
-                liveHitCounts,
-                frontHitCounts,
-                rearHitCounts,
-                frontVeCorrections,
-                rearVeCorrections,
-                liveVeCorrections,
-                frontAfrAccumulator,
-                rearAfrAccumulator,
-                afrAccumulator,
-                timestamp: Date.now(),
-                enginePreset: activePreset
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+        if (totalHits <= 0) return;
+
+        // Debounce localStorage writes to avoid blocking the main thread during live capture.
+        if (saveTimeoutRef.current !== null) {
+            window.clearTimeout(saveTimeoutRef.current);
         }
-    }, [totalHits, liveHitCounts, frontHitCounts, rearHitCounts, frontVeCorrections, rearVeCorrections, liveVeCorrections, frontAfrAccumulator, rearAfrAccumulator, afrAccumulator, activePreset, STORAGE_KEY]);
+        saveTimeoutRef.current = window.setTimeout(() => {
+            try {
+                const sessionData = {
+                    liveHitCounts,
+                    frontHitCounts,
+                    rearHitCounts,
+                    frontVeCorrections,
+                    rearVeCorrections,
+                    liveVeCorrections,
+                    frontAfrAccumulator,
+                    rearAfrAccumulator,
+                    afrAccumulator,
+                    timestamp: Date.now(),
+                    enginePreset: activePreset,
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+            } catch {
+                // Ignore storage errors (quota / private mode)
+            }
+        }, 1000);
+
+        return () => {
+            if (saveTimeoutRef.current !== null) {
+                window.clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = null;
+            }
+        };
+    }, [
+        totalHits,
+        liveHitCounts,
+        frontHitCounts,
+        rearHitCounts,
+        frontVeCorrections,
+        rearVeCorrections,
+        liveVeCorrections,
+        frontAfrAccumulator,
+        rearAfrAccumulator,
+        afrAccumulator,
+        activePreset,
+        STORAGE_KEY,
+    ]);
     
     // Restore hit counts from localStorage on component mount
     useEffect(() => {

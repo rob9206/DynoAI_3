@@ -13,8 +13,8 @@ Why GP, Not Neural Network:
     4. Industry standard in calibration tools (AVL CAMEO, ETAS ASCMO)
 
 Performance Budget:
-    _refit()          with 100 obs:  < 1.5 seconds
-    _refit()          with 500 obs:  < 5 seconds
+    _refit()          uses <=150 obs (capped) for bounded runtime
+    _refit()          warm refit reuses previous kernel params
     predict_full_map  on 16x16 grid: < 100 ms
     predict           single point:  < 5 ms
 
@@ -37,6 +37,15 @@ logger = logging.getLogger(__name__)
 
 # Extreme VE delta threshold — observations beyond this are rejected
 _MAX_VE_DELTA = 15.0
+
+# Cap observations used for GP fit so refit stays fast (GP is O(n^3)).
+# Without this, 500+ obs can take minutes and freeze the UI.
+_MAX_OBS_FOR_REFIT = 150
+
+# Cap how many non-template (real pull) observations we keep in memory.
+# Template observations are kept separately (they serve as priors), but pull
+# observations are pruned to keep memory bounded during long sessions.
+_MAX_PULL_OBS_STORED = _MAX_OBS_FOR_REFIT
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +80,20 @@ def confidence_to_badge(confidence: float) -> str:
     if confidence >= 50:
         return "L"
     return "\u2014"  # em-dash
+
+
+def _uncertainty_map_to_confidence(unc_map: NDArray[np.float64]) -> NDArray[np.float64]:
+    """
+    Vectorized uncertainty->confidence mapping.
+
+    Replaces `np.vectorize(uncertainty_to_confidence)` which is a Python-loop wrapper.
+    """
+    unc = np.asarray(unc_map, dtype=np.float64)
+    return np.select(
+        [unc < 0.5, unc < 1.0, unc < 2.0],
+        [95.0, 80.0, 60.0],
+        default=20.0,
+    ).astype(np.float64)
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +159,7 @@ class VESurrogate:
         self._gp_model = None
         self.is_fitted = False
         self._last_fit_time_ms: float = 0.0
+        self._stale: bool = False
 
         # Normalization parameters — computed from bin ranges
         self._rpm_min = float(np.min(rpm_bins))
@@ -155,16 +179,41 @@ class VESurrogate:
     def observation_count(self) -> int:
         return len(self.observations)
 
+    def _prune_observations_if_needed(self) -> None:
+        """
+        Keep memory bounded by pruning old pull observations.
+
+        - Always retain template observations (pull_number == -1)
+        - Retain only the most recent `_MAX_PULL_OBS_STORED` non-template observations
+        """
+        # Quick check to avoid work on the hot path.
+        max_allowed = int(self.template_observation_count) + int(_MAX_PULL_OBS_STORED)
+        if len(self.observations) <= max_allowed:
+            return
+
+        template_obs: list[Observation] = []
+        pull_obs: list[Observation] = []
+        for o in self.observations:
+            if o.pull_number == -1:
+                template_obs.append(o)
+            else:
+                pull_obs.append(o)
+
+        if len(pull_obs) > _MAX_PULL_OBS_STORED:
+            pull_obs = pull_obs[-_MAX_PULL_OBS_STORED:]
+
+        self.observations = template_obs + pull_obs
+
     # ------------------------------------------------------------------
     # Add data
     # ------------------------------------------------------------------
     def add_observation(self, obs: Observation) -> None:
-        """Add a single measured data point and refit if we have enough."""
+        """Add a single measured data point (marks model stale)."""
         if obs.timestamp is None:
             obs.timestamp = time.time()
         self.observations.append(obs)
-        if len(self.observations) >= 3:
-            self._refit()
+        self._prune_observations_if_needed()
+        self._stale = True
 
     def add_pull_data(
         self,
@@ -210,8 +259,9 @@ class VESurrogate:
             ))
             accepted += 1
 
-        if len(self.observations) >= 3:
-            self._refit()
+        if accepted > 0:
+            self._prune_observations_if_needed()
+            self._stale = True
 
         logger.info(
             "Pull data ingested: %d/%d accepted (pull #%s)",
@@ -261,8 +311,9 @@ class VESurrogate:
 
         self.template_observation_count = count
 
-        if len(self.observations) >= 3:
-            self._refit()
+        if count > 0:
+            self._prune_observations_if_needed()
+            self._stale = True
 
         logger.info(
             "Template seeded: %d synthetic observations added", count,
@@ -277,6 +328,9 @@ class VESurrogate:
 
         If the model is not fitted, returns a high-uncertainty prior.
         """
+        if self._stale:
+            self._refit()
+
         if not self.is_fitted or self._gp_model is None:
             return PointPrediction(
                 ve_delta=0.0,
@@ -307,6 +361,9 @@ class VESurrogate:
         n_rpm = len(self.rpm_bins)
         n_map = len(self.map_bins)
 
+        if self._stale:
+            self._refit()
+
         if not self.is_fitted or self._gp_model is None:
             # Return prior: zero VE, high uncertainty
             elapsed = (time.time() - t0) * 1000
@@ -314,19 +371,19 @@ class VESurrogate:
             return FullMapPrediction(
                 ve_map=np.zeros((n_rpm, n_map)),
                 uncertainty_map=unc_map,
-                confidence_map=np.vectorize(uncertainty_to_confidence)(unc_map),
+                confidence_map=_uncertainty_map_to_confidence(unc_map),
                 predict_time_ms=elapsed,
             )
 
-        grid = np.array([
-            [r, m] for r in self.rpm_bins for m in self.map_bins
-        ])
+        # Build an (n_rpm*n_map, 2) grid without Python loops.
+        rr, mm = np.meshgrid(self.rpm_bins, self.map_bins, indexing="ij")
+        grid = np.stack((rr.ravel(), mm.ravel()), axis=1)
         X_norm = self._normalize(grid)
         means, stds = self._gp_model.predict(X_norm, return_std=True)
 
         ve_map = means.reshape(n_rpm, n_map)
         unc_map = stds.reshape(n_rpm, n_map)
-        conf_map = np.vectorize(uncertainty_to_confidence)(unc_map)
+        conf_map = _uncertainty_map_to_confidence(unc_map)
 
         elapsed = (time.time() - t0) * 1000
 
@@ -347,9 +404,11 @@ class VESurrogate:
     # ------------------------------------------------------------------
     def _refit(self) -> None:
         """
-        Refit the GP model on all observations.
+        Refit the GP model on observations.
 
-        Target: <1.5s for 100 obs, <5s for 500 obs.
+        Uses at most _MAX_OBS_FOR_REFIT total points to keep fit time bounded.
+        Template observations (pull_number == -1) are always retained in the fit
+        so template priors are not lost.
         """
         from sklearn.gaussian_process import GaussianProcessRegressor
         from sklearn.gaussian_process.kernels import Matern, WhiteKernel
@@ -359,28 +418,52 @@ class VESurrogate:
 
         t0 = time.time()
 
-        X = np.array([
-            [o.rpm, o.map_kpa] for o in self.observations
-        ])
-        y = np.array([o.ve_delta for o in self.observations])
+        # Cap total points so refit stays fast (GP is O(n^3)), but always keep
+        # template observations (pull_number == -1) so the prior is not lost.
+        if len(self.observations) <= _MAX_OBS_FOR_REFIT:
+            obs_for_fit = self.observations
+        else:
+            template_obs = [o for o in self.observations if o.pull_number == -1]
+            pull_obs = [o for o in self.observations if o.pull_number != -1]
+            n_slots_for_pull = _MAX_OBS_FOR_REFIT - len(template_obs)
+            if n_slots_for_pull <= 0:
+                obs_for_fit = (template_obs + pull_obs)[-_MAX_OBS_FOR_REFIT:]
+            else:
+                obs_for_fit = template_obs + pull_obs[-n_slots_for_pull:]
+        n_used = len(obs_for_fit)
+
+        X = np.array([[o.rpm, o.map_kpa] for o in obs_for_fit])
+        y = np.array([o.ve_delta for o in obs_for_fit])
 
         X_norm = self._normalize(X)
 
-        kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
-            noise_level=0.1
-        )
+        # Warm-start: reuse optimized kernel hyperparameters from previous fit.
+        # This dramatically reduces fit time for incremental updates.
+        n_restarts = 2
+        if self._gp_model is not None and self.is_fitted and hasattr(self._gp_model, "kernel_"):
+            import copy
+
+            kernel = copy.deepcopy(self._gp_model.kernel_)
+            n_restarts = 0
+        else:
+            kernel = Matern(nu=2.5, length_scale=[0.3, 0.3]) + WhiteKernel(
+                noise_level=0.1
+            )
+
         self._gp_model = GaussianProcessRegressor(
             kernel=kernel,
-            n_restarts_optimizer=2,
+            n_restarts_optimizer=n_restarts,
             alpha=0.05,
             normalize_y=True,
         )
         self._gp_model.fit(X_norm, y)
         self.is_fitted = True
+        self._stale = False
 
         self._last_fit_time_ms = (time.time() - t0) * 1000
         logger.info(
-            "GP refit: %d observations, %.1f ms",
+            "GP refit: %d used (of %d total), %.1f ms",
+            n_used,
             len(self.observations),
             self._last_fit_time_ms,
         )

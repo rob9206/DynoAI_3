@@ -6,7 +6,7 @@
  * Heatmap, Pull History, Overlay Status.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Zap, Target, BarChart3, ShieldCheck, Play, FastForward,
   ChevronRight, AlertTriangle, CheckCircle2, XCircle
@@ -37,6 +37,10 @@ const ENGINE_FAMILIES = [
   { value: "m8_114", label: "M8 114 (Air-Cooled)" },
   { value: "m8_117", label: "M8 117 (Air-Cooled)" },
   { value: "m8_131", label: "M8 131 (Oil-Cooled)" },
+  { value: "tc_88", label: "TC 88 (Air-Cooled)" },
+  { value: "tc_96", label: "TC 96 (Air-Cooled)" },
+  { value: "tc_103", label: "TC 103 (Air-Cooled)" },
+  { value: "tc_110", label: "TC 110 (Air-Cooled)" },
   { value: "revmax_1250", label: "RevMax 1250 (Liquid)" },
   { value: "evo_1200", label: "Evo 1200 (Air-Cooled)" },
 ] as const;
@@ -50,6 +54,10 @@ const EXHAUST_OPTIONS = [
   "stock", "slip_on", "2into1", "open",
 ];
 
+const AIR_CLEANER_OPTIONS = [
+  "stock", "high_flow", "velocity_stack", "other",
+];
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -61,6 +69,7 @@ export function V3TuningTab() {
     displacement_ci: 114,
     cam_spec: "stock",
     exhaust_type: "stock",
+    air_cleaner: "stock",
   });
   const [simMode, setSimMode] = useState<"quick" | "realistic">("realistic");
 
@@ -120,6 +129,22 @@ export function V3TuningTab() {
       toast.error("Auto-simulation failed");
     }
   }, [v3, simMode]);
+
+  const handleFinalize = useCallback(async () => {
+    if (!v3.uncertaintyMap?.ve_map) {
+      toast.error("No VE map available to finalize");
+      return;
+    }
+    try {
+      const result = await v3.finalize({
+        ve_table_front: v3.uncertaintyMap.ve_map,
+        operator: "user",
+      });
+      toast.success(`Session finalized! Template ${result.template_id} saved.`);
+    } catch (err) {
+      toast.error("Failed to finalize session");
+    }
+  }, [v3]);
 
   // ---- Render: Idle / Setup ----
   if (v3.sessionPhase === "idle") {
@@ -207,6 +232,21 @@ export function V3TuningTab() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Air Cleaner</Label>
+              <Select
+                value={config.air_cleaner ?? "stock"}
+                onValueChange={(v) => setConfig((c) => ({ ...c, air_cleaner: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AIR_CLEANER_OPTIONS.map((o) => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button
               onClick={handleStartSession}
               disabled={v3.isCreating}
@@ -238,13 +278,76 @@ export function V3TuningTab() {
   }
 
   // ---- Render: Active session ----
-  const convergencePct = v3.convergence
-    ? Math.round(
-        ((v3.convergence.total_cells - v3.convergence.cells_above_threshold) /
-          Math.max(v3.convergence.total_cells, 1)) *
-          100
-      )
-    : 0;
+  const convergencePct = useMemo(() => {
+    if (!v3.convergence) return 0;
+    return Math.round(
+      ((v3.convergence.total_cells - v3.convergence.cells_above_threshold) /
+        Math.max(v3.convergence.total_cells, 1)) *
+        100
+    );
+  }, [v3.convergence]);
+
+  const uncertaintyMapCard = useMemo(() => {
+    const um = v3.uncertaintyMap;
+    if (!um) return null;
+
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-purple-500" />
+            Uncertainty Map
+            <span className="text-xs font-normal text-muted-foreground ml-auto">
+              {um.predict_time_ms.toFixed(0)}ms GP predict
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left p-1 text-muted-foreground">RPM\MAP</th>
+                  {um.map_bins.map((m) => (
+                    <th key={m} className="p-1 text-center text-muted-foreground">{m}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {um.rpm_bins.map((rpm, ri) => (
+                  <tr key={rpm}>
+                    <td className="p-1 font-medium text-muted-foreground">{rpm}</td>
+                    {um.uncertainty_map[ri].map((unc, ci) => {
+                      const bg =
+                        unc < 0.5 ? "bg-green-900/40" :
+                        unc < 1.0 ? "bg-yellow-900/40" :
+                        unc < 2.0 ? "bg-orange-900/40" :
+                        "bg-red-900/40";
+                      return (
+                        <td
+                          key={ci}
+                          className={cn("p-1 text-center rounded-sm", bg)}
+                          title={`VE: ${um.ve_map[ri][ci].toFixed(1)}% | Unc: ${unc.toFixed(2)}`}
+                        >
+                          {unc.toFixed(1)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-3 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/40" /> &lt;0.5 (High)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-900/40" /> 0.5-1.0 (Med)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-900/40" /> 1.0-2.0 (Low)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-900/40" /> &gt;2.0 (Skip)</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }, [v3.uncertaintyMap]);
 
   return (
     <div className="space-y-6">
@@ -386,62 +489,7 @@ export function V3TuningTab() {
       )}
 
       {/* Uncertainty map preview */}
-      {v3.uncertaintyMap && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-purple-500" />
-              Uncertainty Map
-              <span className="text-xs font-normal text-muted-foreground ml-auto">
-                {v3.uncertaintyMap.predict_time_ms.toFixed(0)}ms GP predict
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr>
-                    <th className="text-left p-1 text-muted-foreground">RPM\MAP</th>
-                    {v3.uncertaintyMap.map_bins.map((m) => (
-                      <th key={m} className="p-1 text-center text-muted-foreground">{m}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {v3.uncertaintyMap.rpm_bins.map((rpm, ri) => (
-                    <tr key={rpm}>
-                      <td className="p-1 font-medium text-muted-foreground">{rpm}</td>
-                      {v3.uncertaintyMap!.uncertainty_map[ri].map((unc, ci) => {
-                        const bg =
-                          unc < 0.5 ? "bg-green-900/40" :
-                          unc < 1.0 ? "bg-yellow-900/40" :
-                          unc < 2.0 ? "bg-orange-900/40" :
-                          "bg-red-900/40";
-                        return (
-                          <td
-                            key={ci}
-                            className={cn("p-1 text-center rounded-sm", bg)}
-                            title={`VE: ${v3.uncertaintyMap!.ve_map[ri][ci].toFixed(1)}% | Unc: ${unc.toFixed(2)}`}
-                          >
-                            {unc.toFixed(1)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex gap-3 mt-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/40" /> &lt;0.5 (High)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-900/40" /> 0.5-1.0 (Med)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-900/40" /> 1.0-2.0 (Low)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-900/40" /> &gt;2.0 (Skip)</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {uncertaintyMapCard}
 
       {/* Overlay / Safety */}
       {v3.overlay && (
@@ -478,6 +526,29 @@ export function V3TuningTab() {
               >
                 <AlertTriangle className="h-4 w-4 mr-1" />
                 Kill Switch
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Finalize Session (when converged) */}
+      {v3.isConverged && v3.sessionPhase !== "complete" && (
+        <Card className="border-green-800">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-3">
+              <CheckCircle2 className="h-6 w-6 text-green-500 mx-auto" />
+              <h4 className="font-semibold">Session Converged</h4>
+              <p className="text-sm text-muted-foreground">
+                The VE map has reached target accuracy. Finalize to save as a template.
+              </p>
+              <Button
+                onClick={handleFinalize}
+                disabled={v3.isFinalizing || !v3.uncertaintyMap}
+                className="w-full"
+                variant="default"
+              >
+                {v3.isFinalizing ? "Saving..." : "Finalize & Save Template"}
               </Button>
             </div>
           </CardContent>

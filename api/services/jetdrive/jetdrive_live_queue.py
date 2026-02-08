@@ -127,6 +127,7 @@ class LiveCaptureQueueManager:
         self._csv_file = None
         self._csv_writer = None
         self._csv_lock = threading.Lock()
+        self._last_csv_flush_time: float = 0.0
 
         # Stats
         self.stats = LiveCaptureQueueStats()
@@ -179,6 +180,13 @@ class LiveCaptureQueueManager:
             return
 
         try:
+            # Local counters to minimize lock acquisitions in hot path.
+            samples_aggregated = 0
+            windows_flushed = 0
+            samples_enqueued = 0
+            samples_dropped = 0
+            high_watermark = 0
+
             # Aggregate samples using adapter
             # adapter.aggregate_samples() takes list and returns list of DynoDataPointSchema
             aggregated = self.adapter.aggregate_samples(
@@ -188,9 +196,8 @@ class LiveCaptureQueueManager:
             if not aggregated:
                 return
 
-            with self._stats_lock:
-                self.stats.samples_aggregated += len(self._sample_buffer)
-                self.stats.aggregation_windows += 1
+            samples_aggregated = len(self._sample_buffer)
+            windows_flushed = 1
 
             # Enqueue aggregated data point(s)
             for point in aggregated:
@@ -215,16 +222,34 @@ class LiveCaptureQueueManager:
                 )
 
                 if item_id:
-                    with self._stats_lock:
-                        self.stats.samples_enqueued += 1
+                    samples_enqueued += 1
+                    try:
                         queue_size = len(self.queue)
-                        self.stats.queue_high_watermark = max(
-                            self.stats.queue_high_watermark, queue_size
-                        )
+                        high_watermark = max(high_watermark, queue_size)
+                    except Exception:
+                        # Stats only; don't let it affect capture
+                        pass
                 else:
-                    with self._stats_lock:
-                        self.stats.samples_dropped += 1
+                    samples_dropped += 1
                     logger.warning("Queue full, dropped aggregated sample")
+
+            # Apply stats updates in a single lock acquisition.
+            if (
+                samples_aggregated
+                or windows_flushed
+                or samples_enqueued
+                or samples_dropped
+                or high_watermark
+            ):
+                with self._stats_lock:
+                    self.stats.samples_aggregated += samples_aggregated
+                    self.stats.aggregation_windows += windows_flushed
+                    self.stats.samples_enqueued += samples_enqueued
+                    self.stats.samples_dropped += samples_dropped
+                    if high_watermark:
+                        self.stats.queue_high_watermark = max(
+                            self.stats.queue_high_watermark, high_watermark
+                        )
 
         except Exception as e:
             logger.error(f"Error flushing aggregation window: {e}")
@@ -335,6 +360,7 @@ class LiveCaptureQueueManager:
                     extrasaction="ignore",  # Ignore extra fields
                 )
                 self._csv_writer.writeheader()
+                self._last_csv_flush_time = time.time()
 
                 logger.info(f"Opened CSV file: {path}")
             except Exception as e:
@@ -348,9 +374,11 @@ class LiveCaptureQueueManager:
             if self._csv_writer:
                 try:
                     self._csv_writer.writerow(data)
-                    # Flush periodically (every second via batch processor)
-                    if self.stats.samples_written % 20 == 0:
+                    # Flush time-based to avoid per-row modulo checks and stats coupling.
+                    now = time.time()
+                    if self._csv_file and (now - self._last_csv_flush_time) >= 1.0:
                         self._csv_file.flush()
+                        self._last_csv_flush_time = now
                 except Exception as e:
                     logger.error(f"Failed to write CSV row: {e}")
 
