@@ -25,10 +25,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from numpy.typing import NDArray
 
-from .gp_surrogate import VESurrogate, Observation
+from .gp_surrogate import Observation, VESurrogate
 from .grid_config import GridConfig
 from .physics_constraints import PhysicsConstraints
-from .pull_advisor import PullAdvisor, PullRecommendation, ConvergenceStatus
+from .pull_advisor import ConvergenceStatus, PullAdvisor, PullRecommendation
 from .template_library import HardwareConfig, TemplateLibrary, TemplateMatch
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ class SessionState(Enum):
 @dataclass
 class SessionInit:
     """Result of session initialization (Phase 1)."""
+
     session_id: str
     engine_family: str
     initial_plan: List[PullRecommendation]
@@ -60,6 +61,7 @@ class SessionInit:
 @dataclass
 class PullResult:
     """Result of ingesting a single pull (Phase 2)."""
+
     pull_number: int
     observations_added: int
     convergence: Optional[ConvergenceStatus] = None
@@ -69,6 +71,7 @@ class PullResult:
 @dataclass
 class FinalResult:
     """Result of session finalization (Phase 3)."""
+
     template_id: str
     total_pulls: int
     session_id: str = ""
@@ -123,7 +126,8 @@ class TuningSession:
 
         logger.info(
             "TuningSession created: %s (family=%s)",
-            self.session_id, config.engine_family,
+            self.session_id,
+            config.engine_family,
         )
 
     # ------------------------------------------------------------------
@@ -182,7 +186,9 @@ class TuningSession:
             if ve_key is not None:
                 template_ve = np.array(cal[ve_key], dtype=np.float64)
                 self.surrogate.seed_from_template(
-                    template_ve, rpm_bins, map_bins,
+                    template_ve,
+                    rpm_bins,
+                    map_bins,
                 )
                 logger.info(
                     "GP seeded from template %s (similarity=%.2f)",
@@ -239,23 +245,22 @@ class TuningSession:
 
         # Feed data to GP surrogate
         n_added = self.surrogate.add_pull_data(
-            rpm, map_kpa, ve,
+            rpm,
+            map_kpa,
+            ve,
             pull_number=self._pull_count,
         )
 
         # Update convergence
-        self._convergence = (
-            self.advisor.check_convergence() if self.advisor else None
-        )
+        self._convergence = self.advisor.check_convergence() if self.advisor else None
 
         # Get next suggestion
-        next_rec = (
-            self.advisor.suggest_next_pull() if self.advisor else None
-        )
+        next_rec = self.advisor.suggest_next_pull() if self.advisor else None
 
         logger.info(
             "Pull #%d ingested: %d observations added",
-            self._pull_count, n_added,
+            self._pull_count,
+            n_added,
         )
 
         return PullResult(
@@ -303,7 +308,9 @@ class TuningSession:
 
         logger.info(
             "Session %s finalized: %d pulls, template %s stored",
-            self.session_id, self._pull_count, template_id,
+            self.session_id,
+            self._pull_count,
+            template_id,
         )
 
         return FinalResult(
@@ -319,10 +326,7 @@ class TuningSession:
     @property
     def converged(self) -> bool:
         """Whether the session has converged."""
-        return (
-            self._convergence is not None
-            and self._convergence.converged
-        )
+        return self._convergence is not None and self._convergence.converged
 
     def get_status(self) -> Dict[str, Any]:
         """Get current session status for UI display."""
@@ -334,8 +338,6 @@ class TuningSession:
             "converged": self.converged,
             "elapsed_s": time.time() - self._start_time,
             "template_match": (
-                self._template_match.template_id
-                if self._template_match
-                else None
+                self._template_match.template_id if self._template_match else None
             ),
         }

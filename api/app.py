@@ -35,8 +35,7 @@ from api.metrics import init_metrics, record_analysis, record_file_upload
 
 # Configure logging to INFO level so logger.info() calls are visible
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 load_dotenv()  # Load environment variables from .env if present
@@ -279,6 +278,7 @@ except Exception as e:  # pragma: no cover
 # Register Engine Analyzer blueprint
 try:
     from api.routes.engine_analyzer import engine_analyzer_bp
+
     app.register_blueprint(engine_analyzer_bp)
     print("[+] Engine Analyzer registered at /api/ea")
 except Exception as e:  # pragma: no cover
@@ -296,6 +296,7 @@ except Exception as e:  # pragma: no cover
 # Register v3 Accelerated Calibration blueprint
 try:
     from api.routes.v3_session import v3_session_bp
+
     app.register_blueprint(v3_session_bp)
     print("[+] V3 Accelerated Calibration registered at /api/v3")
 except Exception as e:  # pragma: no cover

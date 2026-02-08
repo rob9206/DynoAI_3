@@ -115,17 +115,18 @@ class GridConfig:
         """
         # Check PVV bins (must have both and be non-empty)
         has_pvv = (
-            pvv_rpm_bins is not None 
-            and pvv_map_bins is not None 
-            and len(pvv_rpm_bins) > 0 
+            pvv_rpm_bins is not None
+            and pvv_map_bins is not None
+            and len(pvv_rpm_bins) > 0
             and len(pvv_map_bins) > 0
         )
-        
+
         if has_pvv:
             gc = cls.from_pvv(pvv_rpm_bins, pvv_map_bins)
             logger.info(
                 "Grid resolved from PVV: %d RPM x %d MAP bins",
-                len(gc.rpm_bins), len(gc.map_bins),
+                len(gc.rpm_bins),
+                len(gc.map_bins),
             )
             return gc
 
@@ -136,7 +137,7 @@ class GridConfig:
             and len(wizard_rpm_bins) > 0
             and len(wizard_map_bins) > 0
         )
-        
+
         if has_wizard:
             gc = cls(
                 rpm_bins=sorted(float(r) for r in wizard_rpm_bins),
@@ -145,7 +146,8 @@ class GridConfig:
             )
             logger.info(
                 "Grid resolved from wizard: %d RPM x %d MAP bins",
-                len(gc.rpm_bins), len(gc.map_bins),
+                len(gc.rpm_bins),
+                len(gc.map_bins),
             )
             return gc
 
@@ -160,7 +162,9 @@ class GridConfig:
         gc = cls.from_preset(engine_family)
         logger.info(
             "Grid resolved from preset (%s): %d RPM x %d MAP bins",
-            engine_family, len(gc.rpm_bins), len(gc.map_bins),
+            engine_family,
+            len(gc.rpm_bins),
+            len(gc.map_bins),
         )
         return gc
 
