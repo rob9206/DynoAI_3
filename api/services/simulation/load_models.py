@@ -8,8 +8,8 @@ Provides:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 
 @dataclass
@@ -57,7 +57,7 @@ class RoadLoadModel:
     def road_force_lbs(self, speed_mph: float) -> float:
         rolling = self.rolling_a
         speed_term = self.speed_b * speed_mph
-        aero = self.aero_c * (speed_mph ** 2)
+        aero = self.aero_c * (speed_mph**2)
         grade = self.vehicle_weight_lbs * (self.grade_pct / 100.0)
         return rolling + speed_term + aero + grade
 
@@ -77,4 +77,3 @@ class RoadLoadModel:
             tire_circumference_ft=6.9,
             grade_pct=0.0,
         )
-

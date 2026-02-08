@@ -14,6 +14,7 @@ Tests:
 
 Run with: pytest tests/test_ve_math_regression.py -v
 """
+
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -272,7 +273,12 @@ class TestCrossComponentAgreement:
         import sys
         from pathlib import Path
 
-        script_path = Path(__file__).resolve().parents[2] / "scripts" / "jetdrive" / "jetdrive_autotune.py"
+        script_path = (
+            Path(__file__).resolve().parents[2]
+            / "scripts"
+            / "jetdrive"
+            / "jetdrive_autotune.py"
+        )
         spec = importlib.util.spec_from_file_location("jetdrive_autotune", script_path)
         mod = importlib.util.module_from_spec(spec)
         sys.modules["jetdrive_autotune"] = mod

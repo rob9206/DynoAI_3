@@ -146,7 +146,9 @@ def start_simulator():
         error_msg = str(e)
         logger.error(f"Failed to start simulator: {error_msg}", exc_info=True)
         return (
-            jsonify({"success": False, "error": f"Failed to start simulator: {error_msg}"}),
+            jsonify(
+                {"success": False, "error": f"Failed to start simulator: {error_msg}"}
+            ),
             500,
         )
 

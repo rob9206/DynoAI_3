@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
+from synthetic import winpep8_cli as cli
+
+from api.services.jetdrive import jetdrive_client as jc
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-
-from api.services.jetdrive import jetdrive_client as jc
-from synthetic import winpep8_cli as cli
 
 
 def _provider(with_afr: bool = True) -> jc.JetDriveProviderInfo:

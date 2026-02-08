@@ -10,7 +10,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     import flask_socketio  # noqa: F401
 except ImportError:
-    pytest.skip("flask-socketio not installed (optional dependency)", allow_module_level=True)
+    pytest.skip(
+        "flask-socketio not installed (optional dependency)", allow_module_level=True
+    )
 
 
 def test_module_imports():
@@ -19,7 +21,7 @@ def test_module_imports():
         ClientSubscription,
         LiveLinkSocketIOManager,
         create_livelink_app,
-        )
+    )
 
     print("✓ All imports successful")
 
