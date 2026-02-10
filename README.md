@@ -4,7 +4,7 @@
 
 > Current release: **v1.2.1** — defined once in `dynoai/version.py` and used across code, builds, and docs.
 
-DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles with provable math, explicit boundaries, and OEM-inspired discipline. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision and Power Core systems—all with deterministic, reproducible results.
+DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles that combines **deterministic math** with **Bayesian intelligence**. Analyze dyno logs, generate VE corrections, and integrate with Dynojet Power Vision systems—all with state-of-the-art predictive modeling and provable results.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
@@ -12,6 +12,7 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 
 ## What Makes DynoAI3 World-Class
 
+✅ **Bayesian Intelligence** - Gaussian Process surrogate models that "learn" engine character in real-time  
 ✅ **Deterministic Math** - Same inputs always produce same outputs, bit-for-bit  
 ✅ **Provable Apply/Rollback** - Exact mathematical inverses with SHA-256 verification  
 ✅ **Automation-First** - Headless CLI, batch processing, CI-ready workflows  
@@ -19,34 +20,67 @@ DynoAI3 is a world-class dyno tuning toolkit for Harley-Davidson motorcycles wit
 ✅ **Math Versioning** - Stable algorithms with version freeze guarantees  
 ✅ **Production Safety** - Conservative defaults, dry-run mode, rollback protection
 
+## AI & Machine Learning Core (NEW!)
+
+DynoAI3 has evolved beyond static grid analysis. It now features a state-of-the-art **Bayesian Optimization engine** that actively guides the tuning process.
+
+### 🧠 Gaussian Process Surrogate
+Instead of treating each VE cell in isolation, DynoAI uses **Gaussian Process (GP) Regression** (via `scikit-learn`) to model the entire VE surface as a continuous probabilistic function.
+- **Learns the Engine:** The model updates in real-time after every pull, "learning" the shape of the engine's airflow efficiency.
+- **Predicts Unmeasured Areas:** Accurately infers VE values for cells you haven't even hit yet based on surrounding data.
+- **Quantifies Uncertainty:** Knows what it *doesn't* know. It generates a live "Uncertainty Map" showing exactly where more data is needed.
+
+### 🎯 Bayesian Active Learning
+The system doesn't just analyze data—it **plans your next move**. The **Smart Pull Advisor** uses Bayesian Active Learning to calculate the "Information Gain" of every possible operating point.
+- **Optimized Testing:** Suggests specific RPM/MAP targets (Steady-State or Sweep) that will reduce global uncertainty the most.
+- **Steady-State Detection:** Automatically identifies stable conditions in the physics-based simulator or real dyno runs.
+
+### 📉 Probabilistic Convergence
+Stop guessing when the tune is "good enough."
+- **Convergence Tracking:** Monitors the reduction in model variance (sigma) over time.
+- **Completion Metrics:** Provides a real-time "Percent Complete" metric based on mathematical confidence, not just hit counts.
+
+### 🛡️ Hybrid Architecture: "Safe by Design"
+While the AI provides intelligence, the safety rails remain deterministic:
+- **AI Suggests:** The GP model recommends where to test and what the VE *should* likely be.
+- **Math Applies:** The final corrections are calculated using the proven, deterministic `VE = AFR_measured / AFR_target` logic with strict clamping.
+- **You Control:** No changes are written to the ECU without explicit user review and approval.
+
 ## Features
 
-### 🔊 Audio Engine (NEW!)
+### 🚀 V3 AI Tuning Engine
+- **Smart Pull Advisor** - AI suggests the next best pull type (Steady-State vs. Sweep) and target zone
+- **Live Uncertainty Mapping** - Visual heatmap showing exactly where the model is confident vs. guessing
+- **Convergence Tracking** - Real-time progress bar based on model confidence
+- **Predictive Modeling** - See the AI's predicted VE surface before you even finish tuning
+
+### 🎛️ Command Center & Telemetry
+- **MoTeC-Style Telemetry** - Real-time streaming gauges (RPM, MAP, AFR, TPS) via SSE
+- **AI Coach** - Live tuning assistant providing context-aware insights during capture
+- **17-Column Heatmap** - Expanded resolution (10-105 kPa) matching PVV standards
+- **Live Coverage Tracking** - Visual feedback on which zones (Cruise, Part Throttle, WOT) are fully tuned
+
+### 🔊 Audio Engine
 - **Real-time engine sound synthesis** synchronized with dyno pulls
 - **Realistic audio generation** based on RPM, load, and cylinder count
 - **Exhaust effects** including deceleration crackle and harmonics
 - **Auto-start** during dyno captures for immersive experience
-
-### Core Features
 
 ### 🎯 Deterministic Core Engine
 - **VE Correction Analysis** - Deterministic AFR-to-VE conversion with provable math
 - **Three-Kernel System** - K1 (gradient-limited smoothing), K2 (coverage-weighted), K3 (spark logic)
 - **Apply/Rollback Symmetry** - Exact mathematical inverses verified by acceptance tests
 - **Math Versioning** - Algorithm stability with version freeze guarantees (currently v1.0.0)
-- **2D Grid Analysis** - RPM × MAP zone-based analysis (11×9 grid = 99 cells)
+- **2D Grid Analysis** - RPM × MAP zone-based analysis
 - **Conservative Clamping** - Default ±7% limit for production safety
 
 ### 🧠 NextGen Analysis (Phase 7: Predictive Test Planning)
 - **Physics-Informed ECU Reasoning** - Understanding VE, spark, and knock interactions
 - **Spark Valley Detection** - Automatic identification of timing valleys at high load
 - **Cause Tree Hypotheses** - Ranked diagnostic hypotheses with evidence
-- **Predictive Test Planning** - AI-driven suggestions that maximize coverage with minimal dyno time
 - **Cross-Run Coverage Tracking** - Learns from every session to suggest optimal next tests
 - **Efficiency Scoring** - Each test ranked by expected coverage gain per minute
 - **User Constraints** - Configure RPM/MAP limits, max pulls, test environment preferences
-- **Visual Priority Overlay** - Color-coded heatmap showing exactly which cells to target
-- **Feedback Loop** - Suggestions evolve as coverage improves across sessions
 
 ### 🔌 JetDrive Integration
 - **Live Data Capture** - Real-time dyno data via KLHDV multicast protocol
@@ -227,20 +261,26 @@ DynoAI_3/
 │   ├── app.py             # Main application
 │   ├── routes/            # API endpoints
 │   │   ├── jetdrive.py    # JetDrive auto-tune API
-│   │   ├── powercore.py   # Power Core integration
+│   │   ├── v3_session.py  # NEW: V3 AI tuning routes
 │   │   └── ...
 │   └── services/          # Business logic
+│       ├── dynoai_v3/     # NEW: AI Tuning Engine
+│       │   ├── gp_surrogate.py   # Gaussian Process logic
+│       │   └── pull_advisor.py   # Bayesian Active Learning
 │       ├── jetdrive_client.py    # KLHDV protocol
-│       ├── autotune_workflow.py  # Unified analysis engine
-│       └── ...
+│       └── autotune_workflow.py  # Unified analysis engine
 ├── frontend/              # React/TypeScript UI
 │   └── src/
 │       ├── pages/
 │       │   └── JetDriveAutoTunePage.tsx
 │       └── components/
+│           └── jetdrive/
+│               ├── AICoach.tsx          # NEW: AI Tuning Assistant
+│               ├── CommandCenter.tsx    # NEW: Centralized controls
+│               ├── TelemetryStrip.tsx   # NEW: MoTeC-style gauges
+│               └── VEHeatmapPanel.tsx   # UPDATED: 17-col grid
 ├── scripts/               # CLI tools
 │   ├── jetdrive_autotune.py      # Full auto-tune CLI
-│   ├── jetdrive_hardware_test.py # Hardware diagnostics
 │   └── ...
 ├── docs/                  # Documentation
 └── tests/                 # Test suite
@@ -248,14 +288,15 @@ DynoAI_3/
 
 ## API Endpoints
 
-### JetDrive Auto-Tune
+### JetDrive & V3 AI Tuning
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/jetdrive/status` | GET | Check JetDrive system status |
-| `/api/jetdrive/analyze` | POST | Run analysis on uploaded CSV |
+| `/api/jetdrive/live` | GET (SSE) | **Real-time telemetry stream** |
+| `/api/v3/session` | POST | **Start AI tuning session** |
+| `/api/v3/next-pull` | GET | **Get AI pull recommendation** |
 | `/api/jetdrive/analyze-unified` | POST | Run unified workflow analysis |
-| `/api/jetdrive/runs/<id>` | GET | Get run details and results |
 | `/api/jetdrive/runs/<id>/pvv` | GET | Download PVV XML export |
 | `/api/jetdrive/runs/<id>/export-text` | GET | Download comprehensive text export for AI analysis |
 | `/api/jetdrive/runs/<id>/report` | GET | Download diagnostics report |
@@ -347,10 +388,11 @@ FEATURE_CLOSED_LOOP=true         # Enable closed-loop tuning
 
 | MAP Range | Target AFR | Use Case |
 |-----------|------------|----------|
-| < 50 kPa | 14.7 | Cruise/light load |
-| 50-70 kPa | 13.8 | Part throttle |
-| 70-85 kPa | 13.2 | Acceleration |
-| > 85 kPa | 12.2 | WOT/power |
+| 10-20 kPa | 14.7 | Idle/light cruise |
+| 25-45 kPa | 14.5-14.0 | Cruise |
+| 50-65 kPa | 13.8-13.5 | Part throttle |
+| 70-85 kPa | 13.2-13.0 | Acceleration |
+| 90-105 kPa | 12.5-12.2 | WOT/power |
 
 ## Testing
 
@@ -456,7 +498,11 @@ These boundaries are intentional and allow DynoAI3 to excel in its specific doma
 pip install -r requirements.txt
 ```
 
-Key packages: Flask, pandas, numpy, scipy
+Key packages:
+- **scikit-learn** (Machine Learning kernels)
+- **Flask** (API)
+- **pandas/numpy** (Data processing)
+- **scipy** (Signal processing)
 
 ### Frontend Dependencies
 
