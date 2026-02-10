@@ -127,7 +127,12 @@ class JetstreamClient:
                 or ""
             )
             if isinstance(run_id, dict):
-                run_id = run_id.get("id") or run_id.get("job_id") or run_id.get("run_id") or ""
+                run_id = (
+                    run_id.get("id")
+                    or run_id.get("job_id")
+                    or run_id.get("run_id")
+                    or ""
+                )
             run_id = str(run_id) if run_id else ""
             runs.append(
                 JetstreamRun(
