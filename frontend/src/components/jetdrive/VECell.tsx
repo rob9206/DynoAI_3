@@ -38,6 +38,8 @@ export const VECell = memo(function VECell({
   isSelected,
   isClampWarning,
   isClampCritical,
+  width,
+  height,
   textSize,
   background,
   textColor,
@@ -47,6 +49,7 @@ export const VECell = memo(function VECell({
   onLeave,
 }: VECellProps) {
   const isNoData = correction === null || hitCount === 0;
+  const showClampIcon = width >= 32 && height >= 24;
 
   // Build background image layers
   const bgImages: string[] = [];
@@ -58,6 +61,8 @@ export const VECell = memo(function VECell({
       className={cn(
         'relative flex items-center justify-center font-mono tabular-nums',
         textSize,
+        // Grid border — visible on all cells for full grid structure
+        isNoData ? 'border border-zinc-800/50' : 'border border-zinc-800/30',
         // Live cell tracking
         isCurrentCell && 'ring-2 ring-orange-500 animate-pulse',
         isAdjacentCell && !isCurrentCell && 'ring-1 ring-orange-500/30',
@@ -77,10 +82,10 @@ export const VECell = memo(function VECell({
     >
       <span>{display}</span>
       {/* Clamp warning icon: amber at ±7%, red at ±15% */}
-      {isClampCritical && (
+      {showClampIcon && isClampCritical && (
         <AlertTriangle className="absolute right-0.5 top-0.5 h-3 w-3 text-red-500" />
       )}
-      {!isClampCritical && isClampWarning && (
+      {showClampIcon && !isClampCritical && isClampWarning && (
         <AlertTriangle className="absolute right-0.5 top-0.5 h-3 w-3 text-amber-500" />
       )}
     </div>

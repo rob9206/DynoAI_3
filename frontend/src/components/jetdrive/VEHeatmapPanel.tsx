@@ -13,15 +13,21 @@ import { VECell } from './VECell';
 
 const MISSING_VALUE = '—';
 
-const MIN_CELL_WIDTH = 36;   // fits "+2.1" in text-xs mono
+const MIN_CELL_WIDTH = 29;   // allows 17 MAP columns on typical 1080p layouts
 const MIN_CELL_HEIGHT = 24;  // fits one line of text
-const MAX_ASPECT_RATIO = 1.6; // width:height — closer to square = more like a real heatmap
-const AXIS_LABEL_WIDTH = 48;
+const MAX_ASPECT_RATIO = 2.0; // permit narrower cells before width is capped
+const AXIS_LABEL_WIDTH = 40;
 const AXIS_LABEL_HEIGHT = 28;
 const MAX_CORRECTION = 0.15; // +/-15% preview clamp
 const MIN_HITS_FOR_CORRECTION = 3;
 // UI-only formatting precision for display labels/tooltips (does not affect correction math)
-const DISPLAY_DECIMALS = 1;
+const DISPLAY_DECIMALS = 0;
+
+function formatSignedPercent(value: number, decimals: number = DISPLAY_DECIMALS): string {
+  const sign = value >= 0 ? '+' : '';
+  if (decimals <= 0) return `${sign}${Math.round(value)}%`;
+  return `${sign}${value.toFixed(decimals)}%`;
+}
 
 const RPM_CANDIDATES = ['RPM', 'Engine RPM', 'Digital RPM 1', 'Digital RPM 2'];
 const MAP_CANDIDATES = ['MAP', 'MAP kPa'];
@@ -145,8 +151,7 @@ function getLuminanceFromRgb(rgb: string): number {
 
 function getCorrectionDisplay(value: number, hits: number): string {
   if (hits === 0) return MISSING_VALUE;
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(DISPLAY_DECIMALS)}%`;
+  return formatSignedPercent(value);
 }
 
 function getConfidenceLabel(hits: number): 'Low' | 'Medium' | 'High' | 'None' {
@@ -214,9 +219,10 @@ function calculateCellTrace(
 
 /** Compute text size based on cell dimensions */
 function getCellTextSize(cellWidth: number): string {
-  if (cellWidth >= 80) return 'text-xs';
-  if (cellWidth >= 50) return 'text-[10px]';
-  return 'text-[9px]';
+  if (cellWidth >= 72) return 'text-xs';
+  if (cellWidth >= 42) return 'text-[10px]';
+  if (cellWidth >= 32) return 'text-[9px]';
+  return 'text-[8px]';
 }
 
 function VEHeatmapPanelContent({
@@ -334,11 +340,11 @@ function VEHeatmapPanelContent({
   }, [live.isConnected, liveValues.rpm, liveValues.map, rpmBins, mapBins]);
 
   useEffect(() => {
-    if (!cellTrace || liveValues.rpm < 800) {
+    if (!cellTrace || liveValues.rpm < 500) {
       if (debugHeatmap) {
         // Debug: log why accumulation isn't happening
         if (!cellTrace) console.log('[VEHeatmap] No cellTrace');
-        if (liveValues.rpm < 800) console.log('[VEHeatmap] RPM too low:', liveValues.rpm);
+        if (liveValues.rpm < 500) console.log('[VEHeatmap] RPM too low:', liveValues.rpm);
       }
       return;
     }
@@ -460,7 +466,7 @@ function VEHeatmapPanelContent({
     return total / count;
   }, [frontCorrections, rearCorrections, frontHits, rearHits, rpmBins.length, mapBins.length]);
 
-  const balanceLabel = `${balanceDelta >= 0 ? '+' : ''}${balanceDelta.toFixed(DISPLAY_DECIMALS)}%`;
+  const balanceLabel = formatSignedPercent(balanceDelta);
   const balanceClass =
     Math.abs(balanceDelta) > 3
       ? 'text-red-400'
@@ -507,7 +513,10 @@ function VEHeatmapPanelContent({
   }, []);
 
   // Calculate raw cell dimensions from container and grid
-  let cellWidth = Math.floor((gridSize.width - AXIS_LABEL_WIDTH) / mapBins.length);
+  // Reserve space for the compact stats panel (min 224px + 1px border) — 20% wider than current for optimal balance
+  const STATS_PANEL_MIN_WIDTH = 225;
+  const availableGridWidth = Math.max(0, gridSize.width - STATS_PANEL_MIN_WIDTH);
+  let cellWidth = Math.floor((availableGridWidth - AXIS_LABEL_WIDTH) / mapBins.length);
   let cellHeight = Math.floor((gridSize.height - AXIS_LABEL_HEIGHT) / rpmBins.length);
 
   // CRITICAL: Cap aspect ratio to prevent ultra-wide rectangular cells
@@ -520,17 +529,15 @@ function VEHeatmapPanelContent({
   const effectiveCellWidth = Math.max(cellWidth, MIN_CELL_WIDTH);
   const effectiveCellHeight = Math.max(cellHeight, MIN_CELL_HEIGHT);
 
-  // If grid is now narrower than container, center it horizontally
+  // Grid pixel dimensions — no centering; stats panel fills remaining space
   const gridPixelWidth = effectiveCellWidth * mapBins.length + AXIS_LABEL_WIDTH;
   const gridPixelHeight = effectiveCellHeight * rpmBins.length + AXIS_LABEL_HEIGHT;
-  const horizontalPadding = needsScroll ? 0 : Math.max(0, (gridSize.width - gridPixelWidth) / 2);
 
   const gridStyle = {
     gridTemplateColumns: `${AXIS_LABEL_WIDTH}px repeat(${mapBins.length}, ${effectiveCellWidth}px)`,
     gridTemplateRows: `${AXIS_LABEL_HEIGHT}px repeat(${rpmBins.length}, ${effectiveCellHeight}px)`,
-    width: needsScroll ? gridPixelWidth : gridPixelWidth,
+    width: gridPixelWidth,
     height: needsScroll ? gridPixelHeight : undefined,
-    marginLeft: horizontalPadding > 0 ? `${horizontalPadding}px` : undefined,
   } as const;
 
   const activeCell = cellTrace ? { row: cellTrace.rpmIdx, col: cellTrace.mapIdx } : null;
@@ -543,6 +550,70 @@ function VEHeatmapPanelContent({
     }
     return set;
   }, [cellTrace]);
+
+  // ── Stats panel data (derived from existing state) ──────────────────
+  const gridStats = useMemo(() => {
+    const totalCells = rpmBins.length * mapBins.length;
+    let cellsWithData = 0;
+    let totalHits = 0;
+    let correctionSum = 0;
+    let correctionCount = 0;
+    let minCorr = Infinity;
+    let maxCorr = -Infinity;
+    // Zone accumulators — cruise: MAP < 60, partThrottle: 60-80, wot: > 80
+    const zones = {
+      cruise: { hits: 0, cells: 0, corrSum: 0, corrCount: 0, total: 0 },
+      partThrottle: { hits: 0, cells: 0, corrSum: 0, corrCount: 0, total: 0 },
+      wot: { hits: 0, cells: 0, corrSum: 0, corrCount: 0, total: 0 },
+    };
+
+    for (let i = 0; i < rpmBins.length; i++) {
+      for (let j = 0; j < mapBins.length; j++) {
+        const hits = displayHits[i]?.[j] ?? 0;
+        const corr = displayCorrections[i]?.[j] ?? 0;
+        const mapVal = mapBins[j];
+        const zone = mapVal < 60 ? zones.cruise : mapVal <= 80 ? zones.partThrottle : zones.wot;
+        zone.total += 1;
+
+        totalHits += hits;
+        if (hits > 0) {
+          cellsWithData += 1;
+          correctionSum += corr;
+          correctionCount += 1;
+          minCorr = Math.min(minCorr, corr);
+          maxCorr = Math.max(maxCorr, corr);
+          zone.cells += 1;
+          zone.corrSum += corr;
+          zone.corrCount += 1;
+        }
+        zone.hits += hits;
+      }
+    }
+
+    return {
+      totalCells,
+      cellsWithData,
+      totalHits,
+      meanCorr: correctionCount > 0 ? correctionSum / correctionCount : 0,
+      maxAbsCorr: correctionCount > 0 ? Math.max(Math.abs(minCorr), Math.abs(maxCorr)) : 0,
+      minCorr: correctionCount > 0 ? minCorr : 0,
+      maxCorr: correctionCount > 0 ? maxCorr : 0,
+      zones: {
+        cruise: {
+          coverage: zones.cruise.total > 0 ? Math.round((zones.cruise.cells / zones.cruise.total) * 100) : 0,
+          meanCorr: zones.cruise.corrCount > 0 ? zones.cruise.corrSum / zones.cruise.corrCount : 0,
+        },
+        partThrottle: {
+          coverage: zones.partThrottle.total > 0 ? Math.round((zones.partThrottle.cells / zones.partThrottle.total) * 100) : 0,
+          meanCorr: zones.partThrottle.corrCount > 0 ? zones.partThrottle.corrSum / zones.partThrottle.corrCount : 0,
+        },
+        wot: {
+          coverage: zones.wot.total > 0 ? Math.round((zones.wot.cells / zones.wot.total) * 100) : 0,
+          meanCorr: zones.wot.corrCount > 0 ? zones.wot.corrSum / zones.wot.corrCount : 0,
+        },
+      },
+    };
+  }, [displayCorrections, displayHits, rpmBins, mapBins]);
 
   const handleCylinderChange = (next: Cylinder) => {
     setLocalCylinder(next);
@@ -558,11 +629,11 @@ function VEHeatmapPanelContent({
     if (absCorrValue >= 15) {
       clampNote = ' | ⚠ MAX clamp at ±15%';
     } else if (absCorrValue >= 7) {
-      clampNote = ` | ⚠ Clamped at ±7% — computed ${value >= 0 ? '+' : ''}${value.toFixed(DISPLAY_DECIMALS)}%`;
+      clampNote = ` | ⚠ Clamped at ±7% — computed ${formatSignedPercent(value)}`;
     }
     setTooltip({
       x: rect.left + rect.width / 2,
-      y: rect.top - 8,
+      y: rect.top - 12,
       text: `RPM: ${rpmBins[row]} | MAP: ${mapBins[col]} kPa | Correction: ${correction} | Hits: ${hits} | Confidence: ${confidence} | ${cylinder === 'front' ? 'Front' : 'Rear'} Cyl${clampNote}`,
     });
   };
@@ -625,8 +696,9 @@ function VEHeatmapPanelContent({
         </div>
       </div>
 
-      <div ref={gridRef} className="relative flex-1 overflow-hidden">
-        <div className={cn('absolute inset-0', needsScroll ? 'overflow-auto' : 'overflow-hidden')}>
+      <div ref={gridRef} className="relative flex flex-1 overflow-hidden">
+        {/* Heatmap grid — left-aligned, shrink-to-fit */}
+        <div className={cn('shrink-0', needsScroll ? 'overflow-auto' : 'overflow-hidden')}>
           <div className="grid gap-px bg-zinc-800 p-px" style={gridStyle}>
             <div className="flex flex-col justify-center px-2 text-[10px] text-zinc-600">
               <span>RPM ↑</span>
@@ -656,14 +728,14 @@ function VEHeatmapPanelContent({
                   const correctionColor = colorScale[colorIndex] ?? 'rgb(63, 63, 70)';
                   const isNoData = hits === 0;
                   const coverageColor = getCoverageColor(hits);
-                  // Spec: no-data = zinc-950 (#09090b), zero-correction = zinc-700, corrections = color scale
+                  // no-data = zinc-800/40 (visible rectangle), zero-correction = zinc-700, corrections = color scale
                   const background = showCoverage
                     ? coverageColor
                     : isNoData
-                      ? '#09090b'
+                      ? '#1e1e22'
                       : correctionColor;
                   const textColor = isNoData
-                    ? '#52525b'  // zinc-600 for no-data dash
+                    ? '#52525b'  // zinc-600 — visible dash on #1e1e22
                     : getLuminanceFromRgb(background) > 0.55 ? '#18181b' : '#fafafa';
                   const display = showCoverage
                     ? hits > 0
@@ -702,6 +774,101 @@ function VEHeatmapPanelContent({
                 })}
               </Fragment>
             ))}
+          </div>
+        </div>
+
+        {/* Stats panel — fills remaining width to the right of the grid */}
+        <div className="flex-1 min-w-[224px] border-l border-zinc-800 overflow-y-auto px-2 py-2 space-y-2">
+          {/* Color Scale Legend */}
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Correction Scale</div>
+            <div className="flex items-stretch gap-1.5">
+              <div
+                className="w-3.5 rounded-sm"
+                style={{
+                  background: 'linear-gradient(to bottom, #2563eb, #60a5fa, #93c5fd, #bfdbfe, #3f3f46, #fed7aa, #fdba74, #fb923c, #ea580c)',
+                  minHeight: 96,
+                }}
+              />
+              <div className="flex flex-col justify-between text-[10px] font-mono tabular-nums text-zinc-500">
+                <span>-7%</span>
+                <span>-3%</span>
+                <span>&nbsp;0%</span>
+                <span>+3%</span>
+                <span>+7%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Zone Summary */}
+          <div className="border-t border-zinc-800 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Zone Summary</div>
+            <div className="space-y-1.5">
+              {([
+                ['Cruise', gridStats.zones.cruise] as const,
+                ['Part Throttle', gridStats.zones.partThrottle] as const,
+                ['WOT', gridStats.zones.wot] as const,
+              ]).map(([label, zone]) => (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500">{label}</span>
+                  <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums">
+                    <span className={cn(
+                      zone.coverage >= 70 ? 'text-green-400' : zone.coverage >= 40 ? 'text-amber-400' : 'text-zinc-500',
+                    )}>
+                      {zone.coverage}%
+                    </span>
+                    <span className="text-zinc-600">
+                      {zone.meanCorr >= 0 ? '+' : ''}{zone.meanCorr.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Grid Stats */}
+          <div className="border-t border-zinc-800 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Grid Stats</div>
+            <div className="space-y-1 text-[10px]">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Cells</span>
+                <span className="font-mono tabular-nums text-zinc-300">
+                  {gridStats.cellsWithData} / {gridStats.totalCells}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Total Hits</span>
+                <span className="font-mono tabular-nums text-zinc-300">
+                  {gridStats.totalHits.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Mean Corr.</span>
+                <span className="font-mono tabular-nums text-zinc-300">
+                  {gridStats.meanCorr >= 0 ? '+' : ''}{gridStats.meanCorr.toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Max |Corr.|</span>
+                <span className="font-mono tabular-nums text-zinc-300">
+                  {gridStats.maxAbsCorr.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Correction Range */}
+          <div className="border-t border-zinc-800 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Correction Range</div>
+            <div className="flex items-center justify-between text-[10px] font-mono tabular-nums">
+              <span className="text-blue-400">
+                {gridStats.cellsWithData > 0 ? `${gridStats.minCorr >= 0 ? '+' : ''}${gridStats.minCorr.toFixed(1)}%` : MISSING_VALUE}
+              </span>
+              <span className="text-zinc-600">to</span>
+              <span className="text-orange-400">
+                {gridStats.cellsWithData > 0 ? `${gridStats.maxCorr >= 0 ? '+' : ''}${gridStats.maxCorr.toFixed(1)}%` : MISSING_VALUE}
+              </span>
+            </div>
           </div>
         </div>
       </div>

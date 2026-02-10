@@ -31,6 +31,9 @@ export interface EnginePresetData {
     afrTargets: Record<number, number>;
 }
 
+// Rounded integer form of PVV ECU MAP bins (17 columns)
+const PVV_MAP_BINS: number[] = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 85, 95, 105];
+
 /**
  * Harley-Davidson Milwaukee-Eight (M8) Engine
  * 107/114/117/131 cubic inch variants
@@ -39,7 +42,7 @@ const HARLEY_M8: EnginePresetData = {
     name: 'Harley M8',
     description: 'Milwaukee-Eight 107/114/117/131',
     rpmBins: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 6500,
     
     // Typical M8 VE values (as percentages)
@@ -82,7 +85,7 @@ const HARLEY_TC: EnginePresetData = {
     name: 'Harley Twin Cam',
     description: 'Twin Cam 88/96/103/110',
     rpmBins: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 6000,
     
     veTableFront: [
@@ -122,7 +125,7 @@ const HARLEY_REVMAX_1250: EnginePresetData = {
     name: 'Harley RevMax 1250',
     description: 'Revolution Max 1250 (Sportster S / Pan America)',
     rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 9500,
     veTableFront: [
         [72, 74, 77, 80, 83, 86, 88, 90, 92, 94],
@@ -148,7 +151,7 @@ const HARLEY_REVMAX_975: EnginePresetData = {
     name: 'Harley RevMax 975',
     description: 'Revolution Max 975T (Nightster)',
     rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 9000,
     veTableFront: [
         [71, 73, 76, 79, 82, 85, 87, 89, 91, 93],
@@ -173,7 +176,7 @@ const SPORTBIKE_600: EnginePresetData = {
     name: 'Sportbike 600cc',
     description: 'High-revving 600cc inline-4',
     rpmBins: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 15000,
     
     veTableFront: [
@@ -216,7 +219,7 @@ const SPORTBIKE_1000: EnginePresetData = {
     name: 'Sportbike 1000cc',
     description: 'High-power 1000cc inline-4',
     rpmBins: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000],
-    mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    mapBins: [...PVV_MAP_BINS],
     maxRpm: 13000,
     
     veTableFront: [
@@ -305,7 +308,7 @@ export const ENGINE_GRID_CONFIGS: Record<EnginePreset, EngineConfig> = {
     custom: {
         name: 'Custom',
         rpmBins: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000],
-        mapBins: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+        mapBins: [...PVV_MAP_BINS],
         maxRpm: 10000,
     },
 };
