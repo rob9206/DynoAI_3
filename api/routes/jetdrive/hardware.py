@@ -1015,6 +1015,11 @@ def stream_live_data():
     UDP receive loop, instead of sleeping a fixed 250 ms.  This reduces
     SSE latency from ~250 ms (4 Hz) to near-instant (~20 Hz, matching
     the 50 ms aggregation window).
+
+    The stream pushes two event types:
+    - ``data`` (default): The latest channel snapshot for gauge displays.
+    - ``samples``: Batch of all accumulated samples since last push, for
+      VE hit accumulation and other consumers that need every sample.
     """
 
     def _event_stream():
@@ -1730,6 +1735,61 @@ def discover_channels():
             ),
             500,
         )
+
+
+@hardware_bp.route("/hardware/metrics", methods=["GET"])
+def pipeline_metrics():
+    """Return observability metrics for the entire JetDrive data pipeline.
+
+    Surfaces:
+    - UDP packets received / dropped (from sequence-gap tracking in the
+      subscribe loop)
+    - Aggregation window count / queue depth / queue drops
+    - SSE client count (approximate)
+    - Sample ring buffer depth and capacity
+    - Live capture queue manager statistics
+    """
+    from api.services.jetdrive.jetdrive_live_queue import get_live_queue_manager
+    from api.services.jetdrive.jetdrive_validation import get_validator
+
+    with _live_data_lock:
+        capturing = _live_data.get("capturing", False)
+        last_update_ts = _live_data.get("last_update_ts")
+        ring_depth = len(_sample_ring)
+        ring_capacity = _sample_ring.maxlen or 0
+
+    # Queue manager stats (aggregation windows, enqueue rate, drops, etc.)
+    queue_mgr = get_live_queue_manager()
+    queue_stats = queue_mgr.get_stats()
+
+    # Validator tracks frame-level stats including seq gaps
+    validator = get_validator()
+    validator_health = validator.get_all_health()
+
+    data_age_seconds: float | None = None
+    if last_update_ts:
+        try:
+            data_age_seconds = round(time.time() - float(last_update_ts), 2)
+        except Exception:
+            pass
+
+    return jsonify(
+        {
+            "capturing": capturing,
+            "data_age_seconds": data_age_seconds,
+            "sample_ring": {
+                "depth": ring_depth,
+                "capacity": ring_capacity,
+                "utilization_pct": (
+                    round(ring_depth / ring_capacity * 100, 1)
+                    if ring_capacity
+                    else 0
+                ),
+            },
+            "queue": queue_stats,
+            "validator": validator_health,
+        }
+    )
 
 
 @hardware_bp.route("/hardware/health", methods=["GET"])

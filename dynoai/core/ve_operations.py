@@ -378,12 +378,16 @@ class VEApply:
 
         # Apply factors: updated_ve = base_ve * (1 + factor/100)
         updated_ve: List[List[float]] = []
+        cells_modified = 0
         for base_row, factor_row in zip(base_ve, clamped_factors):
             updated_row: List[float] = []
             for base_val, factor_val in zip(base_row, factor_row):
                 # Convert percentage to multiplier: 5% -> 1.05, -3% -> 0.97
                 multiplier = 1.0 + (factor_val / 100.0)
-                updated_row.append(base_val * multiplier)
+                updated_val = base_val * multiplier
+                if abs(updated_val - base_val) > 1e-9:
+                    cells_modified += 1
+                updated_row.append(updated_val)
             updated_ve.append(updated_row)
 
         # Compute hashes
@@ -401,6 +405,7 @@ class VEApply:
             "base_file": str(base_ve_path),
             "factor_file": str(factor_path),
             "output_file": str(output_path),
+            "cells_modified": cells_modified,
             "comment": "Rollback = divide by last factor (or multiply by reciprocal of applied multipliers)",
         }
 

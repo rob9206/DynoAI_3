@@ -727,12 +727,25 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
     - Expanded header synonyms (PowerVision, descriptive exports).
     - AFR fallback: derive AFR from lambda columns when AFR is missing/invalid (e.g., constant 5.1).
     - Torque derivation: if torque column absent but horsepower present, compute torque = HP * 5252 / RPM.
+    - Skips comment lines (starting with #) before reading headers.
     """
     target = io_contracts.safe_path(str(path))
     with open(
         target, newline="", encoding="utf-8-sig"
     ) as f:  # Use utf-8-sig for BOM safety
-        reader = csv.DictReader(f)
+        # Skip comment lines (starting with #) before reading headers
+        lines = []
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#'):
+                lines.append(line)
+            elif not stripped:
+                lines.append(line)  # Keep empty lines for DictReader
+        
+        # Create a file-like object from the filtered lines
+        from io import StringIO
+        filtered_content = ''.join(lines)
+        reader = csv.DictReader(StringIO(filtered_content))
 
         def normalize_header(h: str) -> str:
             return h.lower().strip()
@@ -926,9 +939,21 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
     except Exception:
         pass  # fallback to default
 
-    # Now parse file with detected dialect
+    # Now parse file with detected dialect, skipping comment lines
     with open(target, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f, dialect=dialect) if dialect else csv.DictReader(f)
+        # Skip comment lines (starting with #) before reading headers
+        lines = []
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#'):
+                lines.append(line)
+            elif not stripped:
+                lines.append(line)  # Keep empty lines for DictReader
+        
+        # Create a file-like object from the filtered lines
+        from io import StringIO
+        filtered_content = ''.join(lines)
+        reader = csv.DictReader(StringIO(filtered_content), dialect=dialect) if dialect else csv.DictReader(StringIO(filtered_content))
         rows: List[Dict[str, str]] = list(reader)  # raw strings from CSV/TXT
     if not rows:
         raise RuntimeError("Empty WinPEP CSV.")

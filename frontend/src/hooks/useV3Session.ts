@@ -23,6 +23,7 @@ import {
   listTemplates,
   simulatePull,
   autoSimulate,
+  materializeRun,
   type CreateSessionPayload,
   type HardwareConfig,
   type PullData,
@@ -42,6 +43,7 @@ import {
   type UncertaintyMapResult,
   type OverlayStatus,
   type TemplateListResult,
+  type MaterializeRunResult,
 } from "@/api/v3Session";
 
 // ---------------------------------------------------------------------------
@@ -202,6 +204,10 @@ export function useV3Session(sessionId?: string) {
     },
   });
 
+  const materializeRunMutation = useMutation({
+    mutationFn: () => materializeRun(sessionId!),
+  });
+
   // ---- Wrapped actions ----
 
   const startSession = useCallback(
@@ -257,6 +263,11 @@ export function useV3Session(sessionId?: string) {
     void refetchNextPull();
   }, [refetchSession, refetchConvergence, refetchUncertainty, refetchNextPull]);
 
+  const materializeLatestRun = useCallback(
+    () => materializeRunMutation.mutateAsync(),
+    [materializeRunMutation]
+  );
+
   // ---- Derived state ----
 
   const sessionPhase = useMemo<"idle" | "ready" | "tuning" | "complete">(() => {
@@ -310,6 +321,7 @@ export function useV3Session(sessionId?: string) {
     isFinalizing: finalizeMutation.isPending,
     isSimulating: simulateMutation.isPending,
     isAutoSimulating: autoSimulateMutation.isPending,
+    isMaterializingRun: materializeRunMutation.isPending,
 
     // Errors
     statusError,
@@ -318,6 +330,7 @@ export function useV3Session(sessionId?: string) {
 
     // Results (for init data after create)
     initResult: createMutation.data as SessionInitResult | undefined,
+    materializeResult: materializeRunMutation.data as MaterializeRunResult | undefined,
 
     // Actions
     startSession,
@@ -329,6 +342,7 @@ export function useV3Session(sessionId?: string) {
     simulate,
     runAutoSimulate,
     importSessionCorrections,
+    materializeLatestRun,
     refreshSessionData,
   };
 }

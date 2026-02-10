@@ -1117,17 +1117,22 @@ def apply_ve_corrections():
     if not run_id:
         raise ValidationError("Invalid run_id")
 
-    # Find the run directory (check both outputs and runs folders)
+    # Find the run directory (check both outputs and runs folders).
+    # JetDrive runs often store artifacts directly in runs/<run_id>/ (no output/ subdir).
     run_dir = None
     output_dir = None
 
-    # Check runs folder first (for Jetstream runs)
-    runs_path = config.storage.runs_folder / run_id
-    if runs_path.exists():
-        run_dir = runs_path
-        output_dir = runs_path / "output"
-    else:
-        # Check outputs folder (for direct uploads)
+    runs_candidates = [
+        config.storage.runs_folder / run_id,  # configurable data/runs
+        PROJECT_ROOT / "runs" / run_id,       # JetDrive legacy/default runs path
+    ]
+    for runs_path in runs_candidates:
+        if runs_path.exists():
+            run_dir = runs_path
+            output_candidates = [runs_path / "output", runs_path]
+            output_dir = next((path for path in output_candidates if path.exists()), runs_path)
+            break
+    if not run_dir:
         outputs_path = config.storage.output_folder / run_id
         if outputs_path.exists():
             run_dir = outputs_path
@@ -1136,9 +1141,30 @@ def apply_ve_corrections():
     if not run_dir or not output_dir:
         raise NotFoundError("Run", run_id)
 
-    # Find VE correction file
-    ve_correction_path = output_dir / "VE_Correction_Delta_DYNO.csv"
-    if not ve_correction_path.exists():
+    # Find VE correction file.
+    # Legacy analyze flow writes VE_Correction_Delta_DYNO.csv; JetDrive writes VE_Corrections_2D.csv.
+    legacy_delta_path = output_dir / "VE_Correction_Delta_DYNO.csv"
+    jetdrive_delta_path = output_dir / "VE_Corrections_2D.csv"
+    ve_correction_path = None
+    if legacy_delta_path.exists():
+        ve_correction_path = legacy_delta_path
+    elif jetdrive_delta_path.exists():
+        # Normalize JetDrive CSV header from "RPM\\MAP" to "RPM" for VEApply parser compatibility.
+        normalized_path = output_dir / "VE_Correction_Delta_DYNO.csv"
+        try:
+            with open(jetdrive_delta_path, "r", encoding="utf-8") as src:
+                lines = src.readlines()
+            if not lines:
+                raise ValidationError("VE correction file is empty")
+            header = lines[0].strip()
+            if header.startswith("RPM\\MAP,"):
+                lines[0] = "RPM," + header.split(",", 1)[1] + "\n"
+            with open(normalized_path, "w", encoding="utf-8") as dst:
+                dst.writelines(lines)
+            ve_correction_path = normalized_path
+        except Exception as exc:
+            raise ValidationError(f"Failed to normalize VE corrections: {exc}") from exc
+    if not ve_correction_path:
         raise NotFoundError("VE corrections", run_id)
 
     # Get base VE path (from request or default)
@@ -1162,6 +1188,41 @@ def apply_ve_corrections():
     # Create output paths
     ve_output_path = output_dir / "VE_Applied.csv"
     ve_backup_path = output_dir / "VE_Before_Apply.csv"
+
+    # JetDrive runs may produce correction grids whose dimensions do not match the
+    # default base table. In that case, synthesize a neutral 100.0 VE base grid
+    # with the same shape as the correction table so apply/rollback can proceed.
+    try:
+        import csv
+
+        def _read_grid_shape(path: Path) -> tuple[int, int, list[str], list[str]]:
+            with open(path, "r", encoding="utf-8", newline="") as handle:
+                reader = csv.reader(handle)
+                header = next(reader, [])
+                if not header or len(header) < 2:
+                    raise ValidationError(f"{path} missing RPM header")
+                rpm_rows: list[str] = []
+                for row in reader:
+                    if row:
+                        rpm_rows.append(row[0])
+                return len(rpm_rows), len(header) - 1, header[1:], rpm_rows
+
+        base_rows, base_cols, _, _ = _read_grid_shape(base_ve_path)
+        factor_rows, factor_cols, factor_map_bins, factor_rpm_rows = _read_grid_shape(ve_correction_path)
+
+        if (base_rows, base_cols) != (factor_rows, factor_cols):
+            synthetic_base_path = output_dir / "VE_Base_Synthetic_100.csv"
+            with open(synthetic_base_path, "w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["RPM", *factor_map_bins])
+                for rpm in factor_rpm_rows:
+                    writer.writerow([rpm, *(["100.0"] * factor_cols)])
+            base_ve_path = synthetic_base_path
+    except ValidationError:
+        raise
+    except Exception:
+        # If shape probing fails, continue and let VEApply raise a precise error.
+        pass
 
     # Backup the base VE before applying
     import shutil
@@ -1237,15 +1298,22 @@ def rollback_ve_corrections():
     if not run_id:
         raise ValidationError("Invalid run_id")
 
-    # Find the run directory
+    # Find the run directory.
+    # Prefer output/ when it exists, otherwise use run root (JetDrive layout).
     run_dir = None
     output_dir = None
 
-    runs_path = config.storage.runs_folder / run_id
-    if runs_path.exists():
-        run_dir = runs_path
-        output_dir = runs_path / "output"
-    else:
+    runs_candidates = [
+        config.storage.runs_folder / run_id,  # configurable data/runs
+        PROJECT_ROOT / "runs" / run_id,       # JetDrive legacy/default runs path
+    ]
+    for runs_path in runs_candidates:
+        if runs_path.exists():
+            run_dir = runs_path
+            output_candidates = [runs_path / "output", runs_path]
+            output_dir = next((path for path in output_candidates if path.exists()), runs_path)
+            break
+    if not run_dir:
         outputs_path = config.storage.output_folder / run_id
         if outputs_path.exists():
             run_dir = outputs_path

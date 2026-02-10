@@ -198,6 +198,13 @@ export interface AutoSimulateResult {
   pull_summary: AutoSimulatePullSummary[];
 }
 
+export interface MaterializeRunResult {
+  success: boolean;
+  run_id: string;
+  session_id: string;
+  materialized_at: string;
+}
+
 export interface ImportBaseVEResult {
   status: string;
   observations_added: number;
@@ -363,6 +370,15 @@ export async function autoSimulate(
   const response = await api.post<AutoSimulateResult>(
     `/api/v3/session/${encodePathSegment(sessionId)}/auto-simulate`,
     data || {}
+  );
+  return response.data;
+}
+
+export async function materializeRun(
+  sessionId: string
+): Promise<MaterializeRunResult> {
+  const response = await api.post<MaterializeRunResult>(
+    `/api/v3/session/${encodePathSegment(sessionId)}/materialize-run`
   );
   return response.data;
 }

@@ -9,6 +9,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { playUiSound } from '@/lib/ui-sounds';
 
+// Shared capability flag across all hook instances on the page.
+let globalDrainEndpointUnavailable = false;
+let globalDrainBackoffMs = 0;
+let globalDrainBackoffUntil = 0;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -85,6 +90,17 @@ export interface JetDriveSnapshot {
 
 export type JetDriveDataSource = 'simulator' | 'hardware' | 'none';
 
+/** A raw sample entry from the /live/drain endpoint.
+ *  Each entry represents one channel value at one point in time.
+ *  Use consumeDrainedSamples() to get all samples since the last call. */
+export interface DrainedSample {
+    name: string;
+    value: number;
+    timestamp: number;
+    category?: string;
+    units?: string;
+}
+
 export interface UseJetDriveLiveOptions {
     /** API base URL (default: http://127.0.0.1:5001/api/jetdrive) */
     apiUrl?: string;
@@ -129,6 +145,12 @@ export interface UseJetDriveLiveReturn {
     getChannelValue: (channel: string) => number | null;
     clearHistory: () => void;
     clearChannels: () => Promise<void>;
+
+    /** Consume all drained samples since last call. Returns array of raw sample
+     *  entries (each has name, value, timestamp). Clears the internal buffer.
+     *  Use this for VE cell hit accumulation to get every sample, not just the
+     *  latest snapshot value. Backed by the /hardware/live/drain endpoint. */
+    consumeDrainedSamples: () => DrainedSample[];
 }
 
 // Channel configuration type with category
@@ -210,6 +232,7 @@ export const JETDRIVE_CHANNEL_CONFIG: Record<string, ChannelConfig> = {
     'TPS': { label: 'TPS', units: '%', min: 0, max: 100, decimals: 1, color: '#14b8a6', category: 'engine' },
     'IAT': { label: 'IAT', units: '°F', min: 0, max: 200, decimals: 0, color: '#f59e0b', category: 'engine' },
     'IAT F': { label: 'IAT', units: '°F', min: 0, max: 200, decimals: 0, color: '#f59e0b', category: 'engine' },
+    'ECT': { label: 'ECT', units: '°F', min: 100, max: 280, decimals: 0, color: '#ef4444', category: 'engine', warning: 230, critical: 250 },
     'VBatt': { label: 'Battery', units: 'V', min: 11, max: 15, decimals: 1, color: '#eab308', category: 'engine' },
     'Voltage 2': { label: 'Voltage 2', units: 'V', min: 0, max: 5, decimals: 3, color: '#facc15', category: 'engine' },
 
@@ -322,8 +345,8 @@ export function getChannelsByCategory(
 const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'>> & { isSimulatorActive?: boolean } = {
     apiUrl: 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: false,
-    pollInterval: 1000,  // 1000ms = 1 update/sec - balances responsiveness with connection pool limits
-    historyPublishIntervalMs: 300, // publish chart history at ~3Hz to reduce render/memory pressure
+    pollInterval: 250,  // 250ms = 4Hz polling fallback; SSE is preferred (event-driven ~20Hz)
+    historyPublishIntervalMs: 100, // publish chart history at ~10Hz for responsive gauges
     maxHistoryPoints: 300,
     debug: false,
     useSse: true,
@@ -360,6 +383,14 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     // Rate limit backoff state
     const backoffRef = useRef<number>(0); // Current backoff delay in ms
     const backoffUntilRef = useRef<number>(0); // Timestamp when backoff expires
+
+    // Drain buffer: accumulates raw samples from /live/drain for VE hit accumulation.
+    // consumeDrainedSamples() returns the buffer contents and clears it.
+    const drainBufferRef = useRef<DrainedSample[]>([]);
+    const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const drainEndpointUnavailableRef = useRef(false);
+    const drainBackoffMsRef = useRef(0);
+    const drainBackoffUntilRef = useRef(0);
 
     // UI sound state (debounced to avoid flapping/poll noise)
     const prevConnectedRef = useRef<boolean | null>(null);
@@ -702,6 +733,105 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         };
     }, [shouldPollLive, opts.useSse, opts.apiUrl, processLivePayload]);
 
+    // Drain polling: fetch /live/drain every 100ms to accumulate ALL samples
+    // for VE cell hit counting. Runs independently of SSE (which serves gauges).
+    useEffect(() => {
+        if (!shouldPollLive) {
+            // Clear buffer when not capturing
+            drainBufferRef.current = [];
+            drainEndpointUnavailableRef.current = false;
+            drainBackoffMsRef.current = 0;
+            drainBackoffUntilRef.current = 0;
+            return;
+        }
+
+        const pollDrain = async () => {
+            if (drainEndpointUnavailableRef.current || globalDrainEndpointUnavailable) return;
+            if (Date.now() < drainBackoffUntilRef.current || Date.now() < globalDrainBackoffUntil) return;
+            try {
+                const res = await fetch(`${opts.apiUrl}/hardware/live/drain`);
+                if (!res.ok) {
+                    // Some backends don't expose /live/drain. Disable polling to avoid console spam.
+                    if (res.status === 404) {
+                        drainEndpointUnavailableRef.current = true;
+                        globalDrainEndpointUnavailable = true;
+                        if (opts.debug) {
+                            console.warn('[useJetDriveLive] /hardware/live/drain not available (404); disabling drain polling.');
+                        }
+                    }
+                    // Apply endpoint-level rate-limit backoff to prevent hammering.
+                    if (res.status === 429) {
+                        const nextBackoff = Math.min(
+                            drainBackoffMsRef.current === 0 ? 500 : drainBackoffMsRef.current * 2,
+                            15000
+                        );
+                        const backoffUntil = Date.now() + nextBackoff;
+                        drainBackoffMsRef.current = nextBackoff;
+                        drainBackoffUntilRef.current = backoffUntil;
+                        globalDrainBackoffMs = Math.max(globalDrainBackoffMs, nextBackoff);
+                        globalDrainBackoffUntil = Math.max(globalDrainBackoffUntil, backoffUntil);
+                        if (opts.debug) {
+                            console.warn(
+                                `[useJetDriveLive] /hardware/live/drain rate-limited; backing off ${nextBackoff}ms.`
+                            );
+                        }
+                    }
+                    return;
+                }
+
+                // Success: clear drain backoff state.
+                drainBackoffMsRef.current = 0;
+                drainBackoffUntilRef.current = 0;
+                globalDrainBackoffMs = 0;
+                globalDrainBackoffUntil = 0;
+                const raw: unknown = await res.json();
+                if (!isRecord(raw)) return;
+
+                const samples = raw.samples;
+                if (!Array.isArray(samples) || samples.length === 0) return;
+
+                // Append parsed samples to buffer
+                for (const s of samples) {
+                    if (!isRecord(s)) continue;
+                    const name = getString(s.name);
+                    const value = getNumber(s.value);
+                    const timestamp = getNumber(s.timestamp);
+                    if (name === null || value === null || timestamp === null) continue;
+                    drainBufferRef.current.push({
+                        name,
+                        value,
+                        timestamp,
+                        category: getString(s.category) ?? undefined,
+                        units: getString(s.units) ?? undefined,
+                    });
+                }
+            } catch {
+                // Silent fail -- drain is best-effort
+            }
+        };
+
+        // Start polling drain immediately, then every 100ms (aligned with 50ms
+        // aggregation window; 10Hz drain ≈ 2 polls per window = minimal loss)
+        void pollDrain();
+        drainIntervalRef.current = setInterval(pollDrain, 100);
+
+        return () => {
+            if (drainIntervalRef.current) {
+                clearInterval(drainIntervalRef.current);
+                drainIntervalRef.current = null;
+            }
+        };
+    }, [shouldPollLive, opts.apiUrl]);
+
+    // consumeDrainedSamples: returns all accumulated samples and clears the buffer.
+    // Called by VE accumulation consumers (e.g., VEHeatmapPanel) at their own pace.
+    const consumeDrainedSamples = useCallback((): DrainedSample[] => {
+        const samples = drainBufferRef.current;
+        if (samples.length === 0) return [];
+        drainBufferRef.current = [];
+        return samples;
+    }, []);
+
     // Auto-connect
     useEffect(() => {
         if (opts.autoConnect && monitorConnected && !isCapturing) {
@@ -747,6 +877,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         getChannelValue,
         clearHistory,
         clearChannels,
+        consumeDrainedSamples,
     };
 }
 

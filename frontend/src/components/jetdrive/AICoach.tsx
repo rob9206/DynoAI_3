@@ -21,12 +21,15 @@ import {
 } from '../ui/sheet';
 import { useV3Session } from '../../hooks/useV3Session';
 import { useApplyRollback } from '../../hooks/useApplyRollback';
+import api, { handleApiError } from '../../lib/api';
 import type { CreateSessionPayload, HardwareConfig, ConvergenceStatus } from '../../api/v3Session';
 import { TuneImport, type TuneImportResult } from './TuneImport';
 import { AFRTargetTable, DEFAULT_AFR_TARGETS } from './AFRTargetTable';
 import { calculateCoverage, getCoverageGrade } from '../../utils/veApply/coverageCalculator';
 
 const MISSING_VALUE = '—';
+const JETDRIVE_API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/jetdrive`;
+const V3_MATERIALIZE_FALLBACK_ENABLED = import.meta.env.VITE_V3_MATERIALIZE_FALLBACK !== 'false';
 
 const ENGINE_FAMILIES = [
   { value: 'm8_107', label: 'M8 107 (Air-Cooled)' },
@@ -69,6 +72,7 @@ interface AICoachProps {
   } | null;
   balanceDelta?: number;
   runId?: string;
+  onRunIdChange?: (runId: string | undefined) => void;
   onExport?: () => void;
   className?: string;
 }
@@ -86,10 +90,12 @@ export function AICoach({
   hitData,
   balanceDelta,
   runId,
+  onRunIdChange,
   onExport,
   className,
 }: AICoachProps) {
   const [sessionId, setSessionId] = useState<string | undefined>();
+  const [sessionRunId, setSessionRunId] = useState<string | undefined>();
   const [localImportedTune, setLocalImportedTune] = useState<TuneImportResult | null>(null);
   const [showImportSheet, setShowImportSheet] = useState(false);
   const [showConfigSheet, setShowConfigSheet] = useState(false);
@@ -99,6 +105,8 @@ export function AICoach({
   );
   const [localCylinder, setLocalCylinder] = useState<Cylinder>('front');
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
+  const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
+  const [lastRunReadyAt, setLastRunReadyAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (afrTargets) {
@@ -114,10 +122,12 @@ export function AICoach({
     air_cleaner: 'stock',
   });
 
+  // Only use a true analysis run_id for apply/rollback; v3 session_id is not valid here.
+  const effectiveRunId = runId ?? sessionRunId;
   const v3 = useV3Session(sessionId);
   const applyRollback = useApplyRollback({
-    runId: runId ?? 'inactive',
-    initialCanApply: Boolean(runId),
+    runId: effectiveRunId ?? 'inactive',
+    initialCanApply: true,
     initialCanRollback: false,
   });
 
@@ -132,6 +142,11 @@ export function AICoach({
 
       const result = await v3.startSession(payload);
       setSessionId(result.session_id);
+      const derivedRunId = (result as { run_id?: string }).run_id;
+      setSessionRunId(derivedRunId);
+      setLastAnalyzedAt(null);
+      setLastRunReadyAt(null);
+      onRunIdChange?.(derivedRunId);
       const matchLabel = result.template_match
         ? `Template ${(result.template_match.similarity_score * 100).toFixed(0)}%`
         : 'No template match';
@@ -141,7 +156,7 @@ export function AICoach({
         description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
-  }, [config, localImportedTune, v3]);
+  }, [config, localImportedTune, onRunIdChange, v3]);
 
   const handleTargetsChange = useCallback(
     (targets: Record<number, number>) => {
@@ -151,12 +166,119 @@ export function AICoach({
     [onAfrTargetsChange],
   );
 
+  const handleApplyCorrections = useCallback(async () => {
+    if (applyRollback.status !== 'idle' || !applyRollback.canApply) return;
+    if (!sessionId) {
+      toast.info('Start AI session before applying corrections.');
+      return;
+    }
+
+    const targetRunId =
+      effectiveRunId ??
+      `dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`;
+
+    try {
+      let resolvedRunId: string | null = null;
+      try {
+        const materialized = await v3.materializeLatestRun();
+        resolvedRunId = materialized.run_id;
+      } catch (materializeError) {
+        const materializeErrorMessage = handleApiError(materializeError);
+
+        // If no cached correction surface exists yet, run one realistic v3 update
+        // and retry materialize before dropping to legacy fallback.
+        if (
+          materializeErrorMessage.toLowerCase().includes('run analyze/update first') ||
+          materializeErrorMessage.toLowerCase().includes('no cached v3 corrections')
+        ) {
+          try {
+            await v3.simulate({ mode: 'realistic' });
+            v3.refreshSessionData();
+            setLastAnalyzedAt(new Date().toISOString());
+            const retried = await v3.materializeLatestRun();
+            resolvedRunId = retried.run_id;
+          } catch {
+            // Continue to fallback path below when retry fails.
+          }
+        }
+
+        if (resolvedRunId) {
+          if (!effectiveRunId || resolvedRunId !== effectiveRunId) {
+            setSessionRunId(resolvedRunId);
+            onRunIdChange?.(resolvedRunId);
+          }
+          setLastRunReadyAt(new Date().toISOString());
+          await applyRollback.apply(resolvedRunId);
+          return;
+        }
+
+        if (!V3_MATERIALIZE_FALLBACK_ENABLED) {
+          throw materializeError;
+        }
+
+        const analyzeWithMode = async (mode: 'simulator_pull' | 'simulate') => {
+          const analyzeRes = await api.post(`${JETDRIVE_API_BASE}/analyze`, {
+            run_id: targetRunId,
+            mode,
+            afr_targets: localTargets,
+          });
+          return analyzeRes.data as {
+            success?: boolean;
+            run_id?: string;
+            error?: string;
+          };
+        };
+
+        let analyzeData: { success?: boolean; run_id?: string; error?: string } | null = null;
+        let analyzeErr: unknown = null;
+        try {
+          analyzeData = await analyzeWithMode('simulator_pull');
+        } catch (error) {
+          analyzeErr = error;
+        }
+        if (!analyzeData?.success && !analyzeData?.run_id) {
+          try {
+            analyzeData = await analyzeWithMode('simulate');
+            analyzeErr = null;
+          } catch (error) {
+            analyzeErr = error;
+          }
+        }
+        if (!analyzeData?.run_id) {
+          const fallbackError =
+            analyzeData?.error ||
+            (analyzeErr ? handleApiError(analyzeErr) : undefined) ||
+            materializeErrorMessage;
+          throw new Error(fallbackError || 'Failed to materialize run for apply.');
+        }
+        resolvedRunId = analyzeData.run_id;
+        toast.info('Using temporary legacy analyze fallback for this apply.');
+      }
+
+      if (!resolvedRunId) {
+        throw new Error('Failed to materialize run for apply.');
+      }
+
+      if (!effectiveRunId || resolvedRunId !== effectiveRunId) {
+        setSessionRunId(resolvedRunId);
+        onRunIdChange?.(resolvedRunId);
+      }
+      setLastRunReadyAt(new Date().toISOString());
+
+      await applyRollback.apply(resolvedRunId);
+    } catch (error) {
+      toast.error('Failed to prepare corrections', {
+        description: handleApiError(error),
+      });
+    }
+  }, [applyRollback, effectiveRunId, localTargets, onRunIdChange, sessionId, v3]);
+
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ action?: string }>).detail;
       if (!detail?.action) return;
       if (detail.action === 'rollback') {
-        if (runId && applyRollback.canRollback && applyRollback.status === 'idle') {
+        if (effectiveRunId && applyRollback.canRollback && applyRollback.status === 'idle') {
           const confirmed = window.confirm('Rollback VE corrections? This will revert applied changes.');
           if (confirmed) {
             void applyRollback.rollback();
@@ -170,7 +292,7 @@ export function AICoach({
 
     window.addEventListener('dynoai:shortcut', handler);
     return () => window.removeEventListener('dynoai:shortcut', handler);
-  }, [applyRollback, onExport, runId]);
+  }, [applyRollback, effectiveRunId, onExport]);
 
   useEffect(() => {
     const handler = (_event: Event) => {
@@ -189,6 +311,7 @@ export function AICoach({
         .then(() => {
           // Force refresh of all session queries to sync with backend
           v3.refreshSessionData();
+          setLastAnalyzedAt(new Date().toISOString());
           toast.success('AI Coach updated from simulator pull.');
         })
         .catch((error) => {
@@ -256,6 +379,15 @@ export function AICoach({
       ? MISSING_VALUE
       : `${balanceDelta >= 0 ? '+' : ''}${balanceDelta.toFixed(1)}%`;
   const cylinder = activeCylinder ?? localCylinder;
+  const formattedLastAnalyzedAt = lastAnalyzedAt
+    ? new Date(lastAnalyzedAt).toLocaleTimeString()
+    : MISSING_VALUE;
+  const formattedRunReadyAt = lastRunReadyAt
+    ? new Date(lastRunReadyAt).toLocaleTimeString()
+    : MISSING_VALUE;
+  const applyStateText = applyRollback.canApply
+    ? 'Ready to apply for current run'
+    : 'Applied for this run; trigger new pull/update to apply again';
 
   if (v3.sessionPhase === 'idle') {
     return (
@@ -465,6 +597,12 @@ export function AICoach({
         <Progress value={stepProgress} className="mt-2 h-2 bg-zinc-800 border-0" />
         <div className="mt-3 text-sm font-semibold text-zinc-100">{guidanceTitle}</div>
         <div className="mt-1 text-xs text-zinc-400">{guidanceDetail}</div>
+        <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[11px] text-zinc-400">
+          <div>Last analyzed update: {formattedLastAnalyzedAt}</div>
+          <div>Run ready: {effectiveRunId ?? MISSING_VALUE}</div>
+          <div>Run prepared at: {formattedRunReadyAt}</div>
+          <div>{applyStateText}</div>
+        </div>
         
         {/* Section 2: Convergence — percentage bars only */}
         <div className="mt-3 space-y-2">
@@ -492,17 +630,36 @@ export function AICoach({
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         <div className="border-t border-zinc-800 pt-3">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">AI Insight</div>
-          <div className="mt-2 text-sm leading-relaxed text-zinc-300">
+          <div className="mt-2 space-y-2 text-sm leading-snug text-zinc-300">
             {v3.nextPull ? (
               <>
-                {v3.convergence && v3.convergence.cells_above_threshold > 0
-                  ? `${v3.convergence.cells_above_threshold} cells still need coverage (mean uncertainty: ${v3.convergence.mean_uncertainty.toFixed(2)}). `
-                  : ''}
-                {v3.nextPull.reason}
-                {v3.nextPull.pull_mode === 'steady_state'
-                  ? ` Recommend steady-state pull at ${Math.round(v3.nextPull.rpm)} RPM / ${Math.round(v3.nextPull.map_kpa)} kPa.`
-                  : ` Recommend WOT pull at ${Math.round(v3.nextPull.rpm)} RPM / ${Math.round(v3.nextPull.map_kpa)} kPa.`}
-                {planItems.length > 1 && ` ${planItems.length - 1} more pulls planned after this.`}
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Next</span>
+                    <span className="font-semibold text-zinc-100">
+                      {v3.nextPull.pull_mode === 'steady_state' ? 'Steady-state pull' : 'WOT pull'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Target</span>
+                    <span className="font-mono tabular-nums text-zinc-200">
+                      {Math.round(v3.nextPull.rpm)} RPM @ {Math.round(v3.nextPull.map_kpa)} kPa
+                    </span>
+                  </div>
+                </div>
+
+                {v3.nextPull.reason && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">Why</div>
+                    <div className="mt-1 text-zinc-300">{v3.nextPull.reason}</div>
+                  </div>
+                )}
+
+                {planItems.length > 1 && (
+                  <div className="text-xs text-zinc-400">
+                    Then: {planItems.length - 1} more pull{planItems.length - 1 === 1 ? '' : 's'} planned.
+                  </div>
+                )}
               </>
             ) : (
               <span className="text-zinc-500">
@@ -556,12 +713,12 @@ export function AICoach({
                 </div>
               )}
 
-              {/* GP uncertainty detail */}
+              {/* Model uncertainty detail */}
               {v3.convergence && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">GP Uncertainty</div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Model Uncertainty (Advanced)</div>
                   <ul className="space-y-1 text-xs text-zinc-400">
-                    <li>Cells above threshold: {v3.convergence.cells_above_threshold}</li>
+                    <li>Cells needing more coverage (above threshold): {v3.convergence.cells_above_threshold}</li>
                     <li>Mean uncertainty: {v3.convergence.mean_uncertainty.toFixed(3)}</li>
                     {v3.nextPull && <li>Expected info gain: {v3.nextPull.expected_info_gain.toFixed(2)}</li>}
                   </ul>
@@ -571,7 +728,7 @@ export function AICoach({
               {/* Planned pulls */}
               {planItems.length > 0 && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Test Plan</div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Planned Pulls</div>
                   <ul className="space-y-1 text-xs text-zinc-400">
                     {planItems.map((plan) => (
                       <li key={`${plan.pull_number}-${plan.rpm}-${plan.map_kpa}`} className="flex items-center gap-2">
@@ -644,16 +801,20 @@ export function AICoach({
         <Button
           type="button"
           className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-          disabled={!runId || !applyRollback.canApply || applyRollback.status !== 'idle'}
-          onClick={() => void applyRollback.apply()}
+          disabled={!applyRollback.canApply || applyRollback.status !== 'idle' || v3.isMaterializingRun}
+          onClick={() => void handleApplyCorrections()}
         >
-          {applyRollback.status === 'applying' ? 'Applying...' : 'Accept Corrections'}
+          {v3.isMaterializingRun
+            ? 'Preparing run...'
+            : applyRollback.status === 'applying'
+              ? 'Applying...'
+              : 'Accept Corrections'}
         </Button>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button
             type="button"
             variant="secondary"
-            disabled={!runId || !applyRollback.canRollback || applyRollback.status !== 'idle'}
+            disabled={!effectiveRunId || !applyRollback.canRollback || applyRollback.status !== 'idle'}
             onClick={() => {
               const confirmed = window.confirm('Rollback VE corrections? This will revert applied changes.');
               if (confirmed) {

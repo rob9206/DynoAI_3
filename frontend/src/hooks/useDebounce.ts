@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Debounces a value by delaying updates until after the specified delay
@@ -21,29 +21,44 @@ export function useDebounce<T>(value: T, delay: number = 300): T {
 }
 
 /**
- * Throttles a value by limiting updates to once per interval
- * Better for high-frequency updates like live data streams
+ * Throttles a value by limiting updates to once per interval.
+ * Uses ref-based timing to avoid a self-referencing dependency cycle.
+ * Leading edge fires immediately when the interval has elapsed;
+ * trailing edge schedules exactly one deferred update.
  */
 export function useThrottle<T>(value: T, interval: number = 100): T {
   const [throttledValue, setThrottledValue] = useState<T>(value);
-  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const lastFiredRef = useRef<number>(0);
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const now = Date.now();
-    const timeSinceLastUpdate = now - lastUpdated;
+    const elapsed = now - lastFiredRef.current;
 
-    if (timeSinceLastUpdate >= interval) {
+    if (elapsed >= interval) {
+      // Leading edge: fire immediately
+      lastFiredRef.current = now;
       setThrottledValue(value);
-      setLastUpdated(now);
-    } else {
-      const timeoutId = setTimeout(() => {
+      if (pendingRef.current) {
+        clearTimeout(pendingRef.current);
+        pendingRef.current = null;
+      }
+    } else if (!pendingRef.current) {
+      // Trailing edge: schedule one deferred update
+      pendingRef.current = setTimeout(() => {
+        lastFiredRef.current = Date.now();
         setThrottledValue(value);
-        setLastUpdated(Date.now());
-      }, interval - timeSinceLastUpdate);
-
-      return () => clearTimeout(timeoutId);
+        pendingRef.current = null;
+      }, interval - elapsed);
     }
-  }, [value, interval, lastUpdated]);
+
+    return () => {
+      if (pendingRef.current) {
+        clearTimeout(pendingRef.current);
+        pendingRef.current = null;
+      }
+    };
+  }, [value, interval]);
 
   return throttledValue;
 }

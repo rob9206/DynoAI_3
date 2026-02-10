@@ -511,6 +511,7 @@ class SimulatorConfig:
     # Behavior
     auto_pull: bool = False  # Auto-start pulls periodically
     auto_pull_interval_sec: float = 15.0
+    min_pull_duration_sec: float = 20.0  # Minimum time to stay in PULL state before transitioning to DECEL
 
     # Throttle response
     throttle_response_rate: float = 200.0  # TPS % per second (fast DBW/cable snap)
@@ -650,6 +651,7 @@ class SimulatedChannels:
     map_kpa: float = 30.0
     tps_pct: float = 0.0
     iat_f: float = 85.0
+    ect_f: float = 180.0
     vbatt: float = 13.8
     acceleration_g: float = 0.0
 
@@ -718,6 +720,12 @@ class SimulatedChannels:
                 "id": 105,
                 "name": "VBatt",
                 "value": self.vbatt,
+                "timestamp": now,
+            },
+            "ECT": {
+                "id": 106,
+                "name": "ECT",
+                "value": self.ect_f,
                 "timestamp": now,
             },
         }
@@ -1790,6 +1798,7 @@ class DynoSimulator:
         self.channels.afr_rear = self._add_noise(target_afr, 1.5)
 
         self.channels.iat_f = self.physics.iat_f
+        self.channels.ect_f = self.physics.engine_temp_f
         self.channels.vbatt = 13.6 + random.gauss(0, 0.1)
 
     def _handle_pull_state(self, dt: float, profile: EngineProfile):
@@ -1803,11 +1812,13 @@ class DynoSimulator:
 
         self._update_external_load(dt)
 
-        # If the operator chops throttle during an active pull, end the power-sweep immediately
+        # If the operator chops throttle during an active pull, end the power-sweep after minimum duration
         # and transition to DECEL (coastdown). This prevents the live HP trace from flatlining
         # for a few ticks while TPS is closed but we're still in the PULL handler.
+        # Respect minimum pull duration even for throttle chops.
         if (
-            self._pull_elapsed_s > 0.5
+            elapsed >= self.config.min_pull_duration_sec
+            and self._pull_elapsed_s > 0.5
             and self.physics.tps_target < 5.0
             and self.physics.tps_actual < 5.0
             and self.physics.rpm > profile.idle_rpm * 1.5
@@ -1936,6 +1947,7 @@ class DynoSimulator:
             self.channels.afr_rear = self._add_noise(current_afr + 0.1, noise_pct)
 
         self.channels.iat_f = self.physics.iat_f
+        self.channels.ect_f = self.physics.engine_temp_f
         self.channels.vbatt = 14.0 + random.gauss(0, 0.1)
 
         # Collect pull data
@@ -1971,8 +1983,19 @@ class DynoSimulator:
             profile.redline_rpm - profile.idle_rpm
         )
 
-        # Check if pull complete (reached redline)
-        if self.physics.rpm >= profile.redline_rpm * 0.98:
+        # If we've reached redline but haven't met minimum duration, hold at redline
+        if self.physics.rpm >= profile.redline_rpm * 0.98 and elapsed < self.config.min_pull_duration_sec:
+            # Clamp RPM to redline and maintain it until minimum duration elapses
+            self.physics.rpm = min(self.physics.rpm, profile.redline_rpm)
+            self.physics.angular_velocity = self._rpm_to_rad_s(self.physics.rpm)
+            # Keep throttle open to maintain RPM at redline
+            self.physics.tps_target = 100.0
+
+        # Check if pull complete (reached redline AND minimum duration elapsed)
+        if (
+            self.physics.rpm >= profile.redline_rpm * 0.98
+            and elapsed >= self.config.min_pull_duration_sec
+        ):
             # Clamp RPM to redline to prevent overshoot
             self.physics.rpm = min(self.physics.rpm, profile.redline_rpm)
             self.physics.angular_velocity = self._rpm_to_rad_s(self.physics.rpm)
@@ -2055,6 +2078,7 @@ class DynoSimulator:
             self.channels.afr_rear = self._add_noise(14.7, 2)
 
         self.channels.iat_f = self.physics.iat_f
+        self.channels.ect_f = self.physics.engine_temp_f
         self.channels.vbatt = 13.8 + random.gauss(0, 0.1)
 
         # Check if back to idle (allow more time for gradual decel)
@@ -2102,6 +2126,7 @@ class DynoSimulator:
         self.channels.afr_front = self._add_noise(14.7, 1)
         self.channels.afr_rear = self._add_noise(14.7, 1)
         self.channels.iat_f = self.physics.iat_f
+        self.channels.ect_f = self.physics.engine_temp_f
         self.channels.vbatt = 13.6 + random.gauss(0, 0.1)
 
         if elapsed >= 2.0:  # 2 second cooldown

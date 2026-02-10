@@ -2,6 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { encodePathSegment } from './sanitize';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+const API_KEY = import.meta.env.VITE_API_KEY;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +11,14 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+if (API_KEY) {
+  api.interceptors.request.use((config) => {
+    config.headers = config.headers ?? {};
+    config.headers['X-API-Key'] = API_KEY;
+    return config;
+  });
+}
 
 // Rate limit handling with exponential backoff
 let rateLimitBackoff = 0;
@@ -666,9 +675,15 @@ export const getNextGenHypotheses = async (
 // Error handler
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ error: string }>;
-    if (axiosError.response?.data?.error) {
-      return axiosError.response.data.error;
+    const axiosError = error as AxiosError<{
+      error?: string | { code?: string; message?: string };
+    }>;
+    const payloadError = axiosError.response?.data?.error;
+    if (typeof payloadError === 'string') {
+      return payloadError;
+    }
+    if (payloadError && typeof payloadError === 'object' && payloadError.message) {
+      return payloadError.message;
     }
     if (axiosError.message) {
       return axiosError.message;

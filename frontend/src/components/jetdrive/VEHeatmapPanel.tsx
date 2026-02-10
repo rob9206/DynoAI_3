@@ -7,6 +7,7 @@ import {
   type JetDriveChannel,
   type UseJetDriveLiveReturn,
 } from '../../hooks/useJetDriveLive';
+import type { LiveVEExportData } from './LiveVETable';
 import { ENGINE_GRID_CONFIGS, type EnginePreset } from '../../utils/enginePresets';
 import { DEFAULT_AFR_TARGETS } from './AFRTargetTable';
 import { VECell } from './VECell';
@@ -19,7 +20,7 @@ const MAX_ASPECT_RATIO = 2.0; // permit narrower cells before width is capped
 const AXIS_LABEL_WIDTH = 40;
 const AXIS_LABEL_HEIGHT = 28;
 const MAX_CORRECTION = 0.15; // +/-15% preview clamp
-const MIN_HITS_FOR_CORRECTION = 3;
+const MIN_HITS_FOR_CORRECTION = 1;
 // UI-only formatting precision for display labels/tooltips (does not affect correction math)
 const DISPLAY_DECIMALS = 0;
 
@@ -51,6 +52,7 @@ interface VEHeatmapPanelProps {
   activeCylinder?: Cylinder;
   onCylinderChange?: (cylinder: Cylinder) => void;
   onHitCountsChange?: (frontHits: number[][], rearHits: number[][], rpmBins: number[], mapBins: number[]) => void;
+  onLiveDataUpdate?: (data: LiveVEExportData) => void;
   uncertaintyMap?: number[][];
   className?: string;
 }
@@ -234,6 +236,7 @@ function VEHeatmapPanelContent({
   activeCylinder,
   onCylinderChange,
   onHitCountsChange,
+  onLiveDataUpdate,
   uncertaintyMap,
   className,
 }: {
@@ -245,6 +248,7 @@ function VEHeatmapPanelContent({
   activeCylinder?: Cylinder;
   onCylinderChange?: (cylinder: Cylinder) => void;
   onHitCountsChange?: (frontHits: number[][], rearHits: number[][], rpmBins: number[], mapBins: number[]) => void;
+  onLiveDataUpdate?: (data: LiveVEExportData) => void;
   uncertaintyMap?: number[][];
   className?: string;
 }) {
@@ -299,7 +303,7 @@ function VEHeatmapPanelContent({
     }),
     [rpmChannel?.value, mapChannel?.value, afrFrontChannel?.value, afrRearChannel?.value],
   );
-  const liveValues = useThrottle(rawLiveValues, 100);
+  const liveValues = useThrottle(rawLiveValues, 50);
 
   const [frontHits, setFrontHits] = useState<number[][]>(() =>
     rpmBins.map(() => mapBins.map(() => 0)),
@@ -397,56 +401,170 @@ function VEHeatmapPanelContent({
     }
   }, [cellTrace, liveValues.afrFront, liveValues.afrRear, liveValues.rpm, liveValues.map, debugHeatmap]);
 
+  // Ref to hold the latest channel values seen from drained samples.
+  // Updated each flush cycle so RPM/MAP/AFR can be reconstructed from individual channel entries.
+  const drainChannelValuesRef = useRef<Record<string, number>>({});
+
+  // ── VE cell flush: use requestAnimationFrame for display-aligned timing ──
+  // This replaces the old 250ms setInterval. RAF fires at ~60Hz (16.7ms) which
+  // is much better aligned with the 50ms aggregation window and 100ms drain
+  // polling. We throttle the heavy state updates to at most every 100ms to
+  // avoid excessive React re-renders while keeping accumulation up to date.
   useEffect(() => {
-    const interval = setInterval(() => {
+    let rafId: number | null = null;
+    let lastFlushAt = 0;
+    const FLUSH_INTERVAL_MS = 100; // state update cadence (10Hz)
+
+    const tick = () => {
+      const now = performance.now();
+
       const fHits = frontHitsRef.current;
       const rHits = rearHitsRef.current;
       const fAcc = frontAccRef.current;
       const rAcc = rearAccRef.current;
 
-      if (debugHeatmap) {
-        // Debug: check if refs have data
-        const totalFrontHits = fHits.flat().reduce((sum, val) => sum + val, 0);
-        const totalRearHits = rHits.flat().reduce((sum, val) => sum + val, 0);
-        console.log('[VEHeatmap] State update - Total front hits:', totalFrontHits, 'Total rear hits:', totalRearHits);
-      }
+      // ── Process drained samples for VE accumulation ──────────────
+      // This gives us every sample from the backend ring buffer, not just
+      // the latest snapshot value. Each drained sample is a single channel
+      // entry (e.g., "Digital RPM 1" = 3500). We maintain running latest
+      // values per channel and run cell trace + accumulation whenever we
+      // see an RPM sample (the trigger signal for a new "moment").
+      if (live.consumeDrainedSamples) {
+        const drained = live.consumeDrainedSamples();
+        if (drained.length > 0) {
+          const cv = drainChannelValuesRef.current;
 
-      setFrontHits(fHits.map((row) => [...row]));
-      setRearHits(rHits.map((row) => [...row]));
+          for (const sample of drained) {
+            cv[sample.name] = sample.value;
 
-      const calcCorrections = (acc: { sum: number; count: number }[][]) => {
-        const result = rpmBins.map(() => mapBins.map(() => 0));
-        for (let i = 0; i < rpmBins.length; i++) {
-          for (let j = 0; j < mapBins.length; j++) {
-            const cell = acc[i]?.[j];
-            if (cell && cell.count >= MIN_HITS_FOR_CORRECTION) {
-              const meanAfr = cell.sum / cell.count;
-              const targetAfr = getTargetAfrForMap(mapBins[j], afrTargets);
-              const ratio = meanAfr / targetAfr;
-              const clamped = Math.max(1 - MAX_CORRECTION, Math.min(1 + MAX_CORRECTION, ratio));
-              result[i][j] = (clamped - 1) * 100;
+            // Only trigger accumulation on RPM updates (the fastest-changing
+            // dyno signal), which ensures we have a fresh RPM+MAP pair.
+            const isRpmSample = RPM_CANDIDATES.some(
+              (c) => c === sample.name || sample.name.toLowerCase().includes('rpm'),
+            );
+            if (!isRpmSample) continue;
+
+            // Reconstruct current values from the running channel map
+            const rpm = cv['Digital RPM 1'] ?? cv['Engine RPM'] ?? cv['RPM'] ?? cv['Digital RPM 2'] ?? 0;
+            const map = cv['MAP kPa'] ?? cv['MAP'] ?? 0;
+            const afrFront =
+              cv['Air/Fuel Ratio 1'] ?? cv['User Analog 1'] ?? cv['AFR Front'] ?? cv['AFR 1'] ?? cv['AFR'] ?? 0;
+            const afrRear =
+              cv['Air/Fuel Ratio 2'] ?? cv['User Analog 2'] ?? cv['AFR Rear'] ?? cv['AFR 2'] ?? 0;
+
+            if (rpm < 500 || map <= 0) continue;
+
+            const trace = calculateCellTrace(rpm, map, rpmBins, mapBins);
+            for (const cell of trace.activeCells) {
+              if (cell.weight <= 0.2) continue;
+              const i = cell.rpmIdx;
+              const j = cell.mapIdx;
+              fHits[i][j] += 1;
+              rHits[i][j] += 1;
+            }
+
+            if (afrFront > 8 && afrFront < 20) {
+              for (const cell of trace.activeCells) {
+                if (cell.weight <= 0.2) continue;
+                const i = cell.rpmIdx;
+                const j = cell.mapIdx;
+                fAcc[i][j].sum += afrFront * cell.weight;
+                fAcc[i][j].count += cell.weight;
+              }
+            }
+
+            if (afrRear > 8 && afrRear < 20) {
+              for (const cell of trace.activeCells) {
+                if (cell.weight <= 0.2) continue;
+                const i = cell.rpmIdx;
+                const j = cell.mapIdx;
+                rAcc[i][j].sum += afrRear * cell.weight;
+                rAcc[i][j].count += cell.weight;
+              }
             }
           }
+
+          if (debugHeatmap) {
+            console.log('[VEHeatmap] Processed', drained.length, 'drained samples');
+          }
         }
-        return result;
-      };
-
-      setFrontCorrections(calcCorrections(fAcc));
-      setRearCorrections(calcCorrections(rAcc));
-
-      // Notify parent of hit count changes
-      if (onHitCountsChange) {
-        onHitCountsChange(
-          fHits.map((row) => [...row]),
-          rHits.map((row) => [...row]),
-          rpmBins,
-          mapBins
-        );
       }
-    }, 250);
 
-    return () => clearInterval(interval);
-  }, [afrTargets, mapBins, rpmBins, onHitCountsChange, debugHeatmap]);
+      // Throttle React state updates to FLUSH_INTERVAL_MS
+      if (now - lastFlushAt >= FLUSH_INTERVAL_MS) {
+        lastFlushAt = now;
+
+        if (debugHeatmap) {
+          const totalFrontHits = fHits.flat().reduce((sum, val) => sum + val, 0);
+          const totalRearHits = rHits.flat().reduce((sum, val) => sum + val, 0);
+          console.log('[VEHeatmap] State update - Total front hits:', totalFrontHits, 'Total rear hits:', totalRearHits);
+        }
+
+        setFrontHits(fHits.map((row) => [...row]));
+        setRearHits(rHits.map((row) => [...row]));
+
+        const calcCorrections = (acc: { sum: number; count: number }[][]) => {
+          const result = rpmBins.map(() => mapBins.map(() => 0));
+          for (let i = 0; i < rpmBins.length; i++) {
+            for (let j = 0; j < mapBins.length; j++) {
+              const cell = acc[i]?.[j];
+              if (cell && cell.count >= MIN_HITS_FOR_CORRECTION) {
+                const meanAfr = cell.sum / cell.count;
+                const targetAfr = getTargetAfrForMap(mapBins[j], afrTargets);
+                const ratio = meanAfr / targetAfr;
+                const clamped = Math.max(1 - MAX_CORRECTION, Math.min(1 + MAX_CORRECTION, ratio));
+                result[i][j] = (clamped - 1) * 100;
+              }
+            }
+          }
+          return result;
+        };
+
+        const nextFrontCorrections = calcCorrections(fAcc);
+        const nextRearCorrections = calcCorrections(rAcc);
+        setFrontCorrections(nextFrontCorrections);
+        setRearCorrections(nextRearCorrections);
+
+        // Notify parent of hit count changes
+        if (onHitCountsChange) {
+          onHitCountsChange(
+            fHits.map((row) => [...row]),
+            rHits.map((row) => [...row]),
+            rpmBins,
+            mapBins,
+          );
+        }
+
+        if (onLiveDataUpdate) {
+          const combinedHits = fHits.map((row, rowIdx) =>
+            row.map((frontHit, colIdx) => Math.min(frontHit, rHits[rowIdx]?.[colIdx] ?? 0)),
+          );
+          const totalHits = combinedHits.flat().reduce((sum, value) => sum + value, 0);
+          onLiveDataUpdate({
+            frontCorrections: nextFrontCorrections,
+            rearCorrections: nextRearCorrections,
+            hitCounts: combinedHits,
+            frontHitCounts: fHits.map((row) => [...row]),
+            rearHitCounts: rHits.map((row) => [...row]),
+            rpmBins,
+            mapBins,
+            afrTargets,
+            enginePreset,
+            totalHits,
+            exportedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [afrTargets, mapBins, rpmBins, onHitCountsChange, onLiveDataUpdate, enginePreset, debugHeatmap, live]);
 
   const displayCorrections = cylinder === 'front' ? frontCorrections : rearCorrections;
   const displayHits = cylinder === 'front' ? frontHits : rearHits;
@@ -894,13 +1012,14 @@ function VEHeatmapPanelWithLive({
   activeCylinder,
   onCylinderChange,
   onHitCountsChange,
+  onLiveDataUpdate,
   uncertaintyMap,
   className,
 }: VEHeatmapPanelProps) {
   const live = useJetDriveLive({
     apiUrl: apiUrl ?? 'http://127.0.0.1:5001/api/jetdrive',
     autoConnect: true,
-    pollInterval: 800,
+    pollInterval: 250,  // 250ms polling fallback; SSE is preferred (~20Hz event-driven)
     useSse: true,
   });
 
@@ -914,6 +1033,7 @@ function VEHeatmapPanelWithLive({
       activeCylinder={activeCylinder}
       onCylinderChange={onCylinderChange}
       onHitCountsChange={onHitCountsChange}
+      onLiveDataUpdate={onLiveDataUpdate}
       uncertaintyMap={uncertaintyMap}
       className={className}
     />
@@ -930,6 +1050,7 @@ export function VEHeatmapPanel({
   activeCylinder,
   onCylinderChange,
   onHitCountsChange,
+  onLiveDataUpdate,
   uncertaintyMap,
   className,
 }: VEHeatmapPanelProps) {
@@ -944,6 +1065,7 @@ export function VEHeatmapPanel({
         activeCylinder={activeCylinder}
         onCylinderChange={onCylinderChange}
         onHitCountsChange={onHitCountsChange}
+        onLiveDataUpdate={onLiveDataUpdate}
         uncertaintyMap={uncertaintyMap}
         className={className}
       />
@@ -960,6 +1082,7 @@ export function VEHeatmapPanel({
       activeCylinder={activeCylinder}
       onCylinderChange={onCylinderChange}
       onHitCountsChange={onHitCountsChange}
+      onLiveDataUpdate={onLiveDataUpdate}
       uncertaintyMap={uncertaintyMap}
       className={className}
     />

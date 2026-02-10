@@ -37,7 +37,18 @@ def parse_ve_delta_csv(
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
+            # Skip comment lines (starting with #) and empty lines before reading headers
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    lines.append(line)
+                elif not stripped:
+                    lines.append(line)  # Keep empty lines
+            
+            from io import StringIO
+            filtered_content = ''.join(lines)
+            reader = csv.reader(StringIO(filtered_content))
 
             # Read header row (contains kPa bins)
             try:
@@ -129,7 +140,18 @@ def parse_dyno_run_csv(
     """
     try:
         with open(file_path, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
+            # Skip comment lines (starting with #) before reading headers
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    lines.append(line)
+                elif not stripped:
+                    lines.append(line)  # Keep empty lines
+            
+            from io import StringIO
+            filtered_content = ''.join(lines)
+            reader = csv.DictReader(StringIO(filtered_content))
 
             # Validate required columns if specified
             if required_columns and reader.fieldnames:
@@ -187,7 +209,18 @@ def parse_csv_with_validation(
     """
     try:
         with open(file_path, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
+            # Skip comment lines (starting with #) before reading headers
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    lines.append(line)
+                elif not stripped:
+                    lines.append(line)  # Keep empty lines
+            
+            from io import StringIO
+            filtered_content = ''.join(lines)
+            reader = csv.DictReader(StringIO(filtered_content))
             valid_rows = []
             errors = []
 

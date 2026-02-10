@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import api from '@/lib/api';
@@ -24,8 +24,8 @@ interface RollbackResponse {
 }
 
 interface UseApplyRollbackReturn {
-  apply: () => Promise<void>;
-  rollback: () => Promise<void>;
+  apply: (overrideRunId?: string) => Promise<void>;
+  rollback: (overrideRunId?: string) => Promise<void>;
   status: 'idle' | 'applying' | 'rolling_back';
   error: Error | null;
   canApply: boolean;
@@ -46,9 +46,17 @@ export function useApplyRollback({
   const [canApply, setCanApply] = useState(initialCanApply);
   const [canRollback, setCanRollback] = useState(initialCanRollback);
 
+  useEffect(() => {
+    const hasActiveRun = Boolean(runId) && runId !== 'inactive';
+    if (hasActiveRun) {
+      setCanApply(true);
+    }
+  }, [runId]);
+
   const applyMutation = useMutation({
-    mutationFn: async (): Promise<ApplyResponse> => {
-      const response = await api.post('/api/apply', { run_id: runId });
+    mutationFn: async (overrideRunId?: string): Promise<ApplyResponse> => {
+      const targetRunId = overrideRunId ?? runId;
+      const response = await api.post('/api/apply', { run_id: targetRunId });
       return response.data as ApplyResponse;
     },
     onSuccess: (data) => {
@@ -75,8 +83,9 @@ export function useApplyRollback({
   });
 
   const rollbackMutation = useMutation({
-    mutationFn: async (): Promise<RollbackResponse> => {
-      const response = await api.post('/api/rollback', { run_id: runId });
+    mutationFn: async (overrideRunId?: string): Promise<RollbackResponse> => {
+      const targetRunId = overrideRunId ?? runId;
+      const response = await api.post('/api/rollback', { run_id: targetRunId });
       return response.data as RollbackResponse;
     },
     onSuccess: () => {
@@ -102,12 +111,12 @@ export function useApplyRollback({
     },
   });
 
-  const apply = useCallback(async (): Promise<void> => {
-    await applyMutation.mutateAsync();
+  const apply = useCallback(async (overrideRunId?: string): Promise<void> => {
+    await applyMutation.mutateAsync(overrideRunId);
   }, [applyMutation]);
 
-  const rollback = useCallback(async (): Promise<void> => {
-    await rollbackMutation.mutateAsync();
+  const rollback = useCallback(async (overrideRunId?: string): Promise<void> => {
+    await rollbackMutation.mutateAsync(overrideRunId);
   }, [rollbackMutation]);
 
   const getStatus = (): 'idle' | 'applying' | 'rolling_back' => {

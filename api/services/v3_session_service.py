@@ -12,13 +12,17 @@ Templates are stored under ``data/v3_templates/`` by default.
 
 from __future__ import annotations
 
+import csv
+import json
 import logging
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from api.config import get_config
 from api.errors import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -111,6 +115,154 @@ def _ensure_bins_match(
         raise ValidationError(f"{label} bins do not match the session grid")
     if not np.allclose(session_bins, provided_bins, atol=atol):
         raise ValidationError(f"{label} bins do not match the session grid")
+
+
+def _iso_utc_now() -> str:
+    """Return an RFC3339-ish UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _format_float(value: float, precision: int = 6) -> str:
+    """Format float for CSV/JSON while avoiding noisy trailing zeros."""
+    return f"{float(value):.{precision}f}".rstrip("0").rstrip(".")
+
+
+def _normalize_multiplier_grid(
+    corrections: np.ndarray,
+    fmt: str = "multiplier",
+) -> np.ndarray:
+    """
+    Normalize correction values to multiplier grid (1.0 = no change).
+    """
+    if fmt == "multiplier":
+        return np.asarray(corrections, dtype=np.float64)
+    # percentage (+5 means +5%) -> multiplier (1.05)
+    return 1.0 + (np.asarray(corrections, dtype=np.float64) / 100.0)
+
+
+def _multiplier_to_percent_grid(multiplier_grid: np.ndarray) -> np.ndarray:
+    """
+    Convert multiplier grid to VEApply-compatible percent delta grid.
+    Example: 1.05 -> +5.0, 0.93 -> -7.0
+    """
+    arr = np.asarray(multiplier_grid, dtype=np.float64)
+    return (arr - 1.0) * 100.0
+
+
+def _cache_latest_corrections(
+    session: Any,
+    correction_grid: np.ndarray,
+    rpm_bins: np.ndarray,
+    map_bins: np.ndarray,
+    *,
+    source: str,
+    pull_number: Optional[int] = None,
+) -> None:
+    """Store latest correction surface on session for materialization/export."""
+    setattr(
+        session,
+        "_latest_corrections",
+        {
+            "correction_grid": np.asarray(correction_grid, dtype=np.float64).copy(),
+            "rpm_bins": np.asarray(rpm_bins, dtype=np.float64).copy(),
+            "map_bins": np.asarray(map_bins, dtype=np.float64).copy(),
+            "source": source,
+            "pull_number": pull_number,
+            "updated_at": _iso_utc_now(),
+        },
+    )
+
+
+def _materialize_latest_run(session_id: str, session: Any) -> Dict[str, Any]:
+    """
+    Persist the latest cached correction grid into a run folder compatible with /api/apply.
+    """
+    latest = getattr(session, "_latest_corrections", None)
+    if not isinstance(latest, dict):
+        raise ValidationError(
+            "No cached v3 corrections found for this session. Run Analyze/Update first."
+        )
+
+    correction_grid = latest.get("correction_grid")
+    rpm_bins = latest.get("rpm_bins")
+    map_bins = latest.get("map_bins")
+    if correction_grid is None or rpm_bins is None or map_bins is None:
+        raise ValidationError("Cached v3 corrections are incomplete; run Analyze/Update again.")
+
+    correction_array = np.asarray(correction_grid, dtype=np.float64)
+    percent_delta_array = _multiplier_to_percent_grid(correction_array)
+    rpm_array = np.asarray(rpm_bins, dtype=np.float64)
+    map_array = np.asarray(map_bins, dtype=np.float64)
+    if correction_array.ndim != 2:
+        raise ValidationError("Cached correction grid must be 2D.")
+    if correction_array.shape != (len(rpm_array), len(map_array)):
+        raise ValidationError(
+            "Cached correction grid dimensions do not match cached RPM/MAP bins."
+        )
+
+    config = get_config()
+    timestamp = datetime.now(timezone.utc)
+    ts_compact = timestamp.strftime("%Y%m%d_%H%M%S")
+    run_id = f"v3_{session_id[:8]}_{ts_compact}"
+
+    run_dir = config.storage.runs_folder / run_id
+    suffix = 1
+    while run_dir.exists():
+        run_id = f"v3_{session_id[:8]}_{ts_compact}_{suffix}"
+        run_dir = config.storage.runs_folder / run_id
+        suffix += 1
+    run_dir.mkdir(parents=True, exist_ok=False)
+
+    ve_2d_path = run_dir / "VE_Corrections_2D.csv"
+    ve_delta_path = run_dir / "VE_Correction_Delta_DYNO.csv"
+
+    map_headers = [_format_float(v, 3) for v in map_array.tolist()]
+    rpm_headers = [_format_float(v, 0) for v in rpm_array.tolist()]
+
+    # JetDrive-style table.
+    with open(ve_2d_path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["RPM\\MAP", *map_headers])
+        for row_idx, rpm in enumerate(rpm_headers):
+            row_values = [_format_float(v, 6) for v in percent_delta_array[row_idx].tolist()]
+            writer.writerow([rpm, *row_values])
+
+    # Legacy apply-compatible table (preferred by /api/apply if present).
+    with open(ve_delta_path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["RPM", *map_headers])
+        for row_idx, rpm in enumerate(rpm_headers):
+            row_values = [_format_float(v, 6) for v in percent_delta_array[row_idx].tolist()]
+            writer.writerow([rpm, *row_values])
+
+    materialized_at = _iso_utc_now()
+    manifest = {
+        "source": "v3_materialized",
+        "session_id": session_id,
+        "materialized_at": materialized_at,
+        "generated_files": [ve_2d_path.name, ve_delta_path.name],
+        "grid": {
+            "rows": int(correction_array.shape[0]),
+            "cols": int(correction_array.shape[1]),
+            "rpm_bins": rpm_array.tolist(),
+            "map_bins": map_array.tolist(),
+            "correction_units": "percent_delta",
+        },
+        "latest_corrections_meta": {
+            "updated_at": latest.get("updated_at"),
+            "source": latest.get("source"),
+            "pull_number": latest.get("pull_number"),
+        },
+    }
+    with open(run_dir / "manifest.json", "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+    return {
+        "success": True,
+        "run_id": run_id,
+        "session_id": session_id,
+        "materialized_at": materialized_at,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +504,16 @@ def import_corrections(
     if corr_array.ndim != 2:
         raise ValidationError("corrections must be a 2D array")
 
+    # Cache imported grid for potential materialization/apply bridge.
+    multiplier_grid = _normalize_multiplier_grid(corr_array, fmt=fmt)
+    _cache_latest_corrections(
+        session,
+        multiplier_grid,
+        rpm_bins_arr,
+        map_bins_arr,
+        source="import_corrections",
+    )
+
     rpm_values: List[float] = []
     map_values: List[float] = []
     ve_deltas: List[float] = []
@@ -430,6 +592,12 @@ def finalize_session(
         "session_id": result.session_id,
         "session_duration_s": result.session_duration_s,
     }
+
+
+def materialize_run(session_id: str) -> Dict[str, Any]:
+    """Persist latest v3 correction surface to a run artifact folder."""
+    session = _get_session(session_id)
+    return _materialize_latest_run(session_id, session)
 
 
 def suggest_next_pull(session_id: str) -> Dict[str, Any]:
@@ -851,6 +1019,15 @@ def simulate_pull_realistic(
     )
 
     result = session.ingest_pull(rpm_arr, map_arr, ve_values)
+
+    _cache_latest_corrections(
+        session,
+        corrections.correction_table,
+        np.asarray(rpm_bins, dtype=np.float64),
+        np.asarray(map_bins, dtype=np.float64),
+        source="simulate_pull_realistic",
+        pull_number=result.pull_number,
+    )
 
     # AFR metrics for frontend display
     afr_metrics = None

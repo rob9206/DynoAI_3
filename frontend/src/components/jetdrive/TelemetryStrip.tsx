@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -10,6 +11,7 @@ import {
 } from '../../hooks/useJetDriveLive';
 import { AudioCapturePanel } from './AudioCapturePanel';
 import { DEFAULT_AFR_TARGETS } from './AFRTargetTable';
+import { Sparkline } from './Sparkline';
 import type { KnockEvent } from '../../hooks/useAudioCapture';
 
 const MISSING_VALUE = '—';
@@ -123,6 +125,7 @@ function InstrumentCell({
   statusRight,
   labelClass,
   dot,
+  sparkline,
 }: {
   label: string;
   value: string;
@@ -133,6 +136,7 @@ function InstrumentCell({
   statusRight?: string;
   labelClass?: string;
   dot?: 'live' | 'warning' | 'off';
+  sparkline?: ReactNode;
 }) {
   const isHero = size === 'hero';
 
@@ -160,18 +164,21 @@ function InstrumentCell({
         )}
       </div>
 
-      {/* Value */}
-      <div
-        className={cn(
-          'font-mono font-bold tabular-nums',
-          isHero ? 'mt-1 text-3xl' : 'mt-0.5 text-base',
-          value === MISSING_VALUE ? 'text-zinc-600' : (valueClass ?? 'text-zinc-50'),
-        )}
-      >
-        {value}
-        {units && !isHero ? (
-          <span className="ml-1 text-xs font-normal text-zinc-600">{units}</span>
-        ) : null}
+      {/* Value + sparkline */}
+      <div className="flex items-end gap-3">
+        <div
+          className={cn(
+            'font-mono font-bold tabular-nums',
+            isHero ? 'mt-1 text-3xl' : 'mt-0.5 text-base',
+            value === MISSING_VALUE ? 'text-zinc-600' : (valueClass ?? 'text-zinc-50'),
+          )}
+        >
+          {value}
+          {units && !isHero ? (
+            <span className="ml-1 text-xs font-normal text-zinc-600">{units}</span>
+          ) : null}
+        </div>
+        {sparkline && <div className="mb-1">{sparkline}</div>}
       </div>
 
       {/* Status footer */}
@@ -267,6 +274,9 @@ function TelemetryStripContent({
   const afrRearState = getAfrState(afrValues.afrRear, afrTarget);
 
   const rpmHistory = rpmChannel?.name ? live.history[rpmChannel.name] : null;
+  const afrFrontHistory = afrFrontChannel?.name ? live.history[afrFrontChannel.name] : null;
+  const afrRearHistory = afrRearChannel?.name ? live.history[afrRearChannel.name] : null;
+
   const rpmStats = useMemo(() => {
     if (!rpmHistory || rpmHistory.length === 0) return null;
     let min = rpmHistory[0]?.value ?? 0;
@@ -277,6 +287,20 @@ function TelemetryStripContent({
     }
     return { min, max };
   }, [rpmHistory]);
+
+  // Extract last N values for sparklines (take the 20 most recent points)
+  const rpmSparkData = useMemo(
+    () => rpmHistory?.slice(-20).map((p) => p.value) ?? [],
+    [rpmHistory],
+  );
+  const afrFrontSparkData = useMemo(
+    () => afrFrontHistory?.slice(-20).map((p) => p.value) ?? [],
+    [afrFrontHistory],
+  );
+  const afrRearSparkData = useMemo(
+    () => afrRearHistory?.slice(-20).map((p) => p.value) ?? [],
+    [afrRearHistory],
+  );
 
   const showKnock = lastKnockAt !== null && Date.now() - lastKnockAt < 5000;
   const knockValue =
@@ -303,6 +327,11 @@ function TelemetryStripContent({
             dot={live.isConnected ? 'live' : 'off'}
             statusLeft={rpmStats ? `\u2191${formatRpm(rpmStats.max)}` : '\u2191 \u2014'}
             statusRight={rpmStats ? `\u2193${formatRpm(rpmStats.min)}` : '\u2193 \u2014'}
+            sparkline={
+              rpmSparkData.length >= 2
+                ? <Sparkline data={rpmSparkData} color="rgb(244, 244, 245)" width={50} height={24} />
+                : undefined
+            }
           />
         </div>
 
@@ -315,6 +344,11 @@ function TelemetryStripContent({
             dot={afrValues.afrFront !== null ? 'live' : 'off'}
             statusLeft={afrFrontState.label}
             statusRight={afrTarget !== null ? `tgt: ${afrTarget.toFixed(1)}` : 'tgt: \u2014'}
+            sparkline={
+              afrFrontSparkData.length >= 2
+                ? <Sparkline data={afrFrontSparkData} color="rgb(34, 197, 94)" width={50} height={24} />
+                : undefined
+            }
           />
         </div>
 
@@ -327,6 +361,11 @@ function TelemetryStripContent({
             dot={afrValues.afrRear !== null ? 'live' : 'off'}
             statusLeft={afrRearState.label}
             statusRight={afrTarget !== null ? `tgt: ${afrTarget.toFixed(1)}` : 'tgt: \u2014'}
+            sparkline={
+              afrRearSparkData.length >= 2
+                ? <Sparkline data={afrRearSparkData} color="rgb(239, 68, 68)" width={50} height={24} />
+                : undefined
+            }
           />
         </div>
       </div>

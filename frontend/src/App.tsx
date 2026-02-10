@@ -55,7 +55,7 @@ function App() {
             </Suspense>
           </Layout>
         </Router>
-        <Toaster position="bottom-right" richColors duration={3000} visibleToasts={3} />
+        <Toaster position="top-right" richColors duration={3000} visibleToasts={3} />
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -168,6 +168,18 @@ def finalize_session(session_id: str):
     return jsonify(result)
 
 
+@v3_session_bp.route("/session/<session_id>/materialize-run", methods=["POST"])
+@with_error_handling
+def materialize_run(session_id: str):
+    """Materialize latest v3 correction grid as a run artifact for /api/apply."""
+    from api.services.v3_session_service import materialize_run as _materialize
+    try:
+        result = _materialize(session_id)
+    except KeyError:
+        raise NotFoundError(resource="V3 Session", identifier=session_id)
+    return jsonify(result)
+
+
 # ---------------------------------------------------------------------------
 # Pull advisor
 # ---------------------------------------------------------------------------
