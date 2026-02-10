@@ -23,6 +23,10 @@ DEFAULT_PORT = int(os.getenv("JETDRIVE_PORT", "22344"))
 # Default to all interfaces (0.0.0.0) to receive from external devices like Dynoware RT.
 # Set JETDRIVE_IFACE to a specific IP (e.g., 169.254.x.x) if you need to bind to a particular interface.
 DEFAULT_IFACE = os.getenv("JETDRIVE_IFACE", "0.0.0.0")
+# UDP receive buffer size -- 1 MB prevents OS-level packet drops under load.
+# At ~200 Hz with ~100-byte packets, the default 8-64 KB OS buffer can overflow
+# if the Python GIL or a lock stalls the receive loop even briefly.
+DEFAULT_RCVBUF = int(os.getenv("JETDRIVE_RCVBUF", str(1024 * 1024)))  # 1 MB
 ALL_HOSTS = 0xFFFF
 
 # Message keys
@@ -596,6 +600,7 @@ def _discover_providers_sync(
     # Create BLOCKING socket (don't call _make_socket which sets non-blocking)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, DEFAULT_RCVBUF)
     sock.bind(("0.0.0.0", cfg.port))
 
     # Join BOTH multicast groups on specific interface (Power Core may use either)
@@ -697,6 +702,12 @@ def _subscribe_sync(
     # Create BLOCKING socket for Windows multicast compatibility
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # Enlarge OS receive buffer to prevent silent packet drops under load.
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, DEFAULT_RCVBUF)
+    actual_rcvbuf = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+    logger.debug("Subscribe socket SO_RCVBUF: requested=%d, actual=%d", DEFAULT_RCVBUF, actual_rcvbuf)
+
     sock.bind(("0.0.0.0", cfg.port))
 
     # Join multicast on specific interface
@@ -725,7 +736,9 @@ def _subscribe_sync(
     dropped_frames = 0
     non_provider_frames = 0
     total_frames = 0
+    seq_gaps = 0  # Total missed sequence numbers (indicates UDP packet loss)
     accepted_providers: set[int] = set()
+    _last_seq: dict[int, int] = {}  # host_id -> last seen sequence number
 
     try:
         while not stop_flag[0]:
@@ -739,7 +752,24 @@ def _subscribe_sync(
             if not decoded:
                 dropped_frames += 1
                 continue
-            key, _, host, _, _, value = decoded
+            key, _, host, seq, _, value = decoded
+
+            # --- Sequence gap detection ---
+            # The seq field is a uint8 (0-255) that increments per frame per host.
+            # A gap means the OS dropped UDP packets before we could read them.
+            if host in _last_seq:
+                expected = (_last_seq[host] + 1) & 0xFF
+                if seq != expected:
+                    gap = (seq - expected) & 0xFF
+                    # Only count forward gaps (backward = duplicate/reorder, ignore)
+                    if gap < 128:
+                        seq_gaps += gap
+                        if debug:
+                            logger.debug(
+                                "Seq gap: host=0x%04X expected=%d got=%d (lost ~%d packets)",
+                                host, expected, seq, gap,
+                            )
+            _last_seq[host] = seq
 
             # Handle ChannelInfo packets - update cache dynamically
             if key == KEY_CHANNEL_INFO:
@@ -784,16 +814,17 @@ def _subscribe_sync(
                 on_sample(sample)
     finally:
         sock.close()
-        if debug:
-            print(
-                f"[jetdrive_client._subscribe_sync] dropped_frames={dropped_frames}, "
-                f"non_provider_frames={non_provider_frames}, total_frames={total_frames}, "
-                f"accepted_providers={[hex(p) for p in accepted_providers]}",
-                flush=True,
+        if debug or seq_gaps > 0:
+            logger.info(
+                "[jetdrive_client._subscribe_sync] total_frames=%d, dropped_frames=%d, "
+                "seq_gaps=%d, non_provider_frames=%d, accepted_providers=%s",
+                total_frames, dropped_frames, seq_gaps,
+                non_provider_frames, [hex(p) for p in accepted_providers],
             )
 
     return {
         "dropped_frames": dropped_frames,
+        "seq_gaps": seq_gaps,
         "non_provider_frames": non_provider_frames,
         "total_frames": total_frames,
         "accepted_providers": list(accepted_providers),

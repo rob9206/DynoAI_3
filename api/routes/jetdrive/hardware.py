@@ -30,9 +30,11 @@ from ._shared import (
     JETDRIVE_PORT,
     _is_simulator_active,
     _live_data,
+    _live_data_event,
     _live_data_lock,
     _monitor_lock,
     _monitor_state,
+    _sample_ring,
     get_network_interfaces,
     get_project_root,
     logger,
@@ -656,6 +658,10 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 _live_data["last_update_ts"] = now_ts
                 if "error" in _live_data:
                     del _live_data["error"]
+                # Append to ring buffer for drain endpoint (per-channel granularity)
+                _sample_ring.append(entry)
+            # Wake SSE listeners immediately instead of waiting for their sleep cycle
+            _live_data_event.set()
 
         stop_event = asyncio.Event()
 
@@ -833,6 +839,8 @@ def start_live_capture():
         _live_data["provider_id"] = None
         _live_data["provider_name"] = None
         _live_data["provider_host"] = None
+        # Clear sample ring to prevent stale samples from previous session
+        _sample_ring.clear()
 
     thread = threading.Thread(
         target=_live_capture_loop, args=(requested_provider_id,), daemon=True
@@ -865,6 +873,37 @@ def stop_live_capture():
 def get_live_data():
     """Get current live channel data (polling-friendly JSON)."""
     return jsonify(_build_live_data_payload())
+
+
+@hardware_bp.route("/hardware/live/drain", methods=["GET"])
+def drain_live_samples():
+    """
+    Drain all accumulated samples from the ring buffer since the last drain.
+    
+    This endpoint returns every processed sample (not just the latest value)
+    accumulated since the last call, enabling VE cell hit accumulation without
+    loss. The ring buffer is cleared after reading.
+    
+    Returns:
+        JSON with:
+        - samples: List of sample dicts (each has name, value, timestamp, etc.)
+        - count: Number of samples returned
+        - capturing: Current capture status
+        - last_update_ts: Timestamp of last sample received
+    """
+    with _live_data_lock:
+        # Copy all samples from the ring and clear it atomically
+        samples = list(_sample_ring)
+        _sample_ring.clear()
+        capturing = _live_data.get("capturing", False)
+        last_update_ts = _live_data.get("last_update_ts")
+    
+    return jsonify({
+        "samples": samples,
+        "count": len(samples),
+        "capturing": capturing,
+        "last_update_ts": last_update_ts,
+    })
 
 
 def _build_live_data_payload() -> dict[str, Any]:
@@ -970,12 +1009,24 @@ def _build_live_data_payload() -> dict[str, Any]:
 
 @hardware_bp.route("/hardware/live/stream", methods=["GET"])
 def stream_live_data():
-    """Server-Sent Events (SSE) stream for live channel data."""
+    """Server-Sent Events (SSE) stream for live channel data.
+
+    Uses a threading.Event to push data as soon as it arrives from the
+    UDP receive loop, instead of sleeping a fixed 250 ms.  This reduces
+    SSE latency from ~250 ms (4 Hz) to near-instant (~20 Hz, matching
+    the 50 ms aggregation window).
+    """
 
     def _event_stream():
         last_sent_key: tuple[Any, ...] | None = None
         last_keepalive = time.time()
         while True:
+            # Block until new data arrives or 50 ms elapses (whichever first).
+            # The event is set() by on_sample in _live_capture_loop whenever
+            # _live_data is updated.
+            _live_data_event.wait(timeout=0.05)
+            _live_data_event.clear()
+
             payload = _build_live_data_payload()
             key = (
                 payload.get("simulated", False),
@@ -992,7 +1043,6 @@ def stream_live_data():
                 if now - last_keepalive > 10.0:
                     yield ": keepalive\n\n"
                     last_keepalive = now
-            time.sleep(0.25)
 
     headers = {
         "Cache-Control": "no-cache",
