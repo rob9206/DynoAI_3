@@ -167,9 +167,10 @@ interface TuneImportProps {
     onImport: (result: TuneImportResult) => void;
     currentPreset?: string;
     compact?: boolean;
+    sheet?: boolean; // New mode for sheet display - cleaner than full, more info than compact
 }
 
-export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = false }: TuneImportProps) {
+export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = false, sheet = false }: TuneImportProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [importedPVV, setImportedPVV] = useState<ParsedPVV | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
@@ -457,6 +458,136 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+        );
+    }
+
+    if (sheet) {
+        return (
+            <div className="space-y-4">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pvv"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                />
+
+                {/* Import Status */}
+                {importedPVV ? (
+                    <div className="space-y-3">
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                                <Check className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div className="text-sm flex-1">
+                                    <div className="text-green-400 font-medium">
+                                        {importedPVV.sourceFile || 'PVV File Loaded'}
+                                    </div>
+                                    <div className="text-zinc-400 mt-1 text-xs">
+                                        {getPVVSummary(importedPVV)}
+                                    </div>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={clearImport}>
+                                    <X className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        {/* Simple Preview - Just show we have tables */}
+                        <div className="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+                            <div className="text-xs font-medium text-zinc-300 mb-2">Imported Tables</div>
+                            <div className="space-y-1 text-xs">
+                                {importedPVV.veFront && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                        <span className="text-zinc-400">Front VE: {importedPVV.veFront.rows.length}×{importedPVV.veFront.columns.length} grid</span>
+                                    </div>
+                                )}
+                                {importedPVV.veRear && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                        <span className="text-zinc-400">Rear VE: {importedPVV.veRear.rows.length}×{importedPVV.veRear.columns.length} grid</span>
+                                    </div>
+                                )}
+                                {importedPVV.afrTarget && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                                        <span className="text-zinc-400">AFR Targets: {importedPVV.afrTarget.rows.length}×{importedPVV.afrTarget.columns.length} grid</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : importError ? (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
+                            <div className="text-xs text-red-400">
+                                {importError}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* Drop Zone */
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Drop PVV file here or click to browse"
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                        onClick={() => !isParsing && fileInputRef.current?.click()}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); !isParsing && fileInputRef.current?.click(); } }}
+                        className={`
+                            border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
+                            ${isParsing
+                                ? 'border-orange-500 bg-orange-500/10 cursor-wait'
+                                : isDragging 
+                                    ? 'border-blue-500 bg-blue-500/10' 
+                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
+                            }
+                        `}
+                    >
+                        {isParsing ? (
+                            <>
+                                <div className="w-8 h-8 mx-auto mb-2 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                                <div className="text-sm text-orange-400">Parsing PVV file...</div>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
+                                <div className="text-sm text-zinc-400">
+                                    Drop .pvv file here or click to browse
+                                </div>
+                                <div className="text-xs text-zinc-600 mt-1">
+                                    Load VE tables from Power Vision
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* Engine Presets - Simplified */}
+                <div className="border-t border-zinc-800 pt-4">
+                    <div className="text-xs text-zinc-500 mb-2">Or use an engine preset:</div>
+                    <div className="grid grid-cols-2 gap-2">
+                        {presets.map(p => (
+                            <Button
+                                key={p.key}
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePresetSelect(p.key)}
+                                className={`justify-start text-xs ${
+                                    currentPreset === p.key 
+                                        ? 'border-orange-500/50 text-orange-400' 
+                                        : 'border-zinc-700'
+                                }`}
+                            >
+                                {p.name}
+                            </Button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );

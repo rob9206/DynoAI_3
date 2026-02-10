@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -73,7 +73,7 @@ import { SetupWizard } from '../components/jetdrive/SetupWizard';
 import { ZoneCoverageCard } from '../components/jetdrive/ZoneCoverageCard';
 import type { BikeConfig, DynoConnectionConfig } from '../types/bikeConfig';
 import { SmartPromptBanner } from '../components/jetdrive/SmartPromptBanner';
-import { V3TuningTab } from '../components/jetdrive/V3TuningTab';
+import { CommandCenter } from '../components/jetdrive/CommandCenter';
 import { SessionSummaryCard } from '../components/jetdrive/SessionSummaryCard';
 import { useTuningWizard } from '../hooks/useTuningWizard';
 import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
@@ -86,6 +86,292 @@ import { SimulatorLoadPanel } from '../components/jetdrive/SimulatorLoadPanel';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
+
+const NAV_ITEMS = [
+    { label: 'Dashboard', to: '/dashboard' },
+    { label: 'JetDrive', to: '/jetdrive' },
+    { label: 'Results', to: '/results/last' },
+    { label: 'History', to: '/history' },
+];
+
+const UnifiedTuningTab = (_props: Record<string, unknown>) => null;
+
+export default function JetDriveAutoTunePage() {
+    const location = useLocation();
+    const [hardwareOpen, setHardwareOpen] = useState(false);
+    const [isSimulatorActive, setIsSimulatorActive] = useState(false);
+    const [isStartingSim, setIsStartingSim] = useState(false);
+    const [isTriggeringPull, setIsTriggeringPull] = useState(false);
+    const [simThrottle, setSimThrottle] = useState(0);
+    const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    const live = useJetDriveLive({
+        apiUrl: API_BASE,
+        autoConnect: true,
+        pollInterval: 800,
+        useSse: true,
+        isSimulatorActive,
+    });
+
+    const isActive = (path: string) =>
+        location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+    const handleToggleSimulator = async () => {
+        if (isSimulatorActive) {
+            // Stop simulator
+            try {
+                await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' });
+                await live.clearChannels();
+                setIsSimulatorActive(false);
+                setSimThrottle(0);
+                toast.info('Simulator stopped');
+            } catch (error) {
+                toast.error('Failed to stop simulator');
+                console.error('Simulator stop error:', error);
+            }
+        } else {
+            // Start simulator with default profile
+            setIsStartingSim(true);
+            try {
+                const res = await fetch(`${API_BASE}/simulator/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: 'm8_114',
+                        virtual_ecu: { enabled: false },
+                        auto_pull: false,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                    throw new Error(errorData.error || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                if (data.success) {
+                    setIsSimulatorActive(true);
+                    toast.success(`Simulator started: ${data.profile?.name || 'M8 114'}`, {
+                        description: `${data.profile?.max_hp || 114} HP @ ${data.profile?.redline_rpm || 6200} RPM`
+                    });
+                } else {
+                    toast.error('Failed to start simulator', {
+                        description: data.error || 'Unknown error'
+                    });
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to start simulator';
+                toast.error('Failed to start simulator', {
+                    description: errorMessage
+                });
+                console.error('Simulator start error:', error);
+            } finally {
+                setIsStartingSim(false);
+            }
+        }
+    };
+
+    const handleThrottleChange = (value: number) => {
+        // Clamp value between 0-100
+        const clampedValue = Math.max(0, Math.min(100, value));
+        console.log('[Throttle] Setting to:', clampedValue);
+        setSimThrottle(clampedValue);
+        
+        // Debounce network calls while dragging
+        if (simThrottleTimerRef.current) {
+            clearTimeout(simThrottleTimerRef.current);
+        }
+        
+        simThrottleTimerRef.current = setTimeout(async () => {
+            simThrottleTimerRef.current = null;
+            try {
+                console.log('[Throttle] Sending to backend:', clampedValue);
+                await fetch(`${API_BASE}/simulator/throttle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tps: clampedValue }),
+                });
+            } catch (error) {
+                console.error('Failed to set throttle:', error);
+            }
+        }, 100);
+    };
+
+    const handleTriggerPull = async () => {
+        if (!isSimulatorActive) return;
+        if (live.simState && live.simState !== 'idle') {
+            toast.warning(`Cannot trigger pull while simulator is ${live.simState}`);
+            return;
+        }
+
+        setIsTriggeringPull(true);
+        try {
+            const throttlePct = Math.round(simThrottle);
+            // Ensure TPS target is set before triggering pull (some builds ignore throttle in /pull)
+            await fetch(`${API_BASE}/simulator/throttle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tps: throttlePct }),
+            });
+
+            const res = await fetch(`${API_BASE}/simulator/pull`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ throttle: throttlePct, tps: throttlePct }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                toast.error(data.error || 'Cannot start pull');
+                return;
+            }
+
+            // Re-assert TPS target right after pull starts to override any WOT defaults
+            setTimeout(() => {
+                fetch(`${API_BASE}/simulator/throttle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tps: throttlePct }),
+                }).catch(() => undefined);
+            }, 80);
+
+            window.dispatchEvent(
+                new CustomEvent('dynoai:simulator-pull', {
+                    detail: {
+                        throttle: throttlePct,
+                    },
+                }),
+            );
+            toast.success(`Pull started at ${throttlePct}% throttle`);
+        } catch (error) {
+            toast.error('Failed to trigger pull');
+            console.error('Trigger pull error:', error);
+        } finally {
+            setIsTriggeringPull(false);
+        }
+    };
+
+    return (
+        <div className="flex h-full flex-col">
+            <header className="flex h-12 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-4">
+                <div className="flex items-center gap-3">
+                    <div className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-200">
+                        THUNDERHORSE
+                    </div>
+                    <div className="text-xs text-zinc-500">·</div>
+                    <div className="text-sm font-semibold text-zinc-100">DynoAI</div>
+                </div>
+
+                <nav className="flex items-center gap-2 text-xs">
+                    {NAV_ITEMS.map((item) => (
+                        <Link
+                            key={item.to}
+                            to={item.to}
+                            className={cn(
+                                'rounded-md px-3 py-2 transition-colors',
+                                isActive(item.to)
+                                    ? 'bg-zinc-800 text-white'
+                                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900',
+                            )}
+                        >
+                            {item.label}
+                        </Link>
+                    ))}
+                </nav>
+
+                <div className="flex items-center gap-4 text-xs text-zinc-300">
+                    <div className="flex items-center gap-2">
+                        <span
+                            className={cn(
+                                'h-2 w-2 rounded-full',
+                                live.isConnected ? 'bg-green-500 animate-pulse' : 'bg-zinc-600',
+                            )}
+                        />
+                        <span>{live.isConnected ? 'Connected' : 'Disconnected'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span
+                            className={cn(
+                                'h-2 w-2 rounded-full',
+                                live.isCapturing ? 'bg-red-500 animate-pulse' : 'bg-zinc-600',
+                            )}
+                        />
+                        <span>Recording</span>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                            'h-7 px-3 text-xs font-medium transition-colors',
+                            isSimulatorActive 
+                                ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/40' 
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                        )}
+                        onClick={handleToggleSimulator}
+                        disabled={isStartingSim}
+                    >
+                        {isStartingSim ? 'Starting...' : isSimulatorActive ? 'Sim ON' : 'Sim OFF'}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-zinc-400 hover:text-zinc-200"
+                        onClick={() => setHardwareOpen(true)}
+                    >
+                        <Settings2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            </header>
+
+            <div className="flex flex-1 flex-col min-h-0">
+                {isSimulatorActive && (
+                    <>
+                        <div className="flex h-6 items-center justify-center bg-yellow-500/10 border-b border-yellow-500/30 text-xs font-bold uppercase tracking-widest text-yellow-400">
+                            Simulator Mode
+                        </div>
+                        <div className="flex items-center gap-4 bg-zinc-900/50 border-b border-yellow-500/30 px-6 py-3">
+                            <div className="flex items-center gap-3 text-sm text-zinc-300">
+                                <span className="font-semibold">Throttle:</span>
+                                <span className="font-mono text-yellow-400 font-bold min-w-[4ch] text-right">{Math.round(simThrottle)}%</span>
+                            </div>
+                            <div className="flex-1 max-w-md">
+                                <Slider
+                                    value={[Math.max(0, Math.min(100, simThrottle))]}
+                                    onValueChange={(v) => handleThrottleChange(v[0] ?? 0)}
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-zinc-400">State: {live.simState ?? 'unknown'}</span>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 bg-orange-600 hover:bg-orange-500 text-white"
+                                    onClick={handleTriggerPull}
+                                    disabled={isTriggeringPull || !!(live.simState && live.simState !== 'idle')}
+                                >
+                                    <Play className="mr-1.5 h-3.5 w-3.5" />
+                                    {isTriggeringPull ? 'Starting...' : 'Trigger Pull'}
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                )}
+                <div className={cn('flex-1 min-h-0', isSimulatorActive && 'ring-2 ring-yellow-500/70 rounded-md m-1')}>
+                    <CommandCenter
+                        live={live}
+                        hardwareOpen={hardwareOpen}
+                        onHardwareOpenChange={setHardwareOpen}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ==================== TYPES ====================
 
@@ -608,12 +894,12 @@ interface SimulatorStatus {
 
 // ==================== MAIN COMPONENT ====================
 
-export default function JetDriveAutoTunePage() {
+function JetDriveAutoTunePageOld() {
     // Configuration state
     const [afrTargets, setAfrTargets] = useState<Record<number, number>>(() => ({ ...DEFAULT_AFR_TARGETS }));
     const [rpmThreshold, setRpmThreshold] = useState(2000);
     const [showSettings, setShowSettings] = useState(false);
-    const [activeMainTab, setActiveMainTab] = useState('autotune');
+    const [activeMainTab, setActiveMainTab] = useState('tuning');
     const [isReducedMotion, setIsReducedMotion] = useState(false);
     
     // Wizard mode toggle (new simplified UI)
@@ -1966,7 +2252,7 @@ function SmartPromptBanner({
 
                 {/* Main Tabs */}
                 <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+                    <TabsList className="grid w-full grid-cols-3 max-w-2xl">
                         <TabsTrigger value="hardware" className="flex items-center gap-2">
                             <Radio className="h-4 w-4" />
                             Hardware
@@ -1975,13 +2261,9 @@ function SmartPromptBanner({
                             <Activity className="h-4 w-4" />
                             Live
                         </TabsTrigger>
-                        <TabsTrigger value="autotune" className="flex items-center gap-2">
+                        <TabsTrigger value="tuning" className="flex items-center gap-2">
                             <Zap className="h-4 w-4" />
-                            Auto-Tune
-                        </TabsTrigger>
-                        <TabsTrigger value="v3" className="flex items-center gap-2">
-                            <Zap className="h-4 w-4" />
-                            Accelerated
+                            Tuning
                         </TabsTrigger>
                     </TabsList>
 
@@ -1995,41 +2277,25 @@ function SmartPromptBanner({
                         <JetDriveLiveDashboard apiUrl={API_BASE} />
                     </TabsContent>
 
-                    {/* Auto-Tune Tab */}
-                    <TabsContent value="autotune" className="mt-6">
-                        {/* Wizard Mode Toggle */}
-                        <div className="flex items-center justify-end mb-4">
-                            <button
-                                onClick={() => setWizardMode(!wizardMode)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                                    wizardMode
-                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                                        : 'bg-zinc-800/50 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
-                                }`}
-                            >
-                                <Zap className="w-4 h-4" />
-                                {wizardMode ? 'Wizard Mode' : 'Classic Mode'}
-                            </button>
-                        </div>
-
-                        {/* Wizard Mode - Simplified guided flow */}
-                        {wizardMode ? (
-                            <div className="space-y-4">
-                                {/* Smart Prompt Banner */}
-                                <SmartPromptBanner
-                                    step={isLive ? 'collect' : 'setup'}
-                                    coverageReport={coverageComputed}
-                                    canProceedToAnalyze={canProceedToAnalyze}
-                                    onActionClick={(action) => {
-                                        if (action === 'wot') aiAssistant.onWotSuggestion();
-                                        if (action === 'cruise') aiAssistant.onCruiseSuggestion();
-                                    }}
-                                    onCancelAdvance={handleCancelAutoAdvance}
-                                    secondsRemaining={secondsRemaining}
-                                />
-
-                                {/* Tuning Wizard with hook integration */}
-                                <TuningWizard
+                    {/* Unified Tuning Tab: Wizard | Manual | Accelerated */}
+                    <TabsContent value="tuning" className="mt-6">
+                        <UnifiedTuningTab
+                            importedTune={importedTune}
+                            onTuningModeChange={(mode) => setWizardMode(mode === 'wizard')}
+                            renderWizardContent={() => (
+                                <div className="space-y-4">
+                                    <SmartPromptBanner
+                                        step={isLive ? 'collect' : 'setup'}
+                                        coverageReport={coverageComputed}
+                                        canProceedToAnalyze={canProceedToAnalyze}
+                                        onActionClick={(action) => {
+                                            if (action === 'wot') aiAssistant.onWotSuggestion();
+                                            if (action === 'cruise') aiAssistant.onCruiseSuggestion();
+                                        }}
+                                        onCancelAdvance={handleCancelAutoAdvance}
+                                        secondsRemaining={secondsRemaining}
+                                    />
+                                    <TuningWizard
                                     isSimulatorActive={isSimulatorActive}
                                     isCapturing={isCapturing}
                                     isLive={isLive}
@@ -2136,12 +2402,11 @@ function SmartPromptBanner({
                                             onBoundsPresetChange={setVeBoundsPreset}
                                         />
                                     )}
-                                />
-
-                            </div>
-                        ) : (
-                        /* Classic Mode - Original complex UI */
-                        workflowState === 'disconnected' ? (
+                                    />
+                                </div>
+                            )}
+                            renderManualContent={() => (
+                                workflowState === 'disconnected' ? (
                             /* DISCONNECTED STATE */
                             <div className="space-y-6">
                                 {/* Primary: Hardware Connection */}
@@ -2972,13 +3237,9 @@ function SmartPromptBanner({
                                     </Card>
                                 </div>
                             </div>
-                        )
-                        )}
-                    </TabsContent>
-
-                    {/* Accelerated Calibration (v3) Tab */}
-                    <TabsContent value="v3" className="mt-6">
-                        <V3TuningTab importedTune={importedTune} />
+                            )
+                            )}
+                        />
                     </TabsContent>
                 </Tabs>
             </div>

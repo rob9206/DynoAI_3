@@ -57,6 +57,7 @@ export function useV3Session(sessionId?: string) {
     data: sessionStatus,
     isLoading: isLoadingStatus,
     error: statusError,
+    refetch: refetchSession,
   } = useQuery({
     queryKey: ["v3", "session", sessionId],
     queryFn: () => getSession(sessionId!),
@@ -72,16 +73,20 @@ export function useV3Session(sessionId?: string) {
   const {
     data: convergence,
     isLoading: isLoadingConvergence,
+    refetch: refetchConvergence,
   } = useQuery({
     queryKey: ["v3", "convergence", sessionId],
     queryFn: () => checkConvergence(sessionId!),
-    enabled: !!sessionId && sessionStatus?.state === "in_progress",
+    enabled:
+      !!sessionId &&
+      (sessionStatus?.state === "in_progress" || sessionStatus?.state === "ready"),
     staleTime: 3_000,
   });
 
   const {
     data: uncertaintyMap,
     isLoading: isLoadingUncertainty,
+    refetch: refetchUncertainty,
   } = useQuery({
     queryKey: ["v3", "uncertainty", sessionId],
     queryFn: () => getUncertaintyMap(sessionId!),
@@ -92,6 +97,7 @@ export function useV3Session(sessionId?: string) {
   const {
     data: nextPull,
     isLoading: isLoadingNextPull,
+    refetch: refetchNextPull,
   } = useQuery({
     queryKey: ["v3", "next-pull", sessionId],
     queryFn: () => suggestNextPull(sessionId!),
@@ -244,10 +250,20 @@ export function useV3Session(sessionId?: string) {
     [importCorrectionsMutation]
   );
 
+  const refreshSessionData = useCallback(() => {
+    void refetchSession();
+    void refetchConvergence();
+    void refetchUncertainty();
+    void refetchNextPull();
+  }, [refetchSession, refetchConvergence, refetchUncertainty, refetchNextPull]);
+
   // ---- Derived state ----
 
   const sessionPhase = useMemo<"idle" | "ready" | "tuning" | "complete">(() => {
-    if (!sessionId || !sessionStatus) return "idle";
+    if (!sessionId) return "idle";
+    // If we have a created session id but status has not loaded yet,
+    // keep coach out of idle so UI can transition immediately.
+    if (!sessionStatus) return "ready";
     switch (sessionStatus.state) {
       case "ready": return "ready";
       case "in_progress": return "tuning";
@@ -313,5 +329,6 @@ export function useV3Session(sessionId?: string) {
     simulate,
     runAutoSimulate,
     importSessionCorrections,
+    refreshSessionData,
   };
 }

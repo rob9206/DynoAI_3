@@ -667,7 +667,11 @@ def simulate_pull_realistic(
                     break
                 _time.sleep(0.1)
         else:
-            simulator.trigger_pull()
+            # Preserve the operator-selected simulator throttle instead of forcing WOT.
+            # This keeps manual Trigger Pull behavior consistent with the UI slider.
+            current_tps_target = float(getattr(simulator.physics, "tps_target", 100.0))
+            throttle_pct = max(0.0, min(100.0, current_tps_target))
+            simulator.trigger_pull(throttle_pct=throttle_pct)
             _time.sleep(0.2)
 
             # Wait for pull completion (max 15s real time)
@@ -839,52 +843,72 @@ def simulate_pull(
     Generate synthetic pull data and ingest it into the session.
 
     If rpm/map_kpa not provided, uses the advisor's next recommendation.
-    Generates realistic scatter around the target point with VE deltas
-    based on realistic noise patterns.
+    Point generation strategy varies by pull_mode:
+      - acceleration: simulates an RPM sweep at roughly constant MAP,
+        covering many RPM bins in a single pull (25 points).
+      - steady_state: clusters points near the target RPM/MAP zone
+        for focused uncertainty reduction (15 points).
 
     Args:
         session_id: Session ID
         rpm: Target RPM (optional, defaults to next advisor suggestion)
         map_kpa: Target MAP (optional, defaults to next advisor suggestion)
-        n_points: Number of data points to generate (default 8)
+        n_points: Number of data points to generate (ignored — overridden
+                  by pull_mode heuristics)
 
     Returns:
         PullResult dict
     """
     session = _get_session(session_id)
 
-    # If no target specified, use advisor's next recommendation
+    # Resolve target and pull_mode from advisor recommendation
+    _pull_mode_value = "acceleration"
     if rpm is None or map_kpa is None:
         if session.advisor is None:
             raise RuntimeError("Session not initialized")
         rec = session.advisor.suggest_next_pull()
         rpm = rpm or rec.rpm
         map_kpa = map_kpa or rec.map_kpa
+        if hasattr(rec, "pull_mode"):
+            _pull_mode_value = rec.pull_mode.value if hasattr(rec.pull_mode, "value") else str(rec.pull_mode)
 
-    # Generate synthetic data with realistic scatter
+    # Seed RNG deterministically from target + observation count
     rng = np.random.RandomState(int(rpm + map_kpa + len(session.surrogate.observations)))
 
-    # RPM scatter: +/- 100 RPM around target
-    rpm_arr = rpm + rng.randn(n_points) * 100
+    if _pull_mode_value == "acceleration":
+        # --- Acceleration sweep: spread across the RPM range at target MAP ---
+        # Mimics a real inertia-dyno pull that sweeps from low to high RPM
+        # at roughly constant (WOT) MAP. Covers many RPM bins per pull.
+        n_pts = 25
+        rpm_lo = max(750.0, rpm - 2000)
+        rpm_hi = min(6500.0, rpm + 2000)
+        rpm_arr = np.linspace(rpm_lo, rpm_hi, n_pts) + rng.randn(n_pts) * 50
+        map_arr = map_kpa + rng.randn(n_pts) * 3  # tight MAP spread (WOT ≈ const)
 
-    # MAP scatter: +/- 5 kPa around target
-    map_arr = map_kpa + rng.randn(n_points) * 5
+        # VE varies with RPM (volumetric efficiency curve shape)
+        base_ve = 75 + (map_kpa - 30) / 75 * 25  # 75% at 30kPa, 100% at 105kPa
+        rpm_norm = (rpm_arr - 750) / 5750  # 0..1 across RPM range
+        rpm_curve = 1.0 + 0.08 * np.sin(rpm_norm * np.pi)  # peak mid-range
+        ve_arr = base_ve * rpm_curve + rng.randn(n_pts) * 0.3
+    else:
+        # --- Steady-state: cluster at the target RPM/MAP zone ---
+        # Simulates holding RPM constant via eddy brake while targeting a
+        # specific MAP. Focused data reduces uncertainty at that zone.
+        n_pts = 15
+        rpm_arr = rpm + rng.randn(n_pts) * 80   # tight RPM cluster
+        map_arr = map_kpa + rng.randn(n_pts) * 4  # tight MAP cluster
 
-    # VE values: realistic absolute VE percentages (70-110%)
-    # Base value varies by load (higher MAP = higher VE)
-    base_ve = 75 + (map_kpa - 30) / 75 * 25  # 75% at 30kPa, 100% at 105kPa
-    rpm_effect = np.sin(rpm / 1500) * 5  # ±5% variation with RPM
-    ve_base = base_ve + rpm_effect
-
-    # Add noise
-    ve_arr = ve_base + rng.randn(n_points) * 0.3
+        # VE at this operating point
+        base_ve = 75 + (map_kpa - 30) / 75 * 25
+        rpm_effect = np.sin(rpm / 1500) * 5
+        ve_arr = (base_ve + rpm_effect) + rng.randn(n_pts) * 0.3
 
     # Ingest into session
     result = session.ingest_pull(rpm_arr, map_arr, ve_arr)
 
     logger.info(
-        "Simulated pull at RPM=%.0f MAP=%.0f: %d points generated",
-        rpm, map_kpa, n_points,
+        "Quick-sim pull (%s) at RPM=%.0f MAP=%.0f: %d points generated",
+        _pull_mode_value, rpm, map_kpa, n_pts,
     )
 
     return {

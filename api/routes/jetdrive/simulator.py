@@ -203,7 +203,7 @@ def get_simulator_status():
 
 @simulator_bp.route("/simulator/pull", methods=["POST"])
 def trigger_pull():
-    """Manually trigger a WOT pull in the simulator."""
+    """Manually trigger a pull in the simulator (default WOT)."""
     if not _is_simulator_active():
         return jsonify({"error": "Simulator not running"}), 400
 
@@ -223,9 +223,26 @@ def trigger_pull():
             400,
         )
 
-    sim.trigger_pull()
+    data = request.get_json() or {}
+    raw_throttle = data.get("throttle", data.get("tps", 100.0))
+    try:
+        throttle_pct = float(raw_throttle)
+    except Exception:
+        return jsonify({"error": "Missing or invalid throttle/tps (0-100)"}), 400
 
-    return jsonify({"success": True, "status": "pull_started", "state": "pull"})
+    if not (0.0 <= throttle_pct <= 100.0):
+        return jsonify({"error": "throttle/tps must be between 0 and 100"}), 400
+
+    sim.trigger_pull(throttle_pct=throttle_pct)
+
+    return jsonify(
+        {
+            "success": True,
+            "status": "pull_started",
+            "state": "pull",
+            "throttle_pct": throttle_pct,
+        }
+    )
 
 
 @simulator_bp.route("/simulator/throttle", methods=["POST"])
