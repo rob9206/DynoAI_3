@@ -42,12 +42,6 @@ import math
 import sys
 import threading
 from pathlib import Path
-
-# Add project root to path for imports
-root_dir = Path(__file__).parent.parent
-if str(root_dir) not in sys.path:
-    sys.path.insert(0, str(root_dir))
-
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
 from dynoai.constants import (
@@ -66,6 +60,11 @@ from dynoai.constants import (
 )
 from dynoai.core import io_contracts
 from dynoai.core.io_contracts import sanitize_csv_cell
+
+# Add project root to path for imports
+root_dir = Path(__file__).parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -737,14 +736,15 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         lines = []
         for line in f:
             stripped = line.strip()
-            if stripped and not stripped.startswith('#'):
+            if stripped and not stripped.startswith("#"):
                 lines.append(line)
             elif not stripped:
                 lines.append(line)  # Keep empty lines for DictReader
-        
+
         # Create a file-like object from the filtered lines
         from io import StringIO
-        filtered_content = ''.join(lines)
+
+        filtered_content = "".join(lines)
         reader = csv.DictReader(StringIO(filtered_content))
 
         def normalize_header(h: str) -> str:
@@ -945,15 +945,20 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         lines = []
         for line in f:
             stripped = line.strip()
-            if stripped and not stripped.startswith('#'):
+            if stripped and not stripped.startswith("#"):
                 lines.append(line)
             elif not stripped:
                 lines.append(line)  # Keep empty lines for DictReader
-        
+
         # Create a file-like object from the filtered lines
         from io import StringIO
-        filtered_content = ''.join(lines)
-        reader = csv.DictReader(StringIO(filtered_content), dialect=dialect) if dialect else csv.DictReader(StringIO(filtered_content))
+
+        filtered_content = "".join(lines)
+        reader = (
+            csv.DictReader(StringIO(filtered_content), dialect=dialect)
+            if dialect
+            else csv.DictReader(StringIO(filtered_content))
+        )
         rows: List[Dict[str, str]] = list(reader)  # raw strings from CSV/TXT
     if not rows:
         raise RuntimeError("Empty WinPEP CSV.")
