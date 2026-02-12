@@ -17,6 +17,12 @@ import { parsePVV, getPVVSummary, extractAfrTargets, type ParsedPVV, type PVVTab
 import { listEnginePresets, getEnginePreset } from '../../utils/enginePresets';
 import { resampleVETable } from '../../utils/veResampler';
 import { toast } from '../../lib/toast';
+import {
+    discoverYourDynoRuns,
+    parseYourDynoRun,
+    type ParseYourDynoRunResponse,
+    type YourDynoFile,
+} from '../../lib/api';
 
 // ==================== VE Preview Table Component ====================
 
@@ -154,7 +160,7 @@ function AFRPreviewTable({ table }: { table: PVVTable }) {
 }
 
 export interface TuneImportResult {
-    source: 'pvv' | 'preset';
+    source: 'pvv' | 'preset' | 'yourdyno';
     sourceName: string;
     veFront?: PVVTable;
     veRear?: PVVTable;
@@ -171,15 +177,22 @@ interface TuneImportProps {
 }
 
 export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = false, sheet = false }: TuneImportProps) {
+    const [selectedSource, setSelectedSource] = useState<'pvv' | 'yourdyno' | 'preset'>('pvv');
     const [isDragging, setIsDragging] = useState(false);
     const [importedPVV, setImportedPVV] = useState<ParsedPVV | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
     const [showPresets, setShowPresets] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
+    const [yourdynoRuns, setYourDynoRuns] = useState<YourDynoFile[]>([]);
+    const [selectedYourDynoFileId, setSelectedYourDynoFileId] = useState<string>('');
+    const [yourdynoPreview, setYourDynoPreview] = useState<ParseYourDynoRunResponse | null>(null);
+    const [isDiscoveringYourDyno, setIsDiscoveringYourDyno] = useState(false);
+    const [isParsingYourDyno, setIsParsingYourDyno] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFile = useCallback(async (file: File) => {
+        setSelectedSource('pvv');
         setImportError(null);
         
         if (!file.name.toLowerCase().endsWith('.pvv')) {
@@ -378,6 +391,7 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
     }, [handleFile]);
 
     const handlePresetSelect = useCallback((presetKey: string) => {
+        setSelectedSource('preset');
         const preset = getEnginePreset(presetKey);
         if (!preset) return;
 
@@ -395,8 +409,66 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
         onImport(result);
     }, [onImport]);
 
+    const handleDiscoverYourDynoRuns = useCallback(async () => {
+        setSelectedSource('yourdyno');
+        setImportError(null);
+        setIsDiscoveringYourDyno(true);
+        try {
+            const discovered = await discoverYourDynoRuns();
+            setYourDynoRuns(discovered.files || []);
+            if ((discovered.files || []).length > 0) {
+                setSelectedYourDynoFileId(discovered.files[0].id);
+                toast.success(`Found ${discovered.count} YourDyno run file(s)`);
+            } else {
+                toast.info('No YourDyno run files found in default folders');
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to discover YourDyno runs';
+            setImportError(msg);
+        } finally {
+            setIsDiscoveringYourDyno(false);
+        }
+    }, []);
+
+    const handleParseSelectedYourDynoRun = useCallback(async () => {
+        setSelectedSource('yourdyno');
+        if (!selectedYourDynoFileId) {
+            setImportError('Select a YourDyno run file first');
+            return;
+        }
+
+        setImportError(null);
+        setIsParsingYourDyno(true);
+        try {
+            const parsed = await parseYourDynoRun(selectedYourDynoFileId);
+            if (!parsed.success) {
+                throw new Error(parsed.error || 'Failed to parse YourDyno run');
+            }
+
+            setYourDynoPreview(parsed);
+            setImportedPVV(null);
+
+            const preset = getEnginePreset(currentPreset);
+            const selectedFile = yourdynoRuns.find((f) => f.id === selectedYourDynoFileId);
+            onImport({
+                source: 'yourdyno',
+                sourceName: selectedFile?.name || 'YourDyno Run',
+                afrTargets: preset?.afrTargets ?? {},
+                rpmBins: preset?.rpmBins ?? [],
+                mapBins: preset?.mapBins ?? [],
+            });
+            toast.success('YourDyno run parsed successfully');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to parse YourDyno run';
+            setImportError(msg);
+        } finally {
+            setIsParsingYourDyno(false);
+        }
+    }, [selectedYourDynoFileId, currentPreset, yourdynoRuns, onImport]);
+
     const clearImport = useCallback(() => {
         setImportedPVV(null);
+        setYourDynoPreview(null);
         setImportError(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -415,35 +487,78 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                     onChange={handleFileSelect}
                     className="hidden"
                 />
-                
-                {importedPVV ? (
-                    <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10">
-                        <FileCheck className="w-3 h-3 mr-1" />
-                        {importedPVV.sourceFile || 'PVV Loaded'}
-                    </Badge>
+
+                <div className="flex items-center gap-1 rounded-md border border-zinc-700 p-1">
+                    <Button
+                        variant={selectedSource === 'pvv' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        onClick={() => setSelectedSource('pvv')}
+                    >
+                        PVV
+                    </Button>
+                    <Button
+                        variant={selectedSource === 'yourdyno' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        onClick={() => setSelectedSource('yourdyno')}
+                    >
+                        YourDyno
+                    </Button>
+                </div>
+
+                {selectedSource === 'pvv' ? (
+                    importedPVV ? (
+                        <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10">
+                            <FileCheck className="w-3 h-3 mr-1" />
+                            {importedPVV.sourceFile || 'PVV Loaded'}
+                        </Badge>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-xs"
+                        >
+                            <Upload className="w-3 h-3 mr-1" />
+                            Import PVV
+                        </Button>
+                    )
                 ) : (
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={async () => {
+                            if (yourdynoRuns.length === 0) {
+                                await handleDiscoverYourDynoRuns();
+                                return;
+                            }
+                            if (selectedYourDynoFileId) {
+                                await handleParseSelectedYourDynoRun();
+                            }
+                        }}
+                        disabled={isDiscoveringYourDyno || isParsingYourDyno}
                         className="text-xs"
                     >
                         <Upload className="w-3 h-3 mr-1" />
-                        Import PVV
+                        {isDiscoveringYourDyno || isParsingYourDyno ? 'Loading...' : 'Load YourDyno'}
                     </Button>
                 )}
-                
+
                 <div className="relative">
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setShowPresets(!showPresets)}
+                        onClick={() => {
+                            setSelectedSource('preset');
+                            setShowPresets(!showPresets);
+                        }}
                         className="text-xs"
                     >
                         <Settings className="w-3 h-3 mr-1" />
                         Preset
                     </Button>
-                    
+
                     {showPresets && (
                         <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[180px] z-50">
                             {presets.map(p => (
@@ -616,8 +731,91 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                         )}
                     </div>
 
+                    <div className="flex items-center gap-2 rounded-md border border-zinc-700 p-1 w-fit">
+                        <Button
+                            variant={selectedSource === 'pvv' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('pvv')}
+                        >
+                            Power Vision
+                        </Button>
+                        <Button
+                            variant={selectedSource === 'yourdyno' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('yourdyno')}
+                        >
+                            YourDyno
+                        </Button>
+                        <Button
+                            variant={selectedSource === 'preset' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('preset')}
+                        >
+                            Preset
+                        </Button>
+                    </div>
+
                     {/* Import Status */}
-                    {importedPVV ? (
+                    {selectedSource === 'yourdyno' ? (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleDiscoverYourDynoRuns}
+                                    disabled={isDiscoveringYourDyno}
+                                    className="text-xs"
+                                >
+                                    {isDiscoveringYourDyno ? 'Scanning...' : 'Discover Run Files'}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleParseSelectedYourDynoRun}
+                                    disabled={!selectedYourDynoFileId || isParsingYourDyno}
+                                    className="text-xs"
+                                >
+                                    {isParsingYourDyno ? 'Parsing...' : 'Parse Selected File'}
+                                </Button>
+                            </div>
+
+                            {yourdynoRuns.length > 0 && (
+                                <select
+                                    value={selectedYourDynoFileId}
+                                    onChange={(e) => setSelectedYourDynoFileId(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-200"
+                                >
+                                    {yourdynoRuns.map((f) => (
+                                        <option key={f.id} value={f.id}>
+                                            {f.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {yourdynoPreview?.success && (
+                                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 space-y-2">
+                                    <div className="text-xs text-green-300">
+                                        Parsed {yourdynoPreview.rows ?? 0} rows from YourDyno run.
+                                    </div>
+                                    <div className="text-xs text-zinc-300">
+                                        <span className="text-zinc-500">Detected channels:</span>{' '}
+                                        {Object.keys(yourdynoPreview.detected_columns || {}).length}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {Object.entries(yourdynoPreview.detected_columns || {}).slice(0, 10).map(([k, v]) => (
+                                            <Badge key={k} variant="outline" className="text-[10px] border-zinc-600 text-zinc-300">
+                                                {k}: {String(v)}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : importedPVV ? (
                         <div className="space-y-3">
                             <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                                 <div className="flex items-start gap-2">
@@ -830,10 +1028,14 @@ export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = fa
                                 <>
                                     <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
                                     <div className="text-sm text-zinc-400">
-                                        Drop .pvv file here or click to browse
+                                        {selectedSource === 'preset'
+                                            ? 'Select an engine preset below'
+                                            : 'Drop .pvv file here or click to browse'}
                                     </div>
                                     <div className="text-xs text-zinc-600 mt-1">
-                                        Exports from Power Vision will auto-populate VE and AFR tables
+                                        {selectedSource === 'preset'
+                                            ? 'Preset mode loads AFR targets and default grid bins'
+                                            : 'Exports from Power Vision will auto-populate VE and AFR tables'}
                                     </div>
                                 </>
                             )}
