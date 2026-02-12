@@ -251,3 +251,82 @@ def stream_live_data():
         headers=headers,
     )
 
+
+# ---------------------------------------------------------------------------
+# JetDrive-compatible aliases
+# ---------------------------------------------------------------------------
+
+
+@live_bp.route("/hardware/monitor/status", methods=["GET"])
+def monitor_status_alias():
+    """
+    Compatibility endpoint for useJetDriveLive.
+    """
+    with _live_data_lock:
+        connected = bool(_live_data.get("connected"))
+        channel_count = len(_live_data.get("channels", {}) or {})
+        status = _live_data.get("status", "idle")
+
+    provider_name = "DynoAIBridge" if connected else "YourDyno Bridge"
+    providers = [
+        {
+            "provider_id": 1,
+            "name": provider_name,
+            "host": YourDynoClientConfig.from_env().host,
+            "channel_count": channel_count,
+            "status": status,
+        }
+    ] if connected else []
+
+    return jsonify(
+        {
+            "running": bool(_live_data.get("capturing")),
+            "connected": connected,
+            "providers": providers,
+            "history": [],
+            "last_check": datetime.now().isoformat(),
+        }
+    )
+
+
+@live_bp.route("/hardware/monitor/start", methods=["POST"])
+def monitor_start_alias():
+    return jsonify({"status": "started"})
+
+
+@live_bp.route("/hardware/monitor/stop", methods=["POST"])
+def monitor_stop_alias():
+    return jsonify({"status": "stopped"})
+
+
+@live_bp.route("/hardware/live/start", methods=["POST"])
+def live_start_alias():
+    return start_live_capture()
+
+
+@live_bp.route("/hardware/live/stop", methods=["POST"])
+def live_stop_alias():
+    return stop_live_capture()
+
+
+@live_bp.route("/hardware/live/data", methods=["GET"])
+def live_data_alias():
+    return get_live_data()
+
+
+@live_bp.route("/hardware/live/drain", methods=["GET"])
+def live_drain_alias():
+    return drain_live_samples()
+
+
+@live_bp.route("/hardware/live/stream", methods=["GET"])
+def live_stream_alias():
+    return stream_live_data()
+
+
+@live_bp.route("/queue/reset", methods=["POST"])
+def reset_queue_alias():
+    reset_yourdyno_live_queue_manager()
+    clear_live_buffers()
+    return jsonify({"status": "reset"})
+

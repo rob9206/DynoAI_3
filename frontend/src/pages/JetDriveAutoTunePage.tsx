@@ -45,6 +45,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '../components/ui/dialog';
 import { useJetDriveLive } from '../hooks/useJetDriveLive';
+import { useYourDynoLive } from '../hooks/useYourDynoLive';
 import { usePowerOpportunities } from '../hooks/usePowerOpportunities';
 import { LiveVETable, LiveVEExportData } from '../components/jetdrive/LiveVETable';
 import { exportToCSV, exportToJSON, exportToPVV, downloadFile } from '../utils/veExport';
@@ -86,6 +87,7 @@ import { SimulatorLoadPanel } from '../components/jetdrive/SimulatorLoadPanel';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
+const YOURDYNO_API_BASE = `${API_BASE_URL}/api/yourdyno`;
 
 const NAV_ITEMS = [
     { label: 'Dashboard', to: '/dashboard' },
@@ -1036,8 +1038,25 @@ function JetDriveAutoTunePageOld() {
     const [simState, setSimState] = useState<SimulatorStatus['state']>('stopped');
     const [selectedProfile, setSelectedProfile] = useState<string>('m8_114');
     const [isStartingSimulator, setIsStartingSimulator] = useState(false);
+    const [activeLiveSource, setActiveLiveSource] = useState<'jetdrive' | 'yourdyno'>('jetdrive');
 
-    // JetDrive live hook - separate simulator vs real data; pass simulator mode so hook polls correctly
+    // JetDrive live hook
+    const jetdriveLive = useJetDriveLive({
+        apiUrl: API_BASE,
+        pollInterval: 100,  // 100ms (10Hz) - fast updates for live tuning
+        isSimulatorActive,
+    });
+
+    // YourDyno live hook (uses compatible /hardware/* aliases on backend)
+    const yourdynoLive = useYourDynoLive({
+        apiUrl: YOURDYNO_API_BASE,
+        pollInterval: 100,
+        isSimulatorActive: false,
+    });
+
+    const liveApiBase = activeLiveSource === 'yourdyno' ? YOURDYNO_API_BASE : API_BASE;
+    const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
+
     const {
         isConnected,
         isCapturing,
@@ -1048,11 +1067,16 @@ function JetDriveAutoTunePageOld() {
         startCapture,
         stopCapture,
         clearChannels,
-    } = useJetDriveLive({
-        apiUrl: API_BASE,
-        pollInterval: 100,  // 100ms (10Hz) - fast updates for live tuning
-        isSimulatorActive,
-    });
+    } = activeLive;
+
+    useEffect(() => {
+        // Simulator transport exists only for JetDrive endpoints.
+        if (activeLiveSource === 'yourdyno' && isSimulatorActive) {
+            setIsSimulatorActive(false);
+            setSimState('stopped');
+            toast.info('Simulator controls are only available with JetDrive source.');
+        }
+    }, [activeLiveSource, isSimulatorActive]);
 
     // Explicit mode: simulator vs real vs idle (no combined booleans - prevents cross-contamination)
     const liveMode: 'simulator' | 'real' | 'idle' = isSimulatorActive ? 'simulator' : (isCapturing ? 'real' : 'idle');
@@ -2252,6 +2276,29 @@ function SmartPromptBanner({
 
                 {/* Main Tabs */}
                 <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+                    <div className="mb-3 flex items-center gap-2">
+                        <span className="text-xs text-zinc-400">Live source:</span>
+                        <Button
+                            size="sm"
+                            variant={activeLiveSource === 'jetdrive' ? 'default' : 'outline'}
+                            onClick={() => setActiveLiveSource('jetdrive')}
+                            className="h-7"
+                        >
+                            JetDrive
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={activeLiveSource === 'yourdyno' ? 'default' : 'outline'}
+                            onClick={() => setActiveLiveSource('yourdyno')}
+                            className="h-7"
+                            disabled={isSimulatorActive}
+                        >
+                            YourDyno
+                        </Button>
+                        <Badge variant="outline" className="ml-1 text-[10px] uppercase tracking-wide">
+                            {activeLiveSource}
+                        </Badge>
+                    </div>
                     <TabsList className="grid w-full grid-cols-3 max-w-2xl">
                         <TabsTrigger value="hardware" className="flex items-center gap-2">
                             <Radio className="h-4 w-4" />
@@ -2269,12 +2316,12 @@ function SmartPromptBanner({
 
                     {/* Hardware Tab */}
                     <TabsContent value="hardware" className="mt-6">
-                        <HardwareTab apiUrl={API_BASE} />
+                        <HardwareTab apiUrl={liveApiBase} />
                     </TabsContent>
 
                     {/* Live Dashboard Tab */}
                     <TabsContent value="live" className="mt-6">
-                        <JetDriveLiveDashboard apiUrl={API_BASE} />
+                        <JetDriveLiveDashboard apiUrl={liveApiBase} />
                     </TabsContent>
 
                     {/* Unified Tuning Tab: Wizard | Manual | Accelerated */}
