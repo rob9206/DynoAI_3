@@ -41,13 +41,14 @@ def parse_ve_delta_csv(
             lines = []
             for line in f:
                 stripped = line.strip()
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     lines.append(line)
                 elif not stripped:
                     lines.append(line)  # Keep empty lines
-            
+
             from io import StringIO
-            filtered_content = ''.join(lines)
+
+            filtered_content = "".join(lines)
             reader = csv.reader(StringIO(filtered_content))
 
             # Read header row (contains kPa bins)
@@ -144,13 +145,14 @@ def parse_dyno_run_csv(
             lines = []
             for line in f:
                 stripped = line.strip()
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     lines.append(line)
                 elif not stripped:
                     lines.append(line)  # Keep empty lines
-            
+
             from io import StringIO
-            filtered_content = ''.join(lines)
+
+            filtered_content = "".join(lines)
             reader = csv.DictReader(StringIO(filtered_content))
 
             # Validate required columns if specified
@@ -213,13 +215,14 @@ def parse_csv_with_validation(
             lines = []
             for line in f:
                 stripped = line.strip()
-                if stripped and not stripped.startswith('#'):
+                if stripped and not stripped.startswith("#"):
                     lines.append(line)
                 elif not stripped:
                     lines.append(line)  # Keep empty lines
-            
+
             from io import StringIO
-            filtered_content = ''.join(lines)
+
+            filtered_content = "".join(lines)
             reader = csv.DictReader(StringIO(filtered_content))
             valid_rows = []
             errors = []

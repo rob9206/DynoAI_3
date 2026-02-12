@@ -295,7 +295,12 @@ def _resolve_iface_address(iface: str) -> str:
 
 
 def _make_socket(cfg: JetDriveConfig) -> socket.socket:
-    logger.debug("Creating socket: iface=%s, group=%s, port=%d", cfg.iface, cfg.multicast_group, cfg.port)
+    logger.debug(
+        "Creating socket: iface=%s, group=%s, port=%d",
+        cfg.iface,
+        cfg.multicast_group,
+        cfg.port,
+    )
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     reuseport = getattr(socket, "SO_REUSEPORT", None)
@@ -324,9 +329,16 @@ def _make_socket(cfg: JetDriveConfig) -> socket.socket:
     mreq = socket.inet_aton(cfg.multicast_group) + socket.inet_aton(multicast_iface)
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        logger.debug("Joined multicast: group=%s iface=%s", cfg.multicast_group, multicast_iface)
+        logger.debug(
+            "Joined multicast: group=%s iface=%s", cfg.multicast_group, multicast_iface
+        )
     except OSError as exc:
-        logger.debug("Multicast join failed: group=%s iface=%s error=%s", cfg.multicast_group, multicast_iface, exc)
+        logger.debug(
+            "Multicast join failed: group=%s iface=%s error=%s",
+            cfg.multicast_group,
+            multicast_iface,
+            exc,
+        )
         sock.close()
         raise RuntimeError(
             f"Failed to join multicast group {cfg.multicast_group} on {multicast_iface}: {exc}"
@@ -706,7 +718,11 @@ def _subscribe_sync(
     # Enlarge OS receive buffer to prevent silent packet drops under load.
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, DEFAULT_RCVBUF)
     actual_rcvbuf = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
-    logger.debug("Subscribe socket SO_RCVBUF: requested=%d, actual=%d", DEFAULT_RCVBUF, actual_rcvbuf)
+    logger.debug(
+        "Subscribe socket SO_RCVBUF: requested=%d, actual=%d",
+        DEFAULT_RCVBUF,
+        actual_rcvbuf,
+    )
 
     sock.bind(("0.0.0.0", cfg.port))
 
@@ -767,7 +783,10 @@ def _subscribe_sync(
                         if debug:
                             logger.debug(
                                 "Seq gap: host=0x%04X expected=%d got=%d (lost ~%d packets)",
-                                host, expected, seq, gap,
+                                host,
+                                expected,
+                                seq,
+                                gap,
                             )
             _last_seq[host] = seq
 
@@ -818,8 +837,11 @@ def _subscribe_sync(
             logger.info(
                 "[jetdrive_client._subscribe_sync] total_frames=%d, dropped_frames=%d, "
                 "seq_gaps=%d, non_provider_frames=%d, accepted_providers=%s",
-                total_frames, dropped_frames, seq_gaps,
-                non_provider_frames, [hex(p) for p in accepted_providers],
+                total_frames,
+                dropped_frames,
+                seq_gaps,
+                non_provider_frames,
+                [hex(p) for p in accepted_providers],
             )
 
     return {

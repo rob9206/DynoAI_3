@@ -16,6 +16,7 @@ import struct
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -279,7 +280,7 @@ _live_data_event = threading.Event()
 # Allows the /live/drain endpoint to return every sample received since last drain,
 # enabling VE cell hit accumulation without loss. Uses _live_data_lock for synchronization.
 # maxlen=2000 gives ~1-2 seconds of buffer at typical rates (1000-2000 samples/sec).
-from collections import deque
+
 _sample_ring: deque[dict[str, Any]] = deque(maxlen=2000)
 
 # ---------------------------------------------------------------------------

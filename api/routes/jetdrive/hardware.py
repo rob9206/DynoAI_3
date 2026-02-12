@@ -44,7 +44,6 @@ from ._shared import (
 
 hardware_bp = Blueprint("jetdrive_hardware", __name__)
 
-
 # ---------------------------------------------------------------------------
 # Hardware Diagnostics
 # ---------------------------------------------------------------------------
@@ -157,7 +156,9 @@ def discover_providers():
         project_root = get_project_root()
         sys.path.insert(0, str(project_root))
 
-        from api.services.jetdrive.jetdrive_client import JetDriveConfig
+        from api.services.jetdrive.jetdrive_client import (
+            JetDriveConfig,
+        )
         from api.services.jetdrive.jetdrive_client import (
             discover_providers as async_discover,
         )
@@ -226,6 +227,8 @@ def discover_providers_multi():
     try:
         from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
+        )
+        from api.services.jetdrive.jetdrive_client import (
             discover_providers as _discover_providers,
         )
 
@@ -326,7 +329,9 @@ def _monitor_loop():
     project_root = get_project_root()
     sys.path.insert(0, str(project_root))
 
-    from api.services.jetdrive.jetdrive_client import JetDriveConfig
+    from api.services.jetdrive.jetdrive_client import (
+        JetDriveConfig,
+    )
     from api.services.jetdrive.jetdrive_client import (
         discover_providers as async_discover,
     )
@@ -435,7 +440,11 @@ def _live_capture_loop(requested_provider_id: int | None = None):
     from api.services.jetdrive.jetdrive_client import (
         JetDriveConfig,
         JetDriveSample,
+    )
+    from api.services.jetdrive.jetdrive_client import (
         discover_providers as _discover_providers,
+    )
+    from api.services.jetdrive.jetdrive_client import (
         subscribe,
     )
     from api.services.jetdrive.jetdrive_live_queue import (
@@ -879,11 +888,11 @@ def get_live_data():
 def drain_live_samples():
     """
     Drain all accumulated samples from the ring buffer since the last drain.
-    
+
     This endpoint returns every processed sample (not just the latest value)
     accumulated since the last call, enabling VE cell hit accumulation without
     loss. The ring buffer is cleared after reading.
-    
+
     Returns:
         JSON with:
         - samples: List of sample dicts (each has name, value, timestamp, etc.)
@@ -897,13 +906,15 @@ def drain_live_samples():
         _sample_ring.clear()
         capturing = _live_data.get("capturing", False)
         last_update_ts = _live_data.get("last_update_ts")
-    
-    return jsonify({
-        "samples": samples,
-        "count": len(samples),
-        "capturing": capturing,
-        "last_update_ts": last_update_ts,
-    })
+
+    return jsonify(
+        {
+            "samples": samples,
+            "count": len(samples),
+            "capturing": capturing,
+            "last_update_ts": last_update_ts,
+        }
+    )
 
 
 def _build_live_data_payload() -> dict[str, Any]:
@@ -1066,6 +1077,8 @@ def get_live_debug():
     """Get debug information about live capture status."""
     from api.services.jetdrive.jetdrive_client import (
         JetDriveConfig,
+    )
+    from api.services.jetdrive.jetdrive_client import (
         discover_providers as _discover_providers,
     )
 
@@ -1083,7 +1096,9 @@ def get_live_debug():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            providers = loop.run_until_complete(_discover_providers(config, timeout=5.0))
+            providers = loop.run_until_complete(
+                _discover_providers(config, timeout=5.0)
+            )
         finally:
             try:
                 loop.close()
@@ -1289,6 +1304,8 @@ def validate_hardware():
     try:
         from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
+        )
+        from api.services.jetdrive.jetdrive_client import (
             discover_providers as _discover_providers,
         )
 
@@ -1361,6 +1378,8 @@ def hardware_heartbeat():
     try:
         from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
+        )
+        from api.services.jetdrive.jetdrive_client import (
             discover_providers as _discover_providers,
         )
 
@@ -1405,6 +1424,8 @@ def connect_hardware():
     try:
         from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
+        )
+        from api.services.jetdrive.jetdrive_client import (
             discover_providers as _discover_providers,
         )
 
@@ -1468,6 +1489,8 @@ def hardware_status():
     try:
         from api.services.jetdrive.jetdrive_client import (
             JetDriveConfig,
+        )
+        from api.services.jetdrive.jetdrive_client import (
             discover_providers as _discover_providers,
         )
 
@@ -1781,9 +1804,7 @@ def pipeline_metrics():
                 "depth": ring_depth,
                 "capacity": ring_capacity,
                 "utilization_pct": (
-                    round(ring_depth / ring_capacity * 100, 1)
-                    if ring_capacity
-                    else 0
+                    round(ring_depth / ring_capacity * 100, 1) if ring_capacity else 0
                 ),
             },
             "queue": queue_stats,

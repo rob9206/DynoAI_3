@@ -192,7 +192,7 @@ class EngineProfile:
                 displacement_ci = (
                     math.pi
                     / 4.0
-                    * (build.short_block.bore ** 2)
+                    * (build.short_block.bore**2)
                     * build.short_block.stroke
                     * cylinders
                 )
@@ -228,7 +228,9 @@ class EngineProfile:
         if not use_prediction or max_hp == 0:
             cam_duration = build.cam.intake_duration_050 if build.cam else None
             if cam_duration:
-                hp_peak_rpm = max(2500, min(7000, int((cam_duration - 180) * 30 + 3200)))
+                hp_peak_rpm = max(
+                    2500, min(7000, int((cam_duration - 180) * 30 + 3200))
+                )
             else:
                 hp_peak_rpm = 4800
 
@@ -250,7 +252,7 @@ class EngineProfile:
 
         # Estimate idle RPM based on cam overlap
         idle_rpm = 900.0
-        if build.cam and hasattr(build.cam, 'overlap'):
+        if build.cam and hasattr(build.cam, "overlap"):
             overlap = build.cam.overlap
             if overlap > 60:  # High overlap cams need higher idle
                 idle_rpm = min(1200.0, 900.0 + (overlap - 60) * 5)
@@ -265,18 +267,26 @@ class EngineProfile:
             hp_peak_rpm=float(hp_peak_rpm),
             max_tq=max_tq,
             tq_peak_rpm=float(tq_peak_rpm),
-            num_cylinders=build.short_block.cylinders
-            if build.short_block and build.short_block.cylinders
-            else 2,
-            bore_inches=build.short_block.bore
-            if build.short_block and build.short_block.bore
-            else 4.0,
-            stroke_inches=build.short_block.stroke
-            if build.short_block and build.short_block.stroke
-            else 4.5,
-            compression_ratio=build.short_block.compression_ratio
-            if build.short_block and build.short_block.compression_ratio
-            else 10.0,
+            num_cylinders=(
+                build.short_block.cylinders
+                if build.short_block and build.short_block.cylinders
+                else 2
+            ),
+            bore_inches=(
+                build.short_block.bore
+                if build.short_block and build.short_block.bore
+                else 4.0
+            ),
+            stroke_inches=(
+                build.short_block.stroke
+                if build.short_block and build.short_block.stroke
+                else 4.5
+            ),
+            compression_ratio=(
+                build.short_block.compression_ratio
+                if build.short_block and build.short_block.compression_ratio
+                else 10.0
+            ),
             volumetric_efficiency_peak=ve_peak,
         )
 
@@ -511,7 +521,9 @@ class SimulatorConfig:
     # Behavior
     auto_pull: bool = False  # Auto-start pulls periodically
     auto_pull_interval_sec: float = 15.0
-    min_pull_duration_sec: float = 20.0  # Minimum time to stay in PULL state before transitioning to DECEL
+    min_pull_duration_sec: float = (
+        20.0  # Minimum time to stay in PULL state before transitioning to DECEL
+    )
 
     # Throttle response
     throttle_response_rate: float = 200.0  # TPS % per second (fast DBW/cable snap)
@@ -815,7 +827,7 @@ class DynoSimulator:
         # For simulator: Use the profile's dyno_inertia for tuning pull characteristics
         # For real dyno: Could override with actual drum specs from config
         dyno_inertia = float(profile.dyno_inertia)
-        
+
         # DISABLED: Real drum inertia override (use profile values for simulator tuning)
         # try:
         #     dyno_cfg = get_config().dyno
@@ -1238,7 +1250,9 @@ class DynoSimulator:
         # Combine factors
         if tps >= 80.0:
             # WOT: treat base torque as real output; apply only environment + knock.
-            effective_torque = base_torque * thermal_factor * air_density_factor * knock_factor
+            effective_torque = (
+                base_torque * thermal_factor * air_density_factor * knock_factor
+            )
             throttle_factor = 1.0
             ve_effective = 1.0
             pumping_effective = 0.0
@@ -1246,7 +1260,7 @@ class DynoSimulator:
         else:
             # Part-throttle: smooth non-linear reduction plus environment + knock.
             tps_norm = max(0.0, min(1.0, tps / 100.0))
-            throttle_factor = tps_norm ** 1.35
+            throttle_factor = tps_norm**1.35
             effective_torque = (
                 base_torque
                 * throttle_factor
@@ -1503,14 +1517,15 @@ class DynoSimulator:
     def trigger_pull(self, throttle_pct: float = 100.0):
         """
         Manually trigger a dyno pull.
-        
+
         Args:
             throttle_pct: Throttle position percentage (0-100). Default is 100% (WOT).
         """
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info(f"[SIMULATOR] trigger_pull called with throttle_pct={throttle_pct}")
-        
+
         with self._lock:
             if self.state == SimState.IDLE:
                 self.state = SimState.PULL
@@ -1523,8 +1538,10 @@ class DynoSimulator:
                 # Set throttle target and actual so pull starts at requested % (no carry-over from manual)
                 self.physics.tps_target = max(0.0, min(100.0, throttle_pct))
                 self.physics.tps_actual = self.physics.tps_target
-                
-                logger.info(f"[SIMULATOR] Pull started: tps_target={self.physics.tps_target}, tps_actual={self.physics.tps_actual}")
+
+                logger.info(
+                    f"[SIMULATOR] Pull started: tps_target={self.physics.tps_target}, tps_actual={self.physics.tps_actual}"
+                )
 
                 if self._on_state_change:
                     self._on_state_change(self.state)
@@ -1984,7 +2001,10 @@ class DynoSimulator:
         )
 
         # If we've reached redline but haven't met minimum duration, hold at redline
-        if self.physics.rpm >= profile.redline_rpm * 0.98 and elapsed < self.config.min_pull_duration_sec:
+        if (
+            self.physics.rpm >= profile.redline_rpm * 0.98
+            and elapsed < self.config.min_pull_duration_sec
+        ):
             # Clamp RPM to redline and maintain it until minimum duration elapses
             self.physics.rpm = min(self.physics.rpm, profile.redline_rpm)
             self.physics.angular_velocity = self._rpm_to_rad_s(self.physics.rpm)
@@ -2158,12 +2178,9 @@ class DynoSimulator:
                     self._handle_idle_state(dt_sim, profile)
 
                     # Auto-pull check
-                    if (
-                        self.config.auto_pull
-                        and (
+                    if self.config.auto_pull and (
                         time.time() - last_auto_pull
                         > self.config.auto_pull_interval_sec
-                    )
                     ):
                         self.state = SimState.PULL
                         self._pull_start_time = time.time()
