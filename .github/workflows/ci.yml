@@ -280,8 +280,9 @@ jobs:
           fi
 
           # Check integration-test (conditional job - must succeed if it ran, skip if skipped)
-          if [[ "${{ needs.integration-test.result }}" == "failure" ]]; then
-            echo "Integration tests failed"
+          if [[ "${{ needs.integration-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration-test.result }}" == "cancelled" ]]; then
+            echo "Integration tests failed or were cancelled"
             exit 1
           fi
 
