@@ -38,16 +38,20 @@ jobs:
           pip install ruff black isort mypy bandit
 
       - name: Run Ruff
-        run: ruff check . --output-format=github || true
+        continue-on-error: true
+        run: ruff check . --output-format=github
 
       - name: Run Black check
-        run: black --check --diff . || true
+        continue-on-error: true
+        run: black --check --diff .
 
       - name: Run isort check
-        run: isort --check-only --diff . || true
+        continue-on-error: true
+        run: isort --check-only --diff .
 
       - name: Run Bandit security check
-        run: bandit -r api dynoai -ll --skip B101 || true
+        continue-on-error: true
+        run: bandit -r api dynoai -ll --skip B101
 
   python-test:
     name: Python Tests (${{ matrix.python-version }})
@@ -144,10 +148,12 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint || true
+        continue-on-error: true
+        run: npm run lint
 
       - name: TypeScript type check
-        run: npx tsc --noEmit || true
+        continue-on-error: true
+        run: npx tsc --noEmit
 
   frontend-build:
     name: Frontend Build
