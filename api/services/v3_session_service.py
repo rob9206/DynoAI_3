@@ -191,7 +191,9 @@ def _materialize_latest_run(session_id: str, session: Any) -> Dict[str, Any]:
     rpm_bins = latest.get("rpm_bins")
     map_bins = latest.get("map_bins")
     if correction_grid is None or rpm_bins is None or map_bins is None:
-        raise ValidationError("Cached v3 corrections are incomplete; run Analyze/Update again.")
+        raise ValidationError(
+            "Cached v3 corrections are incomplete; run Analyze/Update again."
+        )
 
     correction_array = np.asarray(correction_grid, dtype=np.float64)
     percent_delta_array = _multiplier_to_percent_grid(correction_array)
@@ -228,7 +230,9 @@ def _materialize_latest_run(session_id: str, session: Any) -> Dict[str, Any]:
         writer = csv.writer(handle)
         writer.writerow(["RPM\\MAP", *map_headers])
         for row_idx, rpm in enumerate(rpm_headers):
-            row_values = [_format_float(v, 6) for v in percent_delta_array[row_idx].tolist()]
+            row_values = [
+                _format_float(v, 6) for v in percent_delta_array[row_idx].tolist()
+            ]
             writer.writerow([rpm, *row_values])
 
     # Legacy apply-compatible table (preferred by /api/apply if present).
@@ -236,7 +240,9 @@ def _materialize_latest_run(session_id: str, session: Any) -> Dict[str, Any]:
         writer = csv.writer(handle)
         writer.writerow(["RPM", *map_headers])
         for row_idx, rpm in enumerate(rpm_headers):
-            row_values = [_format_float(v, 6) for v in percent_delta_array[row_idx].tolist()]
+            row_values = [
+                _format_float(v, 6) for v in percent_delta_array[row_idx].tolist()
+            ]
             writer.writerow([rpm, *row_values])
 
     materialized_at = _iso_utc_now()
