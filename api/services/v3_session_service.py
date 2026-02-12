@@ -124,7 +124,11 @@ def _iso_utc_now() -> str:
 
 def _format_float(value: float, precision: int = 6) -> str:
     """Format float for CSV/JSON while avoiding noisy trailing zeros."""
-    return f"{float(value):.{precision}f}".rstrip("0").rstrip(".")
+    formatted = f"{float(value):.{precision}f}"
+    # Only strip trailing zeros after decimal point, not all trailing zeros
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted
 
 
 def _normalize_multiplier_grid(
