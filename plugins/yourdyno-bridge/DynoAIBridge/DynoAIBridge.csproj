@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net481</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Library</OutputType>
+    <RootNamespace>DynoAIBridge</RootNamespace>
+    <AssemblyName>DynoAIBridge</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Description>DynoAI Bridge Plugin for YourDyno - streams live dyno data to DynoAI via TCP JSON-lines</Description>
+    <Version>1.0.0</Version>
+    <Authors>DynoAI</Authors>
+  </PropertyGroup>
+
+  <!-- YourDyno reference DLLs - copy from YourDyno install directory -->
+  <ItemGroup>
+    <Reference Include="PluginContracts">
+      <HintPath>..\lib\PluginContracts.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="DynoDataConnection">
+      <HintPath>..\lib\DynoDataConnection.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\lib\Newtonsoft.Json.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+# Build outputs
+bin/
+obj/
+
+# Reference DLLs copied from YourDyno (not redistributable)
+lib/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# NuGet
+packages/
