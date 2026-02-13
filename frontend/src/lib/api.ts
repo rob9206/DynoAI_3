@@ -366,6 +366,35 @@ export interface ParseWP8Response {
   error?: string;
 }
 
+// =============================================================================
+// YourDyno Import API
+// =============================================================================
+
+export interface YourDynoFile {
+  id: string;
+  name: string;
+  size_kb: number;
+  mtime: number;
+  type: 'yourdyno';
+  extension?: string;
+}
+
+export interface YourDynoDiscoveryResponse {
+  count: number;
+  files: YourDynoFile[];
+}
+
+export interface ParseYourDynoRunResponse {
+  success: boolean;
+  rows?: number;
+  columns?: string[];
+  normalized_columns?: string[];
+  detected_columns?: Record<string, string>;
+  preview?: Record<string, unknown>[];
+  source_path?: string;
+  error?: string;
+}
+
 /** Check Power Core integration status */
 export const getPowerCoreStatus = async (): Promise<PowerCoreStatusResponse> => {
   const response = await api.get('/api/powercore/status');
@@ -405,6 +434,18 @@ export const parseTune = async (fileId: string): Promise<ParseTuneResponse> => {
 /** Parse a WP8 dyno run file using file_id */
 export const parseWP8 = async (fileId: string): Promise<ParseWP8Response> => {
   const response = await api.post('/api/powercore/parse/wp8', { file_id: fileId });
+  return response.data;
+};
+
+/** Discover available YourDyno run/export files */
+export const discoverYourDynoRuns = async (): Promise<YourDynoDiscoveryResponse> => {
+  const response = await api.get('/api/yourdyno/discover/runs');
+  return response.data;
+};
+
+/** Parse a YourDyno run/export file using file_id */
+export const parseYourDynoRun = async (fileId: string): Promise<ParseYourDynoRunResponse> => {
+  const response = await api.post('/api/yourdyno/import/parse', { file_id: fileId });
   return response.data;
 };
 

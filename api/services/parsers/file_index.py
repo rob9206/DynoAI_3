@@ -30,6 +30,7 @@ class FileType(str, Enum):
     LOG = "log"
     TUNE = "tune"
     WP8 = "wp8"
+    YOURDYNO = "yourdyno"
 
 
 @dataclass

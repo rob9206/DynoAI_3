@@ -315,7 +315,11 @@ export function SetupWizard({
                     <Check className="w-5 h-5 text-green-400" />
                     <div>
                       <p className="text-sm font-medium text-green-400">
-                        {tuneImport.source === 'pvv' ? 'PVV File Imported' : 'Preset Selected'}
+                        {tuneImport.source === 'pvv'
+                          ? 'PVV File Imported'
+                          : tuneImport.source === 'yourdyno'
+                            ? 'YourDyno Run Loaded'
+                            : 'Preset Selected'}
                       </p>
                       <p className="text-xs text-zinc-400">{tuneImport.sourceName}</p>
                     </div>

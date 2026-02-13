@@ -38,6 +38,7 @@ from api.services.powercore_integration import (
     parse_pvv_tune,
     powervision_log_to_dynoai_format,
 )
+from api.services.yourdyno import parse_yourdyno_run
 
 # Import TuneLab-inspired filtering and binning modules
 from dynoai.core.signal_filters import (
@@ -78,6 +79,7 @@ class DataSource(str, Enum):
 
     POWER_VISION = "power_vision"
     JETDRIVE = "jetdrive"
+    YOURDYNO = "yourdyno"
     CSV = "csv"
     SIMULATION = "simulation"
 
@@ -446,6 +448,27 @@ class AutoTuneWorkflow:
             return True
         except Exception as e:
             session.errors.append(f"JetDrive CSV import failed: {e}")
+            session.status = "error"
+            return False
+
+    def import_yourdyno_run(self, session: AutoTuneSession, run_path: str) -> bool:
+        """
+        Import a YourDyno run/export file through the YourDyno parser.
+
+        Returns True if successful, False otherwise.
+        """
+        try:
+            session.log_file = run_path
+            session.data_source = DataSource.YOURDYNO
+
+            parsed = parse_yourdyno_run(run_path)
+            session.dynoai_data = parsed.normalized_data
+
+            self._extract_peak_performance(session)
+            session.status = "log_imported"
+            return True
+        except Exception as e:
+            session.errors.append(f"YourDyno import failed: {e}")
             session.status = "error"
             return False
 
@@ -1036,6 +1059,9 @@ class AutoTuneWorkflow:
         # Import log based on source type
         if data_source == DataSource.JETDRIVE:
             if not self.import_jetdrive_csv(session, log_path):
+                return session
+        elif data_source == DataSource.YOURDYNO:
+            if not self.import_yourdyno_run(session, log_path):
                 return session
         else:
             if not self.import_log(session, log_path):
