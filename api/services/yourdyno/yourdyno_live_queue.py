@@ -131,9 +131,7 @@ class YourDynoLiveQueueManager:
                 self.stats.samples_dropped += 1
 
     @staticmethod
-    def _aggregate_samples(
-        samples: list[YourDynoSample]
-    ) -> DynoDataPointSchema | None:
+    def _aggregate_samples(samples: list[YourDynoSample]) -> DynoDataPointSchema | None:
         if not samples:
             return None
 
