@@ -105,9 +105,10 @@ export default function JetDriveAutoTunePage() {
     const [isStartingSim, setIsStartingSim] = useState(false);
     const [isTriggeringPull, setIsTriggeringPull] = useState(false);
     const [simThrottle, setSimThrottle] = useState(0);
+    const [activeLiveSource, setActiveLiveSource] = useState<'jetdrive' | 'yourdyno'>('jetdrive');
     const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
-    const live = useJetDriveLive({
+    const jetdriveLive = useJetDriveLive({
         apiUrl: API_BASE,
         autoConnect: true,
         pollInterval: 800,
@@ -115,22 +116,44 @@ export default function JetDriveAutoTunePage() {
         isSimulatorActive,
     });
 
+    const yourdynoLive = useYourDynoLive({
+        apiUrl: YOURDYNO_API_BASE,
+        autoConnect: true,
+        pollInterval: 800,
+        useSse: true,
+        isSimulatorActive: false,
+    });
+
+    const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
+
     const isActive = (path: string) =>
         location.pathname === path || location.pathname.startsWith(`${path}/`);
 
+    const stopSimulator = useCallback(async (silent?: boolean) => {
+        try {
+            await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' });
+            await jetdriveLive.clearChannels();
+            setIsSimulatorActive(false);
+            setSimThrottle(0);
+            if (!silent) {
+                toast.info('Simulator stopped');
+            }
+        } catch (error) {
+            if (!silent) {
+                toast.error('Failed to stop simulator');
+            }
+            console.error('Simulator stop error:', error);
+        }
+    }, [jetdriveLive]);
+
     const handleToggleSimulator = async () => {
+        if (activeLiveSource === 'yourdyno') {
+            toast.info('Simulator is only available with JetDrive source.');
+            return;
+        }
         if (isSimulatorActive) {
             // Stop simulator
-            try {
-                await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' });
-                await live.clearChannels();
-                setIsSimulatorActive(false);
-                setSimThrottle(0);
-                toast.info('Simulator stopped');
-            } catch (error) {
-                toast.error('Failed to stop simulator');
-                console.error('Simulator stop error:', error);
-            }
+            await stopSimulator();
         } else {
             // Start simulator with default profile
             setIsStartingSim(true);
@@ -173,6 +196,13 @@ export default function JetDriveAutoTunePage() {
         }
     };
 
+    useEffect(() => {
+        if (activeLiveSource === 'yourdyno' && isSimulatorActive) {
+            void stopSimulator(true);
+            toast.info('Simulator controls are only available with JetDrive source.');
+        }
+    }, [activeLiveSource, isSimulatorActive, stopSimulator]);
+
     const handleThrottleChange = (value: number) => {
         // Clamp value between 0-100
         const clampedValue = Math.max(0, Math.min(100, value));
@@ -201,8 +231,8 @@ export default function JetDriveAutoTunePage() {
 
     const handleTriggerPull = async () => {
         if (!isSimulatorActive) return;
-        if (live.simState && live.simState !== 'idle') {
-            toast.warning(`Cannot trigger pull while simulator is ${live.simState}`);
+        if (jetdriveLive.simState && jetdriveLive.simState !== 'idle') {
+            toast.warning(`Cannot trigger pull while simulator is ${jetdriveLive.simState}`);
             return;
         }
 
@@ -282,20 +312,50 @@ export default function JetDriveAutoTunePage() {
                 </nav>
 
                 <div className="flex items-center gap-4 text-xs text-zinc-300">
-                    <div className="flex items-center gap-2">
-                        <span
+                    <div className="flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/70 p-1">
+                        <Button
+                            type="button"
+                            variant={activeLiveSource === 'jetdrive' ? 'default' : 'ghost'}
+                            size="sm"
                             className={cn(
-                                'h-2 w-2 rounded-full',
-                                live.isConnected ? 'bg-green-500 animate-pulse' : 'bg-zinc-600',
+                                'h-7 px-3 text-[11px] font-semibold',
+                                activeLiveSource === 'jetdrive'
+                                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                    : 'text-zinc-300 hover:text-white',
                             )}
-                        />
-                        <span>{live.isConnected ? 'Connected' : 'Disconnected'}</span>
+                            onClick={() => setActiveLiveSource('jetdrive')}
+                        >
+                            JetDrive
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={activeLiveSource === 'yourdyno' ? 'default' : 'ghost'}
+                            size="sm"
+                            className={cn(
+                                'h-7 px-3 text-[11px] font-semibold',
+                                activeLiveSource === 'yourdyno'
+                                    ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                                    : 'text-zinc-300 hover:text-white',
+                            )}
+                            onClick={() => setActiveLiveSource('yourdyno')}
+                        >
+                            YourDyno
+                        </Button>
                     </div>
                     <div className="flex items-center gap-2">
                         <span
                             className={cn(
                                 'h-2 w-2 rounded-full',
-                                live.isCapturing ? 'bg-red-500 animate-pulse' : 'bg-zinc-600',
+                                activeLive.isConnected ? 'bg-green-500 animate-pulse' : 'bg-zinc-600',
+                            )}
+                        />
+                        <span>{activeLive.isConnected ? 'Connected' : 'Disconnected'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span
+                            className={cn(
+                                'h-2 w-2 rounded-full',
+                                activeLive.isCapturing ? 'bg-red-500 animate-pulse' : 'bg-zinc-600',
                             )}
                         />
                         <span>Recording</span>
@@ -308,10 +368,11 @@ export default function JetDriveAutoTunePage() {
                             'h-7 px-3 text-xs font-medium transition-colors',
                             isSimulatorActive 
                                 ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/40' 
-                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800',
+                            activeLiveSource === 'yourdyno' && 'opacity-60 cursor-not-allowed',
                         )}
                         onClick={handleToggleSimulator}
-                        disabled={isStartingSim}
+                        disabled={isStartingSim || activeLiveSource === 'yourdyno'}
                     >
                         {isStartingSim ? 'Starting...' : isSimulatorActive ? 'Sim ON' : 'Sim OFF'}
                     </Button>
@@ -348,13 +409,13 @@ export default function JetDriveAutoTunePage() {
                                 />
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-zinc-400">State: {live.simState ?? 'unknown'}</span>
+                                <span className="text-xs text-zinc-400">State: {jetdriveLive.simState ?? 'unknown'}</span>
                                 <Button
                                     type="button"
                                     size="sm"
                                     className="h-7 bg-orange-600 hover:bg-orange-500 text-white"
                                     onClick={handleTriggerPull}
-                                    disabled={isTriggeringPull || !!(live.simState && live.simState !== 'idle')}
+                                    disabled={isTriggeringPull || !!(jetdriveLive.simState && jetdriveLive.simState !== 'idle')}
                                 >
                                     <Play className="mr-1.5 h-3.5 w-3.5" />
                                     {isTriggeringPull ? 'Starting...' : 'Trigger Pull'}
@@ -365,7 +426,7 @@ export default function JetDriveAutoTunePage() {
                 )}
                 <div className={cn('flex-1 min-h-0', isSimulatorActive && 'ring-2 ring-yellow-500/70 rounded-md m-1')}>
                     <CommandCenter
-                        live={live}
+                        live={activeLive}
                         hardwareOpen={hardwareOpen}
                         onHardwareOpenChange={setHardwareOpen}
                     />
