@@ -22,7 +22,6 @@ from ._shared import (
     _sample_ring,
     clear_live_buffers,
     get_client,
-    logger,
     mark_status,
 )
 

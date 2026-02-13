@@ -130,8 +130,9 @@ class YourDynoLiveQueueManager:
             else:
                 self.stats.samples_dropped += 1
 
+    @staticmethod
     def _aggregate_samples(
-        self, samples: list[YourDynoSample]
+        samples: list[YourDynoSample]
     ) -> DynoDataPointSchema | None:
         if not samples:
             return None

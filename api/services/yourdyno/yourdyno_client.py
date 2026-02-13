@@ -306,7 +306,8 @@ class YourDynoClient:
         if self._on_sample:
             self._on_sample(sample)
 
-    def _parse_sample(self, payload: Any) -> YourDynoSample | None:
+    @staticmethod
+    def _parse_sample(payload: Any) -> YourDynoSample | None:
         if not isinstance(payload, dict):
             return None
 
