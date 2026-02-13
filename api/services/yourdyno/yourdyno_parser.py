@@ -9,8 +9,8 @@ Phase 1a focuses on post-run import readiness:
 
 from __future__ import annotations
 
-import re
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -236,7 +236,9 @@ def yourdyno_to_dynoai_format(
     return (out, detected) if return_detected else out
 
 
-def _find_best_match(normalized_cols: dict[str, str], patterns: list[str]) -> str | None:
+def _find_best_match(
+    normalized_cols: dict[str, str], patterns: list[str]
+) -> str | None:
     # Exact normalized match first
     for pattern in patterns:
         p = _norm(pattern)
@@ -268,4 +270,3 @@ __all__ = [
     "parse_yourdyno_run",
     "yourdyno_to_dynoai_format",
 ]
-

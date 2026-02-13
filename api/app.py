@@ -35,8 +35,7 @@ from api.metrics import init_metrics, record_analysis, record_file_upload
 
 # Configure logging to INFO level so logger.info() calls are visible
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 load_dotenv()  # Load environment variables from .env if present
@@ -288,6 +287,7 @@ except Exception as e:  # pragma: no cover
 # Register Engine Analyzer blueprint
 try:
     from api.routes.engine_analyzer import engine_analyzer_bp
+
     app.register_blueprint(engine_analyzer_bp)
     print("[+] Engine Analyzer registered at /api/ea")
 except Exception as e:  # pragma: no cover
@@ -305,6 +305,7 @@ except Exception as e:  # pragma: no cover
 # Register v3 Accelerated Calibration blueprint
 try:
     from api.routes.v3_session import v3_session_bp
+
     app.register_blueprint(v3_session_bp)
     print("[+] V3 Accelerated Calibration registered at /api/v3")
 except Exception as e:  # pragma: no cover
@@ -1133,13 +1134,15 @@ def apply_ve_corrections():
 
     runs_candidates = [
         config.storage.runs_folder / run_id,  # configurable data/runs
-        PROJECT_ROOT / "runs" / run_id,       # JetDrive legacy/default runs path
+        PROJECT_ROOT / "runs" / run_id,  # JetDrive legacy/default runs path
     ]
     for runs_path in runs_candidates:
         if runs_path.exists():
             run_dir = runs_path
             output_candidates = [runs_path / "output", runs_path]
-            output_dir = next((path for path in output_candidates if path.exists()), runs_path)
+            output_dir = next(
+                (path for path in output_candidates if path.exists()), runs_path
+            )
             break
     if not run_dir:
         outputs_path = config.storage.output_folder / run_id
@@ -1217,7 +1220,9 @@ def apply_ve_corrections():
                 return len(rpm_rows), len(header) - 1, header[1:], rpm_rows
 
         base_rows, base_cols, _, _ = _read_grid_shape(base_ve_path)
-        factor_rows, factor_cols, factor_map_bins, factor_rpm_rows = _read_grid_shape(ve_correction_path)
+        factor_rows, factor_cols, factor_map_bins, factor_rpm_rows = _read_grid_shape(
+            ve_correction_path
+        )
 
         if (base_rows, base_cols) != (factor_rows, factor_cols):
             synthetic_base_path = output_dir / "VE_Base_Synthetic_100.csv"
@@ -1314,13 +1319,15 @@ def rollback_ve_corrections():
 
     runs_candidates = [
         config.storage.runs_folder / run_id,  # configurable data/runs
-        PROJECT_ROOT / "runs" / run_id,       # JetDrive legacy/default runs path
+        PROJECT_ROOT / "runs" / run_id,  # JetDrive legacy/default runs path
     ]
     for runs_path in runs_candidates:
         if runs_path.exists():
             run_dir = runs_path
             output_candidates = [runs_path / "output", runs_path]
-            output_dir = next((path for path in output_candidates if path.exists()), runs_path)
+            output_dir = next(
+                (path for path in output_candidates if path.exists()), runs_path
+            )
             break
     if not run_dir:
         outputs_path = config.storage.output_folder / run_id

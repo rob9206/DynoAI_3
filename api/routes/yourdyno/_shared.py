@@ -48,7 +48,9 @@ def clear_live_buffers() -> None:
         _live_data_event.clear()
 
 
-def mark_status(status: str, connected: bool | None = None, error: str | None = None) -> None:
+def mark_status(
+    status: str, connected: bool | None = None, error: str | None = None
+) -> None:
     with _live_data_lock:
         _live_data["status"] = status
         if connected is not None:
@@ -56,4 +58,3 @@ def mark_status(status: str, connected: bool | None = None, error: str | None = 
         if error is not None:
             _live_data["error"] = error
         _live_data["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-

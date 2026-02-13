@@ -50,11 +50,16 @@ def parse_run():
     if "file_id" in data:
         file_index = get_file_index()
         try:
-            safe_path = file_index.resolve(data["file_id"], expected_type=FileType.YOURDYNO)
+            safe_path = file_index.resolve(
+                data["file_id"], expected_type=FileType.YOURDYNO
+            )
         except KeyError:
             return jsonify({"error": "Invalid or expired file_id"}), 400
         except ValueError:
-            return jsonify({"error": "File type mismatch: expected YourDyno run file"}), 400
+            return (
+                jsonify({"error": "File type mismatch: expected YourDyno run file"}),
+                400,
+            )
         except FileNotFoundError:
             return jsonify({"error": "File no longer exists"}), 404
     elif "path" in data:
@@ -80,7 +85,10 @@ def parse_run():
             }
         )
     except Exception:
-        return jsonify({"success": False, "error": "Failed to parse YourDyno run file"}), 500
+        return (
+            jsonify({"success": False, "error": "Failed to parse YourDyno run file"}),
+            500,
+        )
 
 
 @import_bp.route("/formats", methods=["GET"])
@@ -106,4 +114,3 @@ def supported_formats():
             ],
         }
     )
-

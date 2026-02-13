@@ -83,7 +83,10 @@ class YourDynoLiveQueueManager:
             if self._last_window_start_ms == 0:
                 self._last_window_start_ms = sample.timestamp_ms
 
-            if sample.timestamp_ms - self._last_window_start_ms >= AGGREGATION_WINDOW_MS:
+            if (
+                sample.timestamp_ms - self._last_window_start_ms
+                >= AGGREGATION_WINDOW_MS
+            ):
                 self._flush_aggregation_window()
                 self._last_window_start_ms = sample.timestamp_ms
                 self._sample_buffer.clear()
@@ -167,7 +170,9 @@ class YourDynoLiveQueueManager:
                         self.stats.samples_written += 1
                 return True
             except Exception as exc:
-                logger.error("Error processing yourdyno queue item %s: %s", item.id, exc)
+                logger.error(
+                    "Error processing yourdyno queue item %s: %s", item.id, exc
+                )
                 return False
 
         self.queue.start_processing(processor, interval=BATCH_FLUSH_INTERVAL_SEC)
@@ -286,4 +291,3 @@ def reset_yourdyno_live_queue_manager() -> None:
         if _yourdyno_live_queue_manager is not None:
             _yourdyno_live_queue_manager.stop_processing()
             _yourdyno_live_queue_manager = None
-

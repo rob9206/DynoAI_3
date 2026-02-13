@@ -162,7 +162,9 @@ def start_live_capture():
         elif status_type == "hello":
             mark_status("hello", connected=True)
         elif status_type == "error":
-            mark_status("error", connected=False, error=str(status.get("message", "error")))
+            mark_status(
+                "error", connected=False, error=str(status.get("message", "error"))
+            )
 
     client = get_client()
     client.start(on_sample=on_sample, on_status=on_status)
@@ -268,15 +270,19 @@ def monitor_status_alias():
         status = _live_data.get("status", "idle")
 
     provider_name = "DynoAIBridge" if connected else "YourDyno Bridge"
-    providers = [
-        {
-            "provider_id": 1,
-            "name": provider_name,
-            "host": YourDynoClientConfig.from_env().host,
-            "channel_count": channel_count,
-            "status": status,
-        }
-    ] if connected else []
+    providers = (
+        [
+            {
+                "provider_id": 1,
+                "name": provider_name,
+                "host": YourDynoClientConfig.from_env().host,
+                "channel_count": channel_count,
+                "status": status,
+            }
+        ]
+        if connected
+        else []
+    )
 
     return jsonify(
         {
@@ -329,4 +335,3 @@ def reset_queue_alias():
     reset_yourdyno_live_queue_manager()
     clear_live_buffers()
     return jsonify({"status": "reset"})
-

@@ -386,4 +386,3 @@ def _to_timestamp_ms(ts: float) -> int:
     if ts > 1e11:
         return int(ts)
     return int(ts * 1000.0)
-
