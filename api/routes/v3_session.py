@@ -72,9 +72,12 @@ def ingest_pull(session_id: str):
     if not data:
         raise ValidationError("Request body required (pull data)")
 
-    for field in ("rpm", "map_kpa", "ve"):
-        if field not in data:
-            raise ValidationError(f"'{field}' array is required")
+    # Validation: Requires either 've' OR 'afr' (plus rpm/map)
+    if not (
+        ("rpm" in data and "map_kpa" in data) and 
+        ("ve" in data or "afr" in data)
+    ):
+        raise ValidationError("Request requires 'rpm' and 'map_kpa', plus either 've' or 'afr'")
 
     from api.services.v3_session_service import ingest_pull as _ingest
     try:
@@ -82,7 +85,10 @@ def ingest_pull(session_id: str):
             session_id,
             rpm=data["rpm"],
             map_kpa=data["map_kpa"],
-            ve=data["ve"],
+            ve=data.get("ve"),
+            afr=data.get("afr"),
+            target_afr=data.get("target_afr"),
+            base_ve=data.get("base_ve"),
         )
     except KeyError:
         raise NotFoundError(resource="V3 Session", identifier=session_id)

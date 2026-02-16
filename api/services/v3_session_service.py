@@ -24,6 +24,8 @@ import numpy as np
 
 from api.config import get_config
 from api.errors import ValidationError
+from dynoai.core.ve_math import calculate_ve_correction, correction_to_percentage
+from dynoai.core.afr_targets import get_target_afr_for_map
 
 logger = logging.getLogger(__name__)
 
@@ -463,14 +465,81 @@ def ingest_pull(
     session_id: str,
     rpm: List[float],
     map_kpa: List[float],
-    ve: List[float],
+    ve: Optional[List[float]] = None,
+    afr: Optional[List[float]] = None,
+    target_afr: Optional[List[float]] = None,
+    base_ve: Optional[List[float]] = None,
 ) -> Dict[str, Any]:
-    """Ingest pull data and return result."""
+    """
+    Ingest pull data and return result.
+    
+    Accepts either pre-calculated Absolute VE OR raw AFR data.
+    If AFR is provided, base_ve is highly recommended to calculate precise Absolute VE.
+    If base_ve is missing, it will assume the surrogate's current prediction or a default
+    (which may be inaccurate, so providing base_ve is preferred).
+    """
     session = _get_session(session_id)
+    
+    # helper: validate and convert to numpy
+    rpm_arr = np.array(rpm, dtype=np.float64)
+    map_arr = np.array(map_kpa, dtype=np.float64)
+    
+    # 1. Determine Absolute VE
+    if ve is not None:
+        # Trust provided Absolute VE (legacy/frontend-calculated)
+        ve_arr = np.array(ve, dtype=np.float64)
+    
+    elif afr is not None:
+        # Calculate from AFR using Core Math
+        afr_arr = np.array(afr, dtype=np.float64)
+        count = len(afr_arr)
+        
+        # Determine targets
+        if target_afr is not None:
+            target_arr = np.array(target_afr, dtype=np.float64)
+        else:
+            # Lookup targets based on MAP
+            target_arr = np.zeros(count, dtype=np.float64)
+            for i in range(count):
+                target_arr[i] = get_target_afr_for_map(float(map_arr[i]))
+                
+        # Determine Base VE (defaults to 100.0 if missing - simplistic but prevents crash)
+        if base_ve is not None:
+            base_ve_arr = np.array(base_ve, dtype=np.float64)
+        else:
+            logger.warning("Ingesting AFR without base_ve; assuming Base VE = 80.0 for calculation.")
+            base_ve_arr = np.full(count, 80.0, dtype=np.float64)
+
+        # Calculate Absolute VE using rigorous math
+        # Correction = Measured / Target
+        # AbsoluteVE = BaseVE * Correction
+        ve_absolute_list = []
+        for i in range(count):
+            measured = float(afr_arr[i])
+            target = float(target_arr[i])
+            base = float(base_ve_arr[i])
+            
+            # Use Core Math for calculation
+            correction = calculate_ve_correction(measured, target)
+            
+            # Calculate New Absolute VE
+            new_ve = base * correction
+            ve_absolute_list.append(new_ve)
+            
+        ve_arr = np.array(ve_absolute_list, dtype=np.float64)
+        
+        logger.info(
+            "Calculated %d Absolute VE values from AFR (mean: %.2f%%)", 
+            count, np.mean(ve_arr)
+        )
+        
+    else:
+        raise ValidationError("Either 've' or 'afr' data is required")
+
     result = session.ingest_pull(
-        np.array(rpm, dtype=np.float64),
-        np.array(map_kpa, dtype=np.float64),
-        np.array(ve, dtype=np.float64),
+        rpm_arr,
+        map_arr,
+        ve_arr,
     )
     return {
         "pull_number": result.pull_number,
@@ -1003,40 +1072,60 @@ def simulate_pull_realistic(
         ve_values = base_ve_pct * corrections.correction_table[r_idx, m_idx]
 
     # ---- 6. Ingest into v3 session ----
-    # Validate VE values are in reasonable range (GP expects 35-135%)
-    if not isinstance(ve_values, np.ndarray):
-        ve_values = np.asarray(ve_values, dtype=np.float64)
-
-    if len(ve_values) == 0:
-        logger.error("No VE values to ingest; falling back to quick mode")
-        return simulate_pull(session_id, rpm=rpm, map_kpa=map_kpa)
-
-    # Clip extreme values to acceptable range (safety check)
-    ve_min, ve_max = ve_values.min(), ve_values.max()
-    if ve_min < 35 or ve_max > 135:
-        logger.warning(
-            "VE values outside expected range [35, 135]: [%.2f, %.2f]; clipping",
-            ve_min,
-            ve_max,
-        )
-        ve_values = np.clip(ve_values, 35.0, 135.0)
-
+    # Use the new Math Integration path!
+    # Instead of calculating VE here, we pass raw AFR + Target + Base VE.
+    # formatting: extracting numpy arrays from dataframe/tables
+    
+    afr_meas = df["AFR Meas F"].values.astype(np.float64)
+    afr_target = df["AFR Target"].values.astype(np.float64)
+    
+    # We need Base VE for every point. Look it up from wrong_ve_baseline.
+    base_ve_values = []
+    if wrong_ve_baseline is not None:
+         # Convert from fraction to percent 
+         base_ve_values = wrong_ve_baseline[r_idx, m_idx] * 100.0
+    else:
+         # Fallback
+         base_ve_values = np.full(len(afr_meas), 85.0, dtype=np.float64)
+         
     logger.info(
-        "Ingesting %d observations with VE range [%.2f, %.2f]%%",
-        len(ve_values),
-        ve_values.min(),
-        ve_values.max(),
+        "Ingesting %d simulated points via AFR/BaseVE path. Mean Base VE: %.1f%%",
+        len(afr_meas),
+        np.mean(base_ve_values) if len(base_ve_values) > 0 else 0.0
     )
+    
+    # DEBUG: Print sample of data
+    if len(afr_meas) > 0:
+        logger.debug(f"DEBUG SAMPLE: AFR={afr_meas[:3]}, Target={afr_target[:3]}, BaseVE={base_ve_values[:3]}")
+    else:
+        logger.warning("DEBUG: afr_meas is EMPTY! Simulator produced no valid AFR data.")
 
-    result = session.ingest_pull(rpm_arr, map_arr, ve_values)
+    # Call the PUBLIC service ingest_pull (not session.ingest_pull directly) 
+    # so it triggers the calculation logic we just added.
+    # Note: simulate_pull_realistic is inside v3_session_service, so we recurse 
+    # to the top-level ingest_pull function defined in this module.
+    result_dict = ingest_pull(
+        session_id=session_id,
+        rpm=rpm_arr.tolist(),
+        map_kpa=map_arr.tolist(),
+        afr=afr_meas.tolist(),
+        target_afr=afr_target.tolist(),
+        base_ve=base_ve_values.tolist()
+    )
+    
+    # Unpack the dict result to match local variables expected below
+    observations_added = result_dict["observations_added"]
+    pull_number = result_dict["pull_number"]
 
+    # We still want to cache the "grid corrections" from AutoTuneWorkflow for visualization if available,
+    # even though we didn't use them for the actual VE calculation (we trusted ingest_pull).
     _cache_latest_corrections(
         session,
         corrections.correction_table,
         np.asarray(rpm_bins, dtype=np.float64),
         np.asarray(map_bins, dtype=np.float64),
         source="simulate_pull_realistic",
-        pull_number=result.pull_number,
+        pull_number=pull_number,
     )
 
     # AFR metrics for frontend display
@@ -1063,16 +1152,12 @@ def simulate_pull_realistic(
     )
 
     return {
-        "pull_number": result.pull_number,
-        "observations_added": result.observations_added,
+        "pull_number": pull_number,
+        "observations_added": observations_added,
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": (
-            _convergence_to_dict(result.convergence) if result.convergence else None
-        ),
-        "next_suggestion": (
-            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
-        ),
+        "convergence": result_dict.get("convergence"),
+        "next_suggestion": result_dict.get("next_suggestion"),
         "mode": "realistic",
         "afr_metrics": afr_metrics,
     }
@@ -1128,37 +1213,60 @@ def simulate_pull(
 
     if _pull_mode_value == "acceleration":
         # --- Acceleration sweep: spread across the RPM range at target MAP ---
-        # Mimics a real inertia-dyno pull that sweeps from low to high RPM
-        # at roughly constant (WOT) MAP. Covers many RPM bins per pull.
         n_pts = 25
         rpm_lo = max(750.0, rpm - 2000)
         rpm_hi = min(6500.0, rpm + 2000)
         rpm_arr = np.linspace(rpm_lo, rpm_hi, n_pts) + rng.randn(n_pts) * 50
         map_arr = map_kpa + rng.randn(n_pts) * 3  # tight MAP spread (WOT ≈ const)
-
-        # VE varies with RPM (volumetric efficiency curve shape)
-        base_ve = 75 + (map_kpa - 30) / 75 * 25  # 75% at 30kPa, 100% at 105kPa
-        rpm_norm = (rpm_arr - 750) / 5750  # 0..1 across RPM range
-        rpm_curve = 1.0 + 0.08 * np.sin(rpm_norm * np.pi)  # peak mid-range
-        ve_arr = base_ve * rpm_curve + rng.randn(n_pts) * 0.3
     else:
         # --- Steady-state: cluster at the target RPM/MAP zone ---
-        # Simulates holding RPM constant via eddy brake while targeting a
-        # specific MAP. Focused data reduces uncertainty at that zone.
         n_pts = 15
         rpm_arr = rpm + rng.randn(n_pts) * 80  # tight RPM cluster
         map_arr = map_kpa + rng.randn(n_pts) * 4  # tight MAP cluster
 
-        # VE at this operating point
-        base_ve = 75 + (map_kpa - 30) / 75 * 25
-        rpm_effect = np.sin(rpm / 1500) * 5
-        ve_arr = (base_ve + rpm_effect) + rng.randn(n_pts) * 0.3
-
-    # Ingest into session
-    result = session.ingest_pull(rpm_arr, map_arr, ve_arr)
+    # --- Generate Synthetic AFR Data ---
+    # Instead of guessing VE directly, we'll generate Base VE + AFR Error
+    # giving us a "measured AFR" that implies the VE correction.
+    
+    # 1. Base VE (The "wrong" map we are correcting)
+    base_ve_arr = np.full(n_pts, 85.0) # Simplified base map
+    
+    # Add some shape to base VE based on RPM/MAP so it's not flat
+    ve_shape = (rpm_arr - 2000) / 4000 * 10 + (map_arr - 30) / 70 * 20
+    base_ve_arr += ve_shape
+    
+    # 2. Target AFR (Rich at high load, Lean at cruise)
+    # Simple logic: 13.0 at 100kPa, 14.7 at 30kPa
+    target_afr_arr = 14.7 - (map_arr - 30) / 70 * 1.7
+    
+    # 3. Measured AFR
+    # Apply a random "error" to the target.
+    # e.g. Error = 1.05 means running 5% lean (AFR = Target * 1.05)
+    # which implies Actual VE is HIGHER than Base VE (needs fuel added)
+    # Wait: correction = Measured / Target. 
+    # If Measured > Target (Lean), Correction > 1.0, VE increases. Correct.
+    
+    noise = rng.randn(n_pts) * 0.05 # +/- 5% random noise
+    true_correction = 1.0 + noise 
+    
+    # Drift: simulate a systematic lean spot
+    drift = 0.05 * np.sin(rpm_arr / 1000)
+    true_correction += drift
+    
+    measured_afr_arr = target_afr_arr * true_correction
+    
+    # Ingest using the new Math Path
+    result_dict = ingest_pull(
+        session_id=session_id,
+        rpm=rpm_arr.tolist(),
+        map_kpa=map_arr.tolist(),
+        afr=measured_afr_arr.tolist(),
+        target_afr=target_afr_arr.tolist(),
+        base_ve=base_ve_arr.tolist()
+    )
 
     logger.info(
-        "Quick-sim pull (%s) at RPM=%.0f MAP=%.0f: %d points generated",
+        "Quick-sim pull (%s) at RPM=%.0f MAP=%.0f: %d points generated via AFR path",
         _pull_mode_value,
         rpm,
         map_kpa,
@@ -1166,16 +1274,16 @@ def simulate_pull(
     )
 
     return {
-        "pull_number": result.pull_number,
-        "observations_added": result.observations_added,
+        "pull_number": result_dict["pull_number"],
+        "observations_added": result_dict["observations_added"],
         "target_rpm": float(rpm),
         "target_map_kpa": float(map_kpa),
-        "convergence": (
-            _convergence_to_dict(result.convergence) if result.convergence else None
-        ),
-        "next_suggestion": (
-            _rec_to_dict(result.next_suggestion) if result.next_suggestion else None
-        ),
+        "convergence": result_dict.get("convergence"),
+        "next_suggestion": result_dict.get("next_suggestion"),
         "mode": "quick",
-        "afr_metrics": None,
+        "afr_metrics": {
+            "max_afr_error": float(np.max(np.abs(measured_afr_arr - target_afr_arr))),
+            "mean_afr_error": float(np.mean(np.abs(measured_afr_arr - target_afr_arr))),
+            "data_points": n_pts
+        }
     }

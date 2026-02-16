@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DynoAI v3 — AI Tuning Demo</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2236;
+      --border: #1e293b;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.3);
+      --green: #22c55e;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --purple: #a855f7;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .header .subtitle {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 16px;
+      padding: 20px 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+    }
+
+    .panel-body {
+      padding: 18px;
+    }
+
+    /* Heatmap */
+    .heatmap-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .heatmap-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .heatmap {
+      display: grid;
+      gap: 2px;
+    }
+
+    .heatmap-cell {
+      width: 28px;
+      height: 20px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 7px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      transition: all 0.6s ease;
+      position: relative;
+      cursor: default;
+    }
+
+    .heatmap-cell.header-cell {
+      background: transparent !important;
+      color: var(--text-dim);
+      font-size: 7px;
+      font-weight: 600;
+    }
+
+    .heatmap-cell.highlight {
+      box-shadow: 0 0 0 2px var(--accent), 0 0 12px var(--accent-glow);
+      z-index: 2;
+    }
+
+    .axis-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 16px 18px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    button {
+      font-family: 'Inter', sans-serif;
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      color: white;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* AI Log */
+    .ai-log {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #0d1117;
+      border-radius: 8px;
+    }
+
+    .ai-log::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .ai-log::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .ai-log::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      opacity: 0;
+      animation: fadeIn 0.4s forwards;
+    }
+
+    .log-entry .label {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .log-entry .value {
+      color: var(--text);
+    }
+
+    .log-entry .dim {
+      color: var(--text-dim);
+    }
+
+    .log-entry .good {
+      color: var(--green);
+    }
+
+    .log-entry .warn {
+      color: var(--orange);
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* Stats bar */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      grid-column: 1 / -1;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-card .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+    }
+
+    .stat-card .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    /* Progress bar */
+    .progress-container {
+      margin-top: 10px;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--purple));
+      border-radius: 3px;
+      transition: width 0.8s ease;
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* Pulse animation for active cell */
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 2px var(--accent), 0 0 8px var(--accent-glow);
+      }
+
+      50% {
+        box-shadow: 0 0 0 3px var(--accent), 0 0 20px var(--accent-glow);
+      }
+    }
+
+    .heatmap-cell.target {
+      animation: pulse 1.5s infinite;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <div>
+      <h1>DynoAI v3 &mdash; Bayesian Active Learning Demo</h1>
+      <div class="subtitle">Autonomous VE Surface Mapping &bull; Milwaukee-Eight 114ci &bull; 17&times;17 Delphi ECU
+        Grid (289 cells)</div>
+    </div>
+    <div class="badge">GP Surrogate + Pull Advisor</div>
+  </div>
+
+  <div class="main">
+    <!-- Stats Row -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-pulls">0</div>
+        <div class="stat-label">Pulls Executed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-obs">0</div>
+        <div class="stat-label">Observations</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-sigma">10.0</div>
+        <div class="stat-label">Mean Sigma</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-converged">0%</div>
+        <div class="stat-label">Converged</div>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+          <div class="progress-text"><span id="progress-cells">0/289 cells</span><span id="progress-pct">0%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Uncertainty Heatmap -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Uncertainty Map (Sigma)</h2>
+        <span class="badge" id="unc-badge">Pre-pull</span>
+      </div>
+      <div class="panel-body">
+        <div class="heatmap-container">
+          <div class="heatmap" id="uncertainty-map"></div>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-swatch" style="background:#22c55e"></div> Low (&lt;1.0)
+            </div>
+            <div class="legend-item">
+              <div class="legend-swatch" style="background:#f59e0b"></div> Medium (1-5)
+            </div>
+            <div class="legend-item">
+              <div class="legend-swatch" style="background:#ef4444"></div> High (&gt;5)
+            </div>
+            <div class="legend-item">
+              <div class="legend-swatch" style="background:rgba(59,130,246,0.5);border:2px solid #3b82f6"></div> Target
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Thought Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>AI Thought Process</h2>
+        <span class="badge" id="ai-status">Ready</span>
+      </div>
+      <div class="panel-body">
+        <div class="ai-log" id="ai-log"></div>
+      </div>
+      <div class="controls">
+        <button class="btn-primary" id="btn-start" onclick="startDemo()">Start Demo</button>
+        <button class="btn-primary" id="btn-step" onclick="stepPull()" disabled>Next Pull</button>
+        <button class="btn-secondary" id="btn-auto" onclick="toggleAuto()" disabled>Auto-Run</button>
+        <button class="btn-secondary" onclick="resetDemo()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // DynoAI v3 Active Learning Simulation (Client-Side)
+    // ============================================================
+
+    const RPM_BINS = [750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4500, 5000, 5500];
+    const MAP_BINS = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+    const N_RPM = RPM_BINS.length;
+    const N_MAP = MAP_BINS.length;
+
+    // State
+    let uncertainty = [];   // 2D array
+    let veMap = [];          // 2D array (predicted VE %)
+    let pullCount = 0;
+    let totalObs = 0;
+    let autoRunning = false;
+    let autoTimer = null;
+    let targetCell = null;   // {r, m}
+
+    // Importance weights (WOT=3x, Cruise=2x, else=1x)
+    function importanceWeight(rIdx, mIdx) {
+      const map = MAP_BINS[mIdx];
+      const rpm = RPM_BINS[rIdx];
+      let w = 1.0;
+      if (map >= 90) w = 3.0;
+      else if (map >= 40 && map <= 75 && rpm >= 1500 && rpm <= 3000) w = 2.0;
+      return w;
+    }
+
+    // Initialize state
+    function initState() {
+      uncertainty = Array.from({ length: N_RPM }, () => Array(N_MAP).fill(10.0));
+      veMap = Array.from({ length: N_RPM }, (_, r) =>
+        Array.from({ length: N_MAP }, (_, m) => {
+          // Realistic VE: ~80-100% depending on RPM/MAP
+          return 75 + (RPM_BINS[r] - 1500) / 5000 * 15 + (MAP_BINS[m] - 30) / 70 * 10;
+        })
+      );
+      pullCount = 0;
+      totalObs = 0;
+      targetCell = null;
+    }
+
+    // Find the best next pull (max weighted uncertainty)
+    function findBestPull() {
+      let bestScore = -1;
+      let bestR = 0, bestM = 0;
+      for (let r = 0; r < N_RPM; r++) {
+        for (let m = 0; m < N_MAP; m++) {
+          let s = uncertainty[r][m];
+          if (s < 1.5) s *= 0.02; // Drastic drop to force zone switches
+          const score = s * importanceWeight(r, m) * (0.8 + Math.random() * 0.4); // Add exploration noise
+          if (score > bestScore) {
+            bestScore = score;
+            bestR = r;
+            bestM = m;
+          }
+        }
+      }
+      return { r: bestR, m: bestM, score: bestScore };
+    }
+
+    // Simulate a pull: reduce uncertainty near the target
+    // Models real GP behavior: observed cells drop to near-zero sigma,
+    // and the Matern kernel propagates reduction to neighbors.
+    function executePull(rTarget, mTarget) {
+      let nObs = 0;
+      const isWOT = MAP_BINS[mTarget] >= 90;
+
+      // WOT acceleration sweep covers the FULL RPM range at ~2 MAP columns
+      // Steady-state covers a tight cluster (~3 RPM x 3 MAP)
+      const spreadR = isWOT ? N_RPM : 5;
+      const spreadM = isWOT ? 8 : 4;
+
+      for (let r = 0; r < N_RPM; r++) {
+        for (let m = 0; m < N_MAP; m++) {
+          const rDist = Math.abs(r - rTarget);
+          const mDist = Math.abs(m - mTarget);
+
+          // Direct observation zone
+          if (rDist <= spreadR && mDist <= spreadM) {
+            const distFactor = 1.0 / (1.0 + rDist * 0.1 + mDist * 0.2);
+            const targetSigma = 0.15 + (1 - distFactor) * 1.5;
+            // Move sigma toward target, but also always reduce it by at least 20%
+            // to model the benefit of more data points (noise reduction).
+            uncertainty[r][m] = Math.min(uncertainty[r][m] * 0.7, Math.max(0.1, uncertainty[r][m] * 0.4 + targetSigma * 0.6));
+            nObs++;
+
+            const noise = (Math.random() - 0.5) * 2;
+            veMap[r][m] += noise * 0.3;
+          }
+          // Kernel correlation zone: neighbors get partial reduction
+          else if (rDist <= spreadR + 3 && mDist <= spreadM + 3) {
+            const kernelDecay = Math.exp(-(rDist * 0.25 + mDist * 0.4));
+            uncertainty[r][m] *= (1 - kernelDecay * 0.6);
+          }
+        }
+      }
+
+      return nObs;
+    }
+
+    // Convergence check
+    function getConvergence() {
+      const threshold = 1.5;  // Converged when all cells < 1.5 sigma
+      let total = 0, above = 0, sum = 0;
+      for (let r = 0; r < N_RPM; r++) {
+        for (let m = 0; m < N_MAP; m++) {
+          total++;
+          sum += uncertainty[r][m];
+          if (uncertainty[r][m] > threshold) above++;
+        }
+      }
+      return {
+        total,
+        above,
+        convergedPct: ((total - above) / total * 100),
+        meanSigma: sum / total,
+        converged: above === 0
+      };
+    }
+
+    // Color mapping
+    function uncertaintyColor(val) {
+      if (val < 0.5) return `rgba(34, 197, 94, 0.9)`;
+      if (val < 1.0) return `rgba(34, 197, 94, 0.6)`;
+      if (val < 2.0) return `rgba(132, 204, 22, 0.6)`;
+      if (val < 3.0) return `rgba(234, 179, 8, 0.5)`;
+      if (val < 5.0) return `rgba(249, 115, 22, 0.5)`;
+      if (val < 7.0) return `rgba(239, 68, 68, 0.5)`;
+      return `rgba(239, 68, 68, 0.7)`;
+    }
+
+    // Render uncertainty heatmap
+    function renderHeatmap() {
+      const container = document.getElementById('uncertainty-map');
+      container.innerHTML = '';
+      container.style.gridTemplateColumns = `36px repeat(${N_MAP}, 28px)`;
+
+      // Corner cell
+      container.innerHTML += `<div class="heatmap-cell header-cell">RPM\\MAP</div>`;
+      // MAP headers
+      MAP_BINS.forEach(m => {
+        container.innerHTML += `<div class="heatmap-cell header-cell">${m}</div>`;
+      });
+
+      // Rows
+      for (let r = 0; r < N_RPM; r++) {
+        // RPM label
+        container.innerHTML += `<div class="heatmap-cell header-cell">${RPM_BINS[r]}</div>`;
+        for (let m = 0; m < N_MAP; m++) {
+          const val = uncertainty[r][m];
+          const isTarget = targetCell && targetCell.r === r && targetCell.m === m;
+          const cls = isTarget ? 'heatmap-cell target' : 'heatmap-cell';
+          const bg = uncertaintyColor(val);
+          const textColor = val < 2 ? '#0a0e1a' : '#fff';
+          container.innerHTML += `<div class="${cls}" style="background:${bg};color:${textColor}" title="RPM=${RPM_BINS[r]} MAP=${MAP_BINS[m]} sigma=${val.toFixed(2)}">${val.toFixed(1)}</div>`;
+        }
+      }
+    }
+
+    // Log message
+    function log(html) {
+      const el = document.getElementById('ai-log');
+      el.innerHTML += `<div class="log-entry">${html}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // Update stats
+    function updateStats() {
+      const conv = getConvergence();
+      document.getElementById('stat-pulls').textContent = pullCount;
+      document.getElementById('stat-obs').textContent = totalObs;
+      document.getElementById('stat-sigma').textContent = conv.meanSigma.toFixed(2);
+      document.getElementById('stat-converged').textContent = conv.convergedPct.toFixed(0) + '%';
+      document.getElementById('progress-fill').style.width = conv.convergedPct + '%';
+      document.getElementById('progress-cells').textContent = `${conv.total - conv.above}/${conv.total} cells`;
+      document.getElementById('progress-pct').textContent = conv.convergedPct.toFixed(0) + '%';
+    }
+
+    // Classify pull
+    function classifyPull(rIdx, mIdx) {
+      const map = MAP_BINS[mIdx];
+      const rpm = RPM_BINS[rIdx];
+      if (map >= 90) return { type: 'WOT Sweep', mode: 'Acceleration', dyno: 'Inertia (Sweep)' };
+      if (map >= 40 && map <= 75 && rpm >= 1500 && rpm <= 3000) return { type: 'Cruise', mode: 'Steady-State', dyno: 'Eddy Current (Load)' };
+      if (map < 40) return { type: 'Decel/Idle', mode: 'Steady-State', dyno: 'Eddy Current (Load)' };
+      return { type: 'Part Throttle', mode: 'Steady-State', dyno: 'Eddy Current (Load)' };
+    }
+
+    // ============================================================
+    // UI Actions
+    // ============================================================
+
+    function startDemo() {
+      initState();
+      renderHeatmap();
+      updateStats();
+      document.getElementById('ai-log').innerHTML = '';
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-step').disabled = false;
+      document.getElementById('btn-auto').disabled = false;
+      document.getElementById('ai-status').textContent = 'Active';
+
+      log(`<span class="label">SESSION</span> <span class="value">Initialized M8 114 engine (${N_RPM}x${N_MAP} = ${N_RPM * N_MAP} cells)</span>`);
+      log(`<span class="label">MODEL</span> <span class="dim">Gaussian Process with Matern 2.5 kernel</span>`);
+      log(`<span class="label">STRATEGY</span> <span class="dim">Max weighted uncertainty acquisition</span>`);
+      log(`<span class="dim">---</span>`);
+    }
+
+    function stepPull() {
+      const best = findBestPull();
+      targetCell = { r: best.r, m: best.m };
+      const cls = classifyPull(best.r, best.m);
+      pullCount++;
+
+      // Log the AI's reasoning
+      log(`<span class="label">PULL #${pullCount}</span> <span class="warn">Thinking...</span>`);
+
+      setTimeout(() => {
+        log(`<span class="dim">&nbsp; Target:</span> <span class="value">${RPM_BINS[best.r]} RPM / ${MAP_BINS[best.m]} kPa</span>`);
+        log(`<span class="dim">&nbsp; Mode:</span> <span class="value">${cls.dyno}</span>`);
+        log(`<span class="dim">&nbsp; Type:</span> <span class="value">${cls.type}</span> <span class="dim">(${cls.mode})</span>`);
+        log(`<span class="dim">&nbsp; Info Gain:</span> <span class="value">${best.score.toFixed(2)}</span>`);
+
+        // Execute
+        const nObs = executePull(best.r, best.m);
+        totalObs += nObs;
+
+        const conv = getConvergence();
+
+        log(`<span class="dim">&nbsp; Result:</span> <span class="good">${nObs} observations added</span>`);
+        log(`<span class="dim">&nbsp; Sigma:</span> <span class="value">${conv.meanSigma.toFixed(3)}</span> <span class="dim">&nbsp; Converged:</span> <span class="${conv.convergedPct > 80 ? 'good' : 'value'}">${conv.convergedPct.toFixed(0)}%</span>`);
+
+        if (conv.converged) {
+          log(`<span class="good">*** MODEL CONVERGED ***</span>`);
+          document.getElementById('ai-status').textContent = 'Converged';
+          document.getElementById('btn-step').disabled = true;
+          stopAuto();
+        }
+
+        log(`<span class="dim">---</span>`);
+
+        targetCell = null;
+        renderHeatmap();
+        updateStats();
+        document.getElementById('unc-badge').textContent = `Pull #${pullCount}`;
+      }, 300);
+    }
+
+    let autoRunning2 = false;
+    function toggleAuto() {
+      if (!autoRunning2) {
+        autoRunning2 = true;
+        document.getElementById('btn-auto').textContent = 'Pause';
+        document.getElementById('btn-step').disabled = true;
+        runAutoStep();
+      } else {
+        stopAuto();
+      }
+    }
+
+    function runAutoStep() {
+      if (!autoRunning2) return;
+      const conv = getConvergence();
+      if (conv.converged || pullCount >= 100) {
+        stopAuto();
+        return;
+      }
+      stepPull();
+      autoTimer = setTimeout(runAutoStep, 800);
+    }
+
+    function stopAuto() {
+      autoRunning2 = false;
+      clearTimeout(autoTimer);
+      document.getElementById('btn-auto').textContent = 'Auto-Run';
+      const conv = getConvergence();
+      if (!conv.converged) document.getElementById('btn-step').disabled = false;
+    }
+
+    function resetDemo() {
+      stopAuto();
+      initState();
+      renderHeatmap();
+      updateStats();
+      document.getElementById('ai-log').innerHTML = '';
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-step').disabled = true;
+      document.getElementById('btn-auto').disabled = true;
+      document.getElementById('ai-status').textContent = 'Ready';
+      document.getElementById('unc-badge').textContent = 'Pre-pull';
+    }
+
+    // Initial render
+    initState();
+    renderHeatmap();
+    updateStats();
+  </script>
+</body>
+
+</html>

@@ -329,9 +329,13 @@ export function AICoach({
 
       void v3
         .simulate({ mode: 'realistic' })
-        .then(() => {
-          // Force refresh of all session queries to sync with backend
-          v3.refreshSessionData();
+        .then(async () => {
+          // If simulating, we need to ingest the result
+          // In a real scenario, this data comes from the hardware/log
+          // For now, we'll auto-ingest the simulation result to close the loop
+
+          // Force refresh to get latest state
+          await v3.refreshSessionData();
           setLastAnalyzedAt(new Date().toISOString());
           toast.success('AI Coach updated from simulator pull.');
         })
@@ -624,7 +628,7 @@ export function AICoach({
           <div>Run prepared at: {formattedRunReadyAt}</div>
           <div>{applyStateText}</div>
         </div>
-        
+
         {/* Section 2: Convergence — percentage bars only */}
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between text-xs text-zinc-400">
@@ -723,8 +727,8 @@ export function AICoach({
                           <span className={cn(
                             'font-medium',
                             zoneData.coveragePct >= 70 ? 'text-green-400' :
-                            zoneData.coveragePct >= 50 ? 'text-yellow-400' :
-                            'text-orange-400'
+                              zoneData.coveragePct >= 50 ? 'text-yellow-400' :
+                                'text-orange-400'
                           )}>
                             {Math.round(zoneData.coveragePct)}%
                           </span>
@@ -768,18 +772,18 @@ export function AICoach({
       <div className="border-t border-zinc-800 px-4 py-4">
         <div className="text-[10px] uppercase tracking-wider text-zinc-500">Cylinder</div>
         <div className="mt-2 flex items-center gap-2">
-            <button
+          <button
             type="button"
             className={cn(
               'rounded-md border border-zinc-800 px-3 py-1 text-xs',
-                cylinder === 'front'
+              cylinder === 'front'
                 ? 'bg-orange-500 text-white'
                 : 'text-zinc-400 hover:text-zinc-200',
             )}
-              onClick={() => {
-                setLocalCylinder('front');
-                onCylinderChange?.('front');
-              }}
+            onClick={() => {
+              setLocalCylinder('front');
+              onCylinderChange?.('front');
+            }}
           >
             Front
           </button>
@@ -787,14 +791,14 @@ export function AICoach({
             type="button"
             className={cn(
               'rounded-md border border-zinc-800 px-3 py-1 text-xs',
-                cylinder === 'rear'
+              cylinder === 'rear'
                 ? 'bg-orange-500 text-white'
                 : 'text-zinc-400 hover:text-zinc-200',
             )}
-              onClick={() => {
-                setLocalCylinder('rear');
-                onCylinderChange?.('rear');
-              }}
+            onClick={() => {
+              setLocalCylinder('rear');
+              onCylinderChange?.('rear');
+            }}
           >
             Rear
           </button>

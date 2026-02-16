@@ -131,7 +131,10 @@ export interface TemplateListResult {
 export interface PullData {
   rpm: number[];
   map_kpa: number[];
-  ve: number[];
+  ve?: number[];
+  afr?: number[];
+  target_afr?: number[];
+  base_ve?: number[];
 }
 
 export interface ImportVERequest {
