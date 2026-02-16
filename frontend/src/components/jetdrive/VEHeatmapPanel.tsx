@@ -54,6 +54,7 @@ interface VEHeatmapPanelProps {
   onHitCountsChange?: (frontHits: number[][], rearHits: number[][], rpmBins: number[], mapBins: number[]) => void;
   onLiveDataUpdate?: (data: LiveVEExportData) => void;
   uncertaintyMap?: number[][];
+  targetMarker?: { rpm: number; map: number; label?: string } | null;
   className?: string;
 }
 
@@ -89,6 +90,15 @@ function findChannel(
 function dedupeBins(raw: number[]): number[] {
   const rounded = raw.map((value) => Math.round(value));
   return [...new Set(rounded)].sort((a, b) => a - b);
+}
+
+function expandRpmBins(baseBins: number[], targetCount: number): number[] {
+  if (baseBins.length <= 1 || targetCount <= baseBins.length) return baseBins;
+  const min = baseBins[0];
+  const max = baseBins[baseBins.length - 1];
+  const step = (max - min) / (targetCount - 1);
+  const bins = Array.from({ length: targetCount }, (_, idx) => Math.round(min + step * idx));
+  return dedupeBins(bins);
 }
 
 function getTargetAfrForMap(mapKpa: number, targets: Record<number, number>): number {
@@ -219,6 +229,59 @@ function calculateCellTrace(
   return { rpmIdx, mapIdx, activeCells };
 }
 
+function rpmMapToPixel(
+  rpm: number,
+  map: number,
+  rpmBins: number[],
+  mapBins: number[],
+  cellWidth: number,
+  cellHeight: number,
+): { x: number; y: number; inBounds: boolean } {
+  if (rpmBins.length < 2 || mapBins.length < 2) {
+    return { x: AXIS_LABEL_WIDTH, y: AXIS_LABEL_HEIGHT, inBounds: false };
+  }
+  const rpmMin = rpmBins[0];
+  const rpmMax = rpmBins[rpmBins.length - 1];
+  const mapMin = mapBins[0];
+  const mapMax = mapBins[mapBins.length - 1];
+  const inBounds = rpm >= rpmMin && rpm <= rpmMax && map >= mapMin && map <= mapMax;
+
+  const clampedRpm = Math.max(rpmMin, Math.min(rpmMax, rpm));
+  const clampedMap = Math.max(mapMin, Math.min(mapMax, map));
+
+  let rpmIdx = 0;
+  let rpmWeight = 0;
+  for (let i = 0; i < rpmBins.length - 1; i++) {
+    if (clampedRpm >= rpmBins[i] && clampedRpm < rpmBins[i + 1]) {
+      rpmIdx = i;
+      rpmWeight = (clampedRpm - rpmBins[i]) / (rpmBins[i + 1] - rpmBins[i]);
+      break;
+    }
+    if (clampedRpm >= rpmBins[rpmBins.length - 1]) {
+      rpmIdx = rpmBins.length - 1;
+      rpmWeight = 1;
+    }
+  }
+
+  let mapIdx = 0;
+  let mapWeight = 0;
+  for (let i = 0; i < mapBins.length - 1; i++) {
+    if (clampedMap >= mapBins[i] && clampedMap < mapBins[i + 1]) {
+      mapIdx = i;
+      mapWeight = (clampedMap - mapBins[i]) / (mapBins[i + 1] - mapBins[i]);
+      break;
+    }
+    if (clampedMap >= mapBins[mapBins.length - 1]) {
+      mapIdx = mapBins.length - 1;
+      mapWeight = 1;
+    }
+  }
+
+  const x = AXIS_LABEL_WIDTH + (mapIdx + mapWeight) * cellWidth;
+  const y = AXIS_LABEL_HEIGHT + (rpmIdx + rpmWeight) * cellHeight;
+  return { x, y, inBounds };
+}
+
 /** Compute text size based on cell dimensions */
 function getCellTextSize(cellWidth: number): string {
   if (cellWidth >= 72) return 'text-xs';
@@ -238,6 +301,7 @@ function VEHeatmapPanelContent({
   onHitCountsChange,
   onLiveDataUpdate,
   uncertaintyMap,
+  targetMarker,
   className,
 }: {
   live: UseJetDriveLiveReturn;
@@ -250,6 +314,7 @@ function VEHeatmapPanelContent({
   onHitCountsChange?: (frontHits: number[][], rearHits: number[][], rpmBins: number[], mapBins: number[]) => void;
   onLiveDataUpdate?: (data: LiveVEExportData) => void;
   uncertaintyMap?: number[][];
+  targetMarker?: { rpm: number; map: number; label?: string } | null;
   className?: string;
 }) {
   const debugHeatmap = useMemo(() => {
@@ -269,8 +334,12 @@ function VEHeatmapPanelContent({
   const cylinder = activeCylinder ?? localCylinder;
   const config = ENGINE_GRID_CONFIGS[enginePreset] ?? ENGINE_GRID_CONFIGS.harley_m8;
   const rpmBins = useMemo(
-    () => (customRpmBins && customRpmBins.length ? dedupeBins(customRpmBins) : config.rpmBins),
-    [customRpmBins, config.rpmBins],
+    () => {
+      if (customRpmBins && customRpmBins.length) return dedupeBins(customRpmBins);
+      if (enginePreset === 'harley_m8') return expandRpmBins(config.rpmBins, 21);
+      return config.rpmBins;
+    },
+    [customRpmBins, config.rpmBins, enginePreset],
   );
   const mapBins = useMemo(
     () => (customMapBins && customMapBins.length ? dedupeBins(customMapBins) : config.mapBins),
@@ -304,6 +373,22 @@ function VEHeatmapPanelContent({
     [rpmChannel?.value, mapChannel?.value, afrFrontChannel?.value, afrRearChannel?.value],
   );
   const liveValues = useThrottle(rawLiveValues, 50);
+  const hudLiveValues = useThrottle(rawLiveValues, 80);
+  const [displayHudValues, setDisplayHudValues] = useState(hudLiveValues);
+
+  useEffect(() => {
+    setDisplayHudValues((prev) => {
+      const rpmDelta = hudLiveValues.rpm - prev.rpm;
+      const mapDelta = hudLiveValues.map - prev.map;
+      const rpm = Math.abs(rpmDelta) < 25 ? prev.rpm : prev.rpm + rpmDelta * 0.55;
+      const map = Math.abs(mapDelta) < 1.0 ? prev.map : prev.map + mapDelta * 0.55;
+      return {
+        ...hudLiveValues,
+        rpm,
+        map,
+      };
+    });
+  }, [hudLiveValues]);
 
   const [frontHits, setFrontHits] = useState<number[][]>(() =>
     rpmBins.map(() => mapBins.map(() => 0)),
@@ -658,6 +743,31 @@ function VEHeatmapPanelContent({
     height: needsScroll ? gridPixelHeight : undefined,
   } as const;
 
+  const currentPos = useMemo(
+    () =>
+      rpmMapToPixel(
+        displayHudValues.rpm,
+        displayHudValues.map,
+        rpmBins,
+        mapBins,
+        effectiveCellWidth,
+        effectiveCellHeight,
+      ),
+    [displayHudValues, rpmBins, mapBins, effectiveCellWidth, effectiveCellHeight],
+  );
+
+  const targetPos = useMemo(() => {
+    if (!targetMarker) return null;
+    return rpmMapToPixel(
+      targetMarker.rpm,
+      targetMarker.map,
+      rpmBins,
+      mapBins,
+      effectiveCellWidth,
+      effectiveCellHeight,
+    );
+  }, [targetMarker, rpmBins, mapBins, effectiveCellWidth, effectiveCellHeight]);
+
   const activeCell = cellTrace ? { row: cellTrace.rpmIdx, col: cellTrace.mapIdx } : null;
   const neighborCells = useMemo(() => {
     if (!cellTrace) return new Set<string>();
@@ -817,7 +927,8 @@ function VEHeatmapPanelContent({
       <div ref={gridRef} className="relative flex flex-1 overflow-hidden">
         {/* Heatmap grid — left-aligned, shrink-to-fit */}
         <div className={cn('shrink-0', needsScroll ? 'overflow-auto' : 'overflow-hidden')}>
-          <div className="grid gap-px bg-zinc-800 p-px" style={gridStyle}>
+          <div className="relative" style={{ width: gridPixelWidth, height: gridPixelHeight }}>
+            <div className="grid gap-px bg-zinc-800 p-px" style={gridStyle}>
             <div className="flex flex-col justify-center px-2 text-[10px] text-zinc-600">
               <span>RPM ↑</span>
               <span>kPa →</span>
@@ -893,6 +1004,31 @@ function VEHeatmapPanelContent({
               </Fragment>
             ))}
           </div>
+
+          <div className="pointer-events-none absolute inset-0 z-10">
+            {live.isConnected && displayHudValues.rpm >= 500 && currentPos.inBounds && (
+              <div
+                className="absolute"
+                style={{ left: currentPos.x, top: currentPos.y, transform: 'translate(-50%, -50%)' }}
+              >
+                <div className="h-5 w-5 rounded-full border border-emerald-400/60" />
+                <div className="absolute left-1/2 top-1/2 h-px w-5 -translate-x-1/2 bg-emerald-400/80" />
+                <div className="absolute left-1/2 top-1/2 w-px h-5 -translate-y-1/2 bg-emerald-400/80" />
+              </div>
+            )}
+            {targetMarker && targetPos?.inBounds && (
+              <div
+                className="absolute"
+                style={{ left: targetPos.x, top: targetPos.y, transform: 'translate(-50%, -50%)' }}
+              >
+                <div className="h-9 w-9 rounded-full border border-amber-400/70 border-dashed" />
+                <div className="mt-1 text-[10px] uppercase tracking-wider text-amber-400/90 text-center">
+                  {targetMarker.label ?? 'Target'}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         </div>
 
         {/* Stats panel — fills remaining width to the right of the grid */}
@@ -1014,6 +1150,7 @@ function VEHeatmapPanelWithLive({
   onHitCountsChange,
   onLiveDataUpdate,
   uncertaintyMap,
+  targetMarker,
   className,
 }: VEHeatmapPanelProps) {
   const live = useJetDriveLive({
@@ -1035,6 +1172,7 @@ function VEHeatmapPanelWithLive({
       onHitCountsChange={onHitCountsChange}
       onLiveDataUpdate={onLiveDataUpdate}
       uncertaintyMap={uncertaintyMap}
+      targetMarker={targetMarker}
       className={className}
     />
   );
@@ -1052,6 +1190,7 @@ export function VEHeatmapPanel({
   onHitCountsChange,
   onLiveDataUpdate,
   uncertaintyMap,
+  targetMarker,
   className,
 }: VEHeatmapPanelProps) {
   if (live) {
@@ -1067,6 +1206,7 @@ export function VEHeatmapPanel({
         onHitCountsChange={onHitCountsChange}
         onLiveDataUpdate={onLiveDataUpdate}
         uncertaintyMap={uncertaintyMap}
+        targetMarker={targetMarker}
         className={className}
       />
     );
@@ -1084,6 +1224,7 @@ export function VEHeatmapPanel({
       onHitCountsChange={onHitCountsChange}
       onLiveDataUpdate={onLiveDataUpdate}
       uncertaintyMap={uncertaintyMap}
+      targetMarker={targetMarker}
       className={className}
     />
   );

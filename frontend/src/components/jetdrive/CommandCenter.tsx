@@ -46,6 +46,7 @@ function CommandCenterContent({
   } | null>(null);
   const [currentRunId, setCurrentRunId] = useState<string | undefined>();
   const [liveExportData, setLiveExportData] = useState<LiveVEExportData | null>(null);
+  const [targetMarker, setTargetMarker] = useState<{ rpm: number; map: number; label?: string } | null>(null);
   const hardwareOpen = hardwareOpenProp ?? localHardwareOpen;
   const setHardwareOpen = onHardwareOpenChange ?? setLocalHardwareOpen;
   const hasAutoOpenedHardware = useRef(false);
@@ -187,6 +188,7 @@ function CommandCenterContent({
               afrTargets={afrTargets}
               activeCylinder={activeCylinder}
               onCylinderChange={setActiveCylinder}
+              targetMarker={targetMarker}
               onHitCountsChange={(frontHits, rearHits, rpmBins, mapBins) => {
                 setHitData({ frontHits, rearHits, rpmBins, mapBins });
               }}
@@ -213,6 +215,7 @@ function CommandCenterContent({
             hitData={hitData}
             runId={currentRunId}
             onRunIdChange={setCurrentRunId}
+            onTargetChange={setTargetMarker}
             onExport={() => {
               if (!liveExportData || liveExportData.totalHits <= 0) {
                 toast.info('No VE correction data to export yet.');

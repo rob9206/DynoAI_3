@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -73,6 +73,7 @@ interface AICoachProps {
   balanceDelta?: number;
   runId?: string;
   onRunIdChange?: (runId: string | undefined) => void;
+  onTargetChange?: (target: { rpm: number; map: number; label?: string } | null) => void;
   onExport?: () => void;
   className?: string;
 }
@@ -91,6 +92,7 @@ export function AICoach({
   balanceDelta,
   runId,
   onRunIdChange,
+  onTargetChange,
   onExport,
   className,
 }: AICoachProps) {
@@ -107,6 +109,7 @@ export function AICoach({
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
   const [lastRunReadyAt, setLastRunReadyAt] = useState<string | null>(null);
+  const lastTargetKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (afrTargets) {
@@ -157,6 +160,24 @@ export function AICoach({
       });
     }
   }, [config, localImportedTune, onRunIdChange, v3]);
+
+  useEffect(() => {
+    if (!onTargetChange) return;
+    if (!v3.nextPull) {
+      if (lastTargetKeyRef.current !== 'none') {
+        lastTargetKeyRef.current = 'none';
+        onTargetChange(null);
+      }
+      return;
+    }
+    const label = v3.nextPull.pull_mode === 'steady_state' ? 'Steady-state' : 'WOT';
+    const rpm = Math.round(v3.nextPull.rpm);
+    const map = Math.round(v3.nextPull.map_kpa);
+    const key = `${rpm}|${map}|${label}`;
+    if (lastTargetKeyRef.current === key) return;
+    lastTargetKeyRef.current = key;
+    onTargetChange({ rpm, map, label });
+  }, [onTargetChange, v3.nextPull]);
 
   const handleTargetsChange = useCallback(
     (targets: Record<number, number>) => {
