@@ -1,11 +1,6 @@
 @echo off
 REM Quick Start - Skips dependency installation for faster startup
 
-echo ======================================
-echo DynoAI Quick Start
-echo ======================================
-echo.
-
 REM Change to the project root directory
 cd /d "%~dp0..\.."
 

@@ -27,7 +27,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import numpy as np
 
@@ -164,8 +164,11 @@ class EngineProfile:
     volumetric_efficiency_peak: float = 0.90  # VE at optimal RPM
 
     # Thermal
+    cooling_type: Literal["air", "oil", "liquid"] = "liquid"
     optimal_temp_f: float = 180.0  # Optimal operating temp
-    heat_rate: float = 0.15  # How fast engine heats during pull
+    heat_rate: float = 0.018  # °F per HP per second — slow rise so ECT doesn't hit 250°F in one pull
+    max_engine_temp_f: float = 280.0  # Cooling-type-specific clamp
+    cooling_base_coeff: float = 0.025  # Base cooling coefficient (liquid default)
 
     @classmethod
     def from_ea_build(cls, build, use_prediction: bool = True) -> "EngineProfile":
@@ -301,6 +304,11 @@ class EngineProfile:
             dyno_inertia=4.5,  # Increased from 2.8 to slow acceleration
             mechanical_efficiency=0.87,
             volumetric_efficiency_peak=0.88,
+            cooling_type="air",
+            optimal_temp_f=300.0,
+            heat_rate=0.022,
+            max_engine_temp_f=380.0,
+            cooling_base_coeff=0.012,
         )
 
     @classmethod
@@ -324,6 +332,11 @@ class EngineProfile:
             dyno_inertia=4.5,  # Increased from 2.8 to slow acceleration
             mechanical_efficiency=0.86,
             volumetric_efficiency_peak=0.90,
+            cooling_type="oil",
+            optimal_temp_f=240.0,
+            heat_rate=0.020,
+            max_engine_temp_f=320.0,
+            cooling_base_coeff=0.018,
         )
 
     @classmethod
@@ -347,6 +360,11 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.84,
             volumetric_efficiency_peak=0.83,
+            cooling_type="air",
+            optimal_temp_f=300.0,
+            heat_rate=0.022,
+            max_engine_temp_f=380.0,
+            cooling_base_coeff=0.012,
         )
 
     @classmethod
@@ -370,6 +388,11 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.84,
             volumetric_efficiency_peak=0.84,
+            cooling_type="air",
+            optimal_temp_f=300.0,
+            heat_rate=0.022,
+            max_engine_temp_f=380.0,
+            cooling_base_coeff=0.012,
         )
 
     @classmethod
@@ -393,6 +416,11 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.84,
             volumetric_efficiency_peak=0.85,
+            cooling_type="air",
+            optimal_temp_f=300.0,
+            heat_rate=0.022,
+            max_engine_temp_f=380.0,
+            cooling_base_coeff=0.012,
         )
 
     @classmethod
@@ -416,6 +444,11 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.84,
             volumetric_efficiency_peak=0.86,
+            cooling_type="air",
+            optimal_temp_f=300.0,
+            heat_rate=0.022,
+            max_engine_temp_f=380.0,
+            cooling_base_coeff=0.012,
         )
 
     @classmethod
@@ -440,6 +473,11 @@ class EngineProfile:
             dyno_inertia=3.0,
             mechanical_efficiency=0.88,
             volumetric_efficiency_peak=0.92,
+            cooling_type="liquid",
+            optimal_temp_f=180.0,
+            heat_rate=0.018,
+            max_engine_temp_f=280.0,
+            cooling_base_coeff=0.025,
         )
 
     @classmethod
@@ -464,6 +502,11 @@ class EngineProfile:
             dyno_inertia=2.8,
             mechanical_efficiency=0.87,
             volumetric_efficiency_peak=0.90,
+            cooling_type="liquid",
+            optimal_temp_f=180.0,
+            heat_rate=0.018,
+            max_engine_temp_f=280.0,
+            cooling_base_coeff=0.025,
         )
 
     @classmethod
@@ -488,6 +531,11 @@ class EngineProfile:
             dyno_inertia=1.5,
             mechanical_efficiency=0.90,  # High-performance engine
             volumetric_efficiency_peak=0.95,
+            cooling_type="liquid",
+            optimal_temp_f=180.0,
+            heat_rate=0.018,
+            max_engine_temp_f=280.0,
+            cooling_base_coeff=0.025,
         )
 
 
@@ -756,6 +804,8 @@ class DynoSimulator:
 
         # Virtual ECU for simulating fuel delivery (optional)
         self.virtual_ecu = virtual_ecu
+        if self.virtual_ecu is not None and hasattr(self.virtual_ecu, "warmup_target_f"):
+            self.virtual_ecu.warmup_target_f = self.config.profile.optimal_temp_f
 
         # Pull state
         self._pull_start_time: float = 0.0
@@ -1174,8 +1224,9 @@ class DynoSimulator:
                 knock = True
 
         # Factor 3: High engine temperature (20% weight)
-        if self.physics.engine_temp_f > profile.optimal_temp_f + 20:
-            temp_excess = self.physics.engine_temp_f - (profile.optimal_temp_f + 20)
+        temp_margin = 30.0 if profile.cooling_type == "air" else 20.0
+        if self.physics.engine_temp_f > profile.optimal_temp_f + temp_margin:
+            temp_excess = self.physics.engine_temp_f - (profile.optimal_temp_f + temp_margin)
             temp_risk = min(1.0, temp_excess / 40.0)
             risk_score += temp_risk * 0.20
 
@@ -1295,25 +1346,55 @@ class DynoSimulator:
         profile = self.config.profile
 
         # Heat generation proportional to power
-        heat_rate = power_hp * self.config.profile.heat_rate * dt
+        heat_rate = power_hp * profile.heat_rate * dt
 
-        # Cooling (radiator, oil, etc.)
+        # Cooling (radiator, oil, fins/ram air)
+        rpm = float(self.physics.rpm)
+        rpm_span = max(1.0, float(profile.redline_rpm - profile.idle_rpm))
+        rpm_ratio = max(0.0, min(1.0, (rpm - profile.idle_rpm) / rpm_span))
+        base_rpm_factor = 0.25 + 0.75 * rpm_ratio
+
+        if profile.cooling_type == "air":
+            rpm_factor = base_rpm_factor ** 1.4  # stronger ram-air effect
+        elif profile.cooling_type == "oil":
+            rpm_factor = base_rpm_factor ** 1.2
+        else:
+            rpm_factor = base_rpm_factor
+
+        thermostat_factor = 0.2 if self.physics.engine_temp_f < profile.optimal_temp_f else 1.0
         cooling_rate = (
-            (self.physics.engine_temp_f - self.config.ambient_temp_f) * 0.02 * dt
+            (self.physics.engine_temp_f - self.config.ambient_temp_f)
+            * profile.cooling_base_coeff
+            * rpm_factor
+            * thermostat_factor
+            * dt
         )
 
-        # Update temperature
-        self.physics.engine_temp_f += heat_rate - cooling_rate
+        # Update temperature with a small thermal inertia cap
+        temp_delta = heat_rate - cooling_rate
+        max_delta = 2.0 * dt  # °F per second cap
+        if temp_delta > max_delta:
+            temp_delta = max_delta
+        elif temp_delta < -max_delta:
+            temp_delta = -max_delta
+        self.physics.engine_temp_f += temp_delta
 
-        # Clamp to reasonable range
+        # Clamp to reasonable range per cooling type
         self.physics.engine_temp_f = max(
-            self.config.ambient_temp_f + 20, min(250, self.physics.engine_temp_f)
+            self.config.ambient_temp_f + 20,
+            min(profile.max_engine_temp_f, self.physics.engine_temp_f),
         )
 
-        # IAT follows engine temp but lags
+        # IAT follows engine temp but lags (air-cooled couples more heat)
+        if profile.cooling_type == "air":
+            iat_coupling = 0.4
+        elif profile.cooling_type == "oil":
+            iat_coupling = 0.35
+        else:
+            iat_coupling = 0.3
         iat_target = (
             self.config.ambient_temp_f
-            + (self.physics.engine_temp_f - profile.optimal_temp_f) * 0.3
+            + (self.physics.engine_temp_f - self.config.ambient_temp_f) * iat_coupling
         )
         self.physics.iat_f += (iat_target - self.physics.iat_f) * 0.1 * dt
 
@@ -1462,7 +1543,12 @@ class DynoSimulator:
         # ECU calculates resulting AFR based on its (possibly wrong) VE table
         # For V-twin, we'll use front cylinder (could alternate or average)
         resulting_afr = self.virtual_ecu.calculate_resulting_afr(
-            rpm, map_kpa, actual_ve, cylinder="front"
+            rpm,
+            map_kpa,
+            actual_ve,
+            cylinder="front",
+            ect_f=self.physics.engine_temp_f,
+            iat_f=self.physics.iat_f,
         )
 
         # Add realistic sensor noise (±0.05 AFR typical for wideband)
@@ -1930,7 +2016,12 @@ class DynoSimulator:
                 self.physics.rpm, self.physics.tps_actual
             )
             afr_rear = self.virtual_ecu.calculate_resulting_afr(
-                self.physics.rpm, self.channels.map_kpa, actual_ve_rear, cylinder="rear"
+                self.physics.rpm,
+                self.channels.map_kpa,
+                actual_ve_rear,
+                cylinder="rear",
+                ect_f=self.physics.engine_temp_f,
+                iat_f=self.physics.iat_f,
             )
             # Add realistic sensor noise and clamp to sensor range
             afr_rear_with_noise = afr_rear + random.gauss(0, 0.05)

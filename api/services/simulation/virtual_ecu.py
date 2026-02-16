@@ -83,6 +83,11 @@ class VirtualECU:
     # Environmental conditions
     ambient_temp_f: float = 75.0
     barometric_pressure_inhg: float = 29.92
+
+    # Warmup enrichment (ECT-based fuel multiplier)
+    warmup_target_f: float = 180.0  # Temperature where enrichment is 1.0
+    warmup_span_f: float = 160.0  # Delta below target for max enrichment
+    warmup_max_enrichment_pct: float = 25.0  # Max extra fuel at cold start
     
     # Interpolators (built on init)
     _interp_ve_front: RegularGridInterpolator | None = field(default=None, init=False, repr=False)
@@ -170,8 +175,26 @@ class VirtualECU:
         
         # Clamp to reasonable range
         return np.clip(afr, 10.0, 18.0)
+
+    def get_warmup_fuel_multiplier(self, ect_f: float | None) -> float:
+        """
+        Return a fuel multiplier for cold-start/warmup enrichment.
+
+        - 1.0 at or above warmup_target_f
+        - Linearly increases to warmup_max_enrichment_pct below warmup_target_f
+        """
+        if ect_f is None:
+            return 1.0
+
+        delta_f = self.warmup_target_f - ect_f
+        if delta_f <= 0:
+            return 1.0
+
+        span = max(1.0, self.warmup_span_f)
+        pct = min(delta_f / span, 1.0) * (self.warmup_max_enrichment_pct / 100.0)
+        return 1.0 + pct
     
-    def calculate_air_mass_mg(self, rpm: float, map_kpa: float) -> float:
+    def calculate_air_mass_mg(self, rpm: float, map_kpa: float, iat_f: float | None = None) -> float:
         """
         Calculate theoretical air mass per combustion event.
         
@@ -193,7 +216,8 @@ class VirtualECU:
         pressure_pa = map_kpa * 1000.0
         
         # Temperature in Kelvin (use ambient temp as approximation)
-        temp_k = (self.ambient_temp_f - 32) * 5/9 + KELVIN_OFFSET
+        temp_source_f = self.ambient_temp_f if iat_f is None else iat_f
+        temp_k = (temp_source_f - 32) * 5/9 + KELVIN_OFFSET
         
         # Air mass (kg)
         air_mass_kg = (pressure_pa * displacement_m3) / (R_SPECIFIC_AIR * temp_k)
@@ -204,10 +228,11 @@ class VirtualECU:
         return air_mass_mg
     
     def calculate_required_fuel_mg(
-        self, 
-        rpm: float, 
-        map_kpa: float, 
-        target_afr: float | None = None
+        self,
+        rpm: float,
+        map_kpa: float,
+        target_afr: float | None = None,
+        iat_f: float | None = None,
     ) -> float:
         """
         Calculate required fuel mass for target AFR.
@@ -221,7 +246,7 @@ class VirtualECU:
             Required fuel mass in milligrams
         """
         # Get air mass
-        air_mass_mg = self.calculate_air_mass_mg(rpm, map_kpa)
+        air_mass_mg = self.calculate_air_mass_mg(rpm, map_kpa, iat_f=iat_f)
         
         # Get target AFR
         if target_afr is None:
@@ -236,7 +261,9 @@ class VirtualECU:
         self,
         rpm: float,
         map_kpa: float,
-        cylinder: Literal['front', 'rear']
+        cylinder: Literal['front', 'rear'],
+        ect_f: float | None = None,
+        iat_f: float | None = None,
     ) -> float:
         """
         Calculate actual fuel delivered by ECU based on VE table.
@@ -256,11 +283,14 @@ class VirtualECU:
         ecu_ve = self.lookup_ve(rpm, map_kpa, cylinder)
         
         # Calculate base fuel requirement (for VE = 1.0)
-        base_fuel_mg = self.calculate_required_fuel_mg(rpm, map_kpa)
+        base_fuel_mg = self.calculate_required_fuel_mg(rpm, map_kpa, iat_f=iat_f)
         
         # Apply VE correction
         # Higher VE = more air in cylinder = need more fuel
         delivered_fuel_mg = base_fuel_mg * ecu_ve
+
+        # Apply warmup enrichment (extra fuel when cold)
+        delivered_fuel_mg *= self.get_warmup_fuel_multiplier(ect_f)
         
         return delivered_fuel_mg
     
@@ -269,7 +299,9 @@ class VirtualECU:
         rpm: float,
         map_kpa: float,
         actual_ve: float,
-        cylinder: Literal['front', 'rear']
+        cylinder: Literal['front', 'rear'],
+        ect_f: float | None = None,
+        iat_f: float | None = None,
     ) -> float:
         """
         Calculate the AFR that results from ECU fueling vs actual VE.
@@ -296,19 +328,23 @@ class VirtualECU:
             >>> afr = ecu.calculate_resulting_afr(3000, 80, actual_ve=0.95, 'front')
             >>> # Result: AFR will be LEAN (more air than fuel)
         """
-        # What the ECU thinks VE is (from its table)
-        ecu_ve = self.lookup_ve(rpm, map_kpa, cylinder)
-        
-        # Calculate VE error ratio
-        ve_error_ratio = actual_ve / ecu_ve
-        
-        # Get target AFR from table
-        target_afr = self.lookup_target_afr(rpm, map_kpa)
-        
-        # Calculate resulting AFR
+        # Calculate actual air mass using IAT when available
+        air_mass_mg = self.calculate_air_mass_mg(rpm, map_kpa, iat_f=iat_f)
+        actual_air_mg = air_mass_mg * actual_ve
+
+        # Delivered fuel from ECU tables + warmup enrichment
+        delivered_fuel_mg = self.calculate_delivered_fuel_mg(
+            rpm,
+            map_kpa,
+            cylinder,
+            ect_f=ect_f,
+            iat_f=iat_f,
+        )
+
+        # Calculate resulting AFR from actual air vs delivered fuel
         # If actual VE > ECU VE: More air than expected → Lean → Higher AFR
         # If actual VE < ECU VE: Less air than expected → Rich → Lower AFR
-        resulting_afr = target_afr * ve_error_ratio
+        resulting_afr = actual_air_mg / max(delivered_fuel_mg, 1e-6)
         
         # Clamp to physically reasonable range
         resulting_afr = np.clip(resulting_afr, 8.0, 20.0)

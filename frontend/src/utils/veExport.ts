@@ -246,7 +246,45 @@ export function exportToPVV(data: LiveVEExportData): string {
     }
     lines.push('    </Rows>');
     lines.push('  </Item>');
-    
+
+    // Append warmup/ECT-related items so PVV looks complete
+    const addScalarItem = (name: string, value: number, units: string) => {
+        lines.push(`  <Item name="${name}" units="${units}">`);
+        lines.push('    <Columns units="">');
+        lines.push('      <Col label="0" />');
+        lines.push('    </Columns>');
+        lines.push('    <Rows units="">');
+        lines.push('      <Row label="0">');
+        lines.push(`        <Cell value="${value}" />`);
+        lines.push('      </Row>');
+        lines.push('    </Rows>');
+        lines.push('  </Item>');
+        lines.push('');
+    };
+
+    const warmupTempsF = [3, 32, 61, 90, 118, 147, 176, 205, 234, 262, 291, 320];
+    const warmupValues = [3.52, 2.72, 1.38, 1.03, 0.96, 0.91, 0.91, 0.91, 0.91, 0.91, 0.91, 0.91];
+
+    lines.push('  <Item name="Warmup Enrichment" units="AFR">');
+    lines.push('    <Columns units="Fahrenheit">');
+    for (const temp of warmupTempsF) {
+        lines.push(`      <Col label="${temp}" />`);
+    }
+    lines.push('    </Columns>');
+    lines.push('    <Rows units="">');
+    lines.push('      <Row label="0">');
+    for (const val of warmupValues) {
+        lines.push(`        <Cell value="${val}" />`);
+    }
+    lines.push('      </Row>');
+    lines.push('    </Rows>');
+    lines.push('  </Item>');
+    lines.push('');
+
+    addScalarItem('Engine Temp Entry', 113, 'Fahrenheit');
+    addScalarItem('Engine Temp Exit', 108, 'Fahrenheit');
+    addScalarItem('Entry Time', 2.99, 's');
+
     lines.push('</PVV>');
     
     return lines.join('\n');

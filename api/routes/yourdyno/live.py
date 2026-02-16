@@ -81,6 +81,51 @@ def _build_live_payload() -> dict[str, Any]:
     return payload
 
 
+def _yourdyno_sample_to_drain_entries(sample_dict: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Convert one YourDyno sample dict (from sample.to_dict()) into JetDrive-style
+    per-channel drain entries so the frontend VE heatmap and drain parser get
+    name/value/timestamp and can accumulate VE cell hits.
+    """
+    ts = sample_dict.get("timestamp_ms")
+    if ts is None:
+        return []
+    entries: list[dict[str, Any]] = []
+    # Channel name and optional alias so frontend lookups (e.g. "MAP kPa", "Engine RPM") work
+    channel_specs: list[tuple[str, str, str, list[str] | None]] = [
+        ("engine_rpm", "Engine RPM", "rpm", None),
+        ("roller_rpm", "Roller RPM", "rpm", None),
+        ("horsepower", "Horsepower", "HP", None),
+        ("torque_ftlb", "Torque", "ft-lb", None),
+        ("horsepower_wheel", "Wheel Horsepower", "HP", None),
+        ("torque_wheel_ftlb", "Wheel Torque", "ft-lb", None),
+        ("afr", "AFR", ":1", None),
+        ("afr_front", "AFR Front", ":1", None),
+        ("afr_rear", "AFR Rear", ":1", None),
+        ("map_kpa", "MAP", "kPa", ["MAP kPa"]),
+        ("tps", "TPS", "%", None),
+        ("iat_f", "IAT", "F", None),
+        ("ect_f", "ECT", "F", None),
+        ("force_lbs", "Force", "lbs", None),
+        ("acceleration", "Acceleration", "g", None),
+        ("speed_mph", "Speed", "mph", None),
+        ("ambient_temp_f", "Ambient Temp", "F", None),
+        ("ambient_pressure_inhg", "Ambient Pressure", "inHg", None),
+        ("ambient_humidity", "Ambient Humidity", "%", None),
+    ]
+    for key, name, units, aliases in channel_specs:
+        val = sample_dict.get(key)
+        if val is None or not isinstance(val, (int, float)):
+            continue
+        value = float(val)
+        entry = {"name": name, "value": value, "timestamp": ts, "units": units}
+        entries.append(entry)
+        if aliases:
+            for alias in aliases:
+                entries.append({"name": alias, "value": value, "timestamp": ts, "units": units})
+    return entries
+
+
 @live_bp.route("/discover", methods=["GET"])
 def discover_bridge():
     """Check whether DynoAIBridge TCP server is reachable."""
@@ -197,10 +242,19 @@ def get_live_data():
 @live_bp.route("/live/drain", methods=["GET"])
 def drain_live_samples():
     with _live_data_lock:
-        samples = list(_sample_ring)
+        raw_samples = list(_sample_ring)
         _sample_ring.clear()
         capturing = bool(_live_data.get("capturing"))
         last_update_ts = _live_data.get("last_update_ts")
+    # Expand YourDyno sample dicts into JetDrive-style per-channel entries
+    # so the frontend drain parser (name/value/timestamp) and VE heatmap get data.
+    samples: list[dict[str, Any]] = []
+    for s in raw_samples:
+        if isinstance(s, dict) and ("engine_rpm" in s or "timestamp_ms" in s):
+            samples.extend(_yourdyno_sample_to_drain_entries(s))
+        elif isinstance(s, dict) and "name" in s and "value" in s and "timestamp" in s:
+            # Already per-channel (e.g. from a future code path)
+            samples.append(s)
     return jsonify(
         {
             "samples": samples,

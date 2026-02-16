@@ -43,6 +43,10 @@ export interface ParsedPVV {
     veFront?: PVVTable;
     veRear?: PVVTable;
     afrTarget?: PVVTable;
+    warmupEnrichment?: PVVTable;
+    engineTempEntryF?: number;
+    engineTempExitF?: number;
+    entryTimeS?: number;
     /** Engine displacement from PVV "Engine Displacement" item (CID). */
     engineDisplacementCid?: number;
     /** Calibration/part number from PVV "Calibration ID" item (ASCII). */
@@ -477,6 +481,18 @@ export function parsePVV(xmlContent: string): ParsedPVV {
                         const cid = Math.round(table.values[0][0]);
                         result.engineDisplacementCid = cid;
                         result.inferredEngineFamily = PVV_ENGINE_FAMILY_MAP[cid];
+                    }
+                    if (table.name === "Warmup Enrichment") {
+                        result.warmupEnrichment = table;
+                    }
+                    if (table.name === "Engine Temp Entry" && table.values[0]?.[0] != null) {
+                        result.engineTempEntryF = table.values[0][0];
+                    }
+                    if (table.name === "Engine Temp Exit" && table.values[0]?.[0] != null) {
+                        result.engineTempExitF = table.values[0][0];
+                    }
+                    if (table.name === "Entry Time" && table.values[0]?.[0] != null) {
+                        result.entryTimeS = table.values[0][0];
                     }
                     if (table.name === "Calibration ID" && table.values[0]?.length) {
                         result.calibrationId = table.values[0]
