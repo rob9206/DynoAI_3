@@ -4,8 +4,9 @@ Tests for /api/runs endpoints.
 The runs endpoint provides listing and details for analysis runs.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 
 class TestRunsListEndpoint:
@@ -128,8 +129,12 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
             "stats": {
                 "rows_read": 500,
                 "front_accepted": 120,
@@ -138,7 +143,11 @@ class TestManifestConversion:
                 "max_correction": 9.5,
             },
             "outputs": [],
-            "config": {"args": {"smooth_passes": 2}},
+            "config": {
+                "args": {
+                    "smooth_passes": 2
+                }
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-123")
         assert result["analysisMetrics"]["avgCorrection"] == 3.75
@@ -149,8 +158,12 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
             "stats": {
                 "rows_read": 500,
                 "front_accepted": 120,
@@ -159,7 +172,11 @@ class TestManifestConversion:
                 "max_correction": 9.5,
             },
             "outputs": [],
-            "config": {"args": {"smooth_passes": 2}},
+            "config": {
+                "args": {
+                    "smooth_passes": 2
+                }
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-123")
         assert result["analysisMetrics"]["maxCorrection"] == 9.5
@@ -170,15 +187,21 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
             "stats": {
                 "rows_read": 100,
                 "front_accepted": 50,
                 "rear_accepted": 30,
             },
             "outputs": [],
-            "config": {"args": {}},
+            "config": {
+                "args": {}
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-abc")
         assert result["analysisMetrics"]["avgCorrection"] == 0.0
@@ -190,11 +213,21 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
-            "stats": {"rows_read": 750, "front_accepted": 200, "rear_accepted": 150},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
+            "stats": {
+                "rows_read": 750,
+                "front_accepted": 200,
+                "rear_accepted": 150
+            },
             "outputs": [],
-            "config": {"args": {}},
+            "config": {
+                "args": {}
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-xyz")
         assert result["rowsProcessed"] == 750
@@ -205,11 +238,21 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
-            "stats": {"rows_read": 400, "front_accepted": 110, "rear_accepted": 90},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
+            "stats": {
+                "rows_read": 400,
+                "front_accepted": 110,
+                "rear_accepted": 90
+            },
             "outputs": [],
-            "config": {"args": {}},
+            "config": {
+                "args": {}
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-xyz")
         assert result["correctionsApplied"] == 200
@@ -220,14 +263,28 @@ class TestManifestConversion:
         from api.app import convert_manifest_to_frontend_format
 
         manifest = {
-            "timing": {"start": "2025-01-01T00:00:00Z"},
-            "input": {"path": "test.csv"},
-            "stats": {"rows_read": 100, "front_accepted": 50, "rear_accepted": 30},
+            "timing": {
+                "start": "2025-01-01T00:00:00Z"
+            },
+            "input": {
+                "path": "test.csv"
+            },
+            "stats": {
+                "rows_read": 100,
+                "front_accepted": 50,
+                "rear_accepted": 30
+            },
             "outputs": [
-                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
+                {
+                    "name": "VE_Correction_Delta_DYNO.csv",
+                    "path": "VE_Correction_Delta_DYNO.csv",
+                },
             ],
-            "config": {"args": {}},
+            "config": {
+                "args": {}
+            },
         }
         result = convert_manifest_to_frontend_format(manifest, "run-42")
         assert len(result["outputFiles"]) == 1
-        assert result["outputFiles"][0]["url"] == "/api/download/run-42/VE_Correction_Delta_DYNO.csv"
+        assert (result["outputFiles"][0]["url"] ==
+                "/api/download/run-42/VE_Correction_Delta_DYNO.csv")

@@ -42,12 +42,6 @@ import math
 import sys
 import threading
 from pathlib import Path
-
-# Add project root to path for imports
-root_dir = Path(__file__).parent.parent
-if str(root_dir) not in sys.path:
-    sys.path.insert(0, str(root_dir))
-
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
 from dynoai.constants import (
@@ -66,6 +60,11 @@ from dynoai.constants import (
 )
 from dynoai.core import io_contracts
 from dynoai.core.io_contracts import sanitize_csv_cell
+
+# Add project root to path for imports
+root_dir = Path(__file__).parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -172,8 +171,7 @@ def compute_ve_delta(
     if not measured or not target:
         raise ValueError("Inputs cannot be empty")
     if len(measured) != len(target) or any(
-        len(m) != len(t) for m, t in zip(measured, target)
-    ):
+            len(m) != len(t) for m, t in zip(measured, target)):
         raise ValueError("Shape mismatch between measured and target grids")
 
     def clamp_val(v: float, limit: float) -> float:
@@ -282,13 +280,13 @@ def safe_float(x: Any) -> Optional[float]:
         if math.isnan(value) or math.isinf(value):
             return None
         return value
-    except (ValueError, TypeError):  # Specific exceptions instead of broad Exception
+    except (ValueError,
+            TypeError):  # Specific exceptions instead of broad Exception
         return None
 
 
-def find_column_by_candidates(
-    headers: List[str], candidates: Sequence[str]
-) -> Optional[str]:
+def find_column_by_candidates(headers: List[str],
+                              candidates: Sequence[str]) -> Optional[str]:
     """
     Find a column header matching one of the candidate strings.
 
@@ -314,7 +312,10 @@ def find_column_by_candidates(
     valid_headers = [h for h in headers if h is not None]
 
     # Pass 1: Exact match (case-insensitive, space/underscore normalized)
-    headers_norm = {h: h.strip().lower().replace("_", " ") for h in valid_headers}
+    headers_norm = {
+        h: h.strip().lower().replace("_", " ")
+        for h in valid_headers
+    }
     for c in candidates:
         for h_orig, h_norm in headers_norm.items():
             if c == h_norm:
@@ -361,8 +362,9 @@ def mad(xs: Sequence[Optional[float]]) -> Optional[float]:
 
 
 def kernel_smooth(
-    grid: List[List[Optional[float]]], passes: int = 2, gradient_threshold: float = 1.0
-) -> List[List[Optional[float]]]:
+        grid: List[List[Optional[float]]],
+        passes: int = 2,
+        gradient_threshold: float = 1.0) -> List[List[Optional[float]]]:
     """
     Gradient-limited kernel smoothing for VE corrections (K1 Kernel).
 
@@ -389,7 +391,10 @@ def kernel_smooth(
     log_decision(
         action="SMOOTHING_START",
         reason=f"Starting gradient-limited smoothing with {passes} passes, threshold={gradient_threshold}%",
-        values={"passes": passes, "gradient_threshold": gradient_threshold},
+        values={
+            "passes": passes,
+            "gradient_threshold": gradient_threshold
+        },
     )
 
     rows, cols = len(grid), len(grid[0])
@@ -440,8 +445,7 @@ def kernel_smooth(
             else:
                 # Linear taper between 1.0% and 3.0%
                 taper_factor = (3.0 - abs_correction) / (
-                    3.0 - 1.0
-                )  # 1.0 at 1%, 0.0 at 3%
+                    3.0 - 1.0)  # 1.0 at 1%, 0.0 at 3%
                 adaptive_passes = int(round(passes * taper_factor))
 
             # Apply adaptive smoothing passes to this cell
@@ -480,13 +484,14 @@ def kernel_smooth(
             # If gradient is above threshold, blend back toward original
             if gradient_magnitude > gradient_threshold:
                 # Blend factor: higher gradient = more weight to original
-                blend_factor = min(1.0, gradient_magnitude / (gradient_threshold * 2))
+                blend_factor = min(
+                    1.0, gradient_magnitude / (gradient_threshold * 2))
                 # blend_factor = 0.5 when gradient = threshold
                 # blend_factor = 1.0 when gradient = threshold * 2
 
                 gradient_limited_grid[r][c] = (
-                    1 - blend_factor
-                ) * smoothed_val + blend_factor * original_val
+                    1 -
+                    blend_factor) * smoothed_val + blend_factor * original_val
 
                 # Log gradient limiting for significant cases
                 if gradient_magnitude > gradient_threshold * 1.5:
@@ -501,7 +506,10 @@ def kernel_smooth(
                             "smoothed": round(smoothed_val, 2),
                             "result": round(gradient_limited_grid[r][c], 2),
                         },
-                        cell={"rpm_index": r, "kpa_index": c},
+                        cell={
+                            "rpm_index": r,
+                            "kpa_index": c
+                        },
                     )
 
     # Stage 4: Coverage-weighted smoothing (same as original)
@@ -549,13 +557,13 @@ def kernel_smooth(
             if len(neighbor_values) >= min_hits:
                 # Weighted average with alpha blending
                 weighted_sum = sum(
-                    v * w for v, w in zip(neighbor_values, neighbor_weights)
-                )
+                    v * w for v, w in zip(neighbor_values, neighbor_weights))
                 total_weight = sum(neighbor_weights)
                 smoothed_val = weighted_sum / total_weight
 
                 # Blend with original value using alpha
-                final_grid[r][c] = alpha * smoothed_val + (1 - alpha) * center_val
+                final_grid[r][c] = alpha * smoothed_val + (1 -
+                                                           alpha) * center_val
             # If insufficient neighbors, keep original value
 
     return final_grid
@@ -577,9 +585,8 @@ def write_matrix_csv(
             row: List[Any] = [sanitize_csv_cell(rpm)]
             for ci in range(len(kpa_bins)):
                 cell_value = grid[ri][ci]
-                formatted_value = (
-                    "" if cell_value is None else value_fmt.format(cell_value)
-                )
+                formatted_value = ("" if cell_value is None else
+                                   value_fmt.format(cell_value))
                 row.append(sanitize_csv_cell(formatted_value))
             writer.writerow(row)
     return str(target)
@@ -587,7 +594,8 @@ def write_matrix_csv(
 
 OUTPUT_SPECS: Sequence[Tuple[str, str, str, bool]] = [
     ("VE_Correction_Delta_DYNO.csv", "csv", "ve_delta_grid", True),
-    ("Spark_Adjust_Suggestion_Front.csv", "csv", "spark_suggestion_front", True),
+    ("Spark_Adjust_Suggestion_Front.csv", "csv", "spark_suggestion_front",
+     True),
     ("Spark_Adjust_Suggestion_Rear.csv", "csv", "spark_suggestion_rear", True),
     ("AFR_Error_Map_Front.csv", "csv", "afr_error_front", True),
     ("AFR_Error_Map_Rear.csv", "csv", "afr_error_rear", True),
@@ -607,9 +615,9 @@ OUTPUT_SPECS: Sequence[Tuple[str, str, str, bool]] = [
 
 
 def register_outputs(
-    manifest: Dict[str, Any],
-    outdir: Path,
-    extra_specs: Sequence[Tuple[str, str, str, bool]] = (),
+        manifest: Dict[str, Any],
+        outdir: Path,
+        extra_specs: Sequence[Tuple[str, str, str, bool]] = (),
 ) -> None:
     """Record generated artifacts in the manifest."""
 
@@ -641,7 +649,8 @@ def write_paste_block(
         row_vals: List[str] = []
         for ki in range(len(KPA_BINS)):
             cell_value = grid[ri][ki]
-            formatted_value = "" if cell_value is None else value_fmt.format(cell_value)
+            formatted_value = "" if cell_value is None else value_fmt.format(
+                cell_value)
             row_vals.append(str(sanitize_csv_cell(formatted_value)))
         lines.append("\t".join(row_vals))
     target = io_contracts.safe_path(str(path))
@@ -649,9 +658,8 @@ def write_paste_block(
     return str(target)
 
 
-def write_grid_csv_absolute(
-    path: str | Path, grid: List[List[Optional[float]]]
-) -> None:
+def write_grid_csv_absolute(path: str | Path,
+                            grid: List[List[Optional[float]]]) -> None:
     target = io_contracts.safe_path(str(path))
     with open(target, "w", newline="") as f:
         writer = csv.writer(f)
@@ -698,7 +706,9 @@ def detect_csv_format(path: str | Path) -> str:
         "afr meas",
         "knock",
     ]
-    generic_markers = ["engspeed (rpm)", "afr measured", "time (s)", "throttle (%)"]
+    generic_markers = [
+        "engspeed (rpm)", "afr measured", "time (s)", "throttle (%)"
+    ]
     powervision_markers = [
         "(harley - ecu",
         "(pv) engine speed",
@@ -730,28 +740,29 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
     - Skips comment lines (starting with #) before reading headers.
     """
     target = io_contracts.safe_path(str(path))
-    with open(
-        target, newline="", encoding="utf-8-sig"
-    ) as f:  # Use utf-8-sig for BOM safety
+    with open(target, newline="",
+              encoding="utf-8-sig") as f:  # Use utf-8-sig for BOM safety
         # Skip comment lines (starting with #) before reading headers
         lines = []
         for line in f:
             stripped = line.strip()
-            if stripped and not stripped.startswith('#'):
+            if stripped and not stripped.startswith("#"):
                 lines.append(line)
             elif not stripped:
                 lines.append(line)  # Keep empty lines for DictReader
-        
+
         # Create a file-like object from the filtered lines
         from io import StringIO
-        filtered_content = ''.join(lines)
+
+        filtered_content = "".join(lines)
         reader = csv.DictReader(StringIO(filtered_content))
 
         def normalize_header(h: str) -> str:
             return h.lower().strip()
 
         reader.fieldnames = [
-            normalize_header(fn) if fn else "" for fn in (reader.fieldnames or [])
+            normalize_header(fn) if fn else ""
+            for fn in (reader.fieldnames or [])
         ]
         rows: List[Dict[str, str]] = list(reader)
     if not rows:
@@ -764,55 +775,45 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         return find_column_by_candidates(headers, candidates)
 
     # Column discovery (normalized for generic & PowerVision)
-    col_rpm = find_col(
-        [
-            "engine speed",
-            "engspeed (rpm)",
-            "(pv) engine speed",
-            "(harley - ecu type 22 sw level 621) engine speed",
-            "rpm",
-        ]
-    )
-    col_map = find_col(
-        [
-            "manifold absolute pressure",
-            "map (kpa)",
-            "(pv) manifold absolute pressure",
-            "(harley - ecu type 22 sw level 621) manifold absolute pressure",
-            "map",
-            "map kpa",
-        ]
-    )
-    col_torque = find_col(
-        [
-            "torque",
-            "(dwr cpu) torque",
-            "(dwrt cpu) torque",
-            "(dwrt cpu) torque drum 1",
-            "(dwrt cpu) torque (uncorrected)",
-            "(pv) torque",
-            "engine torque",
-        ]
-    )
+    col_rpm = find_col([
+        "engine speed",
+        "engspeed (rpm)",
+        "(pv) engine speed",
+        "(harley - ecu type 22 sw level 621) engine speed",
+        "rpm",
+    ])
+    col_map = find_col([
+        "manifold absolute pressure",
+        "map (kpa)",
+        "(pv) manifold absolute pressure",
+        "(harley - ecu type 22 sw level 621) manifold absolute pressure",
+        "map",
+        "map kpa",
+    ])
+    col_torque = find_col([
+        "torque",
+        "(dwr cpu) torque",
+        "(dwrt cpu) torque",
+        "(dwrt cpu) torque drum 1",
+        "(dwrt cpu) torque (uncorrected)",
+        "(pv) torque",
+        "engine torque",
+    ])
     col_hp = find_col(["horsepower", "hp", "(pv) horsepower", "(pv) power"])
-    col_afr_cmd = find_col(
-        [
-            "desired air/fuel",
-            "afr commanded",
-            "desired afr",
-            "afr target",
-            "commanded afr",
-        ]
-    )
-    col_afr_meas = find_col(
-        [
-            "wbo2 afr front",
-            "afr measured",
-            "measured afr",
-            "(pv) wbo2 afr front",
-            "(pv) afr meas",
-        ]
-    )
+    col_afr_cmd = find_col([
+        "desired air/fuel",
+        "afr commanded",
+        "desired afr",
+        "afr target",
+        "commanded afr",
+    ])
+    col_afr_meas = find_col([
+        "wbo2 afr front",
+        "afr measured",
+        "measured afr",
+        "(pv) wbo2 afr front",
+        "(pv) afr meas",
+    ])
     col_iat = find_col(["intake air temperature", "iat (°f)", "iat"])
     col_batt = find_col(["battery voltage", "battery (v)", "vbatt"])
     col_tps = find_col(["throttle position", "throttle (%)", "tps"])
@@ -833,12 +834,8 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
     recs: List[Dict[str, Optional[float]]] = []
 
     def afr_invalid(v: Optional[float]) -> bool:
-        return (
-            v is None
-            or v < AFR_RANGE_MIN
-            or v > AFR_RANGE_MAX
-            or abs(v - INVALID_AFR_SENTINEL) < 1e-6
-        )
+        return (v is None or v < AFR_RANGE_MIN or v > AFR_RANGE_MAX
+                or abs(v - INVALID_AFR_SENTINEL) < 1e-6)
 
     for row in rows:
         rpm = safe_float(row.get(col_rpm)) if col_rpm else None
@@ -892,25 +889,23 @@ def load_generic_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         if torque is None:
             continue
 
-        recs.append(
-            {
-                "rpm": rpm,
-                "kpa": kpa,
-                "tq": torque,
-                "hp": horsepower,
-                "tps": tps,
-                "iat": iat,
-                "batt": batt,
-                "afr_cmd_f": afr_cmd,
-                "afr_cmd_r": afr_cmd,
-                "afr_meas_f": afr_meas,
-                "afr_meas_r": afr_meas,
-                "afr_err_f_pct": afr_err_pct,
-                "afr_err_r_pct": afr_err_pct,
-                "knock_f": 0.0,
-                "knock_r": 0.0,  # Generic format has no knock data
-            }
-        )
+        recs.append({
+            "rpm": rpm,
+            "kpa": kpa,
+            "tq": torque,
+            "hp": horsepower,
+            "tps": tps,
+            "iat": iat,
+            "batt": batt,
+            "afr_cmd_f": afr_cmd,
+            "afr_cmd_r": afr_cmd,
+            "afr_meas_f": afr_meas,
+            "afr_meas_r": afr_meas,
+            "afr_err_f_pct": afr_err_pct,
+            "afr_err_r_pct": afr_err_pct,
+            "knock_f": 0.0,
+            "knock_r": 0.0,  # Generic format has no knock data
+        })
     return recs
 
 
@@ -945,15 +940,17 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         lines = []
         for line in f:
             stripped = line.strip()
-            if stripped and not stripped.startswith('#'):
+            if stripped and not stripped.startswith("#"):
                 lines.append(line)
             elif not stripped:
                 lines.append(line)  # Keep empty lines for DictReader
-        
+
         # Create a file-like object from the filtered lines
         from io import StringIO
-        filtered_content = ''.join(lines)
-        reader = csv.DictReader(StringIO(filtered_content), dialect=dialect) if dialect else csv.DictReader(StringIO(filtered_content))
+
+        filtered_content = "".join(lines)
+        reader = (csv.DictReader(StringIO(filtered_content), dialect=dialect)
+                  if dialect else csv.DictReader(StringIO(filtered_content)))
         rows: List[Dict[str, str]] = list(reader)  # raw strings from CSV/TXT
     if not rows:
         raise RuntimeError("Empty WinPEP CSV.")
@@ -964,29 +961,23 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
     col_map = find_column_by_candidates(headers, ["map", "kpa"])
     col_torque = find_column_by_candidates(headers, ["torque"])
     col_afr_cmd_f = find_column_by_candidates(
-        headers, ["afr cmd f", "cmd afr f", "afr target f", "commanded afr f"]
-    )
+        headers, ["afr cmd f", "cmd afr f", "afr target f", "commanded afr f"])
     col_afr_cmd_r = find_column_by_candidates(
-        headers, ["afr cmd r", "cmd afr r", "afr target r", "commanded afr r"]
-    )
+        headers, ["afr cmd r", "cmd afr r", "afr target r", "commanded afr r"])
     col_afr_meas_f = find_column_by_candidates(
-        headers, ["afr meas f", "afr f", "measured afr f", "wb afr f", "o2 f"]
-    )
+        headers, ["afr meas f", "afr f", "measured afr f", "wb afr f", "o2 f"])
     col_afr_meas_r = find_column_by_candidates(
-        headers, ["afr meas r", "afr r", "measured afr r", "wb afr r", "o2 r"]
-    )
+        headers, ["afr meas r", "afr r", "measured afr r", "wb afr r", "o2 r"])
     col_knock_f = find_column_by_candidates(
-        headers, ["knock ret f", "knock f", "spark retard f"]
-    )
+        headers, ["knock ret f", "knock f", "spark retard f"])
     col_knock_r = find_column_by_candidates(
-        headers, ["knock ret r", "knock r", "spark retard r"]
-    )
+        headers, ["knock ret r", "knock r", "spark retard r"])
     col_iat = find_column_by_candidates(headers, ["iat", "intake air"])
-    col_batt = find_column_by_candidates(headers, ["battery", "vbatt", "voltage"])
+    col_batt = find_column_by_candidates(headers,
+                                         ["battery", "vbatt", "voltage"])
     col_tps = find_column_by_candidates(headers, ["tps", "throttle"])
     col_hp = find_column_by_candidates(
-        headers, ["hp", "horsepower"]
-    )  # Find horsepower column
+        headers, ["hp", "horsepower"])  # Find horsepower column
 
     # Performance: Only log if debug level is enabled
     if logger.isEnabledFor(logging.DEBUG):
@@ -1013,9 +1004,8 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
             missing.append("Torque")
 
         # Get available column names for user reference
-        available_cols = (
-            ", ".join(f"'{col}'" for col in rows[0].keys()) if rows else "none"
-        )
+        available_cols = (", ".join(
+            f"'{col}'" for col in rows[0].keys()) if rows else "none")
 
         raise RuntimeError(
             f"Missing required columns in WinPEP CSV: {', '.join(missing)}\n\n"
@@ -1025,8 +1015,7 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
             f"Expected column patterns:\n"
             f"  - RPM: 'rpm', 'engine rpm', 'motor rpm'\n"
             f"  - MAP: 'map', 'kpa', 'manifold', 'pressure'\n"
-            f"  - Torque: 'torque', 'tq', 'ft-lb'"
-        )
+            f"  - Torque: 'torque', 'tq', 'ft-lb'")
 
     recs: List[Dict[str, Optional[float]]] = []
     for row in rows:
@@ -1037,10 +1026,14 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         if rpm is None or kpa is None or torque is None:
             continue
         horsepower = safe_float(row.get(col_hp)) if col_hp else None
-        afr_cmd_f = safe_float(row.get(col_afr_cmd_f)) if col_afr_cmd_f else None
-        afr_cmd_r = safe_float(row.get(col_afr_cmd_r)) if col_afr_cmd_r else None
-        afr_meas_f = safe_float(row.get(col_afr_meas_f)) if col_afr_meas_f else None
-        afr_meas_r = safe_float(row.get(col_afr_meas_r)) if col_afr_meas_r else None
+        afr_cmd_f = safe_float(
+            row.get(col_afr_cmd_f)) if col_afr_cmd_f else None
+        afr_cmd_r = safe_float(
+            row.get(col_afr_cmd_r)) if col_afr_cmd_r else None
+        afr_meas_f = safe_float(
+            row.get(col_afr_meas_f)) if col_afr_meas_f else None
+        afr_meas_r = safe_float(
+            row.get(col_afr_meas_r)) if col_afr_meas_r else None
         knock_f = safe_float(row.get(col_knock_f)) if col_knock_f else None
         knock_r = safe_float(row.get(col_knock_r)) if col_knock_r else None
         iat = safe_float(row.get(col_iat)) if col_iat else None
@@ -1054,25 +1047,23 @@ def load_winpep_csv(path: str | Path) -> List[Dict[str, Optional[float]]]:
         if afr_cmd_r is not None and afr_meas_r is not None and afr_meas_r > 0:
             afr_err_r_pct = (afr_cmd_r - afr_meas_r) / afr_meas_r * 100.0
 
-        recs.append(
-            {
-                "rpm": rpm,
-                "kpa": kpa,
-                "tq": torque,
-                "hp": horsepower,
-                "tps": tps,
-                "afr_cmd_f": afr_cmd_f,
-                "afr_cmd_r": afr_cmd_r,
-                "afr_meas_f": afr_meas_f,
-                "afr_meas_r": afr_meas_r,
-                "afr_err_f_pct": afr_err_f_pct,
-                "afr_err_r_pct": afr_err_r_pct,
-                "knock_f": knock_f,
-                "knock_r": knock_r,
-                "iat": iat,
-                "batt": batt,
-            }
-        )
+        recs.append({
+            "rpm": rpm,
+            "kpa": kpa,
+            "tq": torque,
+            "hp": horsepower,
+            "tps": tps,
+            "afr_cmd_f": afr_cmd_f,
+            "afr_cmd_r": afr_cmd_r,
+            "afr_meas_f": afr_meas_f,
+            "afr_meas_r": afr_meas_r,
+            "afr_err_f_pct": afr_err_f_pct,
+            "afr_err_r_pct": afr_err_r_pct,
+            "knock_f": knock_f,
+            "knock_r": knock_r,
+            "iat": iat,
+            "batt": batt,
+        })
     return recs
 
 
@@ -1081,13 +1072,13 @@ def dyno_bin_aggregate(
     cyl: str = "f",
     use_hp_weight: bool = False,
 ) -> Tuple[
-    List[List[Optional[float]]],  # AFR Error Grid
-    List[List[float]],
-    List[List[Optional[float]]],
-    List[List[int]],
-    Dict[str, Any],
-    List[List[Optional[float]]],  # Torque Grid
-    List[List[Optional[float]]],  # HP Grid
+        List[List[Optional[float]]],  # AFR Error Grid
+        List[List[float]],
+        List[List[Optional[float]]],
+        List[List[int]],
+        Dict[str, Any],
+        List[List[Optional[float]]],  # Torque Grid
+        List[List[Optional[float]]],  # HP Grid
 ]:
     """
     Aggregate AFR error data by bin with diagnostics.
@@ -1103,11 +1094,13 @@ def dyno_bin_aggregate(
     tq_sums: List[List[float]] = [[0.0 for _ in KPA_BINS] for _ in RPM_BINS]
     hp_sums: List[List[float]] = [[0.0 for _ in KPA_BINS] for _ in RPM_BINS]
     knock_max: List[List[float]] = [[0.0 for _ in KPA_BINS] for _ in RPM_BINS]
-    iat_max: List[List[Optional[float]]] = [[None for _ in KPA_BINS] for _ in RPM_BINS]
+    iat_max: List[List[Optional[float]]] = [[None for _ in KPA_BINS]
+                                            for _ in RPM_BINS]
     coverage: List[List[int]] = [[0 for _ in KPA_BINS] for _ in RPM_BINS]
 
     # Per-bin storage for all accepted AFR error values (for MAD calculation)
-    bin_values: List[List[List[float]]] = [[[] for _ in KPA_BINS] for _ in RPM_BINS]
+    bin_values: List[List[List[float]]] = [[[] for _ in KPA_BINS]
+                                           for _ in RPM_BINS]
 
     # Diagnostic counters
     diagnostics: Dict[str, Any] = {
@@ -1115,7 +1108,8 @@ def dyno_bin_aggregate(
         "temp_out_of_range": 0,
         "map_out_of_range": 0,
         "tps_out_of_range": 0,
-        "ve_out_of_range": 0,  # Reserved for future use if VE validation is added
+        "ve_out_of_range":
+        0,  # Reserved for future use if VE validation is added
         "bad_afr_or_request_afr": 0,
         "no_requested_afr": 0,
         "total_records_processed": 0,
@@ -1151,8 +1145,7 @@ def dyno_bin_aggregate(
 
         # Validate AFR values are in reasonable range
         if not (AFR_RANGE[0] <= afr_cmd <= AFR_RANGE[1]) or not (
-            AFR_RANGE[0] <= afr_meas <= AFR_RANGE[1]
-        ):
+                AFR_RANGE[0] <= afr_meas <= AFR_RANGE[1]):
             diagnostics["bad_afr_or_request_afr"] += 1
             continue
 
@@ -1174,8 +1167,10 @@ def dyno_bin_aggregate(
             diagnostics["tps_out_of_range"] += 1
             continue
 
-        rpm_value = cast(float, r["rpm"])  # ensured non-None by load_winpep_csv
-        kpa_value = cast(float, r["kpa"])  # ensured non-None by load_winpep_csv
+        rpm_value = cast(float,
+                         r["rpm"])  # ensured non-None by load_winpep_csv
+        kpa_value = cast(float,
+                         r["kpa"])  # ensured non-None by load_winpep_csv
         rpm_bin = nearest_bin(rpm_value, RPM_BINS)
         kpa_bin = nearest_bin(kpa_value, KPA_BINS)
         # Performance: Use O(1) dict lookup instead of O(n) list.index()
@@ -1218,7 +1213,11 @@ def dyno_bin_aggregate(
                     "afr_commanded": round(afr_cmd, 2) if afr_cmd else None,
                     "afr_measured": round(afr_meas, 2) if afr_meas else None,
                 },
-                cell={"rpm": rpm_bin, "kpa": kpa_bin, "cylinder": cyl},
+                cell={
+                    "rpm": rpm_bin,
+                    "kpa": kpa_bin,
+                    "cylinder": cyl
+                },
             )
 
         assert afr_err is not None
@@ -1240,7 +1239,8 @@ def dyno_bin_aggregate(
         # Track max knock and max IAT for gating/suggestions
         kret = r.get(knock_key)
         if kret is not None:
-            knock_max[rpm_index][kpa_index] = max(knock_max[rpm_index][kpa_index], kret)
+            knock_max[rpm_index][kpa_index] = max(
+                knock_max[rpm_index][kpa_index], kret)
         iat = r.get("iat")
         # Safely track the maximum IAT value seen for this cell.
         if iat is not None:
@@ -1248,28 +1248,32 @@ def dyno_bin_aggregate(
             if current_iat is None or iat > current_iat:
                 iat_max[rpm_index][kpa_index] = iat
 
-    grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS] for _ in RPM_BINS]
-    tq_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS] for _ in RPM_BINS]
-    hp_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS] for _ in RPM_BINS]
-    mad_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS] for _ in RPM_BINS]
+    grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS]
+                                         for _ in RPM_BINS]
+    tq_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS]
+                                            for _ in RPM_BINS]
+    hp_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS]
+                                            for _ in RPM_BINS]
+    mad_grid: List[List[Optional[float]]] = [[None for _ in KPA_BINS]
+                                             for _ in RPM_BINS]
 
     for rpm_index in range(len(RPM_BINS)):
         for kpa_index in range(len(KPA_BINS)):
             if weights[rpm_index][kpa_index] > 0.0:
-                grid[rpm_index][kpa_index] = (
-                    sums[rpm_index][kpa_index] / weights[rpm_index][kpa_index]
-                )
+                grid[rpm_index][kpa_index] = (sums[rpm_index][kpa_index] /
+                                              weights[rpm_index][kpa_index])
                 # Only calculate average if sums were populated
                 if tq_sums[rpm_index][kpa_index] > 0.0:
                     tq_grid[rpm_index][kpa_index] = (
-                        tq_sums[rpm_index][kpa_index] / weights[rpm_index][kpa_index]
-                    )
+                        tq_sums[rpm_index][kpa_index] /
+                        weights[rpm_index][kpa_index])
                 if hp_sums[rpm_index][kpa_index] > 0.0:
                     hp_grid[rpm_index][kpa_index] = (
-                        hp_sums[rpm_index][kpa_index] / weights[rpm_index][kpa_index]
-                    )
+                        hp_sums[rpm_index][kpa_index] /
+                        weights[rpm_index][kpa_index])
                 # Calculate MAD for this bin
-                mad_grid[rpm_index][kpa_index] = mad(bin_values[rpm_index][kpa_index])
+                mad_grid[rpm_index][kpa_index] = mad(
+                    bin_values[rpm_index][kpa_index])
 
     # Add per-bin statistics to diagnostics
     diagnostics["per_bin_stats"] = {"mad": mad_grid, "hits": coverage}
@@ -1292,7 +1296,7 @@ def grid_map(
 
 
 def clamp_grid(
-    grid: List[List[Optional[float]]], limit: float
+        grid: List[List[Optional[float]]], limit: float
 ) -> Tuple[List[List[Optional[float]]], List[Dict[str, Any]]]:
     """Clamp grid values to +/- limit, logging significant clamps.
 
@@ -1319,14 +1323,12 @@ def clamp_grid(
 
                 # Log if value was actually clamped
                 if abs(original - clamped) > 0.01:
-                    clamped_cells.append(
-                        {
-                            "rpm_index": r_idx,
-                            "kpa_index": c_idx,
-                            "original": round(original, 2),
-                            "clamped": round(clamped, 2),
-                        }
-                    )
+                    clamped_cells.append({
+                        "rpm_index": r_idx,
+                        "kpa_index": c_idx,
+                        "original": round(original, 2),
+                        "clamped": round(clamped, 2),
+                    })
             else:
                 result_row.append(None)
         result.append(result_row)
@@ -1345,8 +1347,8 @@ def clamp_grid(
 
 
 def combine_front_rear(
-    f_grid: List[List[Optional[float]]], r_grid: List[List[Optional[float]]]
-) -> List[List[Optional[float]]]:
+        f_grid: List[List[Optional[float]]],
+        r_grid: List[List[Optional[float]]]) -> List[List[Optional[float]]]:
     rows = len(f_grid)
     cols = len(f_grid[0]) if rows else 0
     out: List[List[Optional[float]]] = [[None] * cols for _ in range(rows)]
@@ -1421,7 +1423,8 @@ def apply_delta_to_base(
             elif delta_value is None:
                 out[row_index][col_index] = base_value
             else:
-                out[row_index][col_index] = base_value * (1.0 + delta_value / 100.0)
+                out[row_index][col_index] = base_value * (1.0 +
+                                                          delta_value / 100.0)
     return out
 
 
@@ -1438,9 +1441,8 @@ def read_grid_csv(path: str | Path) -> List[List[Optional[float]]]:
     kpa = [int(float(x)) for x in hdr[1:6]]
     if kpa != KPA_BINS:
         raise RuntimeError(f"{target} MAP bins {kpa} != expected {KPA_BINS}")
-    grid: List[List[Optional[float]]] = [
-        [None] * len(KPA_BINS) for _ in range(len(RPM_BINS))
-    ]
+    grid: List[List[Optional[float]]] = [[None] * len(KPA_BINS)
+                                         for _ in range(len(RPM_BINS))]
     for row in rows[1:]:
         if not row:
             continue
@@ -1474,30 +1476,28 @@ def coverage_csv(path: str | Path, coverage: List[List[int]]) -> None:
 # --- Anomaly detection helpers ---
 
 
-def robust_stats(values: Sequence[Optional[float]]) -> Tuple[Optional[float], float]:
+def robust_stats(
+        values: Sequence[Optional[float]]) -> Tuple[Optional[float], float]:
     vals: List[float] = [float(v) for v in values if v is not None]
     if not vals:
         return None, 1e-6
     vals_sorted: List[float] = sorted(vals)
     count = len(vals_sorted)
-    median: float = (
-        vals_sorted[count // 2]
-        if count % 2 == 1
-        else 0.5 * (vals_sorted[count // 2 - 1] + vals_sorted[count // 2])
-    )
+    median: float = (vals_sorted[count // 2] if count % 2 == 1 else 0.5 *
+                     (vals_sorted[count // 2 - 1] + vals_sorted[count // 2]))
     # MAD
     dev: List[float] = [abs(v - median) for v in vals_sorted]
     dev_sorted: List[float] = sorted(dev)
-    mad_val: float = (
-        dev_sorted[count // 2]
-        if count % 2 == 1
-        else 0.5 * (dev_sorted[count // 2 - 1] + dev_sorted[count // 2])
-    )
+    mad_val: float = (dev_sorted[count // 2] if count % 2 == 1 else 0.5 *
+                      (dev_sorted[count // 2 - 1] + dev_sorted[count // 2]))
     return median, mad_val if mad_val > 0 else 1e-6
 
 
-def robust_z_grid(grid: List[List[Optional[float]]]) -> List[List[Optional[float]]]:
-    vals: List[float] = [float(v) for row in grid for v in row if v is not None]
+def robust_z_grid(
+        grid: List[List[Optional[float]]]) -> List[List[Optional[float]]]:
+    vals: List[float] = [
+        float(v) for row in grid for v in row if v is not None
+    ]
     if not vals:
         return [[None for _ in row] for row in grid]
     med, mad = robust_stats(vals)
@@ -1514,7 +1514,8 @@ def robust_z_grid(grid: List[List[Optional[float]]]) -> List[List[Optional[float
     return out
 
 
-def spatial_roughness(grid: List[List[Optional[float]]]) -> List[List[Optional[float]]]:
+def spatial_roughness(
+        grid: List[List[Optional[float]]]) -> List[List[Optional[float]]]:
     # Laplacian-like magnitude |cell - avg(neighbors)|
     rows: int = len(grid)
     cols: int = len(grid[0]) if rows else 0
@@ -1545,9 +1546,8 @@ def spatial_roughness(grid: List[List[Optional[float]]]) -> List[List[Optional[f
             if not neigh:
                 rough[row_index][col_index] = 0.0
             else:
-                rough[row_index][col_index] = abs(
-                    cell_value - (sum(neigh) / len(neigh))
-                )
+                rough[row_index][col_index] = abs(cell_value -
+                                                  (sum(neigh) / len(neigh)))
     return rough
 
 
@@ -1590,7 +1590,9 @@ def anomaly_diagnostics(
     # 1) Spatial discontinuity
     rough = spatial_roughness(ve_delta_grid)
     # robust z on roughness values
-    rough_vals: List[float] = [float(v) for row in rough for v in row if v is not None]
+    rough_vals: List[float] = [
+        float(v) for row in rough for v in row if v is not None
+    ]
     if rough_vals:
         med, mad = robust_stats(rough_vals)
         # Median should be defined when rough_vals is non-empty
@@ -1600,13 +1602,20 @@ def anomaly_diagnostics(
                 roughness_value = rough[rpm_index][kpa_index]
                 if roughness_value is None:
                     continue
-                z_score = 0.6745 * (roughness_value - med) / mad if mad > 0 else 0.0
+                z_score = 0.6745 * (roughness_value -
+                                    med) / mad if mad > 0 else 0.0
                 if z_score > 3.5 and coverage[rpm_index][kpa_index] > 0:
                     anomaly = {
-                        "type": "Spatial discontinuity",
-                        "score": float(z_score),
-                        "cell": {"rpm": rpm, "kpa": kpa},
-                        "explanation": "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
+                        "type":
+                        "Spatial discontinuity",
+                        "score":
+                        float(z_score),
+                        "cell": {
+                            "rpm": rpm,
+                            "kpa": kpa
+                        },
+                        "explanation":
+                        "Large VE change vs neighbors; could be data artifact or real airflow quirk.",
                         "next_checks": [
                             "Re-run steady-state in this cell",
                             "Inspect for vacuum leaks, throttle sync, or sensor noise",
@@ -1617,92 +1626,110 @@ def anomaly_diagnostics(
                     log_decision(
                         action="ANOMALY_DETECTED",
                         reason=anomaly["explanation"],
-                        values={"type": anomaly["type"], "score": anomaly["score"]},
-                        cell={"rpm": rpm, "kpa": kpa},
+                        values={
+                            "type": anomaly["type"],
+                            "score": anomaly["score"]
+                        },
+                        cell={
+                            "rpm": rpm,
+                            "kpa": kpa
+                        },
                     )
 
     # 2) Rear vs Front bias in mid band
-    diff_grid: List[List[Optional[float]]] = [
-        [None] * len(KPA_BINS) for _ in range(len(RPM_BINS))
-    ]
+    diff_grid: List[List[Optional[float]]] = [[None] * len(KPA_BINS)
+                                              for _ in range(len(RPM_BINS))]
     for rpm_index in range(len(RPM_BINS)):
         for kpa_index in range(len(KPA_BINS)):
             front_value = afr_err_f[rpm_index][kpa_index]
             rear = afr_err_r[rpm_index][kpa_index]
-            diff_grid[rpm_index][kpa_index] = (
-                None if front_value is None or rear is None else (rear - front_value)
-            )
+            diff_grid[rpm_index][kpa_index] = (None if front_value is None
+                                               or rear is None else
+                                               (rear - front_value))
     mid_diff = avg_band(diff_grid, 2500, 3800, 65, 95)
     if mid_diff is not None and abs(mid_diff) >= 3.0:
-        anomalies.append(
-            {
-                "type": "Cylinder fueling imbalance",
-                "score": float(abs(mid_diff)),
-                "cell_band": {"rpm": [2500, 3800], "kpa": [65, 95]},
-                "explanation": f"Rear minus front AFR error ~ {mid_diff:+.1f}% in mid band; suggests rear needs VE bias or injector variance.",
-                "next_checks": [
-                    "Flow test injectors",
-                    "Apply rear VE bias 2–3% then retest",
-                    "Check exhaust leaks near rear sensor",
-                ],
-            }
-        )
+        anomalies.append({
+            "type":
+            "Cylinder fueling imbalance",
+            "score":
+            float(abs(mid_diff)),
+            "cell_band": {
+                "rpm": [2500, 3800],
+                "kpa": [65, 95]
+            },
+            "explanation":
+            f"Rear minus front AFR error ~ {mid_diff:+.1f}% in mid band; suggests rear needs VE bias or injector variance.",
+            "next_checks": [
+                "Flow test injectors",
+                "Apply rear VE bias 2–3% then retest",
+                "Check exhaust leaks near rear sensor",
+            ],
+        })
 
     # 3) Low-MAP lean only
-    lowmap = avg_band(combine_front_rear(afr_err_f, afr_err_r), 1500, 2500, 35, 50)
-    midmap = avg_band(combine_front_rear(afr_err_f, afr_err_r), 2500, 3500, 65, 80)
+    lowmap = avg_band(combine_front_rear(afr_err_f, afr_err_r), 1500, 2500, 35,
+                      50)
+    midmap = avg_band(combine_front_rear(afr_err_f, afr_err_r), 2500, 3500, 65,
+                      80)
     if lowmap is not None and midmap is not None and (lowmap - midmap) >= 4.0:
-        anomalies.append(
-            {
-                "type": "Possible exhaust leak (low MAP bias)",
-                "score": float(lowmap - midmap),
-                "cell_band": {"rpm": [1500, 2500], "kpa": [35, 50]},
-                "explanation": "Lean bias at low MAP not seen at higher load suggests O2 contamination/leak upstream.",
-                "next_checks": [
-                    "Smoke test exhaust joints",
-                    "Check O2 bung welds",
-                    "Use TT sensor condition test in ambient air",
-                ],
-            }
-        )
+        anomalies.append({
+            "type":
+            "Possible exhaust leak (low MAP bias)",
+            "score":
+            float(lowmap - midmap),
+            "cell_band": {
+                "rpm": [1500, 2500],
+                "kpa": [35, 50]
+            },
+            "explanation":
+            "Lean bias at low MAP not seen at higher load suggests O2 contamination/leak upstream.",
+            "next_checks": [
+                "Smoke test exhaust joints",
+                "Check O2 bung welds",
+                "Use TT sensor condition test in ambient air",
+            ],
+        })
 
     # 4) Knock + Hot IAT cluster
     hot_knock_cells: List[Dict[str, Any]] = []
     for ri, rpm in enumerate(RPM_BINS):
         for ki, kpa in enumerate(KPA_BINS):
-            if (knock_f[ri][ki] and knock_f[ri][ki] >= 1.5) or (
-                knock_r[ri][ki] and knock_r[ri][ki] >= 1.5
-            ):
+            if (knock_f[ri][ki] and knock_f[ri][ki]
+                    >= 1.5) or (knock_r[ri][ki] and knock_r[ri][ki] >= 1.5):
                 hot = False
                 iatf = iat_f[ri][ki]
                 iatr = iat_r[ri][ki]
-                if (iatf is not None and iatf >= 120) or (
-                    iatr is not None and iatr >= 120
-                ):
+                if (iatf is not None and iatf >= 120) or (iatr is not None
+                                                          and iatr >= 120):
                     hot = True
-                hot_knock_cells.append(
-                    {"rpm": RPM_BINS[ri], "kpa": KPA_BINS[ki], "hot": hot}
-                )
+                hot_knock_cells.append({
+                    "rpm": RPM_BINS[ri],
+                    "kpa": KPA_BINS[ki],
+                    "hot": hot
+                })
     if hot_knock_cells:
-        anomalies.append(
-            {
-                "type": "Knock cluster",
-                "score": float(len(hot_knock_cells)),
-                "cells": hot_knock_cells[:10],
-                "explanation": "Knock retard ≥1.5° observed; hotter cells likely need richer AFR and/or timing pull.",
-                "next_checks": [
-                    "Richen 0.1–0.2 λ eq. in affected cells",
-                    "Pull 1–2° timing; validate",
-                ],
-            }
-        )
+        anomalies.append({
+            "type":
+            "Knock cluster",
+            "score":
+            float(len(hot_knock_cells)),
+            "cells":
+            hot_knock_cells[:10],
+            "explanation":
+            "Knock retard ≥1.5° observed; hotter cells likely need richer AFR and/or timing pull.",
+            "next_checks": [
+                "Richen 0.1–0.2 λ eq. in affected cells",
+                "Pull 1–2° timing; validate",
+            ],
+        })
 
     # 5) Battery correlation
     # Build arrays of (afr_err, batt) during positive torque
     afr_errs: List[float] = []
     batts: List[float] = []
     for rec in recs:
-        if rec["tq"] is not None and rec["tq"] > 5.0 and rec["batt"] is not None:
+        if rec["tq"] is not None and rec["tq"] > 5.0 and rec[
+                "batt"] is not None:
             # combine f/r errors if present
             if rec["afr_err_f_pct"] is not None:
                 afr_errs.append(rec["afr_err_f_pct"])
@@ -1714,25 +1741,25 @@ def anomaly_diagnostics(
         # Pearson correlation
         mean_afr_error = sum(afr_errs) / len(afr_errs)
         mean_battery = sum(batts) / len(batts)
-        num = sum(
-            (x - mean_afr_error) * (y - mean_battery) for x, y in zip(afr_errs, batts)
-        )
-        denx = math.sqrt(sum((x - mean_afr_error) ** 2 for x in afr_errs))
-        deny = math.sqrt(sum((y - mean_battery) ** 2 for y in batts))
+        num = sum((x - mean_afr_error) * (y - mean_battery)
+                  for x, y in zip(afr_errs, batts))
+        denx = math.sqrt(sum((x - mean_afr_error)**2 for x in afr_errs))
+        deny = math.sqrt(sum((y - mean_battery)**2 for y in batts))
         corr = num / (denx * deny) if denx > 0 and deny > 0 else 0.0
         if corr <= -0.4:  # lower volts -> more error
-            anomalies.append(
-                {
-                    "type": "Electrical supply correlation",
-                    "score": float(abs(corr)),
-                    "explanation": f"AFR error correlates with low battery voltage (r={corr:+.2f}); injector latency or pump voltage sag may bias fueling.",
-                    "next_checks": [
-                        "Log battery voltage under load",
-                        "Check grounds/charging",
-                        "Compensate injector offset if supported",
-                    ],
-                }
-            )
+            anomalies.append({
+                "type":
+                "Electrical supply correlation",
+                "score":
+                float(abs(corr)),
+                "explanation":
+                f"AFR error correlates with low battery voltage (r={corr:+.2f}); injector latency or pump voltage sag may bias fueling.",
+                "next_checks": [
+                    "Log battery voltage under load",
+                    "Check grounds/charging",
+                    "Compensate injector offset if supported",
+                ],
+            })
 
     return anomalies
 
@@ -1806,7 +1833,9 @@ def find_power_opportunities(
                 continue
 
             # Calculate average AFR error (positive = rich, negative = lean)
-            afr_errors = [e for e in [afr_err_front, afr_err_rear] if e is not None]
+            afr_errors = [
+                e for e in [afr_err_front, afr_err_rear] if e is not None
+            ]
             if not afr_errors:
                 continue
 
@@ -1826,30 +1855,34 @@ def find_power_opportunities(
                     estimated_hp_gain = hp_current * (lean_suggestion * 0.02)
                 else:
                     # Estimate based on typical HP for this RPM/load
-                    estimated_hp_gain = (
-                        (rpm / 1000) * (kpa / 100) * lean_suggestion * 0.5
-                    )
+                    estimated_hp_gain = ((rpm / 1000) * (kpa / 100) *
+                                         lean_suggestion * 0.5)
 
-                opportunities.append(
-                    {
-                        "type": "Lean AFR",
-                        "rpm": rpm,
-                        "kpa": kpa,
-                        "suggestion": f"Lean by {lean_suggestion:.1f}% (currently {avg_afr_err:+.1f}% rich)",
-                        "estimated_gain_hp": round(estimated_hp_gain, 2),
-                        "confidence": confidence,
-                        "coverage": coverage_total,
-                        "current_hp": round(hp_current, 1) if hp_current else None,
-                        "details": {
-                            "afr_error_pct": round(avg_afr_err, 2),
-                            "suggested_change_pct": round(
-                                -lean_suggestion, 2
-                            ),  # Negative = lean
-                            "knock_front": round(knock_front, 2),
-                            "knock_rear": round(knock_rear, 2),
-                        },
-                    }
-                )
+                opportunities.append({
+                    "type":
+                    "Lean AFR",
+                    "rpm":
+                    rpm,
+                    "kpa":
+                    kpa,
+                    "suggestion":
+                    f"Lean by {lean_suggestion:.1f}% (currently {avg_afr_err:+.1f}% rich)",
+                    "estimated_gain_hp":
+                    round(estimated_hp_gain, 2),
+                    "confidence":
+                    confidence,
+                    "coverage":
+                    coverage_total,
+                    "current_hp":
+                    round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "afr_error_pct": round(avg_afr_err, 2),
+                        "suggested_change_pct": round(-lean_suggestion,
+                                                      2),  # Negative = lean
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    },
+                })
 
             # Opportunity 2: Timing advance potential (no knock, not already suggested to advance)
             # If spark suggestion is 0 or slightly negative but no knock, there's room to advance
@@ -1863,71 +1896,76 @@ def find_power_opportunities(
                 if hp_current is not None and hp_current > 0:
                     estimated_hp_gain = hp_current * (timing_advance * 0.03)
                 else:
-                    estimated_hp_gain = (
-                        (rpm / 1000) * (kpa / 100) * timing_advance * 0.8
-                    )
+                    estimated_hp_gain = ((rpm / 1000) * (kpa / 100) *
+                                         timing_advance * 0.8)
 
-                opportunities.append(
-                    {
-                        "type": "Advance Timing",
-                        "rpm": rpm,
-                        "kpa": kpa,
-                        "suggestion": f"Advance timing by {timing_advance:.1f}° (no knock detected)",
-                        "estimated_gain_hp": round(estimated_hp_gain, 2),
-                        "confidence": confidence,
-                        "coverage": coverage_total,
-                        "current_hp": round(hp_current, 1) if hp_current else None,
-                        "details": {
-                            "current_suggestion_deg": round(avg_spark_suggest, 2),
-                            "advance_deg": round(timing_advance, 2),
-                            "knock_front": round(knock_front, 2),
-                            "knock_rear": round(knock_rear, 2),
-                        },
-                    }
-                )
+                opportunities.append({
+                    "type":
+                    "Advance Timing",
+                    "rpm":
+                    rpm,
+                    "kpa":
+                    kpa,
+                    "suggestion":
+                    f"Advance timing by {timing_advance:.1f}° (no knock detected)",
+                    "estimated_gain_hp":
+                    round(estimated_hp_gain, 2),
+                    "confidence":
+                    confidence,
+                    "coverage":
+                    coverage_total,
+                    "current_hp":
+                    round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "current_suggestion_deg": round(avg_spark_suggest, 2),
+                        "advance_deg": round(timing_advance, 2),
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    },
+                })
 
             # Opportunity 3: Combined opportunity (rich + no knock = lean AND advance)
-            if (
-                avg_afr_err > RICH_THRESHOLD_PCT
-                and knock_front < 0.1
-                and knock_rear < 0.1
-            ):
+            if (avg_afr_err > RICH_THRESHOLD_PCT and knock_front < 0.1
+                    and knock_rear < 0.1):
                 lean_suggestion = min(avg_afr_err * 0.5, MAX_AFR_CHANGE_PCT)
-                timing_advance = min(
-                    MAX_TIMING_ADVANCE_DEG, 1.5
-                )  # More conservative when combining
+                timing_advance = min(MAX_TIMING_ADVANCE_DEG,
+                                     1.5)  # More conservative when combining
 
                 # Combined gains are multiplicative (but use conservative estimate)
                 if hp_current is not None and hp_current > 0:
                     afr_gain = hp_current * (lean_suggestion * 0.02)
                     timing_gain = hp_current * (timing_advance * 0.03)
-                    estimated_hp_gain = (
-                        afr_gain + timing_gain * 0.8
-                    )  # Reduce timing gain when combined
+                    estimated_hp_gain = (afr_gain + timing_gain * 0.8
+                                         )  # Reduce timing gain when combined
                 else:
-                    estimated_hp_gain = (
-                        (rpm / 1000) * (kpa / 100) * (lean_suggestion + timing_advance)
-                    )
+                    estimated_hp_gain = ((rpm / 1000) * (kpa / 100) *
+                                         (lean_suggestion + timing_advance))
 
-                opportunities.append(
-                    {
-                        "type": "Combined (AFR + Timing)",
-                        "rpm": rpm,
-                        "kpa": kpa,
-                        "suggestion": f"Lean by {lean_suggestion:.1f}% AND advance {timing_advance:.1f}°",
-                        "estimated_gain_hp": round(estimated_hp_gain, 2),
-                        "confidence": confidence,
-                        "coverage": coverage_total,
-                        "current_hp": round(hp_current, 1) if hp_current else None,
-                        "details": {
-                            "afr_error_pct": round(avg_afr_err, 2),
-                            "suggested_afr_change_pct": round(-lean_suggestion, 2),
-                            "advance_deg": round(timing_advance, 2),
-                            "knock_front": round(knock_front, 2),
-                            "knock_rear": round(knock_rear, 2),
-                        },
-                    }
-                )
+                opportunities.append({
+                    "type":
+                    "Combined (AFR + Timing)",
+                    "rpm":
+                    rpm,
+                    "kpa":
+                    kpa,
+                    "suggestion":
+                    f"Lean by {lean_suggestion:.1f}% AND advance {timing_advance:.1f}°",
+                    "estimated_gain_hp":
+                    round(estimated_hp_gain, 2),
+                    "confidence":
+                    confidence,
+                    "coverage":
+                    coverage_total,
+                    "current_hp":
+                    round(hp_current, 1) if hp_current else None,
+                    "details": {
+                        "afr_error_pct": round(avg_afr_err, 2),
+                        "suggested_afr_change_pct": round(-lean_suggestion, 2),
+                        "advance_deg": round(timing_advance, 2),
+                        "knock_front": round(knock_front, 2),
+                        "knock_rear": round(knock_rear, 2),
+                    },
+                })
 
     # Sort by estimated HP gain (highest first)
     opportunities.sort(key=lambda x: x["estimated_gain_hp"], reverse=True)
@@ -1958,7 +1996,8 @@ def write_session_replay(outdir: str | Path, run_id: str) -> None:
     with open(replay_path, "w", encoding="utf-8") as f:
         json.dump(replay_data, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"Session replay log written: {len(session_log)} decisions logged")
+    logger.info(
+        f"Session replay log written: {len(session_log)} decisions logged")
 
 
 def calculate_tune_confidence(
@@ -1992,9 +2031,18 @@ def calculate_tune_confidence(
 
     # Define operating regions
     regions = {
-        "idle": {"rpm_range": (1000, 2000), "kpa_range": (20, 40)},
-        "cruise": {"rpm_range": (2000, 3500), "kpa_range": (40, 70)},
-        "wot": {"rpm_range": (3000, 6500), "kpa_range": (85, 105)},
+        "idle": {
+            "rpm_range": (1000, 2000),
+            "kpa_range": (20, 40)
+        },
+        "cruise": {
+            "rpm_range": (2000, 3500),
+            "kpa_range": (40, 70)
+        },
+        "wot": {
+            "rpm_range": (3000, 6500),
+            "kpa_range": (85, 105)
+        },
     }
 
     total_cells = len(RPM_BINS) * len(KPA_BINS)
@@ -2010,21 +2058,21 @@ def calculate_tune_confidence(
 
         for ri, rpm in enumerate(RPM_BINS):
             for ki, kpa in enumerate(KPA_BINS):
-                if (
-                    bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1]
-                    and bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]
-                ):
+                if (bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1]
+                        and bounds["kpa_range"][0] <= kpa <=
+                        bounds["kpa_range"][1]):
                     region_total += 1
                     hits = coverage_f[ri][ki] + coverage_r[ri][ki]
                     if hits >= coverage_threshold:
                         region_covered += 1
 
         coverage_by_region[region_name] = {
-            "total": region_total,
-            "covered": region_covered,
-            "percentage": (
-                (region_covered / region_total * 100) if region_total > 0 else 0
-            ),
+            "total":
+            region_total,
+            "covered":
+            region_covered,
+            "percentage":
+            ((region_covered / region_total * 100) if region_total > 0 else 0),
         }
 
     # Overall coverage
@@ -2035,9 +2083,8 @@ def calculate_tune_confidence(
                 well_covered_cells += 1
 
     coverage_percentage = (well_covered_cells / total_cells) * 100
-    coverage_score = min(
-        100, coverage_percentage * 1.2
-    )  # Boost to make 85% coverage = 100 points
+    coverage_score = min(100, coverage_percentage *
+                         1.2)  # Boost to make 85% coverage = 100 points
 
     # 2. CONSISTENCY ANALYSIS (30% of score)
     # Lower MAD = better consistency
@@ -2054,10 +2101,10 @@ def calculate_tune_confidence(
 
                     # Categorize by region
                     for region_name, bounds in regions.items():
-                        if (
-                            bounds["rpm_range"][0] <= rpm <= bounds["rpm_range"][1]
-                            and bounds["kpa_range"][0] <= kpa <= bounds["kpa_range"][1]
-                        ):
+                        if (bounds["rpm_range"][0] <= rpm <=
+                                bounds["rpm_range"][1]
+                                and bounds["kpa_range"][0] <= kpa <=
+                                bounds["kpa_range"][1]):
                             mad_by_region[region_name].append(mad_val)
 
     avg_mad = sum(mad_values) / len(mad_values) if mad_values else 0.0
@@ -2074,7 +2121,8 @@ def calculate_tune_confidence(
 
     # 3. ANOMALY IMPACT (15% of score)
     anomaly_count = len(anomalies)
-    high_severity_anomalies = sum(1 for a in anomalies if a.get("score", 0) > 3.0)
+    high_severity_anomalies = sum(1 for a in anomalies
+                                  if a.get("score", 0) > 3.0)
 
     if anomaly_count == 0:
         anomaly_score = 100
@@ -2104,12 +2152,8 @@ def calculate_tune_confidence(
         clamp_score = max(0, 50 - (clamp_percentage - 20) * 2)
 
     # CALCULATE OVERALL SCORE
-    overall_score = (
-        coverage_score * 0.40
-        + consistency_score * 0.30
-        + anomaly_score * 0.15
-        + clamp_score * 0.15
-    )
+    overall_score = (coverage_score * 0.40 + consistency_score * 0.30 +
+                     anomaly_score * 0.15 + clamp_score * 0.15)
 
     # ASSIGN LETTER GRADE
     if overall_score >= 85:
@@ -2136,10 +2180,12 @@ def calculate_tune_confidence(
         )
         for region_name, stats in coverage_by_region.items():
             if stats["percentage"] < 50:
-                weak_areas.append(f"{region_name} ({stats['percentage']:.0f}% covered)")
+                weak_areas.append(
+                    f"{region_name} ({stats['percentage']:.0f}% covered)")
 
         if weak_areas:
-            recommendations.append(f"Focus data collection on: {', '.join(weak_areas)}")
+            recommendations.append(
+                f"Focus data collection on: {', '.join(weak_areas)}")
 
     # Consistency recommendations
     if avg_mad > 1.5:
@@ -2153,10 +2199,12 @@ def calculate_tune_confidence(
             if mad_vals:
                 region_avg_mad = sum(mad_vals) / len(mad_vals)
                 if region_avg_mad > 2.0:
-                    worst_regions.append(f"{region_name} (MAD={region_avg_mad:.2f})")
+                    worst_regions.append(
+                        f"{region_name} (MAD={region_avg_mad:.2f})")
 
         if worst_regions:
-            recommendations.append(f"Worst consistency in: {', '.join(worst_regions)}")
+            recommendations.append(
+                f"Worst consistency in: {', '.join(worst_regions)}")
 
     # Clamping recommendations
     if clamp_percentage > 10:
@@ -2173,13 +2221,13 @@ def calculate_tune_confidence(
     # Success message if score is high
     if overall_score >= 85 and not recommendations:
         recommendations.append(
-            "Tune quality is excellent. No major improvements needed."
-        )
+            "Tune quality is excellent. No major improvements needed.")
 
     # Calculate region-specific MAD averages
     region_mad_avg = {}
     for region_name, mad_vals in mad_by_region.items():
-        region_mad_avg[region_name] = sum(mad_vals) / len(mad_vals) if mad_vals else 0.0
+        region_mad_avg[region_name] = sum(mad_vals) / len(
+            mad_vals) if mad_vals else 0.0
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000
 
@@ -2248,7 +2296,8 @@ def calculate_tune_confidence(
             "calculation_time_ms": round(elapsed_ms, 2),
         },
         "methodology": {
-            "description": "Confidence score based on weighted combination of coverage, consistency, anomalies, and clamping",
+            "description":
+            "Confidence score based on weighted combination of coverage, consistency, anomalies, and clamping",
             "weights": {
                 "coverage": "40% - Cells with ≥10 hits",
                 "consistency": "30% - Average MAD (lower is better)",
@@ -2336,22 +2385,29 @@ def write_diagnostics(
                 lines.append(
                     f"  Total records processed: {diag.get('total_records_processed', 0)}"
                 )
-                lines.append(f"  Accepted WB records: {diag.get('accepted_wb', 0)}")
-                lines.append(f"  No requested AFR: {diag.get('no_requested_afr', 0)}")
+                lines.append(
+                    f"  Accepted WB records: {diag.get('accepted_wb', 0)}")
+                lines.append(
+                    f"  No requested AFR: {diag.get('no_requested_afr', 0)}")
                 lines.append(
                     f"  Bad AFR or request AFR: {diag.get('bad_afr_or_request_afr', 0)}"
                 )
-                lines.append(f"  Temp out of range: {diag.get('temp_out_of_range', 0)}")
-                lines.append(f"  MAP out of range: {diag.get('map_out_of_range', 0)}")
-                lines.append(f"  TPS out of range: {diag.get('tps_out_of_range', 0)}")
-                lines.append(f"  VE out of range: {diag.get('ve_out_of_range', 0)}")
+                lines.append(
+                    f"  Temp out of range: {diag.get('temp_out_of_range', 0)}")
+                lines.append(
+                    f"  MAP out of range: {diag.get('map_out_of_range', 0)}")
+                lines.append(
+                    f"  TPS out of range: {diag.get('tps_out_of_range', 0)}")
+                lines.append(
+                    f"  VE out of range: {diag.get('ve_out_of_range', 0)}")
                 lines.append("")
         lines.append("")
 
     lines.append("=== Anomaly Detection ===")
     lines.append("")
     if not anomalies:
-        lines.append("No strong anomalies detected under current data/thresholds.")
+        lines.append(
+            "No strong anomalies detected under current data/thresholds.")
     else:
         for i, anomaly_raw in enumerate(anomalies, 1):
             anomaly = anomaly_raw  # No need to cast if types are correct
@@ -2360,54 +2416,55 @@ def write_diagnostics(
             )
             cell = cast(Optional[Dict[str, Any]], anomaly.get("cell"))
             if cell is not None:
-                lines.append(f"   cell: RPM {cell.get('rpm')} / {cell.get('kpa')} kPa")
-            cell_band = cast(Optional[Dict[str, Any]], anomaly.get("cell_band"))
+                lines.append(
+                    f"   cell: RPM {cell.get('rpm')} / {cell.get('kpa')} kPa")
+            cell_band = cast(Optional[Dict[str, Any]],
+                             anomaly.get("cell_band"))
             if cell_band is not None:
                 lines.append(
                     f"   band: RPM {cell_band.get('rpm')} / kPa {cell_band.get('kpa')}"
                 )
             cells = cast(Sequence[Dict[str, Any]], anomaly.get("cells", []))
             if cells:
-                cells_s = ", ".join(
-                    [
-                        f"({c.get('rpm')},{c.get('kpa')}{' hot' if c.get('hot') else ''})"
-                        for c in cells
-                    ]
-                )
+                cells_s = ", ".join([
+                    f"({c.get('rpm')},{c.get('kpa')}{' hot' if c.get('hot') else ''})"
+                    for c in cells
+                ])
                 lines.append(f"   cells: {cells_s} ...")
             lines.append(f"   why: {anomaly.get('explanation', '')}")
             next_checks = cast(Sequence[str], anomaly.get("next_checks", []))
             lines.append(f"   next: {', '.join(next_checks)}")
     safe_outdir = io_contracts.safe_path(str(outdir))
-    Path(safe_outdir, "Diagnostics_Report.txt").write_text(
-        "\n".join(lines), encoding="utf-8"
-    )
+    Path(safe_outdir, "Diagnostics_Report.txt").write_text("\n".join(lines),
+                                                           encoding="utf-8")
 
     # Machine-readable
     diagnostic_output: Dict[str, Any] = {
         "anomalies": anomalies,
         "correction_diagnostics": correction_diagnostics or {},
     }
-    Path(safe_outdir, "Anomaly_Hypotheses.json").write_text(
-        json.dumps(diagnostic_output, indent=2), encoding="utf-8"
-    )
+    Path(safe_outdir,
+         "Anomaly_Hypotheses.json").write_text(json.dumps(diagnostic_output,
+                                                          indent=2),
+                                               encoding="utf-8")
 
     # Write confidence report separately if provided
     if confidence_report:
-        Path(safe_outdir, "ConfidenceReport.json").write_text(
-            json.dumps(confidence_report, indent=2), encoding="utf-8"
-        )
+        Path(safe_outdir,
+             "ConfidenceReport.json").write_text(json.dumps(confidence_report,
+                                                            indent=2),
+                                                 encoding="utf-8")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Dyno-mode AI tuner v1.2 (VE apply + diagnostics)"
-    )
+        description="Dyno-mode AI tuner v1.2 (VE apply + diagnostics)")
     ap.add_argument("--csv", required=True, help="WinPEP8 export CSV path.")
     ap.add_argument("--outdir", default=".", help="Output directory.")
-    ap.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose debug logging."
-    )
+    ap.add_argument("--verbose",
+                    "-v",
+                    action="store_true",
+                    help="Enable verbose debug logging.")
     ap.add_argument(
         "--weighting",
         choices=["torque", "hp"],
@@ -2547,13 +2604,15 @@ def main() -> int:
         try:
             base_front_path = io_contracts.safe_path(args.base_front)
         except ValueError as e:
-            print(f"[ERROR] Invalid base front VE table path: {e}", file=sys.stderr)
+            print(f"[ERROR] Invalid base front VE table path: {e}",
+                  file=sys.stderr)
             return 1
     if args.base_rear:
         try:
             base_rear_path = io_contracts.safe_path(args.base_rear)
         except ValueError as e:
-            print(f"[ERROR] Invalid base rear VE table path: {e}", file=sys.stderr)
+            print(f"[ERROR] Invalid base rear VE table path: {e}",
+                  file=sys.stderr)
             return 1
 
     outdir.mkdir(parents=True, exist_ok=True)
@@ -2562,7 +2621,8 @@ def main() -> int:
 
     # Check if input CSV exists before proceeding
     try:
-        input_info: Dict[str, Any] = io_contracts.csv_schema_check(str(csv_path))
+        input_info: Dict[str,
+                         Any] = io_contracts.csv_schema_check(str(csv_path))
     except FileNotFoundError as e:
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
@@ -2600,20 +2660,21 @@ def main() -> int:
         if file_format == "winpep":
             recs = load_winpep_csv(str(csv_path))
         elif file_format in [
-            "generic",
-            "powervision",
+                "generic",
+                "powervision",
         ]:  # Handle both generic and powervision
             recs = load_generic_csv(str(csv_path))
         else:
             # Fallback or error
             try:
-                print("WARN: Unknown CSV format, attempting to load as WinPEP...")
+                print(
+                    "WARN: Unknown CSV format, attempting to load as WinPEP..."
+                )
                 recs = load_winpep_csv(str(csv_path))
             except RuntimeError as e:
                 raise RuntimeError(
                     "Failed to parse CSV. Format is not recognized as WinPEP or Generic.\n"
-                    f"Original error: {e}"
-                )
+                    f"Original error: {e}")
 
         last_stage = "aggregate"
         print("PROGRESS:30:Aggregating front cylinder data...")
@@ -2626,7 +2687,9 @@ def main() -> int:
             diag_f,
             tq_f,
             hp_f,
-        ) = dyno_bin_aggregate(recs, cyl="f", use_hp_weight=args.weighting == "hp")
+        ) = dyno_bin_aggregate(recs,
+                               cyl="f",
+                               use_hp_weight=args.weighting == "hp")
         print("PROGRESS:50:Aggregating rear cylinder data...")
         sys.stdout.flush()
         (
@@ -2637,7 +2700,9 @@ def main() -> int:
             diag_r,
             tq_r,
             hp_r,
-        ) = dyno_bin_aggregate(recs, cyl="r", use_hp_weight=args.weighting == "hp")
+        ) = dyno_bin_aggregate(recs,
+                               cyl="r",
+                               use_hp_weight=args.weighting == "hp")
 
         # Combine front and rear cylinder data for primary outputs
         ve_delta = combine_front_rear(afr_err_f, afr_err_r)
@@ -2649,13 +2714,13 @@ def main() -> int:
                 for ki, kpa in enumerate(KPA_BINS):
                     if 2500 <= rpm <= 3800 and 65 <= kpa <= 95:
                         if afr_err_r[ri][ki] is not None:
-                            afr_err_r[ri][ki] = (
-                                afr_err_r[ri][ki] or 0.0
-                            ) + args.rear_bias
+                            afr_err_r[ri][ki] = (afr_err_r[ri][ki]
+                                                 or 0.0) + args.rear_bias
 
         print("PROGRESS:70:Smoothing and clamping VE corrections...")
         sys.stdout.flush()
-        ve_smooth = kernel_smooth(ve_delta, passes=max(0, min(5, args.smooth_passes)))
+        ve_smooth = kernel_smooth(ve_delta,
+                                  passes=max(0, min(5, args.smooth_passes)))
         ve_clamped, clamped_cells_combined = clamp_grid(ve_smooth, args.clamp)
 
         print("PROGRESS:80:Generating spark advance suggestions...")
@@ -2672,9 +2737,8 @@ def main() -> int:
         last_stage = "export"
         print("PROGRESS:90:Writing output files...")
         sys.stdout.flush()
-        write_matrix_csv(
-            outdir / "VE_Correction_Delta_DYNO.csv", RPM_BINS, KPA_BINS, ve_clamped
-        )
+        write_matrix_csv(outdir / "VE_Correction_Delta_DYNO.csv", RPM_BINS,
+                         KPA_BINS, ve_clamped)
         write_matrix_csv(
             outdir / "Spark_Adjust_Suggestion_Front.csv",
             RPM_BINS,
@@ -2753,15 +2817,15 @@ def main() -> int:
         coverage_csv(outdir / "Coverage_Front.csv", cov_f)
         coverage_csv(outdir / "Coverage_Rear.csv", cov_r)
 
-        write_paste_block(
-            outdir / "VE_Delta_PasteReady.txt", ve_clamped, value_fmt="{:+.2f}"
-        )
-        write_paste_block(
-            outdir / "Spark_Front_PasteReady.txt", spark_f, value_fmt="{:+.2f}"
-        )
-        write_paste_block(
-            outdir / "Spark_Rear_PasteReady.txt", spark_r, value_fmt="{:+.2f}"
-        )
+        write_paste_block(outdir / "VE_Delta_PasteReady.txt",
+                          ve_clamped,
+                          value_fmt="{:+.2f}")
+        write_paste_block(outdir / "Spark_Front_PasteReady.txt",
+                          spark_f,
+                          value_fmt="{:+.2f}")
+        write_paste_block(outdir / "Spark_Rear_PasteReady.txt",
+                          spark_r,
+                          value_fmt="{:+.2f}")
 
         if base_front_path:
             base_f = read_grid_csv(str(base_front_path))
@@ -2775,27 +2839,25 @@ def main() -> int:
                 ve_abs_f,
                 value_fmt="{:.2f}",
             )
-            write_paste_block(
-                outdir / "VE_Rear_Absolute_PasteReady.txt", ve_abs_r, value_fmt="{:.2f}"
-            )
-            extra_specs.extend(
-                [
-                    ("VE_Front_Updated.csv", "csv", "ve_front_updated", True),
-                    ("VE_Rear_Updated.csv", "csv", "ve_rear_updated", True),
-                    (
-                        "VE_Front_Absolute_PasteReady.txt",
-                        "text",
-                        "ve_front_absolute_paste",
-                        False,
-                    ),
-                    (
-                        "VE_Rear_Absolute_PasteReady.txt",
-                        "text",
-                        "ve_rear_absolute_paste",
-                        False,
-                    ),
-                ]
-            )
+            write_paste_block(outdir / "VE_Rear_Absolute_PasteReady.txt",
+                              ve_abs_r,
+                              value_fmt="{:.2f}")
+            extra_specs.extend([
+                ("VE_Front_Updated.csv", "csv", "ve_front_updated", True),
+                ("VE_Rear_Updated.csv", "csv", "ve_rear_updated", True),
+                (
+                    "VE_Front_Absolute_PasteReady.txt",
+                    "text",
+                    "ve_front_absolute_paste",
+                    False,
+                ),
+                (
+                    "VE_Rear_Absolute_PasteReady.txt",
+                    "text",
+                    "ve_rear_absolute_paste",
+                    False,
+                ),
+            ])
 
         last_stage = "diagnostics"
         print("PROGRESS:95:Running anomaly diagnostics...")
@@ -2809,10 +2871,9 @@ def main() -> int:
             iat_f=iat_f,
             knock_r=knock_r,
             iat_r=iat_r,
-            coverage=[
-                [cov_f[r][k] + cov_r[r][k] for k in range(len(KPA_BINS))]
-                for r in range(len(RPM_BINS))
-            ],
+            coverage=[[
+                cov_f[r][k] + cov_r[r][k] for k in range(len(KPA_BINS))
+            ] for r in range(len(RPM_BINS))],
         )
 
         # Calculate tune confidence score
@@ -2820,12 +2881,12 @@ def main() -> int:
         sys.stdout.flush()
 
         # Extract MAD grids from diagnostics
-        mad_grid_f = diag_f.get("per_bin_stats", {}).get(
-            "mad", [[None for _ in KPA_BINS] for _ in RPM_BINS]
-        )
-        mad_grid_r = diag_r.get("per_bin_stats", {}).get(
-            "mad", [[None for _ in KPA_BINS] for _ in RPM_BINS]
-        )
+        mad_grid_f = diag_f.get("per_bin_stats",
+                                {}).get("mad", [[None for _ in KPA_BINS]
+                                                for _ in RPM_BINS])
+        mad_grid_r = diag_r.get("per_bin_stats",
+                                {}).get("mad", [[None for _ in KPA_BINS]
+                                                for _ in RPM_BINS])
 
         # For clamped cells, we need to split by cylinder (we only have combined)
         # Since we don't track separately, we'll split them evenly for the confidence calc
@@ -2848,7 +2909,8 @@ def main() -> int:
         )
 
         correction_diagnostics = {"front": diag_f, "rear": diag_r}
-        write_diagnostics(outdir, anomalies, correction_diagnostics, confidence_report)
+        write_diagnostics(outdir, anomalies, correction_diagnostics,
+                          confidence_report)
 
         # Initialize extra_specs list for additional outputs
         extra_specs: List[Tuple[str, str, str, bool]] = []
@@ -2872,13 +2934,17 @@ def main() -> int:
         power_output_path = outdir / "PowerOpportunities.json"
         power_output = {
             "summary": {
-                "total_opportunities": len(power_opportunities),
-                "total_estimated_gain_hp": round(
-                    sum(opp["estimated_gain_hp"] for opp in power_opportunities), 2
-                ),
-                "analysis_date": io_contracts.utc_now_iso(),
+                "total_opportunities":
+                len(power_opportunities),
+                "total_estimated_gain_hp":
+                round(
+                    sum(opp["estimated_gain_hp"]
+                        for opp in power_opportunities), 2),
+                "analysis_date":
+                io_contracts.utc_now_iso(),
             },
-            "opportunities": power_opportunities,
+            "opportunities":
+            power_opportunities,
             "safety_notes": [
                 "All suggestions are conservative and prioritize engine safety",
                 "Test changes incrementally and monitor for knock",
@@ -2886,9 +2952,8 @@ def main() -> int:
                 "Maximum suggested changes: ±3% AFR, +2° timing per cell",
             ],
         }
-        power_output_path.write_text(
-            json.dumps(power_output, indent=2), encoding="utf-8"
-        )
+        power_output_path.write_text(json.dumps(power_output, indent=2),
+                                     encoding="utf-8")
         print(
             f"[OK] Found {len(power_opportunities)} power opportunities, "
             f"estimated total gain: {power_output['summary']['total_estimated_gain_hp']:.2f} HP"
@@ -2896,14 +2961,23 @@ def main() -> int:
 
         ve_vals = [v for row in ve_clamped for v in row if v is not None]
         stats = {
-            "rows_read": len(recs),
-            "bins_total": len(RPM_BINS) * len(KPA_BINS),
-            "bins_covered": sum(1 for row in cov_f for value in row if value > 0),
-            "front_accepted": diag_f["accepted_wb"],
-            "rear_accepted": diag_r["accepted_wb"],
-            "power_opportunities_found": len(power_opportunities),
-            "avg_correction": round(sum(abs(v) for v in ve_vals) / len(ve_vals), 3) if ve_vals else 0.0,
-            "max_correction": round(max(abs(v) for v in ve_vals), 3) if ve_vals else 0.0,
+            "rows_read":
+            len(recs),
+            "bins_total":
+            len(RPM_BINS) * len(KPA_BINS),
+            "bins_covered":
+            sum(1 for row in cov_f for value in row if value > 0),
+            "front_accepted":
+            diag_f["accepted_wb"],
+            "rear_accepted":
+            diag_r["accepted_wb"],
+            "power_opportunities_found":
+            len(power_opportunities),
+            "avg_correction":
+            (round(sum(abs(v) for v in ve_vals) /
+                   len(ve_vals), 3) if ve_vals else 0.0),
+            "max_correction":
+            (round(max(abs(v) for v in ve_vals), 3) if ve_vals else 0.0),
         }
 
         # --- Decel Fuel Management ---
@@ -2930,16 +3004,14 @@ def main() -> int:
 
                 print(
                     f"[OK] Decel management: {decel_result['events_detected']} events detected, "
-                    f"severity={decel_result['severity_used']}"
-                )
+                    f"severity={decel_result['severity_used']}")
 
                 # Add decel outputs to manifest
-                extra_specs.extend(
-                    [
-                        ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
-                        ("Decel_Analysis_Report.json", "json", "decel_report", False),
-                    ]
-                )
+                extra_specs.extend([
+                    ("Decel_Fuel_Overlay.csv", "csv", "decel_overlay", True),
+                    ("Decel_Analysis_Report.json", "json", "decel_report",
+                     False),
+                ])
 
             except ImportError as e:
                 print(f"[WARN] Decel management module not available: {e}")
@@ -2963,27 +3035,25 @@ def main() -> int:
 
                 print(
                     f"[OK] Cylinder balancing: {balance_result['cells_imbalanced']}/{balance_result['cells_analyzed']} cells imbalanced "
-                    f"(max delta: {balance_result['max_afr_delta']:.2f} AFR)"
-                )
+                    f"(max delta: {balance_result['max_afr_delta']:.2f} AFR)")
 
                 # Add balance outputs to manifest
-                extra_specs.extend(
-                    [
-                        (
-                            "Front_Balance_Factor.csv",
-                            "csv",
-                            "front_balance_factor",
-                            True,
-                        ),
-                        ("Rear_Balance_Factor.csv", "csv", "rear_balance_factor", True),
-                        (
-                            "Cylinder_Balance_Report.json",
-                            "json",
-                            "balance_report",
-                            False,
-                        ),
-                    ]
-                )
+                extra_specs.extend([
+                    (
+                        "Front_Balance_Factor.csv",
+                        "csv",
+                        "front_balance_factor",
+                        True,
+                    ),
+                    ("Rear_Balance_Factor.csv", "csv", "rear_balance_factor",
+                     True),
+                    (
+                        "Cylinder_Balance_Report.json",
+                        "json",
+                        "balance_report",
+                        False,
+                    ),
+                ])
 
             except ImportError as e:
                 print(f"[WARN] Cylinder balancing module not available: {e}")
@@ -3006,25 +3076,37 @@ def main() -> int:
 
                     # Use sys.executable to ensure the correct python interpreter is used
                     result = subprocess.run(
-                        [sys.executable, str(vis_script_path), str(coverage_file_path)],
+                        [
+                            sys.executable,
+                            str(vis_script_path),
+                            str(coverage_file_path)
+                        ],
                         capture_output=True,
                         text=True,
                         cwd=outdir,  # Run from the output directory
                         check=False,  # Don't throw exception on non-zero exit
                     )
                     if result.returncode == 0:
-                        print("[OK] Coverage visualizations generated successfully.")
+                        print(
+                            "[OK] Coverage visualizations generated successfully."
+                        )
                     else:
-                        print("[WARN] Coverage visualization script ran with errors.")
+                        print(
+                            "[WARN] Coverage visualization script ran with errors."
+                        )
                         # Log stdout/stderr for debugging
                         if result.stdout:
                             print(f"       STDOUT: {result.stdout.strip()}")
                         if result.stderr:
                             print(f"       STDERR: {result.stderr.strip()}")
                 except Exception as vis_exc:
-                    print(f"[ERROR] Failed to run visualization script: {vis_exc}")
+                    print(
+                        f"[ERROR] Failed to run visualization script: {vis_exc}"
+                    )
             else:
-                print("[WARN] 'Coverage_Front.csv' not found, skipping visualization.")
+                print(
+                    "[WARN] 'Coverage_Front.csv' not found, skipping visualization."
+                )
         else:
             print(
                 "[WARN] 'visualize_coverage_all.py' not found, skipping visualization."
@@ -3083,11 +3165,14 @@ def main() -> int:
                 print(f"[OK] PDF report generated: {pdf_path}")
 
                 # Add PDF to outputs manifest
-                extra_specs.append(("DynoAI_Report.pdf", "pdf", "tuning_report", False))
+                extra_specs.append(
+                    ("DynoAI_Report.pdf", "pdf", "tuning_report", False))
 
             except ImportError as e:
                 print(f"[WARN] PDF report generation not available: {e}")
-                print("[WARN] Install required packages: pip install reportlab qrcode")
+                print(
+                    "[WARN] Install required packages: pip install reportlab qrcode"
+                )
             except Exception as e:
                 print(f"[WARN] PDF report generation failed: {e}")
                 logger.exception("PDF generation error")
@@ -3095,35 +3180,38 @@ def main() -> int:
 
         register_outputs(manifest, outdir, extra_specs)
         # Finalize and write manifest
-        io_contracts.finish_manifest(
-            manifest, ok=True, last_stage="export", stats=stats
-        )
+        io_contracts.finish_manifest(manifest,
+                                     ok=True,
+                                     last_stage="export",
+                                     stats=stats)
         io_contracts.write_manifest_pair(manifest, str(outdir), run_id)
 
     except Exception as e:
         print(f"[ERROR] {e}", file=sys.stderr)
         # Update manifest with error state
         if manifest:
-            io_contracts.finish_manifest(
-                manifest, ok=False, last_stage=last_stage, message=str(e)
-            )
+            io_contracts.finish_manifest(manifest,
+                                         ok=False,
+                                         last_stage=last_stage,
+                                         message=str(e))
             io_contracts.write_manifest_pair(manifest, str(outdir), run_id)
         sys.exit(1)
 
     finally:
         if manifest and manifest.get("timing", {}).get("end") is None:
             # This block is for cases where sys.exit might be called before finish_manifest
-            io_contracts.finish_manifest(
-                manifest, ok=False, last_stage=last_stage, message="Incomplete run"
-            )
+            io_contracts.finish_manifest(manifest,
+                                         ok=False,
+                                         last_stage=last_stage,
+                                         message="Incomplete run")
 
         if manifest:
             # Validate outputs against manifest
             val_ok, val_msg = io_contracts.validate_outputs_against_manifest(
-                str(outdir), manifest
-            )
+                str(outdir), manifest)
             if not val_ok:
-                print(f"[WARNING] Output validation failed: {val_msg}", file=sys.stderr)
+                print(f"[WARNING] Output validation failed: {val_msg}",
+                      file=sys.stderr)
 
     print("PROGRESS:100:Done.")
     sys.stdout.flush()
