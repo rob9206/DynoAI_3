@@ -5,6 +5,7 @@ The runs endpoint provides listing and details for analysis runs.
 """
 
 import pytest
+from datetime import datetime
 
 
 class TestRunsListEndpoint:
@@ -116,3 +117,117 @@ class TestStatusEndpointMethods:
         """Status endpoint rejects DELETE requests."""
         response = client.delete("/api/status/some-run-id")
         assert response.status_code == 405
+
+
+class TestManifestConversion:
+    """Tests for convert_manifest_to_frontend_format function."""
+
+    @staticmethod
+    def test_manifest_conversion_uses_stats_avg_correction():
+        """convert_manifest_to_frontend_format reads avgCorrection from stats."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {
+                "rows_read": 500,
+                "front_accepted": 120,
+                "rear_accepted": 80,
+                "avg_correction": 3.75,
+                "max_correction": 9.5,
+            },
+            "outputs": [],
+            "config": {"args": {"smooth_passes": 2}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-123")
+        assert result["analysisMetrics"]["avgCorrection"] == 3.75
+
+    @staticmethod
+    def test_manifest_conversion_uses_stats_max_correction():
+        """convert_manifest_to_frontend_format reads maxCorrection from stats."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {
+                "rows_read": 500,
+                "front_accepted": 120,
+                "rear_accepted": 80,
+                "avg_correction": 3.75,
+                "max_correction": 9.5,
+            },
+            "outputs": [],
+            "config": {"args": {"smooth_passes": 2}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-123")
+        assert result["analysisMetrics"]["maxCorrection"] == 9.5
+
+    @staticmethod
+    def test_manifest_conversion_defaults_to_zero_when_stats_absent():
+        """convert_manifest_to_frontend_format defaults metrics to 0.0 when missing."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {
+                "rows_read": 100,
+                "front_accepted": 50,
+                "rear_accepted": 30,
+            },
+            "outputs": [],
+            "config": {"args": {}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-abc")
+        assert result["analysisMetrics"]["avgCorrection"] == 0.0
+        assert result["analysisMetrics"]["maxCorrection"] == 0.0
+
+    @staticmethod
+    def test_manifest_conversion_rows_processed():
+        """convert_manifest_to_frontend_format maps rows_read to rowsProcessed."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {"rows_read": 750, "front_accepted": 200, "rear_accepted": 150},
+            "outputs": [],
+            "config": {"args": {}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-xyz")
+        assert result["rowsProcessed"] == 750
+
+    @staticmethod
+    def test_manifest_conversion_corrections_applied():
+        """convert_manifest_to_frontend_format sums front+rear accepted as correctionsApplied."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {"rows_read": 400, "front_accepted": 110, "rear_accepted": 90},
+            "outputs": [],
+            "config": {"args": {}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-xyz")
+        assert result["correctionsApplied"] == 200
+
+    @staticmethod
+    def test_manifest_conversion_output_files_include_download_url():
+        """convert_manifest_to_frontend_format includes correct download URLs."""
+        from api.app import convert_manifest_to_frontend_format
+
+        manifest = {
+            "timing": {"start": "2025-01-01T00:00:00Z"},
+            "input": {"path": "test.csv"},
+            "stats": {"rows_read": 100, "front_accepted": 50, "rear_accepted": 30},
+            "outputs": [
+                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
+            ],
+            "config": {"args": {}},
+        }
+        result = convert_manifest_to_frontend_format(manifest, "run-42")
+        assert len(result["outputFiles"]) == 1
+        assert result["outputFiles"][0]["url"] == "/api/download/run-42/VE_Correction_Delta_DYNO.csv"

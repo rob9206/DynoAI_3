@@ -2894,6 +2894,7 @@ def main() -> int:
             f"estimated total gain: {power_output['summary']['total_estimated_gain_hp']:.2f} HP"
         )
 
+        ve_vals = [v for row in ve_clamped for v in row if v is not None]
         stats = {
             "rows_read": len(recs),
             "bins_total": len(RPM_BINS) * len(KPA_BINS),
@@ -2901,6 +2902,8 @@ def main() -> int:
             "front_accepted": diag_f["accepted_wb"],
             "rear_accepted": diag_r["accepted_wb"],
             "power_opportunities_found": len(power_opportunities),
+            "avg_correction": round(sum(abs(v) for v in ve_vals) / len(ve_vals), 3) if ve_vals else 0.0,
+            "max_correction": round(max(abs(v) for v in ve_vals), 3) if ve_vals else 0.0,
         }
 
         # --- Decel Fuel Management ---

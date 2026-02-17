@@ -537,8 +537,8 @@ def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
             for output in manifest.get("outputs", [])
         ],
         "analysisMetrics": {
-            "avgCorrection": 2.5,  # Calculate from actual corrections if available
-            "maxCorrection": 7.0,
+            "avgCorrection": manifest.get("stats", {}).get("avg_correction", 0.0),
+            "maxCorrection": manifest.get("stats", {}).get("max_correction", 0.0),
             "targetAFR": 14.7,
             "iterations": manifest.get("config", {})
             .get("args", {})
