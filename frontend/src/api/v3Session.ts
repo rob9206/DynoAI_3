@@ -224,6 +224,16 @@ export interface ImportCorrectionsResult {
 // API functions
 // ---------------------------------------------------------------------------
 
+export interface V3StatusResult {
+  available: boolean;
+  message?: string;
+}
+
+export async function getV3Status(): Promise<V3StatusResult> {
+  const response = await api.get<V3StatusResult>("/api/v3/status");
+  return response.data;
+}
+
 export async function createSession(
   payload: CreateSessionPayload
 ): Promise<SessionInitResult> {

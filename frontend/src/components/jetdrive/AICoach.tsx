@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,7 @@ import {
 import { useV3Session } from '../../hooks/useV3Session';
 import { useApplyRollback } from '../../hooks/useApplyRollback';
 import api, { handleApiError } from '../../lib/api';
-import type { CreateSessionPayload, HardwareConfig, ConvergenceStatus } from '../../api/v3Session';
+import { getV3Status, type CreateSessionPayload, type HardwareConfig, type ConvergenceStatus } from '../../api/v3Session';
 import { TuneImport, type TuneImportResult } from './TuneImport';
 import { AFRTargetTable, DEFAULT_AFR_TARGETS } from './AFRTargetTable';
 import { calculateCoverage, getCoverageGrade } from '../../utils/veApply/coverageCalculator';
@@ -134,6 +135,19 @@ export function AICoach({
     initialCanRollback: false,
   });
 
+  const v3StatusQuery = useQuery({
+    queryKey: ['v3', 'status'],
+    queryFn: async () => {
+      try {
+        return await getV3Status();
+      } catch {
+        return { available: false as const, message: 'AI Coach is not available on this server' };
+      }
+    },
+    enabled: !sessionId,
+    staleTime: 60_000,
+  });
+
   const handleStartSession = useCallback(async () => {
     try {
       const payload: CreateSessionPayload = { ...config };
@@ -155,8 +169,8 @@ export function AICoach({
         : 'No template match';
       toast.success(`Session started — ${matchLabel}`);
     } catch (error) {
-      toast.error('Failed to start session', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+      toast.error('Failed to start AI Coach session', {
+        description: handleApiError(error),
       });
     }
   }, [config, localImportedTune, onRunIdChange, v3]);
@@ -461,18 +475,31 @@ export function AICoach({
             <div className="mt-2 text-sm text-zinc-300">
               Estimated pulls: {v3.initResult?.estimated_pulls ?? '6-8'}
             </div>
+            {v3StatusQuery.data?.available === false && !v3StatusQuery.isLoading && (
+              <div className="mt-2 text-xs text-amber-400">
+                {v3StatusQuery.data?.message ?? 'AI Coach is not available on this server'}
+              </div>
+            )}
             {v3.createError && (
               <div className="mt-2 text-xs text-red-400">
-                {v3.createError instanceof Error ? v3.createError.message : 'Session start failed'}
+                {handleApiError(v3.createError)}
               </div>
             )}
             <Button
               type="button"
               className="mt-3 w-full bg-orange-500 hover:bg-orange-600 text-white"
               onClick={handleStartSession}
-              disabled={v3.isCreating}
+              disabled={
+                v3.isCreating ||
+                v3StatusQuery.isLoading ||
+                v3StatusQuery.data?.available === false
+              }
             >
-              {v3.isCreating ? 'Starting...' : 'Start Session'}
+              {v3.isCreating
+                ? 'Starting...'
+                : v3StatusQuery.isLoading
+                  ? 'Checking...'
+                  : 'Start Session'}
             </Button>
           </div>
         </div>

@@ -99,6 +99,29 @@ If `socket_test.success` is `false`:
    - On Windows, you may need administrator privileges to bind to multicast addresses
    - Try running as administrator
 
+### AI Coach won't start ("Failed to start AI Coach session")
+
+If the AI Coach panel shows "Failed to start AI Coach session" or "Start Session" never enables:
+
+1. **Backend not running or wrong URL**
+   - Ensure the API is running and `VITE_API_URL` (frontend) points to it (e.g. `http://localhost:5001`).
+   - A network error or timeout usually means the backend is down or the URL is wrong.
+
+2. **V3 blueprint not registered**
+   - If the server failed to load the V3 module at startup, `POST /api/v3/session` returns 404.
+   - Check server startup logs for: `[!] Warning: Could not initialize V3 Session: ...`. Fix the reported exception (often a missing or broken `dynoai_v3` install).
+
+3. **Validation errors**
+   - A 400 response with a message (e.g. "engine_family is required") means the request payload is invalid. The toast description should show the backend message.
+
+4. **V3 tuning engine unavailable**
+   - If the backend returns 503 or the message "V3 tuning engine is not available", the `dynoai_v3` package is not installed or cannot be imported (e.g. missing dependency). Install or fix the `dynoai_v3` environment and restart the server.
+
+5. **Other server errors**
+   - For 500 or other errors, check backend logs for the actual exception when you click "Start Session". The toast description may show the error message; use it and the logs to diagnose.
+
+You can also check availability without starting a session: `GET /api/v3/status` returns `{ "available": true }` when the V3 engine is loadable, or `{ "available": false, "message": "..." }` when it is not.
+
 ## API Endpoints
 
 ### Multi-Discovery Endpoint

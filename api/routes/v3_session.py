@@ -21,6 +21,25 @@ v3_session_bp = Blueprint("v3_session", __name__, url_prefix="/api/v3")
 
 
 # ---------------------------------------------------------------------------
+# Availability
+# ---------------------------------------------------------------------------
+
+@v3_session_bp.route("/status", methods=["GET"])
+def v3_status():
+    """Report whether the V3 tuning engine is available (dynoai_v3 loadable)."""
+    try:
+        from dynoai_v3.session_orchestrator import TuningSession  # noqa: F401
+        from dynoai_v3.template_library import HardwareConfig  # noqa: F401
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.debug("V3 status check: not available (%s)", e)
+        return jsonify({
+            "available": False,
+            "message": "V3 tuning engine is not available. Check that dynoai_v3 is installed.",
+        }), 200
+    return jsonify({"available": True}), 200
+
+
+# ---------------------------------------------------------------------------
 # Session lifecycle
 # ---------------------------------------------------------------------------
 

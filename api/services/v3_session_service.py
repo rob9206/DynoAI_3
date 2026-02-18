@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from api.config import get_config
-from api.errors import ValidationError
+from api.errors import APIError, ValidationError
 from dynoai.core.ve_math import calculate_ve_correction, correction_to_percentage
 from dynoai.core.afr_targets import get_target_afr_for_map
 
@@ -335,8 +335,19 @@ def _import_ve_table_to_delta(table: List[List[float]]) -> Optional[np.ndarray]:
 
 def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new TuningSession, initialize it, and return status."""
-    from dynoai_v3.session_orchestrator import TuningSession
-    from dynoai_v3.template_library import HardwareConfig
+    try:
+        from dynoai_v3.session_orchestrator import TuningSession
+        from dynoai_v3.template_library import HardwareConfig
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.warning("V3 tuning engine not available: %s", e)
+        raise APIError(
+            message=(
+                "V3 tuning engine is not available. Check that dynoai_v3 is installed "
+                "and the server was started correctly."
+            ),
+            status_code=503,
+            error_code="V3_UNAVAILABLE",
+        ) from e
 
     config = HardwareConfig.from_dict(config_dict)
 
