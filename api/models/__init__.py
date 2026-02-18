@@ -2,10 +2,9 @@
 Database models for DynoAI.
 
 Provides SQLAlchemy ORM models for:
-- Analysis runs
+- Analysis runs (with user association)
 - Run files/outputs
-- Virtual tuning sessions
-- User data (future)
+- User data
 """
 
 from api.models.run import Base, Run, RunFile
