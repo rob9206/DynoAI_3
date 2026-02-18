@@ -29,14 +29,16 @@ def _build_run_dict(run, user):
         "status": run.status,
         "inputFile": run.input_file,
         "createdAt": run.created_at.isoformat() if run.created_at else None,
-        "completedAt": run.completed_at.isoformat() if run.completed_at else None,
+        "completedAt":
+        run.completed_at.isoformat() if run.completed_at else None,
         "rowsProcessed": run.rows_processed,
         "correctionsApplied": run.corrections_applied,
         "analysisMetrics": {
             "avgCorrection": run.avg_correction,
             "maxCorrection": run.max_correction,
         },
-        "outputFiles": json.loads(run.output_files) if run.output_files else [],
+        "outputFiles":
+        json.loads(run.output_files) if run.output_files else [],
     }
 
 
@@ -84,9 +86,8 @@ def list_runs():
 
         total = query.count()
 
-        runs = (
-            query.order_by(Run.created_at.desc()).offset(offset).limit(limit).all()
-        )
+        runs = query.order_by(
+            Run.created_at.desc()).offset(offset).limit(limit).all()
 
         # Collect user IDs and fetch in one query
         user_ids = {r.user_id for r in runs if r.user_id}
@@ -100,14 +101,12 @@ def list_runs():
         ]
 
     return (
-        jsonify(
-            {
-                "runs": runs_list,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-            }
-        ),
+        jsonify({
+            "runs": runs_list,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }),
         200,
     )
 

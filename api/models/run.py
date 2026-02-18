@@ -61,7 +61,9 @@ class Run(Base):
     )
 
     # Input file
-    input_file = Column(String(255), nullable=True, comment="Uploaded filename")
+    input_file = Column(String(255),
+                        nullable=True,
+                        comment="Uploaded filename")
 
     # Timestamps
     created_at = Column(
@@ -79,7 +81,9 @@ class Run(Base):
     max_correction = Column(Float, nullable=True)
 
     # Output files stored as JSON string
-    output_files = Column(Text, nullable=True, comment="JSON-encoded list of output files")
+    output_files = Column(Text,
+                          nullable=True,
+                          comment="JSON-encoded list of output files")
 
     # Error info
     error_message = Column(String(500), nullable=True)
@@ -95,19 +99,32 @@ class Run(Base):
         import json as _json
 
         return {
-            "id": self.id,
-            "run_id": self.run_id,
-            "user_id": str(self.user_id) if self.user_id else None,
-            "status": self.status,
-            "input_file": self.input_file,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "rows_processed": self.rows_processed,
-            "corrections_applied": self.corrections_applied,
-            "avg_correction": self.avg_correction,
-            "max_correction": self.max_correction,
-            "output_files": _json.loads(self.output_files) if self.output_files else [],
-            "error_message": self.error_message,
+            "id":
+            self.id,
+            "run_id":
+            self.run_id,
+            "user_id":
+            str(self.user_id) if self.user_id else None,
+            "status":
+            self.status,
+            "input_file":
+            self.input_file,
+            "created_at":
+            self.created_at.isoformat() if self.created_at else None,
+            "completed_at":
+            (self.completed_at.isoformat() if self.completed_at else None),
+            "rows_processed":
+            self.rows_processed,
+            "corrections_applied":
+            self.corrections_applied,
+            "avg_correction":
+            self.avg_correction,
+            "max_correction":
+            self.max_correction,
+            "output_files":
+            _json.loads(self.output_files) if self.output_files else [],
+            "error_message":
+            self.error_message,
         }
 
 
@@ -132,17 +149,18 @@ class RunFile(Base):
     )
 
     # File metadata
-    filename = Column(
-        String(255), nullable=False, comment="Filename (e.g., corrections.csv)"
-    )
-    file_type = Column(String(50), comment="File type: csv, json, txt, png, pdf")
+    filename = Column(String(255),
+                      nullable=False,
+                      comment="Filename (e.g., corrections.csv)")
+    file_type = Column(String(50),
+                       comment="File type: csv, json, txt, png, pdf")
     size_bytes = Column(Integer, comment="File size in bytes")
 
     # Storage
     storage_path = Column(Text, comment="Local file path or cloud storage key")
-    storage_type = Column(
-        String(20), default="local", comment="Storage backend: local, s3, gcs"
-    )
+    storage_type = Column(String(20),
+                          default="local",
+                          comment="Storage backend: local, s3, gcs")
 
     # Timestamps
     created_at = Column(
@@ -164,5 +182,6 @@ class RunFile(Base):
             "size_bytes": self.size_bytes,
             "storage_path": self.storage_path,
             "storage_type": self.storage_type,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at":
+            self.created_at.isoformat() if self.created_at else None,
         }

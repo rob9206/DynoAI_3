@@ -656,8 +656,7 @@ def analyze():
                         user_id=user_id,
                         status="queued",
                         input_file=secure_filename(file.filename),
-                    )
-                )
+                    ))
         except Exception:
             pass
         return (
@@ -686,8 +685,7 @@ def analyze():
                         user_id=user_id,
                         status="queued",
                         input_file=secure_filename(file.filename),
-                    )
-                )
+                    ))
         except Exception as db_err:
             logger.warning(f"Could not persist Run record: {db_err}")
 
@@ -796,8 +794,10 @@ def analyze():
                                 "avg_correction")
                             run_record.max_correction = stats.get(
                                 "max_correction")
-                            run_record.output_files = json.dumps(
-                                [o.get("name", o.get("path", "")) for o in outputs])
+                            run_record.output_files = json.dumps([
+                                o.get("name", o.get("path", ""))
+                                for o in outputs
+                            ])
                 except Exception as db_err:
                     logger.warning(
                         f"Could not update Run record on completion: {db_err}")
