@@ -828,10 +828,10 @@ def get_status(run_id):
         response["manifest"] = frontend_manifest
         # Hoist the file list to the top level so the frontend can enumerate
         # available downloads without navigating into the manifest object.
-        response["files"] = [
-            {"name": f["name"], "url": f["url"]}
-            for f in frontend_manifest.get("outputFiles", [])
-        ]
+        response["files"] = [{
+            "name": f["name"],
+            "url": f["url"]
+        } for f in frontend_manifest.get("outputFiles", [])]
 
     return jsonify(response), 200
 

@@ -132,8 +132,12 @@ class TestStatusFilesField:
             "params": {},
             "started_at": "2025-01-01T00:00:00",
             "manifest": {
-                "timing": {"start": "2025-01-01T00:00:00Z"},
-                "input": {"path": "test.csv"},
+                "timing": {
+                    "start": "2025-01-01T00:00:00Z"
+                },
+                "input": {
+                    "path": "test.csv"
+                },
                 "stats": {
                     "rows_read": 200,
                     "front_accepted": 80,
@@ -142,7 +146,11 @@ class TestStatusFilesField:
                     "max_correction": 8.4,
                 },
                 "outputs": outputs,
-                "config": {"args": {"smooth_passes": 2}},
+                "config": {
+                    "args": {
+                        "smooth_passes": 2
+                    }
+                },
             },
         }
 
@@ -152,8 +160,14 @@ class TestStatusFilesField:
         self._inject_completed_job(
             run_id,
             [
-                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
-                {"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"},
+                {
+                    "name": "VE_Correction_Delta_DYNO.csv",
+                    "path": "VE_Correction_Delta_DYNO.csv",
+                },
+                {
+                    "name": "Diagnostics_Report.txt",
+                    "path": "Diagnostics_Report.txt"
+                },
             ],
         )
         response = client.get(f"/api/status/{run_id}")
@@ -168,9 +182,18 @@ class TestStatusFilesField:
         self._inject_completed_job(
             run_id,
             [
-                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
-                {"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"},
-                {"name": "Anomaly_Hypotheses.json", "path": "Anomaly_Hypotheses.json"},
+                {
+                    "name": "VE_Correction_Delta_DYNO.csv",
+                    "path": "VE_Correction_Delta_DYNO.csv",
+                },
+                {
+                    "name": "Diagnostics_Report.txt",
+                    "path": "Diagnostics_Report.txt"
+                },
+                {
+                    "name": "Anomaly_Hypotheses.json",
+                    "path": "Anomaly_Hypotheses.json"
+                },
             ],
         )
         response = client.get(f"/api/status/{run_id}")
@@ -182,7 +205,10 @@ class TestStatusFilesField:
         run_id = "test-files-field-003"
         self._inject_completed_job(
             run_id,
-            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+            [{
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "path": "VE_Correction_Delta_DYNO.csv",
+            }],
         )
         response = client.get(f"/api/status/{run_id}")
         data = response.get_json()
@@ -194,7 +220,10 @@ class TestStatusFilesField:
         run_id = "test-files-field-004"
         self._inject_completed_job(
             run_id,
-            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+            [{
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "path": "VE_Correction_Delta_DYNO.csv",
+            }],
         )
         response = client.get(f"/api/status/{run_id}")
         data = response.get_json()
@@ -206,7 +235,10 @@ class TestStatusFilesField:
         run_id = "test-files-field-005"
         self._inject_completed_job(
             run_id,
-            [{"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"}],
+            [{
+                "name": "Diagnostics_Report.txt",
+                "path": "Diagnostics_Report.txt"
+            }],
         )
         response = client.get(f"/api/status/{run_id}")
         data = response.get_json()
@@ -225,7 +257,10 @@ class TestStatusFilesField:
         run_id = "test-files-field-007"
         self._inject_completed_job(
             run_id,
-            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+            [{
+                "name": "VE_Correction_Delta_DYNO.csv",
+                "path": "VE_Correction_Delta_DYNO.csv",
+            }],
         )
         response = client.get(f"/api/status/{run_id}")
         data = response.get_json()
