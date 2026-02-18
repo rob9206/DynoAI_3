@@ -97,6 +97,142 @@ class TestStatusEndpoint:
             assert "status" in data
             assert data["runId"] == run_id
 
+    @staticmethod
+    def test_status_queued_has_no_files_key(client, sample_csv_file):
+        """Status response for a queued job does NOT include a 'files' key."""
+        with open(sample_csv_file, "rb") as f:
+            create_response = client.post(
+                "/api/analyze",
+                data={"file": (f, "test.csv")},
+                content_type="multipart/form-data",
+            )
+
+        assert create_response.status_code == 202
+        run_id = create_response.get_json()["runId"]
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        # Queued jobs have no manifest yet, so "files" must not appear
+        assert data["status"] == "queued"
+        assert "files" not in data
+
+
+class TestStatusFilesField:
+    """Tests for the top-level 'files' array in the completed-status response."""
+
+    @staticmethod
+    def _inject_completed_job(run_id: str, outputs: list) -> None:
+        """Helper: insert a fake completed job into active_jobs."""
+        import api.app as app_module
+
+        app_module.active_jobs[run_id] = {
+            "status": "completed",
+            "progress": 100,
+            "message": "Analysis complete",
+            "filename": "test.csv",
+            "params": {},
+            "started_at": "2025-01-01T00:00:00",
+            "manifest": {
+                "timing": {"start": "2025-01-01T00:00:00Z"},
+                "input": {"path": "test.csv"},
+                "stats": {
+                    "rows_read": 200,
+                    "front_accepted": 80,
+                    "rear_accepted": 60,
+                    "avg_correction": 2.1,
+                    "max_correction": 8.4,
+                },
+                "outputs": outputs,
+                "config": {"args": {"smooth_passes": 2}},
+            },
+        }
+
+    def test_completed_status_includes_top_level_files(self, client):
+        """Completed status response exposes a top-level 'files' list."""
+        run_id = "test-files-field-001"
+        self._inject_completed_job(
+            run_id,
+            [
+                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
+                {"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"},
+            ],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        assert response.status_code == 200
+        assert "files" in data
+        assert isinstance(data["files"], list)
+
+    def test_files_count_matches_output_count(self, client):
+        """Top-level 'files' has one entry per manifest output."""
+        run_id = "test-files-field-002"
+        self._inject_completed_job(
+            run_id,
+            [
+                {"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"},
+                {"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"},
+                {"name": "Anomaly_Hypotheses.json", "path": "Anomaly_Hypotheses.json"},
+            ],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        assert len(data["files"]) == 3
+
+    def test_files_entries_have_name_and_url(self, client):
+        """Each entry in top-level 'files' has 'name' and 'url' keys only."""
+        run_id = "test-files-field-003"
+        self._inject_completed_job(
+            run_id,
+            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        entry = data["files"][0]
+        assert set(entry.keys()) == {"name", "url"}
+
+    def test_files_url_points_to_download_endpoint(self, client):
+        """'url' in each file entry is a valid /api/download/{runId}/{name} path."""
+        run_id = "test-files-field-004"
+        self._inject_completed_job(
+            run_id,
+            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        expected_url = f"/api/download/{run_id}/VE_Correction_Delta_DYNO.csv"
+        assert data["files"][0]["url"] == expected_url
+
+    def test_files_name_matches_bare_filename(self, client):
+        """'name' in each file entry is just the bare filename (no path components)."""
+        run_id = "test-files-field-005"
+        self._inject_completed_job(
+            run_id,
+            [{"name": "Diagnostics_Report.txt", "path": "Diagnostics_Report.txt"}],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        assert data["files"][0]["name"] == "Diagnostics_Report.txt"
+
+    def test_files_is_empty_list_when_no_outputs(self, client):
+        """'files' is an empty list when the manifest has no outputs."""
+        run_id = "test-files-field-006"
+        self._inject_completed_job(run_id, [])
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        assert data["files"] == []
+
+    def test_manifest_outputfiles_still_present(self, client):
+        """manifest.outputFiles is still present (backward compatibility)."""
+        run_id = "test-files-field-007"
+        self._inject_completed_job(
+            run_id,
+            [{"name": "VE_Correction_Delta_DYNO.csv", "path": "VE_Correction_Delta_DYNO.csv"}],
+        )
+        response = client.get(f"/api/status/{run_id}")
+        data = response.get_json()
+        assert "manifest" in data
+        assert "outputFiles" in data["manifest"]
+        assert len(data["manifest"]["outputFiles"]) == 1
+
 
 class TestStatusEndpointMethods:
     """Tests for status endpoint HTTP method handling."""

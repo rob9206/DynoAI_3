@@ -552,16 +552,40 @@ def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
 @rate_limit("5/minute;20/hour")  # Expensive operation - stricter limits
 def analyze():
     """
-    Analyze uploaded CSV file (async)
+    Submit a dyno log CSV for asynchronous analysis.
 
-    Expected: multipart/form-data with 'file' field and optional parameters
-    Parameters:
-        - smoothPasses: int (default: 2)
-        - clamp: float (default: 15.0)
-        - rearBias: float (default: 0.0)
-        - rearRuleDeg: float (default: 2.0)
-        - hotExtra: float (default: -1.0)
-    Returns: Job ID for tracking progress
+    Request: multipart/form-data
+        Required fields:
+            file            -- CSV or TXT dyno log (max 50 MB)
+
+        Optional tuning parameters (all sent as form text fields):
+            smoothPasses    int   VE smoothing kernel passes          (default 2)
+            clamp           float Max VE correction magnitude ±%      (default 15.0)
+            rearBias        float Extra richness bias for rear cyl %  (default 0.0)
+            rearRuleDeg     float Hot/rear spark retard ceiling deg    (default 2.0)
+            hotExtra        float Additional hot-condition retard deg  (default -1.0)
+
+        Optional decel fuel management fields:
+            decelManagement bool  Enable decel fuel cut analysis       (default false)
+            decelSeverity   str   "light" | "medium" | "heavy"        (default "medium")
+            decelRpmMin     int   RPM lower bound for decel detection  (default 1500)
+            decelRpmMax     int   RPM upper bound for decel detection  (default 5500)
+
+        Optional cylinder-balancing fields:
+            balanceCylinders     bool  Enable per-cylinder balancing   (default false)
+            balanceMode          str   "equalize" | "match_front" | "match_rear"
+                                                                       (default "equalize")
+            balanceMaxCorrection float Max per-cylinder correction %   (default 3.0)
+
+    Response 202 (Accepted):
+        {
+            "runId":   str,   -- UUID; pass to /api/status/{runId} to poll progress
+            "status":  str,   -- always "queued" on initial acceptance
+            "message": str
+        }
+
+    Response 400: missing/empty file or disallowed extension (.csv and .txt only)
+    Response 500: unexpected server error
     """
     # Check if file is in request
     if "file" not in request.files:
@@ -737,13 +761,51 @@ def analyze():
 @rate_limit("120/minute")  # Read-only - permissive
 def get_status(run_id):
     """
-    Get the status of an analysis job
+    Get the status of an analysis job.
 
     Args:
         run_id: Unique run identifier
 
-    Returns:
-        JSON with current job status and progress
+    Response shape (all statuses):
+        {
+            "runId":    str,        -- UUID assigned by /api/analyze
+            "status":   str,        -- "queued" | "running" | "completed" | "error"
+            "progress": int,        -- 0-100
+            "message":  str,        -- human-readable progress description
+            "filename": str         -- original uploaded filename
+        }
+
+    Additional fields when status == "error":
+        {
+            "error": str            -- error message
+        }
+
+    Additional fields when status == "completed":
+        {
+            "files": [              -- flat list of every file available to download
+                {
+                    "name": str,    -- bare filename, e.g. "VE_Correction_Delta_DYNO.csv"
+                    "url":  str     -- "/api/download/{runId}/{name}"
+                },
+                ...
+            ],
+            "manifest": {           -- full analysis summary
+                "runId":              str,
+                "timestamp":          str,   -- ISO-8601, analysis start time
+                "inputFile":          str,   -- original CSV filename
+                "rowsProcessed":      int,   -- rows_read from analysis stats
+                "correctionsApplied": int,   -- front_accepted + rear_accepted
+                "outputFiles": [            -- same entries as top-level "files"
+                    {"name": str, "type": str, "url": str}, ...
+                ],
+                "analysisMetrics": {
+                    "avgCorrection": float,  -- mean abs(correction) across all VE cells
+                    "maxCorrection": float,  -- max  abs(correction) across all VE cells
+                    "targetAFR":     float,  -- always 14.7
+                    "iterations":    int     -- smooth_passes used
+                }
+            }
+        }
     """
     if run_id not in active_jobs:
         return jsonify({"error": "Job not found"}), 404
@@ -761,8 +823,15 @@ def get_status(run_id):
         response["error"] = job.get("error", "Unknown error")
 
     if job["status"] == "completed" and "manifest" in job:
-        response["manifest"] = convert_manifest_to_frontend_format(
+        frontend_manifest = convert_manifest_to_frontend_format(
             job["manifest"], run_id)
+        response["manifest"] = frontend_manifest
+        # Hoist the file list to the top level so the frontend can enumerate
+        # available downloads without navigating into the manifest object.
+        response["files"] = [
+            {"name": f["name"], "url": f["url"]}
+            for f in frontend_manifest.get("outputFiles", [])
+        ]
 
     return jsonify(response), 200
 
@@ -771,14 +840,37 @@ def get_status(run_id):
 @rate_limit("60/minute")  # Standard - moderate limit for downloads
 def download_file(run_id, filename):
     """
-    Download a specific output file
+    Download a named output file produced by a completed analysis run.
 
     Args:
-        run_id: Unique run identifier
-        filename: Name of the file to download
+        run_id:   UUID returned by /api/analyze
+        filename: Bare filename from the "files" array in /api/status/{runId}
 
-    Returns:
-        File download
+    Files produced per run (all are optional; only present if the run generated them):
+        VE_Correction_Delta_DYNO.csv       -- primary VE correction grid (RPM × kPa)
+        Spark_Adjust_Suggestion_Front.csv  -- front-cylinder spark delta grid
+        Spark_Adjust_Suggestion_Rear.csv   -- rear-cylinder spark delta grid
+        AFR_Error_Map_Front.csv            -- AFR error grid, front cylinder
+        AFR_Error_Map_Rear.csv             -- AFR error grid, rear cylinder
+        Coverage_Front.csv                 -- data-point coverage counts, front
+        Coverage_Rear.csv                  -- data-point coverage counts, rear
+        Coverage_Front_Enhanced.csv        -- smoothed coverage grid, front
+        Coverage_Front_Table.html          -- HTML coverage heatmap table
+        Coverage_Front_Heatmap.png         -- PNG coverage heatmap image
+        VE_Delta_PasteReady.txt            -- tab-delimited VE delta for ECU paste
+        Spark_Front_PasteReady.txt         -- tab-delimited spark delta, front
+        Spark_Rear_PasteReady.txt          -- tab-delimited spark delta, rear
+        Diagnostics_Report.txt             -- plain-text diagnostics summary
+        Anomaly_Hypotheses.json            -- anomaly detection results
+        PowerOpportunities.json            -- power opportunity analysis
+        session_replay.json                -- per-decision audit log
+
+    Use the top-level "files" array from GET /api/status/{runId} to enumerate
+    which files were actually generated for a given run before calling this endpoint.
+
+    Response 200: file download (Content-Disposition: attachment)
+    Response 404: run or file not found
+    Response 500: unexpected error
     """
     try:
         # Sanitize inputs
@@ -817,13 +909,22 @@ def download_file(run_id, filename):
 @rate_limit("120/minute")  # Read-only - permissive
 def get_ve_data(run_id):
     """
-    Get VE table data for 3D visualization
+    Get VE correction table data for 3D visualization.
 
     Args:
-        run_id: Unique run identifier
+        run_id: Unique run identifier (same UUID returned by /api/analyze)
 
-    Returns:
-        JSON with VE data in format expected by frontend
+    Response 200:
+        {
+            "rpm":         [int, ...],           -- RPM bin labels (e.g. [1000,1500,...,6500])
+            "load":        [int, ...],           -- kPa load bin labels (e.g. [20,30,...,100])
+            "corrections": [[float, ...], ...],  -- 2-D grid, rows=RPM, cols=load; signed % delta
+            "before":      [[float, ...], ...],  -- baseline VE (100.0 for every cell)
+            "after":       [[float, ...], ...],  -- baseline + corrections per cell
+        }
+
+    Response 404: VE_Correction_Delta_DYNO.csv not found for this runId
+    Response 500: parse error
     """
     try:
         run_id = secure_filename(run_id)
