@@ -9,5 +9,6 @@ Provides SQLAlchemy ORM models for:
 """
 
 from api.models.run import Base, Run, RunFile
+from api.models.user import User
 
-__all__ = ["Base", "Run", "RunFile"]
+__all__ = ["Base", "Run", "RunFile", "User"]

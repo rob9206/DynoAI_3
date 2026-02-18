@@ -312,6 +312,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize V3 Session: {e}")
 
+# Register JWT Authentication blueprint
+try:
+    from api.routes.auth import auth_bp
+
+    app.register_blueprint(auth_bp)
+    print("[+] JWT Auth registered at /api/auth and /api/users")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not register auth blueprint: {e}")
+
 # Initialize CORS after all blueprints are registered
 # Set intercept_exceptions=False and always_send=True to ensure CORS headers on all responses
 CORS(
