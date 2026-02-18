@@ -38,19 +38,19 @@ class User(Base):
         default="customer",
         comment="Role: owner, tech, customer",
     )
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime,
+                        default=lambda: datetime.now(timezone.utc),
+                        nullable=False)
 
     def set_password(self, password: str) -> None:
         """Hash and store a plaintext password."""
-        self.password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
+        self.password_hash = bcrypt.hashpw(password.encode("utf-8"),
+                                           bcrypt.gensalt()).decode("utf-8")
 
     def check_password(self, password: str) -> bool:
         """Verify a plaintext password against the stored hash."""
-        return bcrypt.checkpw(
-            password.encode("utf-8"), self.password_hash.encode("utf-8")
-        )
+        return bcrypt.checkpw(password.encode("utf-8"),
+                              self.password_hash.encode("utf-8"))
 
     def to_dict(self) -> dict:
         """Return a safe, serialisable representation (no password_hash)."""
@@ -59,7 +59,8 @@ class User(Base):
             "email": self.email,
             "name": self.name,
             "role": self.role,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at":
+            self.created_at.isoformat() if self.created_at else None,
         }
 
     def __repr__(self) -> str:

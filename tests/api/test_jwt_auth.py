@@ -16,6 +16,15 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+from flask import Flask
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from api.models.base import Base
+from api.models.user import User
+from api.routes.auth import _encode_token, auth_bp
+
 # Ensure project root is in path before any imports
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
 if _PROJECT_ROOT not in sys.path:
@@ -27,19 +36,10 @@ os.environ.setdefault("JETSTREAM_ENABLED", "false")
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 os.environ.setdefault("SECRET_KEY", "test-jwt-secret-key-for-testing-only")
 
-import pytest
-from flask import Flask
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from api.models.base import Base
-from api.models.user import User
-from api.routes.auth import auth_bp, _encode_token
-
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def auth_app(tmp_path):
@@ -114,7 +114,9 @@ def customer_user(auth_app):
     import api.routes.auth as auth_module
 
     with auth_module.SessionLocal() as session:
-        u = User(email="customer@example.com", name="Customer User", role="customer")
+        u = User(email="customer@example.com",
+                 name="Customer User",
+                 role="customer")
         u.set_password("customerpassword1")
         session.add(u)
         session.commit()
@@ -129,12 +131,17 @@ def customer_user(auth_app):
 # Login tests
 # ---------------------------------------------------------------------------
 
+
 class TestLogin:
+
     def test_login_success(self, client, owner_user):
         owner, _ = owner_user
         resp = client.post(
             "/api/auth/login",
-            json={"email": owner["email"], "password": "ownerpassword1"},
+            json={
+                "email": owner["email"],
+                "password": "ownerpassword1"
+            },
         )
         assert resp.status_code == 200
         data = resp.get_json()
@@ -147,14 +154,20 @@ class TestLogin:
         owner, _ = owner_user
         resp = client.post(
             "/api/auth/login",
-            json={"email": owner["email"], "password": "wrongpassword"},
+            json={
+                "email": owner["email"],
+                "password": "wrongpassword"
+            },
         )
         assert resp.status_code == 401
 
     def test_login_unknown_email(self, client):
         resp = client.post(
             "/api/auth/login",
-            json={"email": "nobody@example.com", "password": "password"},
+            json={
+                "email": "nobody@example.com",
+                "password": "password"
+            },
         )
         assert resp.status_code == 401
 
@@ -167,12 +180,13 @@ class TestLogin:
 # Logout tests
 # ---------------------------------------------------------------------------
 
+
 class TestLogout:
+
     def test_logout_with_valid_token(self, client, owner_user):
         _, token = owner_user
-        resp = client.post(
-            "/api/auth/logout", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = client.post("/api/auth/logout",
+                           headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         assert resp.get_json()["message"] == "logged out"
 
@@ -182,8 +196,8 @@ class TestLogout:
 
     def test_logout_with_invalid_token(self, client):
         resp = client.post(
-            "/api/auth/logout", headers={"Authorization": "Bearer bogus.token.here"}
-        )
+            "/api/auth/logout",
+            headers={"Authorization": "Bearer bogus.token.here"})
         assert resp.status_code == 401
 
 
@@ -191,12 +205,13 @@ class TestLogout:
 # /auth/me tests
 # ---------------------------------------------------------------------------
 
+
 class TestMe:
+
     def test_me_returns_current_user(self, client, owner_user):
         user, token = owner_user
-        resp = client.get(
-            "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = client.get("/api/auth/me",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["user"]["id"] == user["id"]
@@ -211,7 +226,9 @@ class TestMe:
 # /api/auth/register tests
 # ---------------------------------------------------------------------------
 
+
 class TestRegister:
+
     def test_register_as_owner_creates_user(self, client, owner_user):
         _, token = owner_user
         resp = client.post(
@@ -302,12 +319,13 @@ class TestRegister:
 # GET /api/users tests
 # ---------------------------------------------------------------------------
 
+
 class TestListUsers:
+
     def test_owner_can_list_users(self, client, owner_user):
         _, token = owner_user
-        resp = client.get(
-            "/api/users", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = client.get("/api/users",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.get_json()
         assert "users" in data
@@ -316,16 +334,14 @@ class TestListUsers:
 
     def test_tech_can_list_users(self, client, tech_user):
         _, token = tech_user
-        resp = client.get(
-            "/api/users", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = client.get("/api/users",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
 
     def test_customer_cannot_list_users(self, client, customer_user):
         _, token = customer_user
-        resp = client.get(
-            "/api/users", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = client.get("/api/users",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 403
 
     def test_unauthenticated_cannot_list_users(self, client):
@@ -337,7 +353,9 @@ class TestListUsers:
 # POST /api/users tests
 # ---------------------------------------------------------------------------
 
+
 class TestCreateUser:
+
     def test_owner_can_create_user(self, client, owner_user):
         _, token = owner_user
         resp = client.post(
@@ -373,7 +391,9 @@ class TestCreateUser:
 # PUT /api/users/<id> tests
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateUser:
+
     def test_owner_can_update_name(self, client, owner_user, customer_user):
         _, token = owner_user
         customer, _ = customer_user
@@ -415,7 +435,8 @@ class TestUpdateUser:
         )
         assert resp.status_code == 403
 
-    def test_update_invalid_role_is_400(self, client, owner_user, customer_user):
+    def test_update_invalid_role_is_400(self, client, owner_user,
+                                        customer_user):
         _, token = owner_user
         customer, _ = customer_user
         resp = client.put(

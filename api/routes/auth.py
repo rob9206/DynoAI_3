@@ -31,12 +31,12 @@ _TOKEN_EXPIRY_HOURS = 24
 
 def _jwt_secret() -> str:
     """Return the JWT signing secret from environment."""
-    secret = os.environ.get("SECRET_KEY") or os.environ.get("JWT_SECRET_KEY", "")
+    secret = os.environ.get("SECRET_KEY") or os.environ.get(
+        "JWT_SECRET_KEY", "")
     if not secret:
         logger.warning(
             "SECRET_KEY / JWT_SECRET_KEY not set; using insecure fallback. "
-            "Set a strong secret in production."
-        )
+            "Set a strong secret in production.")
         secret = "dynoai-insecure-dev-secret"
     return secret
 
@@ -45,7 +45,8 @@ def _encode_token(user_id: str) -> str:
     """Create a signed JWT for the given user ID."""
     payload = {
         "sub": user_id,
-        "exp": datetime.now(tz=timezone.utc) + timedelta(hours=_TOKEN_EXPIRY_HOURS),
+        "exp":
+        datetime.now(tz=timezone.utc) + timedelta(hours=_TOKEN_EXPIRY_HOURS),
         "iat": datetime.now(tz=timezone.utc),
     }
     return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
@@ -60,6 +61,7 @@ def _decode_token(token: str) -> dict:
 # Decorator helpers
 # ---------------------------------------------------------------------------
 
+
 def require_jwt(f):
     """Decorator: endpoint requires a valid Bearer JWT."""
 
@@ -67,7 +69,8 @@ def require_jwt(f):
     def wrapper(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Authorization header missing or invalid"}), 401
+            return jsonify(
+                {"error": "Authorization header missing or invalid"}), 401
         token = auth_header[len("Bearer "):]
         try:
             payload = _decode_token(token)
@@ -98,6 +101,7 @@ def require_roles(*roles):
     """
 
     def decorator(f):
+
         @wraps(f)
         @require_jwt
         def wrapper(*args, **kwargs):
@@ -113,6 +117,7 @@ def require_roles(*roles):
 # ---------------------------------------------------------------------------
 # Validation helpers
 # ---------------------------------------------------------------------------
+
 
 def _validate_user_payload(data: dict, require_password: bool = True) -> tuple:
     """Return (error_message, None) or (None, cleaned_data)."""
@@ -135,16 +140,23 @@ def _validate_user_payload(data: dict, require_password: bool = True) -> tuple:
     if role not in _VALID_ROLES:
         return f"Role must be one of: {', '.join(sorted(_VALID_ROLES))}", None
 
-    return None, {"email": email, "password": password, "name": name, "role": role}
+    return None, {
+        "email": email,
+        "password": password,
+        "name": name,
+        "role": role
+    }
 
 
 def _create_user_from_data(cleaned: dict):
     """Create and persist a new User from validated payload.  Returns Flask response tuple."""
-    from api.models.user import User
     from sqlalchemy.exc import IntegrityError
 
+    from api.models.user import User
+
     with SessionLocal() as session:
-        existing = session.query(User).filter_by(email=cleaned["email"]).first()
+        existing = session.query(User).filter_by(
+            email=cleaned["email"]).first()
         if existing:
             return jsonify({"error": "Email already registered"}), 409
 
@@ -168,6 +180,7 @@ def _create_user_from_data(cleaned: dict):
 # ---------------------------------------------------------------------------
 # Auth endpoints
 # ---------------------------------------------------------------------------
+
 
 @auth_bp.route("/auth/register", methods=["POST"])
 @require_roles("owner")
@@ -219,6 +232,7 @@ def me():
 # User management endpoints
 # ---------------------------------------------------------------------------
 
+
 @auth_bp.route("/users", methods=["GET"])
 @require_roles("owner", "tech")
 def list_users():
@@ -263,15 +277,20 @@ def update_user(user_id: str):
         if "role" in data:
             role = (data["role"] or "").strip().lower()
             if role not in _VALID_ROLES:
-                return jsonify(
-                    {"error": f"Role must be one of: {', '.join(sorted(_VALID_ROLES))}"}
-                ), 400
+                return (
+                    jsonify({
+                        "error":
+                        f"Role must be one of: {', '.join(sorted(_VALID_ROLES))}"
+                    }),
+                    400,
+                )
             user.role = role
 
         if "password" in data:
             password = data["password"]
             if len(password) < 8:
-                return jsonify({"error": "Password must be at least 8 characters"}), 400
+                return jsonify(
+                    {"error": "Password must be at least 8 characters"}), 400
             user.set_password(password)
 
         session.commit()
