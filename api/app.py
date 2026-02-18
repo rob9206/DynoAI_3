@@ -785,11 +785,12 @@ def analyze():
                             Run.run_id == run_id).first()
                         if run_record:
                             run_record.status = "completed"
-                            run_record.completed_at = datetime.now(timezone.utc)
+                            run_record.completed_at = datetime.now(
+                                timezone.utc)
                             run_record.rows_processed = stats.get("rows_read")
-                            run_record.corrections_applied = (
-                                stats.get("front_accepted", 0) +
-                                stats.get("rear_accepted", 0))
+                            run_record.corrections_applied = stats.get(
+                                "front_accepted", 0) + stats.get(
+                                    "rear_accepted", 0)
                             run_record.avg_correction = stats.get(
                                 "avg_correction")
                             run_record.max_correction = stats.get(
