@@ -97,7 +97,11 @@ def _create_user(session_factory, email, role, name=None):
     return user_dict, token
 
 
-def _create_run(session_factory, user_id, run_id=None, status="queued", input_file="test.csv"):
+def _create_run(session_factory,
+                user_id,
+                run_id=None,
+                status="queued",
+                input_file="test.csv"):
     """Helper: create a Run record and return its run_id."""
     import uuid as _uuid
 
@@ -109,8 +113,7 @@ def _create_run(session_factory, user_id, run_id=None, status="queued", input_fi
                 user_id=user_id,
                 status=status,
                 input_file=input_file,
-            )
-        )
+            ))
         session.commit()
     return rid
 
@@ -141,10 +144,12 @@ class TestResponseShape:
     def test_list_runs_returns_correct_shape(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, token = _create_user(runs_module.SessionLocal, "owner@example.com", "owner")
+        owner, token = _create_user(runs_module.SessionLocal,
+                                    "owner@example.com", "owner")
         _create_run(runs_module.SessionLocal, owner["id"], status="completed")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {token}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
 
         data = resp.get_json()
@@ -157,19 +162,33 @@ class TestResponseShape:
     def test_run_object_has_expected_fields(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, token = _create_user(runs_module.SessionLocal, "owner2@example.com", "owner")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="shape-test-run")
+        owner, token = _create_user(runs_module.SessionLocal,
+                                    "owner2@example.com", "owner")
+        _create_run(runs_module.SessionLocal,
+                    owner["id"],
+                    run_id="shape-test-run")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {token}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         runs = resp.get_json()["runs"]
         assert len(runs) >= 1
         run = runs[0]
 
-        for field in ("runId", "userId", "userEmail", "userName", "status",
-                      "inputFile", "createdAt", "completedAt",
-                      "rowsProcessed", "correctionsApplied",
-                      "analysisMetrics", "outputFiles"):
+        for field in (
+                "runId",
+                "userId",
+                "userEmail",
+                "userName",
+                "status",
+                "inputFile",
+                "createdAt",
+                "completedAt",
+                "rowsProcessed",
+                "correctionsApplied",
+                "analysisMetrics",
+                "outputFiles",
+        ):
             assert field in run, f"Missing field: {field}"
 
         assert "avgCorrection" in run["analysisMetrics"]
@@ -186,13 +205,20 @@ class TestCustomerSeesOnlyOwnRuns:
     def test_customer_only_sees_own_runs(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        customer1, tok1 = _create_user(runs_module.SessionLocal, "c1@example.com", "customer")
-        customer2, tok2 = _create_user(runs_module.SessionLocal, "c2@example.com", "customer")
+        customer1, tok1 = _create_user(runs_module.SessionLocal,
+                                       "c1@example.com", "customer")
+        customer2, tok2 = _create_user(runs_module.SessionLocal,
+                                       "c2@example.com", "customer")
 
-        _create_run(runs_module.SessionLocal, customer1["id"], run_id="run-c1-001")
-        _create_run(runs_module.SessionLocal, customer2["id"], run_id="run-c2-001")
+        _create_run(runs_module.SessionLocal,
+                    customer1["id"],
+                    run_id="run-c1-001")
+        _create_run(runs_module.SessionLocal,
+                    customer2["id"],
+                    run_id="run-c2-001")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {tok1}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {tok1}"})
         assert resp.status_code == 200
         runs = resp.get_json()["runs"]
         run_ids = [r["runId"] for r in runs]
@@ -202,14 +228,23 @@ class TestCustomerSeesOnlyOwnRuns:
     def test_customer_total_reflects_own_runs_only(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        customer, token = _create_user(runs_module.SessionLocal, "solo@example.com", "customer")
-        other, _ = _create_user(runs_module.SessionLocal, "other@example.com", "customer")
+        customer, token = _create_user(runs_module.SessionLocal,
+                                       "solo@example.com", "customer")
+        other, _ = _create_user(runs_module.SessionLocal, "other@example.com",
+                                "customer")
 
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-solo-1")
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-solo-2")
-        _create_run(runs_module.SessionLocal, other["id"], run_id="run-other-1")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-solo-1")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-solo-2")
+        _create_run(runs_module.SessionLocal,
+                    other["id"],
+                    run_id="run-other-1")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {token}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {token}"})
         data = resp.get_json()
         assert data["total"] == 2
 
@@ -219,13 +254,18 @@ class TestTechSeesAllRuns:
     def test_tech_sees_all_runs(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        tech, tok = _create_user(runs_module.SessionLocal, "tech@example.com", "tech")
-        customer, _ = _create_user(runs_module.SessionLocal, "cust@example.com", "customer")
+        tech, tok = _create_user(runs_module.SessionLocal, "tech@example.com",
+                                 "tech")
+        customer, _ = _create_user(runs_module.SessionLocal,
+                                   "cust@example.com", "customer")
 
         _create_run(runs_module.SessionLocal, tech["id"], run_id="run-tech-1")
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-cust-1")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-cust-1")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {tok}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {tok}"})
         assert resp.status_code == 200
         run_ids = [r["runId"] for r in resp.get_json()["runs"]]
         assert "run-tech-1" in run_ids
@@ -237,13 +277,20 @@ class TestOwnerSeesAllRuns:
     def test_owner_sees_all_runs(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "owner@example.com", "owner")
-        customer, _ = _create_user(runs_module.SessionLocal, "cust2@example.com", "customer")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "owner@example.com", "owner")
+        customer, _ = _create_user(runs_module.SessionLocal,
+                                   "cust2@example.com", "customer")
 
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="run-owner-1")
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-cust-2")
+        _create_run(runs_module.SessionLocal,
+                    owner["id"],
+                    run_id="run-owner-1")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-cust-2")
 
-        resp = client.get("/api/runs", headers={"Authorization": f"Bearer {tok}"})
+        resp = client.get("/api/runs",
+                          headers={"Authorization": f"Bearer {tok}"})
         assert resp.status_code == 200
         run_ids = [r["runId"] for r in resp.get_json()["runs"]]
         assert "run-owner-1" in run_ids
@@ -260,9 +307,13 @@ class TestGetSingleRun:
     def test_owner_can_get_any_run(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "owner3@example.com", "owner")
-        customer, _ = _create_user(runs_module.SessionLocal, "cust3@example.com", "customer")
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-single-1")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "owner3@example.com", "owner")
+        customer, _ = _create_user(runs_module.SessionLocal,
+                                   "cust3@example.com", "customer")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-single-1")
 
         resp = client.get("/api/runs/run-single-1",
                           headers={"Authorization": f"Bearer {tok}"})
@@ -273,8 +324,11 @@ class TestGetSingleRun:
     def test_customer_can_get_own_run(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        customer, tok = _create_user(runs_module.SessionLocal, "cust4@example.com", "customer")
-        _create_run(runs_module.SessionLocal, customer["id"], run_id="run-own-1")
+        customer, tok = _create_user(runs_module.SessionLocal,
+                                     "cust4@example.com", "customer")
+        _create_run(runs_module.SessionLocal,
+                    customer["id"],
+                    run_id="run-own-1")
 
         resp = client.get("/api/runs/run-own-1",
                           headers={"Authorization": f"Bearer {tok}"})
@@ -283,9 +337,13 @@ class TestGetSingleRun:
     def test_customer_gets_403_for_other_run(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        customer1, tok1 = _create_user(runs_module.SessionLocal, "cust5@example.com", "customer")
-        customer2, _ = _create_user(runs_module.SessionLocal, "cust6@example.com", "customer")
-        _create_run(runs_module.SessionLocal, customer2["id"], run_id="run-other-2")
+        customer1, tok1 = _create_user(runs_module.SessionLocal,
+                                       "cust5@example.com", "customer")
+        customer2, _ = _create_user(runs_module.SessionLocal,
+                                    "cust6@example.com", "customer")
+        _create_run(runs_module.SessionLocal,
+                    customer2["id"],
+                    run_id="run-other-2")
 
         resp = client.get("/api/runs/run-other-2",
                           headers={"Authorization": f"Bearer {tok1}"})
@@ -294,7 +352,8 @@ class TestGetSingleRun:
     def test_get_nonexistent_run_returns_404(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "owner4@example.com", "owner")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "owner4@example.com", "owner")
         resp = client.get("/api/runs/nonexistent-run",
                           headers={"Authorization": f"Bearer {tok}"})
         assert resp.status_code == 404
@@ -310,9 +369,12 @@ class TestPagination:
     def test_limit_parameter(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "pager@example.com", "owner")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "pager@example.com", "owner")
         for i in range(10):
-            _create_run(runs_module.SessionLocal, owner["id"], run_id=f"page-run-{i:03d}")
+            _create_run(runs_module.SessionLocal,
+                        owner["id"],
+                        run_id=f"page-run-{i:03d}")
 
         resp = client.get("/api/runs?limit=3",
                           headers={"Authorization": f"Bearer {tok}"})
@@ -324,9 +386,12 @@ class TestPagination:
     def test_offset_parameter(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "pager2@example.com", "owner")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "pager2@example.com", "owner")
         for i in range(5):
-            _create_run(runs_module.SessionLocal, owner["id"], run_id=f"offs-run-{i:03d}")
+            _create_run(runs_module.SessionLocal,
+                        owner["id"],
+                        run_id=f"offs-run-{i:03d}")
 
         resp_full = client.get("/api/runs?limit=5",
                                headers={"Authorization": f"Bearer {tok}"})
@@ -342,7 +407,8 @@ class TestPagination:
     def test_limit_capped_at_200(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "capper@example.com", "owner")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "capper@example.com", "owner")
         resp = client.get("/api/runs?limit=999",
                           headers={"Authorization": f"Bearer {tok}"})
         assert resp.status_code == 200
@@ -351,9 +417,12 @@ class TestPagination:
     def test_total_reflects_all_matching_runs(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "totaller@example.com", "owner")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "totaller@example.com", "owner")
         for i in range(7):
-            _create_run(runs_module.SessionLocal, owner["id"], run_id=f"total-run-{i:03d}")
+            _create_run(runs_module.SessionLocal,
+                        owner["id"],
+                        run_id=f"total-run-{i:03d}")
 
         resp = client.get("/api/runs?limit=3",
                           headers={"Authorization": f"Bearer {tok}"})
@@ -372,10 +441,24 @@ class TestStatusFilter:
     def test_status_filter_returns_only_matching_runs(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "filterer@example.com", "owner")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="filter-queued", status="queued")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="filter-completed", status="completed")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="filter-error", status="error")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "filterer@example.com", "owner")
+        _create_run(
+            runs_module.SessionLocal,
+            owner["id"],
+            run_id="filter-queued",
+            status="queued",
+        )
+        _create_run(
+            runs_module.SessionLocal,
+            owner["id"],
+            run_id="filter-completed",
+            status="completed",
+        )
+        _create_run(runs_module.SessionLocal,
+                    owner["id"],
+                    run_id="filter-error",
+                    status="error")
 
         resp = client.get("/api/runs?status=completed",
                           headers={"Authorization": f"Bearer {tok}"})
@@ -389,9 +472,16 @@ class TestStatusFilter:
     def test_status_filter_queued(self, runs_app, client):
         import api.routes.runs as runs_module
 
-        owner, tok = _create_user(runs_module.SessionLocal, "filterer2@example.com", "owner")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="qf-1", status="queued")
-        _create_run(runs_module.SessionLocal, owner["id"], run_id="qf-2", status="completed")
+        owner, tok = _create_user(runs_module.SessionLocal,
+                                  "filterer2@example.com", "owner")
+        _create_run(runs_module.SessionLocal,
+                    owner["id"],
+                    run_id="qf-1",
+                    status="queued")
+        _create_run(runs_module.SessionLocal,
+                    owner["id"],
+                    run_id="qf-2",
+                    status="completed")
 
         resp = client.get("/api/runs?status=queued",
                           headers={"Authorization": f"Bearer {tok}"})
