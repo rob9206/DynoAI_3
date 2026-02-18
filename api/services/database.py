@@ -106,15 +106,44 @@ def init_database():
 
     Creates all tables defined in Base.metadata.
     Safe to call multiple times (won't recreate existing tables).
+    Also seeds the default admin user if it doesn't exist.
     """
-    from api.models import Base
+    # Import all models to ensure they're registered with Base.metadata
+    from api.models import Base, User, Run, RunFile  # noqa: F401
 
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized successfully")
+        
+        # Seed admin user if it doesn't exist
+        _seed_admin_user()
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")
         raise
+
+
+def _seed_admin_user():
+    """Create default admin user if it doesn't exist."""
+    from api.models.user import User
+    
+    admin_email = "admin@thunderhorsetuning.com"
+    admin_password = "ThunderhorseAdmin1!"
+    
+    with SessionLocal() as session:
+        existing = session.query(User).filter_by(email=admin_email).first()
+        if existing:
+            logger.info(f"Admin user already exists: {admin_email}")
+            return
+        
+        admin_user = User(
+            email=admin_email,
+            name="Thunderhorse Admin",
+            role="owner",
+        )
+        admin_user.set_password(admin_password)
+        session.add(admin_user)
+        session.commit()
+        logger.info(f"Admin user seeded: {admin_email}")
 
 
 def drop_all_tables():

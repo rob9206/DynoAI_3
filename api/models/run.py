@@ -10,9 +10,9 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import relationship
 
-Base = declarative_base()
+from api.models.base import Base
 
 
 class Run(Base):
