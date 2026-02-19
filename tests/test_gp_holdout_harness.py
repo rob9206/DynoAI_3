@@ -11,11 +11,17 @@ import pytest
 
 GRID_SHAPES: Dict[str, Tuple[np.ndarray, np.ndarray]] = {
     "10x9_test": (
-        np.array([1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500], dtype=np.float64),
+        np.array(
+            [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500],
+            dtype=np.float64,
+        ),
         np.array([30, 40, 50, 60, 70, 80, 90, 100, 105], dtype=np.float64),
     ),
     "11x5_production": (
-        np.array([1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500], dtype=np.float64),
+        np.array(
+            [1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500],
+            dtype=np.float64,
+        ),
         np.array([35, 50, 65, 80, 95], dtype=np.float64),
     ),
     "16x16_budget": (
@@ -39,7 +45,13 @@ def _surface(rpm_bins: np.ndarray, map_bins: np.ndarray, seed: int = 42) -> np.n
     return out
 
 
-def _obs(surface: np.ndarray, rpm_bins: np.ndarray, map_bins: np.ndarray, n_obs: int, seed: int = 1):
+def _obs(
+    surface: np.ndarray,
+    rpm_bins: np.ndarray,
+    map_bins: np.ndarray,
+    n_obs: int,
+    seed: int = 1,
+):
     rng = np.random.RandomState(seed)
     out = []
     for _ in range(n_obs):
@@ -76,7 +88,9 @@ def _surrogate(rpm_bins: np.ndarray, map_bins: np.ndarray):
 def _add_obs(s, rpm: float, map_kpa: float, ve: float, pull_number: int = 1):
     from dynoai_v3.gp_surrogate import Observation
 
-    s.add_observation(Observation(rpm=rpm, map_kpa=map_kpa, ve_delta=ve, pull_number=pull_number))
+    s.add_observation(
+        Observation(rpm=rpm, map_kpa=map_kpa, ve_delta=ve, pull_number=pull_number)
+    )
 
 
 @dataclass
@@ -124,7 +138,13 @@ class TestHoldout:
     def test_template_plus_real(self, grid_name):
         rpm_bins, map_bins = GRID_SHAPES[grid_name]
         surf = _surface(rpm_bins, map_bins)
-        all_obs = _obs(surf, rpm_bins, map_bins, n_obs=min(80, len(rpm_bins) * len(map_bins) * 2), seed=10)
+        all_obs = _obs(
+            surf,
+            rpm_bins,
+            map_bins,
+            n_obs=min(80, len(rpm_bins) * len(map_bins) * 2),
+            seed=10,
+        )
         train, hold = _split(all_obs)
         s = _surrogate(rpm_bins, map_bins)
         s.seed_from_template(surf, rpm_bins, map_bins)
@@ -138,14 +158,24 @@ class TestHoldout:
         errs = np.asarray(errs)
         mae = float(np.mean(np.abs(errs)))
         rmse = float(np.sqrt(np.mean(errs**2)))
-        _all.append(Metrics("template_plus_real", grid_name, mae=mae, rmse=rmse, predict_ms=elapsed))
+        _all.append(
+            Metrics(
+                "template_plus_real", grid_name, mae=mae, rmse=rmse, predict_ms=elapsed
+            )
+        )
         assert mae < 5.0
 
     @pytest.mark.parametrize("grid_name", list(GRID_SHAPES.keys()))
     def test_real_only(self, grid_name):
         rpm_bins, map_bins = GRID_SHAPES[grid_name]
         surf = _surface(rpm_bins, map_bins)
-        all_obs = _obs(surf, rpm_bins, map_bins, n_obs=min(120, len(rpm_bins) * len(map_bins) * 3), seed=20)
+        all_obs = _obs(
+            surf,
+            rpm_bins,
+            map_bins,
+            n_obs=min(120, len(rpm_bins) * len(map_bins) * 3),
+            seed=20,
+        )
         train, hold = _split(all_obs)
         s = _surrogate(rpm_bins, map_bins)
         for o in train:
@@ -176,7 +206,9 @@ class TestEdgeAndCap:
 
         rpm_bins, map_bins = GRID_SHAPES[grid_name]
         surf = _surface(rpm_bins, map_bins)
-        all_obs = _obs(surf, rpm_bins, map_bins, n_obs=min(_MAX_OBS_FOR_REFIT, 150), seed=30)
+        all_obs = _obs(
+            surf, rpm_bins, map_bins, n_obs=min(_MAX_OBS_FOR_REFIT, 150), seed=30
+        )
         train, hold = _split(all_obs, holdout_frac=0.2)
         s = _surrogate(rpm_bins, map_bins)
         for o in train:

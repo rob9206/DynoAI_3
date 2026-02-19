@@ -23,7 +23,9 @@ DEFAULT_NOISE_VAR = 0.15
 DEFAULT_JITTER = 1e-8
 
 
-def _scaled_sqdist(A: NDArray[np.float64], B: NDArray[np.float64]) -> NDArray[np.float64]:
+def _scaled_sqdist(
+    A: NDArray[np.float64], B: NDArray[np.float64]
+) -> NDArray[np.float64]:
     """Squared Euclidean distance matrix between rows of A and B."""
     a2 = np.sum(A * A, axis=1)[:, None]
     b2 = np.sum(B * B, axis=1)[None, :]

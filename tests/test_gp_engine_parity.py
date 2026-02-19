@@ -100,7 +100,9 @@ class TestDeterminismAndLatency:
         X_pred = _grid_points(*GRID_SHAPES["16x16"])
         outs = []
         for _ in range(3):
-            gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+            gp = MaternGP(
+                length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+            )
             gp.fit(X, y)
             outs.append(gp.predict(X_pred))
         for i in range(1, 3):
@@ -112,7 +114,9 @@ class TestDeterminismAndLatency:
     def test_latency_contract(self, n_train, grid_name):
         X, y = _make_training_data(n_train)
         X_pred = _grid_points(*GRID_SHAPES[grid_name])
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
 
         t0 = time.perf_counter()
         gp.fit(X, y)
