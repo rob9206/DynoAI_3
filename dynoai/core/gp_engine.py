@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 # These are seed values matching the sklearn kernel's initial config.
 # They must be validated via holdout harness before production use.
 DEFAULT_LENGTH_SCALES = np.array([0.3, 0.3], dtype=np.float64)
-DEFAULT_SIGNAL_VAR = 1.0     # No ConstantKernel in current sklearn config
-DEFAULT_NOISE_VAR = 0.15     # WhiteKernel(0.1) + alpha(0.05) combined
-DEFAULT_JITTER = 1e-8        # Numerical stability only
+DEFAULT_SIGNAL_VAR = 1.0  # No ConstantKernel in current sklearn config
+DEFAULT_NOISE_VAR = 0.15  # WhiteKernel(0.1) + alpha(0.05) combined
+DEFAULT_JITTER = 1e-8  # Numerical stability only
 
 
 # ---------------------------------------------------------------------------
@@ -90,11 +90,11 @@ def _matern52(r: NDArray, signal_var: float = 1.0) -> NDArray:
 class _FitCache:
     """Cached Cholesky factorization and solve results from fit()."""
 
-    X_train_scaled: NDArray          # (n, d) — pre-divided by length_scales
-    y_mean: float                    # center of y normalization
-    y_std: float                     # scale of y normalization
-    L: NDArray                       # (n, n) — lower Cholesky of K + noise*I
-    alpha: NDArray                   # (n,) or (n, 1) — K^{-1} y_norm
+    X_train_scaled: NDArray  # (n, d) — pre-divided by length_scales
+    y_mean: float  # center of y normalization
+    y_std: float  # scale of y normalization
+    L: NDArray  # (n, n) — lower Cholesky of K + noise*I
+    alpha: NDArray  # (n,) or (n, 1) — K^{-1} y_norm
     signal_var: float
     noise_var: float
     jitter: float
@@ -222,7 +222,10 @@ class MaternGP:
 
         logger.debug(
             "MaternGP fit: n=%d, y_mean=%.2f, y_std=%.4f, diag_add=%.2e",
-            n, y_mean, y_std, diag_add,
+            n,
+            y_mean,
+            y_std,
+            diag_add,
         )
 
     # ------------------------------------------------------------------
@@ -303,5 +306,3 @@ class MaternGP:
             "jitter": self.jitter,
             "normalize_y": self.normalize_y,
         }
-
-

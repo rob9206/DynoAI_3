@@ -43,11 +43,17 @@ import pytest
 # ---------------------------------------------------------------------------
 GRID_SHAPES: Dict[str, Tuple[np.ndarray, np.ndarray]] = {
     "10x9_test": (
-        np.array([1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500], dtype=np.float64),
+        np.array(
+            [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500],
+            dtype=np.float64,
+        ),
         np.array([30, 40, 50, 60, 70, 80, 90, 100, 105], dtype=np.float64),
     ),
     "11x5_production": (
-        np.array([1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500], dtype=np.float64),
+        np.array(
+            [1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500],
+            dtype=np.float64,
+        ),
         np.array([35, 50, 65, 80, 95], dtype=np.float64),
     ),
     "16x16_budget": (
@@ -60,7 +66,9 @@ GRID_SHAPES: Dict[str, Tuple[np.ndarray, np.ndarray]] = {
 # ---------------------------------------------------------------------------
 # Synthetic data generators (deterministic, seeded)
 # ---------------------------------------------------------------------------
-def _make_ve_surface(rpm_bins: np.ndarray, map_bins: np.ndarray, seed: int = 42) -> np.ndarray:
+def _make_ve_surface(
+    rpm_bins: np.ndarray, map_bins: np.ndarray, seed: int = 42
+) -> np.ndarray:
     """
     Generate a physically plausible VE surface for testing.
 
@@ -78,9 +86,9 @@ def _make_ve_surface(rpm_bins: np.ndarray, map_bins: np.ndarray, seed: int = 42)
 
     for r in range(n_rpm):
         for m in range(n_map):
-            base = 75.0 + 25.0 * map_norm[m]                  # 75% at min MAP → 100% at max
-            rpm_shape = 5.0 * np.sin(np.pi * rpm_norm[r])     # ±5% bell over RPM
-            interaction = 3.0 * rpm_norm[r] * map_norm[m]      # slight RPM×MAP coupling
+            base = 75.0 + 25.0 * map_norm[m]  # 75% at min MAP → 100% at max
+            rpm_shape = 5.0 * np.sin(np.pi * rpm_norm[r])  # ±5% bell over RPM
+            interaction = 3.0 * rpm_norm[r] * map_norm[m]  # slight RPM×MAP coupling
             table[r, m] = base + rpm_shape + interaction
 
     # Small noise so GP has something to learn beyond smooth trend
@@ -115,13 +123,15 @@ def _generate_observations(
         true_ve = ve_surface[r_idx, m_idx]
         measured_ve = true_ve + rng.randn() * noise_std
 
-        observations.append({
-            "rpm": float(rpm_bins[r_idx] + rpm_jitter),
-            "map_kpa": float(map_bins[m_idx] + map_jitter),
-            "ve": float(measured_ve),
-            "grid_r": r_idx,
-            "grid_m": m_idx,
-        })
+        observations.append(
+            {
+                "rpm": float(rpm_bins[r_idx] + rpm_jitter),
+                "map_kpa": float(map_bins[m_idx] + map_jitter),
+                "ve": float(measured_ve),
+                "grid_r": r_idx,
+                "grid_m": m_idx,
+            }
+        )
 
     return observations
 
@@ -188,23 +198,34 @@ class HarnessMetrics:
             f"  mode: {self.mode}",
         ]
         if self.mae is not None:
-            parts.append(f"  MAE: {self.mae:.4f}  RMSE: {self.rmse:.4f}  MaxErr: {self.max_error:.4f}")
+            parts.append(
+                f"  MAE: {self.mae:.4f}  RMSE: {self.rmse:.4f}  MaxErr: {self.max_error:.4f}"
+            )
         if self.mean_uncertainty_holdout is not None:
             parts.append(f"  mean_unc(holdout): {self.mean_uncertainty_holdout:.4f}")
         if self.mean_uncertainty_full is not None:
-            conf_str = f"{self.mean_confidence_full:.1f}" if self.mean_confidence_full is not None else "—"
-            parts.append(f"  mean_unc(full): {self.mean_uncertainty_full:.4f}  mean_conf(full): {conf_str}")
+            conf_str = (
+                f"{self.mean_confidence_full:.1f}"
+                if self.mean_confidence_full is not None
+                else "—"
+            )
+            parts.append(
+                f"  mean_unc(full): {self.mean_uncertainty_full:.4f}  mean_conf(full): {conf_str}"
+            )
         if self.predict_full_map_ms is not None:
-            parts.append(f"  latency: predict_full_map={self.predict_full_map_ms:.1f}ms")
+            parts.append(
+                f"  latency: predict_full_map={self.predict_full_map_ms:.1f}ms"
+            )
         if self.refit_ms is not None:
             parts.append(f"  latency: refit={self.refit_ms:.1f}ms")
-        parts.append(f"  obs in model: {self.total_obs_in_model} (template: {self.template_obs_in_model})")
+        parts.append(
+            f"  obs in model: {self.total_obs_in_model} (template: {self.template_obs_in_model})"
+        )
         return "\n".join(parts)
 
 
 # Accumulate metrics across all tests for final report
 _all_metrics: List[HarnessMetrics] = []
-
 
 # ---------------------------------------------------------------------------
 # Backend abstraction — switch between sklearn and numpy
@@ -212,18 +233,29 @@ _all_metrics: List[HarnessMetrics] = []
 BACKEND = "sklearn"
 
 
-def _create_surrogate(rpm_bins: np.ndarray, map_bins: np.ndarray, engine_family: str = "m8_114"):
+def _create_surrogate(
+    rpm_bins: np.ndarray, map_bins: np.ndarray, engine_family: str = "m8_114"
+):
     """Create a VESurrogate using the current backend."""
     from dynoai_v3.gp_surrogate import VESurrogate
+
     return VESurrogate(rpm_bins, map_bins, engine_family, backend=BACKEND)
 
 
-def _add_observation(surrogate, rpm: float, map_kpa: float, ve: float, pull_number: int = 1):
+def _add_observation(
+    surrogate, rpm: float, map_kpa: float, ve: float, pull_number: int = 1
+):
     """Add a single observation."""
     from dynoai_v3.gp_surrogate import Observation
-    surrogate.add_observation(Observation(
-        rpm=rpm, map_kpa=map_kpa, ve_delta=ve, pull_number=pull_number,
-    ))
+
+    surrogate.add_observation(
+        Observation(
+            rpm=rpm,
+            map_kpa=map_kpa,
+            ve_delta=ve,
+            pull_number=pull_number,
+        )
+    )
 
 
 def _predict_at(surrogate, rpm: float, map_kpa: float):
@@ -327,7 +359,8 @@ class TestTemplateOnly:
 
         # Core contract: template-only should return exact seed values
         np.testing.assert_array_equal(
-            pred.ve_map, ve_surface,
+            pred.ve_map,
+            ve_surface,
             err_msg="Template-only prediction must return exact seed table",
         )
 
@@ -427,7 +460,9 @@ class TestRealDataOnly:
 
         # More observations needed without template prior
         n_obs = min(120, len(rpm_bins) * len(map_bins) * 3)
-        all_obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=77)
+        all_obs = _generate_observations(
+            ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=77
+        )
         train, holdout = _holdout_split(all_obs)
 
         s = _create_surrogate(rpm_bins, map_bins)
@@ -478,7 +513,9 @@ class TestRealDataOnly:
         _all_metrics.append(metrics)
         print(f"\n{metrics.summary()}")
 
-        assert mae < 10.0, f"MAE too high without template: {mae:.4f} (must be < 10.0 VE%)"
+        assert mae < 10.0, (
+            f"MAE too high without template: {mae:.4f} (must be < 10.0 VE%)"
+        )
         assert pred.ve_map.shape == (len(rpm_bins), len(map_bins))
 
 
@@ -498,7 +535,9 @@ class TestLatencyBudget:
 
         # Add some real data to trigger GP fit
         n_obs = 30
-        obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=55)
+        obs = _generate_observations(
+            ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=55
+        )
         for o in obs:
             _add_observation(s, o["rpm"], o["map_kpa"], o["ve"])
 
@@ -535,7 +574,9 @@ class TestLatencyBudget:
         print(f"  all timings: {[f'{t:.1f}ms' for t in timings]}")
 
         # Budget: 500ms for prediction (generous; target is <100ms)
-        assert median_ms < 500, f"Prediction too slow: {median_ms:.1f}ms (budget: 500ms)"
+        assert median_ms < 500, (
+            f"Prediction too slow: {median_ms:.1f}ms (budget: 500ms)"
+        )
 
 
 class TestObservationPruning:
@@ -575,6 +616,7 @@ class TestObservationPruning:
         # Total should be bounded
         # (template_count + _MAX_PULL_OBS_STORED)
         from dynoai_v3.gp_surrogate import _MAX_PULL_OBS_STORED
+
         max_expected = template_count + _MAX_PULL_OBS_STORED
         assert len(s.observations) <= max_expected, (
             f"Observations not pruned: {len(s.observations)} > {max_expected}"
@@ -615,6 +657,7 @@ class TestMissingAlphaFallback:
 
         # Manually force the fallback state
         from dynoai_v3.gp_surrogate import Observation
+
         for rpm in [2500, 3000, 3500]:
             s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=85.0))
 
@@ -630,7 +673,9 @@ class TestMissingAlphaFallback:
 
         # Should fall back to high-uncertainty prior
         assert pred.ve_map.shape == (len(rpm_bins), len(map_bins))
-        assert np.all(pred.uncertainty_map >= 5.0), "Fallback should have high uncertainty"
+        assert np.all(pred.uncertainty_map >= 5.0), (
+            "Fallback should have high uncertainty"
+        )
 
         metrics = HarnessMetrics(
             scenario="alpha_fallback",
@@ -664,7 +709,9 @@ class TestDeterminism:
             s = _create_surrogate(rpm_bins, map_bins)
             s.seed_from_template(ve_surface, rpm_bins, map_bins)
 
-            obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=30, seed=42)
+            obs = _generate_observations(
+                ve_surface, rpm_bins, map_bins, n_obs=30, seed=42
+            )
             for o in obs:
                 _add_observation(s, o["rpm"], o["map_kpa"], o["ve"])
 
@@ -704,7 +751,11 @@ class TestCapSizeTraining:
         # Generate observations near the cap
         n_obs = min(_MAX_OBS_FOR_REFIT, 150)
         all_obs = _generate_observations(
-            ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=303,
+            ve_surface,
+            rpm_bins,
+            map_bins,
+            n_obs=n_obs,
+            seed=303,
         )
         train, holdout = _holdout_split(all_obs, holdout_fraction=0.2)
 
@@ -778,6 +829,7 @@ class TestNumpyBackendAB:
 
     def _create_numpy_surrogate(self, rpm_bins, map_bins, engine_family="m8_114"):
         from dynoai_v3.gp_surrogate import VESurrogate
+
         return VESurrogate(rpm_bins, map_bins, engine_family, backend="numpy")
 
     @pytest.mark.parametrize("grid_name", list(GRID_SHAPES.keys()))
@@ -840,7 +892,9 @@ class TestNumpyBackendAB:
         ve_surface = _make_ve_surface(rpm_bins, map_bins)
 
         n_obs = min(120, len(rpm_bins) * len(map_bins) * 3)
-        all_obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=77)
+        all_obs = _generate_observations(
+            ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=77
+        )
         train, holdout = _holdout_split(all_obs)
 
         s = self._create_numpy_surrogate(rpm_bins, map_bins)
@@ -899,7 +953,9 @@ class TestNumpyBackendAB:
         for _ in range(3):
             s = self._create_numpy_surrogate(rpm_bins, map_bins)
             s.seed_from_template(ve_surface, rpm_bins, map_bins)
-            obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=30, seed=42)
+            obs = _generate_observations(
+                ve_surface, rpm_bins, map_bins, n_obs=30, seed=42
+            )
             for o in obs:
                 _add_observation(s, o["rpm"], o["map_kpa"], o["ve"])
             pred = _predict_full_map(s)
@@ -935,7 +991,9 @@ class TestNumpyBackendAB:
             timings.append((time.perf_counter() - t0) * 1000)
         cached_ms = float(np.median(timings))
 
-        print(f"\n  Numpy latency [{grid_name}]: first={first_ms:.1f}ms, cached={cached_ms:.2f}ms")
+        print(
+            f"\n  Numpy latency [{grid_name}]: first={first_ms:.1f}ms, cached={cached_ms:.2f}ms"
+        )
 
         # Numpy contract: first fit < 10ms, cached < 2ms
         assert first_ms < 50, f"First fit too slow: {first_ms:.1f}ms"
@@ -955,7 +1013,9 @@ class TestNumpyBackendAB:
         ve_surface = _make_ve_surface(rpm_bins, map_bins)
 
         n_obs = min(60, len(rpm_bins) * len(map_bins) * 2)
-        obs = _generate_observations(ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=888)
+        obs = _generate_observations(
+            ve_surface, rpm_bins, map_bins, n_obs=n_obs, seed=888
+        )
 
         # sklearn
         s_sk = VESurrogate(rpm_bins, map_bins, "m8_114", backend="sklearn")
@@ -973,7 +1033,9 @@ class TestNumpyBackendAB:
         mae = float(np.mean(np.abs(diff)))
         max_diff = float(np.max(np.abs(diff)))
 
-        print(f"\n  sklearn vs numpy [{grid_name}]: MAE={mae:.4f}, max_diff={max_diff:.4f}")
+        print(
+            f"\n  sklearn vs numpy [{grid_name}]: MAE={mae:.4f}, max_diff={max_diff:.4f}"
+        )
 
         # Loose: sklearn optimizes hyperparams, numpy freezes them
         assert mae < 3.0, f"Backend disagreement too large: MAE={mae:.4f}"
@@ -985,6 +1047,7 @@ class TestNumpyBackendAB:
 @pytest.fixture(scope="session", autouse=True)
 def _print_final_report(request):
     """Print full metrics report after all tests complete."""
+
     def _report():
         if not _all_metrics:
             return
@@ -1006,7 +1069,9 @@ def _print_final_report(request):
             print(f"{'Scenario':<25} {'Grid':<15} {'MAE':>8} {'RMSE':>8} {'MaxErr':>8}")
             print("-" * 60)
             for m in accuracy_runs:
-                print(f"{m.scenario:<25} {m.grid_shape:<15} {m.mae:>8.4f} {m.rmse:>8.4f} {m.max_error:>8.4f}")
+                print(
+                    f"{m.scenario:<25} {m.grid_shape:<15} {m.mae:>8.4f} {m.rmse:>8.4f} {m.max_error:>8.4f}"
+                )
 
         # Latency summary
         latency_runs = [m for m in _all_metrics if m.predict_full_map_ms is not None]
@@ -1017,7 +1082,11 @@ def _print_final_report(request):
             print("-" * 60)
             for m in latency_runs:
                 refit = f"{m.refit_ms:.1f}" if m.refit_ms is not None else "—"
-                pred = f"{m.predict_full_map_ms:.1f}" if m.predict_full_map_ms is not None else "—"
+                pred = (
+                    f"{m.predict_full_map_ms:.1f}"
+                    if m.predict_full_map_ms is not None
+                    else "—"
+                )
                 print(f"{m.scenario:<25} {m.grid_shape:<15} {pred:>12} {refit:>12}")
 
         print("\n" + "=" * 78)

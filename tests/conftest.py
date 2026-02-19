@@ -34,4 +34,7 @@ def pytest_configure(config):
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
     # Register custom markers
-    config.addinivalue_line("markers", "validation: heavy holdout/parity tests (deselect with -m 'not validation')")
+    config.addinivalue_line(
+        "markers",
+        "validation: heavy holdout/parity tests (deselect with -m 'not validation')",
+    )

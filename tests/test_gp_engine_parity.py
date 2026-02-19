@@ -82,7 +82,7 @@ def _sklearn_fixed_predict(X_train, y_train, X_pred, return_std=True):
         kernel=kernel,
         n_restarts_optimizer=0,
         optimizer=None,  # Fully disable optimizer
-        alpha=JITTER,    # Only jitter on diagonal (noise is in WhiteKernel)
+        alpha=JITTER,  # Only jitter on diagonal (noise is in WhiteKernel)
         normalize_y=True,
     )
     gp.fit(X_train, y_train)
@@ -128,8 +128,10 @@ class TestMathParity:
         max_diff = float(np.max(np.abs(mean_sk - mean_np)))
         mae = float(np.mean(np.abs(mean_sk - mean_np)))
 
-        print(f"\n  Mean parity [{grid_name}, n={n_train}]: "
-              f"max_diff={max_diff:.2e}, MAE={mae:.2e}")
+        print(
+            f"\n  Mean parity [{grid_name}, n={n_train}]: "
+            f"max_diff={max_diff:.2e}, MAE={mae:.2e}"
+        )
 
         # Tight tolerance — this is the same math, just different implementation
         assert max_diff < 1e-6, (
@@ -165,8 +167,10 @@ class TestMathParity:
         std_np_observation = np.sqrt(std_np**2 + NOISE_VAR * y_std_val**2)
 
         max_diff = float(np.max(np.abs(std_sk - std_np_observation)))
-        print(f"\n  Std parity [{grid_name}, n={n_train}]: "
-              f"max_diff={max_diff:.2e} (after noise correction)")
+        print(
+            f"\n  Std parity [{grid_name}, n={n_train}]: "
+            f"max_diff={max_diff:.2e} (after noise correction)"
+        )
 
         # After accounting for the noise term, should match tightly
         assert max_diff < 1e-4, (
@@ -175,8 +179,10 @@ class TestMathParity:
 
         # Also verify the raw difference matches expected noise contribution
         raw_diff = float(np.max(np.abs(std_sk - std_np)))
-        print(f"  Raw std diff (before correction): {raw_diff:.4f} "
-              f"(expected ~sqrt(noise_var)*y_std = {np.sqrt(NOISE_VAR)*y_std_val:.4f})")
+        print(
+            f"  Raw std diff (before correction): {raw_diff:.4f} "
+            f"(expected ~sqrt(noise_var)*y_std = {np.sqrt(NOISE_VAR) * y_std_val:.4f})"
+        )
 
 
 class TestNumpyDeterminism:
@@ -205,7 +211,9 @@ class TestNumpyDeterminism:
         for i in range(1, len(results)):
             mean_diff = float(np.max(np.abs(results[0][0] - results[i][0])))
             std_diff = float(np.max(np.abs(results[0][1] - results[i][1])))
-            print(f"\n  Trial 0 vs {i}: mean_diff={mean_diff:.2e}, std_diff={std_diff:.2e}")
+            print(
+                f"\n  Trial 0 vs {i}: mean_diff={mean_diff:.2e}, std_diff={std_diff:.2e}"
+            )
             assert mean_diff == 0.0, f"Mean not bit-identical: diff={mean_diff}"
             assert std_diff == 0.0, f"Std not bit-identical: diff={std_diff}"
 
@@ -221,7 +229,9 @@ class TestNumpyLatency:
         """fit() must complete within budget."""
         X_train, y_train = _make_training_data(n_train)
 
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
 
         timings = []
         for _ in range(10):
@@ -231,8 +241,10 @@ class TestNumpyLatency:
             timings.append((time.perf_counter() - t0) * 1000)
 
         median_ms = float(np.median(timings))
-        print(f"\n  Fit latency [n={n_train}]: median={median_ms:.2f}ms, "
-              f"all={[f'{t:.2f}' for t in timings]}")
+        print(
+            f"\n  Fit latency [n={n_train}]: median={median_ms:.2f}ms, "
+            f"all={[f'{t:.2f}' for t in timings]}"
+        )
 
         # Contract: < 10ms for ≤ 150 points
         assert median_ms < 10.0, f"Fit too slow: {median_ms:.2f}ms (budget: 10ms)"
@@ -245,7 +257,9 @@ class TestNumpyLatency:
         rpm_norm, map_norm = GRID_SHAPES[grid_name]
         X_pred = _make_pred_grid(rpm_norm, map_norm)
 
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
         gp.fit(X_train, y_train)
 
         timings = []
@@ -256,8 +270,10 @@ class TestNumpyLatency:
 
         median_ms = float(np.median(timings))
         n_pred = X_pred.shape[0]
-        print(f"\n  Predict latency [{grid_name}, n_train={n_train}, n_pred={n_pred}]: "
-              f"median={median_ms:.2f}ms")
+        print(
+            f"\n  Predict latency [{grid_name}, n_train={n_train}, n_pred={n_pred}]: "
+            f"median={median_ms:.2f}ms"
+        )
 
         # Contract: < 2ms for cached prediction
         assert median_ms < 2.0, f"Predict too slow: {median_ms:.2f}ms (budget: 2ms)"
@@ -273,7 +289,9 @@ class TestEdgeCases:
         X = np.array([[0.5, 0.5]])
         y = np.array([90.0])
 
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
         gp.fit(X, y)
 
         X_pred = np.array([[0.5, 0.5], [0.0, 0.0], [1.0, 1.0]])
@@ -290,7 +308,9 @@ class TestEdgeCases:
         X = np.random.RandomState(42).rand(20, 2)
         y = np.full(20, 85.0)
 
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
         gp.fit(X, y)
 
         X_pred = np.array([[0.5, 0.5]])
@@ -345,7 +365,9 @@ class TestEdgeCases:
         map_norm = np.linspace(0, 1, 32)
         X_pred = _make_pred_grid(rpm_norm, map_norm)
 
-        gp = MaternGP(length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR)
+        gp = MaternGP(
+            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
+        )
         gp.fit(X_train, y_train)
         mean, std = gp.predict(X_pred)
 
