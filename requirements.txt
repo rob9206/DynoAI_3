@@ -6,7 +6,7 @@ beautifulsoup4==4.12.3
 requests==2.32.4
 defusedxml==0.7.1
 # Pillow has no Windows wheel for Python 3.14; skip on 3.14 to avoid source build (zlib).
-pillow==10.4.0; python_version < "3.14"
+pillow==12.1.1; python_version < "3.14"
 pytesseract==0.3.10
 pyyaml==6.0.2
 jsonschema==4.23.0
@@ -15,7 +15,7 @@ ruff==0.6.2
 black==24.8.0
 mypy==1.11.2
 pre-commit==3.8.0
-flask==3.0.0
+flask==3.1.0
 flask-cors==6.0.0
 Flask-Limiter>=3.5.0
 flasgger>=0.9.7
