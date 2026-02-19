@@ -131,15 +131,15 @@ class TestRateLimitingIntegration:
         assert response.status_code == 200
 
     @staticmethod
-    def test_runs_endpoint_works(client):
-        """Test that runs endpoint works."""
-        response = client.get("/api/runs")
+    def test_runs_endpoint_works(client, auth_headers):
+        """Test that runs endpoint works with auth."""
+        response = client.get("/api/runs", headers=auth_headers)
         assert response.status_code == 200
 
     @staticmethod
-    def test_rate_limit_headers_present_after_request(client):
+    def test_rate_limit_headers_present_after_request(client, auth_headers):
         """Test that rate limit headers are added to responses."""
-        response = client.get("/api/runs")
+        response = client.get("/api/runs", headers=auth_headers)
         # Flask-Limiter should add these headers when limits are tracked
         # Note: In some configs headers only appear after limit tracking starts
         assert response.status_code == 200

@@ -22,7 +22,9 @@ _os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 # Now do regular imports
 import json  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
 
+import jwt as pyjwt  # noqa: E402
 import pytest  # noqa: E402
 
 
@@ -50,6 +52,21 @@ def client(app):
     """Flask test client with test configuration."""
     with app.test_client() as test_client:
         yield test_client
+
+
+@pytest.fixture
+def auth_headers():
+    """Generate valid JWT Authorization header for test requests."""
+    secret = _os.environ.get("SECRET_KEY") or _os.environ.get(
+        "JWT_SECRET_KEY", "dynoai-insecure-dev-secret"
+    )
+    payload = {
+        "sub": "test-user-id",
+        "exp": datetime.now(tz=timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(tz=timezone.utc),
+    }
+    token = pyjwt.encode(payload, secret, algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

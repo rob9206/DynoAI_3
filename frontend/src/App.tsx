@@ -48,12 +48,6 @@ interface Run {
   created_at: string
 }
 
-interface JobState {
-  status: 'idle' | 'uploading' | 'processing' | 'done' | 'error'
-  progress: number
-  message: string
-}
-
 interface User {
   id: string
   email: string
@@ -82,9 +76,11 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
 
   useEffect(() => {
     (async () => {
+      setError('');
       try {
         const res = await fetch(`${API_BASE}/api/runs`, { headers: authHeaders(token) });
         if (res.status === 401) { onLogout(); return; }
+        if (!res.ok) { setError(`Failed to load runs (status ${res.status})`); return; }
         const data = await res.json();
         setRuns(data.runs ?? []);
       } catch {

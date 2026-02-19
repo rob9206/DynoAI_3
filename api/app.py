@@ -995,7 +995,19 @@ def get_ve_data(run_id):
 @app.route("/api/runs", methods=["GET"])
 @rate_limit("120/minute")  # Read-only - permissive
 def list_runs():
-    """List all available analysis runs"""
+    """List all available analysis runs with enriched metadata."""
+    from api.routes.auth import require_jwt as _require_jwt
+
+    # Require JWT auth — delegate to the decorator logic inline
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Authorization header missing or invalid"}), 401
+    try:
+        from api.routes.auth import _decode_token
+        _decode_token(auth_header[len("Bearer "):])
+    except Exception:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
     try:
         runs = []
         for run_dir in OUTPUT_FOLDER.iterdir():
@@ -1004,13 +1016,38 @@ def list_runs():
                 if manifest_path.exists():
                     with open(manifest_path, "r") as f:
                         manifest = json.load(f)
+
+                    # Collect output files
+                    output_files = [
+                        f.name for f in run_dir.iterdir()
+                        if f.is_file() and f.name != "manifest.json"
+                    ]
+
+                    # Derive status from manifest
+                    status = manifest.get("status", "completed")
+                    if manifest.get("error"):
+                        status = "error"
+
                     runs.append({
-                        "runId":
+                        "id":
                         run_dir.name,
-                        "timestamp":
-                        manifest.get("timing", {}).get("start"),
-                        "inputFile":
+                        "userId":
+                        manifest.get("user", {}).get("id"),
+                        "userEmail":
+                        manifest.get("user", {}).get("email"),
+                        "userName":
+                        manifest.get("user", {}).get("name"),
+                        "fileName":
                         manifest.get("input", {}).get("path"),
+                        "status":
+                        status,
+                        "correctionsApplied":
+                        manifest.get("output",
+                                     {}).get("corrections_applied", 0),
+                        "outputFiles":
+                        output_files,
+                        "created_at":
+                        manifest.get("timing", {}).get("start"),
                     })
 
         return jsonify({"runs": runs}), 200

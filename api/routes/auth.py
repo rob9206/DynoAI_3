@@ -286,6 +286,9 @@ def update_user(user_id: str):
                 )
             user.role = role
 
+        if "active" in data:
+            user.active = bool(data["active"])
+
         if "password" in data:
             password = data["password"]
             if len(password) < 8:
