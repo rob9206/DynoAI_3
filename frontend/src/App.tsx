@@ -38,9 +38,15 @@ const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
 
 /** Matches the shape returned by GET /api/runs */
 interface Run {
-  runId: string
-  timestamp: string | null
-  inputFile: string | null
+  id: string
+  userId: string
+  userEmail?: string
+  userName?: string
+  fileName: string
+  status: 'queued' | 'running' | 'completed' | 'error'
+  correctionsApplied: number
+  outputFiles: string[]
+  created_at: string
 }
 
 /** Matches the shape returned by GET /api/users */
@@ -49,7 +55,8 @@ interface User {
   email: string
   name: string
   role: 'owner' | 'tech' | 'customer'
-  created_at: string | null
+  active: boolean
+  created_at: string
 }
 
 // ---------------------------------------------------------------------------
@@ -92,21 +99,43 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
       <TableHeader>
         <TableRow>
           <TableHead>Date</TableHead>
-          <TableHead>Run ID</TableHead>
-          <TableHead>Input File</TableHead>
+          <TableHead>Customer</TableHead>
+          <TableHead>File</TableHead>
+          <TableHead>Corrections</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Downloads</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {runs.map((run) => (
-          <TableRow key={run.runId}>
-            <TableCell>{run.timestamp ? new Date(run.timestamp).toLocaleString() : '—'}</TableCell>
-            <TableCell className="font-mono text-sm">{run.runId}</TableCell>
-            <TableCell className="font-mono text-sm">{run.inputFile ?? '—'}</TableCell>
+          <TableRow key={run.id}>
+            <TableCell>{new Date(run.created_at).toLocaleString()}</TableCell>
+            <TableCell>{run.userName ?? run.userEmail ?? 'Unknown'}</TableCell>
+            <TableCell className="font-mono text-sm">{run.fileName}</TableCell>
+            <TableCell>{run.correctionsApplied}</TableCell>
+            <TableCell>
+              <Badge variant={run.status === 'completed' ? 'default' : run.status === 'error' ? 'destructive' : 'secondary'}>
+                {run.status}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              {run.status === 'completed' && run.outputFiles?.map((f) => (
+                <a
+                  key={f}
+                  href={`${API_BASE}/api/download/${run.id}/${f}`}
+                  className="text-blue-500 underline mr-2 text-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {f}
+                </a>
+              ))}
+            </TableCell>
           </TableRow>
         ))}
         {runs.length === 0 && (
           <TableRow>
-            <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
               No runs found
             </TableCell>
           </TableRow>
@@ -180,15 +209,16 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
     toast.success('User updated');
   };
 
-  const deleteUser = async (u: User) => {
+  const toggleActive = async (u: User) => {
     const res = await fetch(`${API_BASE}/api/users/${u.id}`, {
-      method: 'DELETE',
-      headers: authHeaders(token),
+      method: 'PUT',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !u.active }),
     });
     if (res.status === 401) { onLogout(); return; }
-    if (!res.ok) { toast.error('Failed to delete user'); return; }
+    if (!res.ok) { toast.error('Failed to update user'); return; }
     await refreshUsers();
-    toast.success('User deleted');
+    toast.success(u.active ? 'User deactivated' : 'User activated');
   };
 
   const createUser = async () => {
@@ -238,6 +268,7 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -276,6 +307,13 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
                         )}
                       </TableCell>
 
+                      {/* Status */}
+                      <TableCell>
+                        <Badge variant={u.active ? 'default' : 'destructive'}>
+                          {u.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+
                       {/* Actions */}
                       <TableCell className="space-x-1">
                         {editingId === u.id ? (
@@ -288,22 +326,24 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
                             <Button size="sm" variant="ghost" onClick={() => startEdit(u)}>Edit</Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="ghost" className="text-destructive">
-                                  Delete
+                                <Button size="sm" variant="ghost" className={u.active ? 'text-destructive' : ''}>
+                                  {u.active ? 'Deactivate' : 'Activate'}
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Delete {u.name}?
+                                    {u.active ? 'Deactivate' : 'Activate'} {u.name}?
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. The user will be permanently removed.
+                                    {u.active
+                                      ? 'They will lose access to the customer portal.'
+                                      : 'They will regain access to the customer portal.'}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => void deleteUser(u)}>Confirm</AlertDialogAction>
+                                  <AlertDialogAction onClick={() => void toggleActive(u)}>Confirm</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
