@@ -36,6 +36,7 @@ const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
 // Types
 // ---------------------------------------------------------------------------
 
+/** Matches the shape returned by GET /api/runs */
 interface Run {
   id: string
   userId: string
@@ -48,12 +49,7 @@ interface Run {
   created_at: string
 }
 
-interface JobState {
-  status: 'idle' | 'uploading' | 'processing' | 'done' | 'error'
-  progress: number
-  message: string
-}
-
+/** Matches the shape returned by GET /api/users */
 interface User {
   id: string
   email: string
@@ -67,7 +63,7 @@ interface User {
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5001';
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -81,11 +77,11 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
   const [error, setError] = useState('');
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/runs`, { headers: authHeaders(token) });
         if (res.status === 401) { onLogout(); return; }
-        const data = await res.json();
+        const data = (await res.json()) as { runs?: Run[] };
         setRuns(data.runs ?? []);
       } catch {
         setError('Failed to load runs');
@@ -114,7 +110,7 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
         {runs.map((run) => (
           <TableRow key={run.id}>
             <TableCell>{new Date(run.created_at).toLocaleString()}</TableCell>
-            <TableCell>{run.userName ?? run.userEmail ?? run.userId}</TableCell>
+            <TableCell>{run.userName ?? run.userEmail ?? 'Unknown'}</TableCell>
             <TableCell className="font-mono text-sm">{run.fileName}</TableCell>
             <TableCell>{run.correctionsApplied}</TableCell>
             <TableCell>
@@ -153,11 +149,11 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
 // TechView
 // ---------------------------------------------------------------------------
 
-function TechView({ user, token, onLogout }: { user: { name: string }; token: string; onLogout: () => void }) {
+export function TechView({ user, token, onLogout }: { user: { name: string }; token: string; onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tech Dashboard &mdash; {user.name}</h1>
+        <h1 className="text-xl font-semibold">Tech Dashboard — {user.name}</h1>
         <Button variant="ghost" onClick={onLogout}>Logout</Button>
       </header>
       <main className="p-6">
@@ -171,7 +167,7 @@ function TechView({ user, token, onLogout }: { user: { name: string }; token: st
 // AdminView
 // ---------------------------------------------------------------------------
 
-function AdminView({ user, token, onLogout }: { user: { name: string }; token: string; onLogout: () => void }) {
+export function AdminView({ user, token, onLogout }: { user: { name: string }; token: string; onLogout: () => void }) {
   // --- Users tab state ---
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -185,13 +181,13 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
   const refreshUsers = async () => {
     const res = await fetch(`${API_BASE}/api/users`, { headers: authHeaders(token) });
     if (res.status === 401) { onLogout(); return; }
-    const data = await res.json();
+    const data = (await res.json()) as { users?: User[] };
     setUsers(data.users ?? []);
   };
 
   useEffect(() => {
     setUsersLoading(true);
-    refreshUsers().finally(() => setUsersLoading(false));
+    void refreshUsers().finally(() => setUsersLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -250,7 +246,7 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Owner Dashboard &mdash; {user.name}</h1>
+        <h1 className="text-xl font-semibold">Owner Dashboard — {user.name}</h1>
         <Button variant="ghost" onClick={onLogout}>Logout</Button>
       </header>
 
@@ -301,9 +297,9 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
                           <Select value={editForm.role} onValueChange={(v) => setEditForm((p) => ({ ...p, role: v }))}>
                             <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="customer">customer</SelectItem>
-                              <SelectItem value="tech">tech</SelectItem>
-                              <SelectItem value="owner">owner</SelectItem>
+                              <SelectItem value="customer">Customer</SelectItem>
+                              <SelectItem value="tech">Tech</SelectItem>
+                              <SelectItem value="owner">Owner</SelectItem>
                             </SelectContent>
                           </Select>
                         ) : (
@@ -322,7 +318,7 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
                       <TableCell className="space-x-1">
                         {editingId === u.id ? (
                           <>
-                            <Button size="sm" onClick={() => saveEdit(u.id)}>Save</Button>
+                            <Button size="sm" onClick={() => void saveEdit(u.id)}>Save</Button>
                             <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
                           </>
                         ) : (
@@ -347,7 +343,7 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => toggleActive(u)}>Confirm</AlertDialogAction>
+                                  <AlertDialogAction onClick={() => void toggleActive(u)}>Confirm</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -404,7 +400,7 @@ function AdminView({ user, token, onLogout }: { user: { name: string }; token: s
                   </div>
                 </div>
                 <Button
-                  onClick={createUser}
+                  onClick={() => void createUser()}
                   disabled={creating || !createForm.name || !createForm.email || !createForm.password}
                   className="mt-4"
                 >

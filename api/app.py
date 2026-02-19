@@ -11,12 +11,12 @@ import subprocess
 import sys
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, g, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -37,6 +37,8 @@ from api.metrics import init_metrics, record_analysis, record_file_upload
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
@@ -321,6 +323,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not register auth blueprint: {e}")
 
+# Register Run History blueprint
+try:
+    from api.routes.runs import runs_bp
+
+    app.register_blueprint(runs_bp)
+    print("[+] Run history registered at /api/runs")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not register run history blueprint: {e}")
+
 # Initialize CORS after all blueprints are registered
 # Set intercept_exceptions=False and always_send=True to ensure CORS headers on all responses
 CORS(
@@ -338,6 +349,13 @@ print("[+] CORS enabled for all routes")
 
 # Store active analysis jobs
 active_jobs = {}
+
+
+def _require_jwt(f):
+    """Apply JWT authentication (wraps api.middleware.auth_middleware.require_jwt)."""
+    from api.middleware.auth_middleware import require_jwt
+
+    return require_jwt(f)
 
 
 # Helper functions for form data parsing
@@ -559,6 +577,7 @@ def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
 
 @app.route("/api/analyze", methods=["POST"])
 @rate_limit("5/minute;20/hour")  # Expensive operation - stricter limits
+@_require_jwt
 def analyze():
     """
     Submit a dyno log CSV for asynchronous analysis.
@@ -624,6 +643,22 @@ def analyze():
             "params": {},
             "started_at": datetime.utcnow().isoformat(),
         }
+        # Persist Run record in DB if possible (best-effort in test mode)
+        try:
+            from api.models.run import Run
+            from api.services.database import get_db
+
+            user_id = getattr(g, "current_user", {}).get("id")
+            with get_db() as db:
+                db.add(
+                    Run(
+                        run_id=run_id,
+                        user_id=user_id,
+                        status="queued",
+                        input_file=secure_filename(file.filename),
+                    ))
+        except Exception:
+            pass
         return (
             jsonify({
                 "runId": run_id,
@@ -636,6 +671,23 @@ def analyze():
     try:
         # Generate unique run ID
         run_id = str(uuid.uuid4())
+
+        # Persist the Run record immediately
+        try:
+            from api.models.run import Run
+            from api.services.database import get_db
+
+            user_id = getattr(g, "current_user", {}).get("id")
+            with get_db() as db:
+                db.add(
+                    Run(
+                        run_id=run_id,
+                        user_id=user_id,
+                        status="queued",
+                        input_file=secure_filename(file.filename),
+                    ))
+        except Exception as db_err:
+            logger.warning(f"Could not persist Run record: {db_err}")
 
         # Save uploaded file
         filename = secure_filename(file.filename)
@@ -721,10 +773,53 @@ def analyze():
                 active_jobs[run_id]["manifest"] = manifest
                 active_jobs[run_id]["status"] = "completed"
                 active_jobs[run_id]["message"] = "Analysis complete"
+                # Update DB record on completion
+                try:
+                    from api.models.run import Run
+                    from api.services.database import get_db
+
+                    stats = manifest.get("stats", {})
+                    outputs = manifest.get("outputs", [])
+                    with get_db() as db:
+                        run_record = db.query(Run).filter(
+                            Run.run_id == run_id).first()
+                        if run_record:
+                            run_record.status = "completed"
+                            run_record.completed_at = datetime.now(
+                                timezone.utc)
+                            run_record.rows_processed = stats.get("rows_read")
+                            run_record.corrections_applied = stats.get(
+                                "front_accepted", 0) + stats.get(
+                                    "rear_accepted", 0)
+                            run_record.avg_correction = stats.get(
+                                "avg_correction")
+                            run_record.max_correction = stats.get(
+                                "max_correction")
+                            run_record.output_files = json.dumps([
+                                o.get("name", o.get("path", ""))
+                                for o in outputs
+                            ])
+                except Exception as db_err:
+                    logger.warning(
+                        f"Could not update Run record on completion: {db_err}")
             except Exception as e:
                 active_jobs[run_id]["status"] = "error"
                 active_jobs[run_id]["error"] = str(e)
                 active_jobs[run_id]["message"] = f"Error: {str(e)}"
+                # Update DB record on error
+                try:
+                    from api.models.run import Run
+                    from api.services.database import get_db
+
+                    with get_db() as db:
+                        run_record = db.query(Run).filter(
+                            Run.run_id == run_id).first()
+                        if run_record:
+                            run_record.status = "error"
+                            run_record.error_message = str(e)[:500]
+                except Exception as db_err:
+                    logger.warning(
+                        f"Could not update Run record on error: {db_err}")
 
         thread = threading.Thread(target=run_analysis_thread, daemon=True)
         thread.start()
@@ -992,31 +1087,8 @@ def get_ve_data(run_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/runs", methods=["GET"])
-@rate_limit("120/minute")  # Read-only - permissive
-def list_runs():
-    """List all available analysis runs"""
-    try:
-        runs = []
-        for run_dir in OUTPUT_FOLDER.iterdir():
-            if run_dir.is_dir():
-                manifest_path = run_dir / "manifest.json"
-                if manifest_path.exists():
-                    with open(manifest_path, "r") as f:
-                        manifest = json.load(f)
-                    runs.append({
-                        "runId":
-                        run_dir.name,
-                        "timestamp":
-                        manifest.get("timing", {}).get("start"),
-                        "inputFile":
-                        manifest.get("input", {}).get("path"),
-                    })
-
-        return jsonify({"runs": runs}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# NOTE: GET /api/runs and GET /api/runs/<run_id> are served by runs_bp
+# (api/routes/runs.py) which requires JWT authentication.
 
 
 @app.route("/api/diagnostics/<run_id>", methods=["GET"])
