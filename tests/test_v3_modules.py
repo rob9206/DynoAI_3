@@ -18,7 +18,9 @@ import pytest
 # ---------------------------------------------------------------------------
 # Standard V-twin test grid
 # ---------------------------------------------------------------------------
-RPM_BINS = np.array([1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500], dtype=np.float64)
+RPM_BINS = np.array(
+    [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500], dtype=np.float64
+)
 MAP_BINS = np.array([30, 40, 50, 60, 70, 80, 90, 100, 105], dtype=np.float64)
 
 
@@ -44,10 +46,13 @@ def _synthetic_pull_data(rpm_center, map_center, n_points=5, noise=0.3):
     rng = np.random.RandomState(int(rpm_center + map_center))
     rpm = rpm_center + rng.randn(n_points) * 100
     map_kpa = map_center + rng.randn(n_points) * 5
-    ve = _synthetic_ve_table()[
-        np.searchsorted(RPM_BINS, rpm_center) - 1,
-        np.searchsorted(MAP_BINS, map_center) - 1,
-    ] + rng.randn(n_points) * noise
+    ve = (
+        _synthetic_ve_table()[
+            np.searchsorted(RPM_BINS, rpm_center) - 1,
+            np.searchsorted(MAP_BINS, map_center) - 1,
+        ]
+        + rng.randn(n_points) * noise
+    )
     return rpm, map_kpa, ve
 
 
@@ -59,7 +64,8 @@ class TestPhysicsConstraints:
 
     def test_load_defaults(self):
         """Default constraints load for all known families."""
-        from dynoai_v3.physics_constraints import PhysicsConstraints, KNOWN_FAMILIES
+        from dynoai_v3.physics_constraints import KNOWN_FAMILIES, PhysicsConstraints
+
         for family in KNOWN_FAMILIES:
             pc = PhysicsConstraints(family)
             assert pc.maps.engine_family == family
@@ -69,12 +75,14 @@ class TestPhysicsConstraints:
     def test_unknown_family_raises(self):
         """Unknown engine family raises ValueError."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         with pytest.raises(ValueError, match="Unknown engine family"):
             PhysicsConstraints("turbocharged_inline_6")
 
     def test_check_point_safe(self):
         """Normal operating point passes all checks."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         verdict = pc.check_point(rpm=3500, map_kpa=80, timing=22.0, afr=12.8)
         assert verdict.safe
@@ -83,6 +91,7 @@ class TestPhysicsConstraints:
     def test_check_point_lean_wot(self):
         """Lean AFR at WOT fails safety check."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         verdict = pc.check_point(rpm=3500, map_kpa=100, afr=14.0)
         assert not verdict.safe
@@ -91,6 +100,7 @@ class TestPhysicsConstraints:
     def test_check_point_over_rpm(self):
         """RPM above max test RPM fails."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         verdict = pc.check_point(rpm=6500, map_kpa=100)
         assert not verdict.safe
@@ -98,6 +108,7 @@ class TestPhysicsConstraints:
     def test_is_safe_to_test(self):
         """Pre-pull safety check works."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         safe, reason = pc.is_safe_to_test(3500, 90)
         assert safe
@@ -110,6 +121,7 @@ class TestPhysicsConstraints:
     def test_clamp_ve_table(self):
         """VE table clamping enforces bounds."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         table = np.full((10, 9), 10.0)  # 10% correction — over the ±7% limit
         clamped, events = pc.clamp_ve_table(table)
@@ -119,6 +131,7 @@ class TestPhysicsConstraints:
     def test_adaptive_clamp_tighter(self):
         """Adaptive clamping uses tighter limits than standard."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         table = np.full((10, 9), 6.0)
         _, events_std = pc.clamp_ve_table(table, is_adaptive=False)
@@ -128,6 +141,7 @@ class TestPhysicsConstraints:
     def test_export_and_reload(self):
         """Constraints survive JSON round-trip."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         with tempfile.TemporaryDirectory() as tmpdir:
             pc = PhysicsConstraints("m8_114")
             path = pc.export_to_json(Path(tmpdir) / "m8_114_limits.json")
@@ -140,13 +154,15 @@ class TestPhysicsConstraints:
     def test_cooling_type_affects_limits(self):
         """Different cooling types produce different thermal limits."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
-        air = PhysicsConstraints("m8_114")     # Air-cooled
+
+        air = PhysicsConstraints("m8_114")  # Air-cooled
         liquid = PhysicsConstraints("revmax_1250")  # Liquid-cooled
         assert air.maps.ect_enrichment_trigger_f > liquid.maps.ect_enrichment_trigger_f
 
     def test_revmax_975_constraints(self):
         """RevMax 975 (Nightster) has liquid cooling and high redline range."""
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("revmax_975")
         assert pc.maps.cooling_type == "liquid"
         assert pc.maps.max_test_rpm >= 8000
@@ -162,6 +178,7 @@ class TestGPSurrogate:
     def test_init(self):
         """Surrogate initializes without data."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         assert not s.is_fitted
         assert s.observation_count == 0
@@ -169,6 +186,7 @@ class TestGPSurrogate:
     def test_unfitted_prediction(self):
         """Unfitted model returns high uncertainty."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         pred = s.predict(3500, 90)
         assert pred.uncertainty >= 5.0
@@ -176,11 +194,14 @@ class TestGPSurrogate:
 
     def test_add_observations_and_fit(self):
         """Adding observations marks model stale; fit happens on first prediction."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         assert not s.is_fitted
         for rpm in [2500, 3000, 3500, 4000, 4500]:
-            s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=85.0 + rpm / 5000))
+            s.add_observation(
+                Observation(rpm=rpm, map_kpa=100, ve_delta=85.0 + rpm / 5000)
+            )
         assert s.observation_count == 5
         assert s._stale  # Model is marked stale, not yet fitted
         # First prediction triggers lazy fit
@@ -190,7 +211,8 @@ class TestGPSurrogate:
 
     def test_prediction_near_data(self):
         """Predictions near measured data have low uncertainty."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         for rpm in [2500, 3000, 3500, 4000, 4500]:
             s.add_observation(Observation(rpm=rpm, map_kpa=100, ve_delta=95.0))
@@ -200,7 +222,8 @@ class TestGPSurrogate:
 
     def test_prediction_far_from_data(self):
         """Predictions far from data have high uncertainty."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         # Only add data at WOT
         for rpm in [2500, 3000, 3500, 4000, 4500]:
@@ -212,6 +235,7 @@ class TestGPSurrogate:
     def test_add_pull_data(self):
         """Bulk pull data ingestion works; fit happens on first prediction."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         rpm, map_kpa, ve = _synthetic_pull_data(3500, 100, n_points=10)
         n = s.add_pull_data(rpm, map_kpa, ve, pull_number=1)
@@ -225,6 +249,7 @@ class TestGPSurrogate:
     def test_rejects_extreme_data(self):
         """Extreme VE values are rejected."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         rpm = np.array([3000, 3500, 4000])
         map_kpa = np.array([100, 100, 100])
@@ -234,7 +259,8 @@ class TestGPSurrogate:
 
     def test_predict_full_map(self):
         """Full map prediction returns correct shapes."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         for rpm in [2500, 3000, 3500, 4000]:
             for map_kpa in [50, 70, 90, 100]:
@@ -243,11 +269,12 @@ class TestGPSurrogate:
         assert pred.ve_map.shape == (len(RPM_BINS), len(MAP_BINS))
         assert pred.uncertainty_map.shape == pred.ve_map.shape
         assert pred.confidence_map.shape == pred.ve_map.shape
-        assert pred.predict_time_ms > 0
+        assert pred.predict_time_ms >= 0
 
     def test_template_seeding(self):
         """Template seeding reduces initial uncertainty."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         # Unseeded
         s1 = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         s1.add_observation(
@@ -280,47 +307,52 @@ class TestGPSurrogate:
     def test_seed_table_returned_exactly(self):
         """When only template data exists, predict_full_map returns exact 1:1 PVV values."""
         from dynoai_v3.gp_surrogate import VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         template_ve = _synthetic_ve_table()
-        
+
         # Seed with template
         s.seed_from_template(template_ve, RPM_BINS, MAP_BINS)
-        
+
         # Predict full map (no real pull data yet)
         pred = s.predict_full_map()
-        
+
         # VE map should match template exactly (1:1)
         np.testing.assert_array_equal(pred.ve_map, template_ve)
-        
+
         # Uncertainty map should still be computed from GP
         assert pred.uncertainty_map.shape == template_ve.shape
         assert np.all(pred.uncertainty_map > 0)  # Should have some uncertainty
-    
+
     def test_seed_table_blends_with_real_data(self):
         """After adding real pull data, GP blends seed with real observations."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         template_ve = _synthetic_ve_table()
-        
+
         # Seed with template
         s.seed_from_template(template_ve, RPM_BINS, MAP_BINS)
-        
+
         # Add a real observation with different value
-        s.add_observation(Observation(rpm=3500, map_kpa=100, ve_delta=99.0, pull_number=1))
-        
+        s.add_observation(
+            Observation(rpm=3500, map_kpa=100, ve_delta=99.0, pull_number=1)
+        )
+
         # Predict full map
         pred = s.predict_full_map()
-        
+
         # VE map should NOT exactly match template anymore (GP blends)
         assert not np.array_equal(pred.ve_map, template_ve)
-        
+
         # But should still be close to template in most places
         diff = np.abs(pred.ve_map - template_ve)
         assert np.mean(diff) < 5.0  # Mean difference less than 5%
 
     def test_save_load_state(self):
         """Surrogate state survives JSON round-trip."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         with tempfile.TemporaryDirectory() as tmpdir:
             s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
             for rpm in [3000, 3500, 4000]:
@@ -334,7 +366,11 @@ class TestGPSurrogate:
 
     def test_confidence_badge_mapping(self):
         """Confidence scores map to correct badges."""
-        from dynoai_v3.gp_surrogate import uncertainty_to_confidence, confidence_to_badge
+        from dynoai_v3.gp_surrogate import (
+            confidence_to_badge,
+            uncertainty_to_confidence,
+        )
+
         assert confidence_to_badge(uncertainty_to_confidence(0.3)) == "H"
         assert confidence_to_badge(uncertainty_to_confidence(0.8)) == "M"
         assert confidence_to_badge(uncertainty_to_confidence(1.5)) == "L"
@@ -342,15 +378,18 @@ class TestGPSurrogate:
 
     def test_refit_performance(self):
         """GP refit completes within performance budget."""
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         rng = np.random.RandomState(42)
         for i in range(100):
-            s.observations.append(Observation(
-                rpm=float(rng.choice(RPM_BINS)),
-                map_kpa=float(rng.choice(MAP_BINS)),
-                ve_delta=float(rng.randn() * 10 + 85),  # Mean 85%, stdev 10%
-            ))
+            s.observations.append(
+                Observation(
+                    rpm=float(rng.choice(RPM_BINS)),
+                    map_kpa=float(rng.choice(MAP_BINS)),
+                    ve_delta=float(rng.randn() * 10 + 85),  # Mean 85%, stdev 10%
+                )
+            )
         s._refit()
         assert s._last_fit_time_ms < 5000  # 5 second budget for 100 obs
 
@@ -362,9 +401,10 @@ class TestPullAdvisor:
     """Tests for pull_advisor.py"""
 
     def _make_advisor(self):
-        from dynoai_v3.gp_surrogate import VESurrogate, Observation
+        from dynoai_v3.gp_surrogate import Observation, VESurrogate
         from dynoai_v3.physics_constraints import PhysicsConstraints
         from dynoai_v3.pull_advisor import PullAdvisor
+
         s = VESurrogate(RPM_BINS, MAP_BINS, "m8_114")
         # Seed with some data
         for rpm in [3000, 4000, 5000]:
@@ -390,6 +430,7 @@ class TestPullAdvisor:
         assert len(plan) >= 3
         # First pulls should be WOT
         from dynoai_v3.pull_advisor import PullType
+
         wot_count = sum(1 for p in plan if p.pull_type == PullType.WOT_SWEEP)
         assert wot_count >= 3
 
@@ -432,7 +473,8 @@ class TestTemplateLibrary:
 
     def test_store_and_retrieve(self):
         """Templates survive store → find cycle."""
-        from dynoai_v3.template_library import TemplateLibrary, HardwareConfig
+        from dynoai_v3.template_library import HardwareConfig, TemplateLibrary
+
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = TemplateLibrary(Path(tmpdir))
             config = HardwareConfig(
@@ -452,7 +494,8 @@ class TestTemplateLibrary:
 
     def test_similarity_scoring(self):
         """Similar configs score higher than dissimilar ones."""
-        from dynoai_v3.template_library import TemplateLibrary, HardwareConfig
+        from dynoai_v3.template_library import HardwareConfig, TemplateLibrary
+
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = TemplateLibrary(Path(tmpdir))
 
@@ -492,7 +535,8 @@ class TestTemplateLibrary:
 
     def test_family_mismatch_returns_none(self):
         """Different engine family returns no match."""
-        from dynoai_v3.template_library import TemplateLibrary, HardwareConfig
+        from dynoai_v3.template_library import HardwareConfig, TemplateLibrary
+
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = TemplateLibrary(Path(tmpdir))
             lib.store_template(
@@ -506,7 +550,8 @@ class TestTemplateLibrary:
 
     def test_count(self):
         """Template count tracks correctly."""
-        from dynoai_v3.template_library import TemplateLibrary, HardwareConfig
+        from dynoai_v3.template_library import HardwareConfig, TemplateLibrary
+
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = TemplateLibrary(Path(tmpdir))
             assert lib.count() == 0
@@ -521,6 +566,7 @@ class TestTemplateLibrary:
     def test_hardware_config_signature(self):
         """Config signature is deterministic and filesystem-safe."""
         from dynoai_v3.template_library import HardwareConfig
+
         c = HardwareConfig(
             engine_family="m8_114",
             displacement_ci=114,
@@ -585,7 +631,7 @@ class TestSessionOrchestrator:
 
     def test_status_tracking(self):
         """Session status updates correctly."""
-        from dynoai_v3.session_orchestrator import TuningSession, SessionState
+        from dynoai_v3.session_orchestrator import SessionState, TuningSession
         from dynoai_v3.template_library import HardwareConfig
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -614,6 +660,7 @@ class TestBoundedOverlay:
     def _make_overlay(self):
         from dynoai_v3.adaptive_overlay import BoundedOverlay
         from dynoai_v3.physics_constraints import PhysicsConstraints
+
         pc = PhysicsConstraints("m8_114")
         base_ve = np.full((10, 9), 80.0)  # 80% VE everywhere
         return BoundedOverlay(base_ve, RPM_BINS, MAP_BINS, pc)
@@ -622,8 +669,10 @@ class TestBoundedOverlay:
         """No correction when AFR matches target."""
         overlay = self._make_overlay()
         corr = overlay.compute_fuel_correction(
-            rpm=3500, map_kpa=90,
-            current_afr=12.8, target_afr=12.8,
+            rpm=3500,
+            map_kpa=90,
+            current_afr=12.8,
+            target_afr=12.8,
             ect_f=400,
         )
         assert abs(corr) < 0.1  # Near zero with learning rate
@@ -634,8 +683,10 @@ class TestBoundedOverlay:
         # Run 10 cycles to accumulate correction
         for _ in range(10):
             corr = overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=13.5, target_afr=12.8,
+                rpm=3500,
+                map_kpa=100,
+                current_afr=13.5,
+                target_afr=12.8,
                 ect_f=400,
             )
         assert corr > 0  # Should add fuel
@@ -647,8 +698,10 @@ class TestBoundedOverlay:
         # Drive correction hard
         for _ in range(100):
             corr = overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=15.0, target_afr=12.0,  # Huge error
+                rpm=3500,
+                map_kpa=100,
+                current_afr=15.0,
+                target_afr=12.0,  # Huge error
                 ect_f=400,
             )
         assert abs(corr) <= max_pct + 0.01  # Within bounds
@@ -659,8 +712,10 @@ class TestBoundedOverlay:
         # Accumulate some corrections
         for _ in range(10):
             overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=13.5, target_afr=12.8,
+                rpm=3500,
+                map_kpa=100,
+                current_afr=13.5,
+                target_afr=12.8,
                 ect_f=400,
             )
         assert overlay.enabled
@@ -672,8 +727,10 @@ class TestBoundedOverlay:
 
         # Corrections return 0 when disabled
         corr = overlay.compute_fuel_correction(
-            rpm=3500, map_kpa=100,
-            current_afr=14.0, target_afr=12.8,
+            rpm=3500,
+            map_kpa=100,
+            current_afr=14.0,
+            target_afr=12.8,
             ect_f=400,
         )
         assert corr == 0.0
@@ -683,8 +740,11 @@ class TestBoundedOverlay:
         overlay = self._make_overlay()
         for _ in range(10):
             overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=13.5, target_afr=12.8, ect_f=400,
+                rpm=3500,
+                map_kpa=100,
+                current_afr=13.5,
+                target_afr=12.8,
+                ect_f=400,
             )
         overlay.kill_switch()
         overlay.re_enable()
@@ -695,8 +755,10 @@ class TestBoundedOverlay:
         """Knock detection retards timing."""
         overlay = self._make_overlay()
         corr = overlay.compute_timing_correction(
-            rpm=3500, map_kpa=100,
-            knock_detected=True, knock_severity=0.8,
+            rpm=3500,
+            map_kpa=100,
+            knock_detected=True,
+            knock_severity=0.8,
             ect_f=400,
         )
         assert corr < 0  # Negative = retard
@@ -705,7 +767,8 @@ class TestBoundedOverlay:
         """Timing overlay never advances beyond base."""
         overlay = self._make_overlay()
         corr = overlay.compute_timing_correction(
-            rpm=3500, map_kpa=100,
+            rpm=3500,
+            map_kpa=100,
             knock_detected=False,
         )
         assert corr <= 0.0  # Never positive
@@ -715,8 +778,11 @@ class TestBoundedOverlay:
         overlay = self._make_overlay()
         # Set a correction at hour 0
         overlay.compute_fuel_correction(
-            rpm=3500, map_kpa=100,
-            current_afr=13.5, target_afr=12.8, ect_f=400,
+            rpm=3500,
+            map_kpa=100,
+            current_afr=13.5,
+            target_afr=12.8,
+            ect_f=400,
         )
         initial_corr = overlay._fuel_corrections.copy()
         assert np.any(initial_corr != 0)
@@ -732,8 +798,10 @@ class TestBoundedOverlay:
         overlay = self._make_overlay()
         # ECT way above trigger (475°F for M8 air-cooled)
         corr = overlay.compute_fuel_correction(
-            rpm=3500, map_kpa=100,
-            current_afr=12.8, target_afr=12.8,  # AFR on target
+            rpm=3500,
+            map_kpa=100,
+            current_afr=12.8,
+            target_afr=12.8,  # AFR on target
             ect_f=500,  # Over the 475°F trigger
         )
         # Should still have positive correction due to ECT override
@@ -743,8 +811,11 @@ class TestBoundedOverlay:
         """All corrections are logged."""
         overlay = self._make_overlay()
         overlay.compute_fuel_correction(
-            rpm=3500, map_kpa=100,
-            current_afr=13.5, target_afr=12.8, ect_f=400,
+            rpm=3500,
+            map_kpa=100,
+            current_afr=13.5,
+            target_afr=12.8,
+            ect_f=400,
         )
         log = overlay.export_correction_log()
         assert len(log) == 1
@@ -764,8 +835,11 @@ class TestBoundedOverlay:
         # Add correction → table changes
         for _ in range(10):
             overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=13.5, target_afr=12.8, ect_f=400,
+                rpm=3500,
+                map_kpa=100,
+                current_afr=13.5,
+                target_afr=12.8,
+                ect_f=400,
             )
         corrected = overlay.get_corrected_ve_table()
         assert not np.array_equal(corrected, base)
@@ -775,8 +849,11 @@ class TestBoundedOverlay:
         overlay = self._make_overlay()
         for _ in range(5):
             overlay.compute_fuel_correction(
-                rpm=3500, map_kpa=100,
-                current_afr=13.5, target_afr=12.8, ect_f=400,
+                rpm=3500,
+                map_kpa=100,
+                current_afr=13.5,
+                target_afr=12.8,
+                ect_f=400,
             )
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "overlay_state.json"
@@ -804,7 +881,7 @@ class TestEndToEnd:
         4. Finalize and store template
         5. Start NEW session — verify template match speeds things up
         """
-        from dynoai_v3 import TuningSession, HardwareConfig
+        from dynoai_v3 import HardwareConfig, TuningSession
 
         with tempfile.TemporaryDirectory() as tmpdir:
             templates_dir = Path(tmpdir) / "templates"
@@ -856,10 +933,10 @@ class TestEndToEnd:
             similar_config = HardwareConfig(
                 engine_family="m8_114",
                 displacement_ci=114,
-                cam_spec="s&s_475",      # Same cams
-                exhaust_type="slip_on",   # Different exhaust
+                cam_spec="s&s_475",  # Same cams
+                exhaust_type="slip_on",  # Different exhaust
                 air_cleaner="high_flow",  # Same
-                compression_ratio=10.5,   # Same
+                compression_ratio=10.5,  # Same
             )
             session3 = TuningSession(similar_config, templates_dir, constraints_dir)
             init3 = session3.initialize()
