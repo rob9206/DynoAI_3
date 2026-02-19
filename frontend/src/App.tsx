@@ -124,7 +124,7 @@ export function TechView({ user, token, onLogout }: { user: { name: string }; to
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tech Dashboard &mdash; {user.name}</h1>
+        <h1 className="text-xl font-semibold">Tech Dashboard — {user.name}</h1>
         <Button variant="ghost" onClick={onLogout}>Logout</Button>
       </header>
       <main className="p-6">
@@ -216,7 +216,7 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Owner Dashboard &mdash; {user.name}</h1>
+        <h1 className="text-xl font-semibold">Owner Dashboard — {user.name}</h1>
         <Button variant="ghost" onClick={onLogout}>Logout</Button>
       </header>
 
@@ -266,9 +266,9 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
                           <Select value={editForm.role} onValueChange={(v) => setEditForm((p) => ({ ...p, role: v }))}>
                             <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="customer">customer</SelectItem>
-                              <SelectItem value="tech">tech</SelectItem>
-                              <SelectItem value="owner">owner</SelectItem>
+                              <SelectItem value="customer">Customer</SelectItem>
+                              <SelectItem value="tech">Tech</SelectItem>
+                              <SelectItem value="owner">Owner</SelectItem>
                             </SelectContent>
                           </Select>
                         ) : (
