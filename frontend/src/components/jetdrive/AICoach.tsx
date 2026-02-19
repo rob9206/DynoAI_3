@@ -353,41 +353,76 @@ export function AICoach({
     // Listen for pull completion (not pull start) so data is available
     const handler = (event: Event) => {
       const customEvent = event as CustomEvent<{ peakHp?: number; state?: string }>;
-      console.log('[AI Coach] Pull complete event received', { sessionId, phase: v3.sessionPhase, isSimulating: v3.isSimulating });
+      console.log('[AI Coach] Pull complete event received', { 
+        sessionId, 
+        phase: v3.sessionPhase, 
+        isSimulating: v3.isSimulating,
+        hasSession: !!sessionId,
+        sessionStatus: v3.sessionStatus,
+      });
       
       if (!sessionId) {
+        console.warn('[AI Coach] No sessionId, cannot update');
         toast.info('Start AI session before triggering pull analysis.');
         return;
       }
       if (v3.sessionPhase === 'idle') {
-        toast.info('AI session is not ready yet.');
+        console.warn('[AI Coach] Session phase is idle, cannot update', {
+          sessionId,
+          sessionStatus: v3.sessionStatus,
+        });
+        toast.info('AI session is not ready yet. Wait for session to initialize.');
         return;
       }
       if (v3.isSimulating) {
         console.log('[AI Coach] Already simulating, skipping update');
         return;
       }
+      
+      console.log('[AI Coach] All checks passed, proceeding with update');
 
       // Small delay to ensure pull data is fully available
       setTimeout(() => {
-        console.log('[AI Coach] Starting simulate() after pull completion');
+        console.log('[AI Coach] Starting simulate() after pull completion', {
+          sessionId,
+          phase: v3.sessionPhase,
+          isSimulating: v3.isSimulating,
+          hasSession: !!sessionId,
+        });
+        
         void v3
           .simulate({ mode: 'realistic' })
-          .then(async () => {
-            // If simulating, we need to ingest the result
-            // In a real scenario, this data comes from the hardware/log
-            // For now, we'll auto-ingest the simulation result to close the loop
+          .then(async (result) => {
+            console.log('[AI Coach] Simulate() completed:', {
+              pull_number: result?.pull_number,
+              observations_added: result?.observations_added,
+              mode: result?.mode,
+            });
 
             // Force refresh to get latest state
             await v3.refreshSessionData();
             setLastAnalyzedAt(new Date().toISOString());
-            console.log('[AI Coach] Update successful');
-            toast.success('AI Coach updated from simulator pull.');
+            
+            const obsAdded = result?.observations_added ?? 0;
+            if (obsAdded > 0) {
+              console.log('[AI Coach] Update successful - observations added:', obsAdded);
+              toast.success(`AI Coach updated: ${obsAdded} observations added`);
+            } else {
+              console.warn('[AI Coach] Simulate completed but no observations added');
+              toast.warning('AI Coach update completed but no new observations. Check simulator data.');
+            }
           })
           .catch((error) => {
             console.error('[AI Coach] Update failed:', error);
+            const errorMsg = handleApiError(error);
+            console.error('[AI Coach] Error details:', {
+              message: errorMsg,
+              sessionId,
+              phase: v3.sessionPhase,
+            });
             toast.error('AI Coach update failed', {
-              description: handleApiError(error),
+              description: errorMsg || 'Unknown error. Check console for details.',
+              duration: 5000,
             });
           });
       }, 1000); // Increased delay to 1s to ensure pull data is fully available
@@ -699,15 +734,40 @@ export function AICoach({
               disabled={v3.isSimulating}
               onClick={async () => {
                 try {
-                  console.log('[AI Coach] Manual update triggered');
-                  await v3.simulate({ mode: 'realistic' });
+                  console.log('[AI Coach] Manual update triggered', {
+                    sessionId,
+                    phase: v3.sessionPhase,
+                    isSimulating: v3.isSimulating,
+                  });
+                  
+                  if (!sessionId) {
+                    toast.error('No session active. Start an AI session first.');
+                    return;
+                  }
+                  
+                  if (v3.sessionPhase === 'idle') {
+                    toast.error('Session not ready. Wait for session to initialize.');
+                    return;
+                  }
+                  
+                  const result = await v3.simulate({ mode: 'realistic' });
+                  console.log('[AI Coach] Manual simulate() result:', result);
+                  
                   await v3.refreshSessionData();
                   setLastAnalyzedAt(new Date().toISOString());
-                  toast.success('AI Coach updated successfully');
+                  
+                  const obsAdded = result?.observations_added ?? 0;
+                  if (obsAdded > 0) {
+                    toast.success(`AI Coach updated: ${obsAdded} observations added`);
+                  } else {
+                    toast.warning('Update completed but no observations added. Check simulator status.');
+                  }
                 } catch (error) {
                   console.error('[AI Coach] Manual update failed:', error);
+                  const errorMsg = handleApiError(error);
                   toast.error('Update failed', {
-                    description: handleApiError(error),
+                    description: errorMsg || 'Unknown error. Check console for details.',
+                    duration: 5000,
                   });
                 }
               }}
