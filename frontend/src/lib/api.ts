@@ -720,14 +720,32 @@ export const handleApiError = (error: unknown): string => {
       error?: string | { code?: string; message?: string };
     }>;
     const payloadError = axiosError.response?.data?.error;
-    if (typeof payloadError === 'string') {
-      return payloadError;
-    }
+    
+    // Handle nested error object structure
     if (payloadError && typeof payloadError === 'object' && payloadError.message) {
       return payloadError.message;
     }
+    
+    // Handle string error
+    if (typeof payloadError === 'string') {
+      return payloadError;
+    }
+    
+    // Handle direct error message in response data
+    if (axiosError.response?.data && typeof axiosError.response.data === 'object') {
+      const data = axiosError.response.data as any;
+      if (data.message) return data.message;
+      if (data.error && typeof data.error === 'string') return data.error;
+    }
+    
+    // Fall back to axios error message
     if (axiosError.message) {
       return axiosError.message;
+    }
+    
+    // Fall back to status text
+    if (axiosError.response?.statusText) {
+      return `${axiosError.response.status} ${axiosError.response.statusText}`;
     }
   }
   if (error instanceof Error) {

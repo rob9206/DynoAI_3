@@ -215,10 +215,14 @@ export function AICoach({
     try {
       let resolvedRunId: string | null = null;
       try {
+        console.log('[AI Coach] Attempting to materialize run...');
         const materialized = await v3.materializeLatestRun();
         resolvedRunId = materialized.run_id;
+        console.log('[AI Coach] Materialize successful:', resolvedRunId);
       } catch (materializeError) {
+        console.error('[AI Coach] Materialize failed:', materializeError);
         const materializeErrorMessage = handleApiError(materializeError);
+        console.log('[AI Coach] Materialize error message:', materializeErrorMessage);
 
         // If no cached correction surface exists yet, run one realistic v3 update
         // and retry materialize before dropping to legacy fallback.
@@ -227,12 +231,23 @@ export function AICoach({
           materializeErrorMessage.toLowerCase().includes('no cached v3 corrections')
         ) {
           try {
+            console.log('[AI Coach] No corrections cached, running simulate() first...');
             await v3.simulate({ mode: 'realistic' });
-            v3.refreshSessionData();
+            console.log('[AI Coach] Simulate completed, refreshing session data...');
+            await v3.refreshSessionData();
             setLastAnalyzedAt(new Date().toISOString());
+            // Wait a bit for corrections to be cached
+            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('[AI Coach] Retrying materialize after simulate...');
             const retried = await v3.materializeLatestRun();
             resolvedRunId = retried.run_id;
-          } catch {
+            console.log('[AI Coach] Materialize successful after simulate:', resolvedRunId);
+          } catch (simulateError) {
+            console.error('[AI Coach] Simulate or materialize retry failed:', simulateError);
+            const simulateErrorMsg = handleApiError(simulateError);
+            toast.error('Failed to generate corrections', {
+              description: simulateErrorMsg || 'Could not create corrections. Try triggering a pull first.',
+            });
             // Continue to fallback path below when retry fails.
           }
         }
@@ -300,10 +315,15 @@ export function AICoach({
       }
       setLastRunReadyAt(new Date().toISOString());
 
+      console.log('[AI Coach] Applying corrections with run_id:', resolvedRunId);
       await applyRollback.apply(resolvedRunId);
+      toast.success('Corrections applied successfully');
     } catch (error) {
+      console.error('[AI Coach] Apply corrections failed:', error);
+      const errorMsg = handleApiError(error);
       toast.error('Failed to prepare corrections', {
-        description: handleApiError(error),
+        description: errorMsg || 'Unknown error occurred. Check console for details.',
+        duration: 5000,
       });
     }
   }, [applyRollback, effectiveRunId, localTargets, onRunIdChange, sessionId, v3]);
@@ -669,6 +689,33 @@ export function AICoach({
           <div>Run prepared at: {formattedRunReadyAt}</div>
           <div>{applyStateText}</div>
         </div>
+        {sessionId && v3.sessionPhase !== 'idle' && (
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full text-xs"
+              disabled={v3.isSimulating}
+              onClick={async () => {
+                try {
+                  console.log('[AI Coach] Manual update triggered');
+                  await v3.simulate({ mode: 'realistic' });
+                  await v3.refreshSessionData();
+                  setLastAnalyzedAt(new Date().toISOString());
+                  toast.success('AI Coach updated successfully');
+                } catch (error) {
+                  console.error('[AI Coach] Manual update failed:', error);
+                  toast.error('Update failed', {
+                    description: handleApiError(error),
+                  });
+                }
+              }}
+            >
+              {v3.isSimulating ? 'Updating...' : 'Update Now'}
+            </Button>
+          </div>
+        )}
 
         {/* Section 2: Convergence — percentage bars only */}
         <div className="mt-3 space-y-2">
