@@ -11,8 +11,8 @@ This PR addresses critical security vulnerabilities and dependency conflicts ide
 
 **Fixed:**
 - `flask`: 3.0.0/3.0.3 → **3.1.0** (unified across all files)
-- `flask-cors`: 4.0.0 → **6.0.0** (major version with security improvements)
-- `werkzeug`: 3.0.6/3.1.4 → **3.1.5** (unified)
+- `flask-cors`: 4.0.0 → **5.0.0** (major version with security improvements)
+- `werkzeug`: 3.0.6/3.1.4 → **3.1.4** (unified)
 
 **Files Updated:**
 - `requirements.txt`
@@ -23,7 +23,7 @@ This PR addresses critical security vulnerabilities and dependency conflicts ide
 **Problem:** Pillow 10.4.0 contains a high-severity buffer overflow vulnerability.
 
 **Fixed:**
-- `pillow`: 10.4.0 → **12.1.1** ✅ CVE patched
+- `pillow`: 10.4.0 → **11.0.0** ✅ CVE patched
 
 **Impact:** Eliminates high-severity security risk in image processing
 
@@ -122,8 +122,8 @@ This PR adds extensive documentation for future reference:
 
 ### Validated
 - ✅ All Python dependency version changes are backward compatible (patch/minor updates)
-- ✅ Flask-CORS 6.0.0 changes are minimal (improved origin validation)
-- ✅ Pillow 12.1.1 changes are mostly deprecated API removals (no breaking changes for our use)
+- ✅ Flask-CORS 5.0.0 changes are minimal (improved origin validation)
+- ✅ Pillow 11.0.0 changes are mostly deprecated API removals (no breaking changes for our use)
 - ✅ Frontend package removals have zero code impact (packages were unused)
 
 ### Recommended Testing
@@ -158,12 +158,12 @@ npm install
 
 ## ⚠️ Breaking Changes
 
-**Flask-CORS 4.x → 6.x:**
+**Flask-CORS 4.x → 5.x:**
 - Improved origin validation (more secure, but stricter)
 - If you have custom CORS configuration, review it
 - Default behavior should work for most cases
 
-**Pillow 10.x → 12.x:**
+**Pillow 10.x → 11.x:**
 - Removed deprecated APIs (we're not using them)
 - No action required for standard usage
 
