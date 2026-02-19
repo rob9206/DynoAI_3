@@ -114,10 +114,15 @@ class PullAdvisor:
 
         Uses maximum importance-weighted uncertainty acquisition function.
         Respects physics constraints and operator vetoes.
+        Penalizes cells that have been hit many times to avoid over-sampling.
         """
         unc_map = self.surrogate.get_uncertainty_map()
         weights = self._importance_weights()
         weighted = unc_map * weights
+
+        # Apply hit-count penalty to avoid over-sampling the same cells
+        hit_penalty = self._get_hit_count_penalty()
+        weighted = weighted * hit_penalty
 
         # Mask out vetoed points and unsafe points
         masked = self._apply_masks(weighted)
@@ -312,6 +317,49 @@ class PullAdvisor:
         weights[np.ix_(cruise_rpm, cruise_map)] *= 2.0
 
         return weights
+
+    def _get_hit_count_penalty(self) -> NDArray[np.float64]:
+        """
+        Calculate penalty factor based on hit counts per cell.
+        
+        Returns a penalty array (0.0 to 1.0) where:
+        - 1.0 = no penalty (cell hasn't been hit much)
+        - < 1.0 = penalty applied (cell has been hit many times)
+        - 0.0 = cell has been hit excessively (effectively masked out)
+        
+        This prevents over-sampling the same operating points.
+        """
+        n_rpm = len(self.surrogate.rpm_bins)
+        n_map = len(self.surrogate.map_bins)
+        hit_counts = np.zeros((n_rpm, n_map), dtype=np.float64)
+        
+        # Count observations per cell
+        for obs in self.surrogate.observations:
+            # Skip template observations (pull_number == -1) as they're priors
+            if obs.pull_number == -1:
+                continue
+                
+            r_idx = self._nearest_idx(obs.rpm, self.surrogate.rpm_bins)
+            m_idx = self._nearest_idx(obs.map_kpa, self.surrogate.map_bins)
+            if 0 <= r_idx < n_rpm and 0 <= m_idx < n_map:
+                hit_counts[r_idx, m_idx] += 1
+        
+        # Apply penalty: exponential decay based on hit count
+        # Formula: penalty = exp(-hit_count / threshold)
+        # - 0 hits: penalty = 1.0 (no penalty)
+        # - 5 hits: penalty ≈ 0.61 (moderate penalty)
+        # - 10 hits: penalty ≈ 0.37 (strong penalty)
+        # - 20 hits: penalty ≈ 0.14 (very strong penalty)
+        # - 50+ hits: penalty ≈ 0.0 (effectively masked)
+        hit_threshold = 5.0  # Hits before penalty starts to bite
+        penalty = np.exp(-hit_counts / hit_threshold)
+        
+        # For cells with excessive hits (50+), set penalty to near-zero
+        # This prevents recommending cells that have been hit hundreds of times
+        excessive_hits_mask = hit_counts > 50
+        penalty[excessive_hits_mask] = 0.01
+        
+        return penalty
 
     def _apply_masks(self, weighted: NDArray[np.float64]) -> NDArray[np.float64]:
         """Mask out vetoed and unsafe points."""

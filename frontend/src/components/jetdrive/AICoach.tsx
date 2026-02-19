@@ -331,7 +331,10 @@ export function AICoach({
 
   useEffect(() => {
     // Listen for pull completion (not pull start) so data is available
-    const handler = (_event: Event) => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ peakHp?: number; state?: string }>;
+      console.log('[AI Coach] Pull complete event received', { sessionId, phase: v3.sessionPhase, isSimulating: v3.isSimulating });
+      
       if (!sessionId) {
         toast.info('Start AI session before triggering pull analysis.');
         return;
@@ -340,10 +343,14 @@ export function AICoach({
         toast.info('AI session is not ready yet.');
         return;
       }
-      if (v3.isSimulating) return;
+      if (v3.isSimulating) {
+        console.log('[AI Coach] Already simulating, skipping update');
+        return;
+      }
 
       // Small delay to ensure pull data is fully available
       setTimeout(() => {
+        console.log('[AI Coach] Starting simulate() after pull completion');
         void v3
           .simulate({ mode: 'realistic' })
           .then(async () => {
@@ -354,14 +361,16 @@ export function AICoach({
             // Force refresh to get latest state
             await v3.refreshSessionData();
             setLastAnalyzedAt(new Date().toISOString());
+            console.log('[AI Coach] Update successful');
             toast.success('AI Coach updated from simulator pull.');
           })
           .catch((error) => {
+            console.error('[AI Coach] Update failed:', error);
             toast.error('AI Coach update failed', {
               description: handleApiError(error),
             });
           });
-      }, 500); // Wait 500ms for pull data to be fully available
+      }, 1000); // Increased delay to 1s to ensure pull data is fully available
     };
 
     // Listen for pull completion event (fires when pull finishes)

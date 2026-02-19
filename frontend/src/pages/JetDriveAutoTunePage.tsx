@@ -1919,27 +1919,43 @@ function JetDriveAutoTunePageOld() {
 
     // Track previous simState to detect pull end
     const prevSimStateRef = useRef<string>('stopped');
+    const eventDispatchedRef = useRef<boolean>(false);
     useEffect(() => {
+        // Use jetdriveLive.simState if available (more reliable), otherwise fall back to local simState
+        const currentState = jetdriveLive.simState || simState;
+        
         // Detect pull end: transitioning from 'pull' to 'decel' or 'cooldown'
-        if (prevSimStateRef.current === 'pull' && (simState === 'decel' || simState === 'cooldown')) {
+        const wasPulling = prevSimStateRef.current === 'pull';
+        const isNowDecelOrCooldown = currentState === 'decel' || currentState === 'cooldown';
+        
+        if (wasPulling && isNowDecelOrCooldown && !eventDispatchedRef.current) {
             // Pull just ended, announce with peak HP
             aiAssistant.onPullEnd(currentHp);
 
             // Dispatch event for AI Coach to update after pull completes
+            console.log('[AI Coach] Pull completed, dispatching update event');
             window.dispatchEvent(
                 new CustomEvent('dynoai:simulator-pull-complete', {
                     detail: {
                         peakHp: currentHp,
+                        state: currentState,
                     },
                 }),
             );
+            eventDispatchedRef.current = true;
 
             if (wizardMode && !canProceedToAnalyze && !analyzeMutation.isPending) {
                 void handleAnalyze();
             }
         }
-        prevSimStateRef.current = simState;
-    }, [aiAssistant, analyzeMutation.isPending, canProceedToAnalyze, currentHp, handleAnalyze, simState, wizardMode]);
+        
+        // Reset event dispatch flag when back to idle
+        if (currentState === 'idle' || currentState === 'stopped') {
+            eventDispatchedRef.current = false;
+        }
+        
+        prevSimStateRef.current = currentState;
+    }, [aiAssistant, analyzeMutation.isPending, canProceedToAnalyze, currentHp, handleAnalyze, simState, jetdriveLive.simState, wizardMode]);
 
     // Start hardware monitor
     const handleStartMonitor = async () => {
