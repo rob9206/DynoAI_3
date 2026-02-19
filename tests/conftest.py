@@ -20,6 +20,12 @@ os.environ["JETSTREAM_STUB_MODE"] = "true"
 os.environ["JETSTREAM_ENABLED"] = "false"
 # CRITICAL: Disable rate limiting for tests
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+# Pin BLAS/OpenMP threads for deterministic linear algebra in GP tests
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 
 def pytest_configure(config):
@@ -27,3 +33,4 @@ def pytest_configure(config):
     # Ensure path is set for all pytest operations
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
+    config.addinivalue_line("markers", "validation: heavy holdout/parity tests")
