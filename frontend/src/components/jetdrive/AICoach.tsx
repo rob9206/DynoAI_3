@@ -355,7 +355,7 @@ export function AICoach({
         })
         .catch((error) => {
           toast.error('AI Coach update failed', {
-            description: error instanceof Error ? error.message : 'Unknown error',
+            description: handleApiError(error),
           });
         });
     };
