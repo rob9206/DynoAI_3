@@ -1925,6 +1925,15 @@ function JetDriveAutoTunePageOld() {
             // Pull just ended, announce with peak HP
             aiAssistant.onPullEnd(currentHp);
 
+            // Dispatch event for AI Coach to update after pull completes
+            window.dispatchEvent(
+                new CustomEvent('dynoai:simulator-pull-complete', {
+                    detail: {
+                        peakHp: currentHp,
+                    },
+                }),
+            );
+
             if (wizardMode && !canProceedToAnalyze && !analyzeMutation.isPending) {
                 void handleAnalyze();
             }

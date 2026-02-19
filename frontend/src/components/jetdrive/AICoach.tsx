@@ -330,6 +330,7 @@ export function AICoach({
   }, [applyRollback, effectiveRunId, onExport]);
 
   useEffect(() => {
+    // Listen for pull completion (not pull start) so data is available
     const handler = (_event: Event) => {
       if (!sessionId) {
         toast.info('Start AI session before triggering pull analysis.');
@@ -341,27 +342,31 @@ export function AICoach({
       }
       if (v3.isSimulating) return;
 
-      void v3
-        .simulate({ mode: 'realistic' })
-        .then(async () => {
-          // If simulating, we need to ingest the result
-          // In a real scenario, this data comes from the hardware/log
-          // For now, we'll auto-ingest the simulation result to close the loop
+      // Small delay to ensure pull data is fully available
+      setTimeout(() => {
+        void v3
+          .simulate({ mode: 'realistic' })
+          .then(async () => {
+            // If simulating, we need to ingest the result
+            // In a real scenario, this data comes from the hardware/log
+            // For now, we'll auto-ingest the simulation result to close the loop
 
-          // Force refresh to get latest state
-          await v3.refreshSessionData();
-          setLastAnalyzedAt(new Date().toISOString());
-          toast.success('AI Coach updated from simulator pull.');
-        })
-        .catch((error) => {
-          toast.error('AI Coach update failed', {
-            description: handleApiError(error),
+            // Force refresh to get latest state
+            await v3.refreshSessionData();
+            setLastAnalyzedAt(new Date().toISOString());
+            toast.success('AI Coach updated from simulator pull.');
+          })
+          .catch((error) => {
+            toast.error('AI Coach update failed', {
+              description: handleApiError(error),
+            });
           });
-        });
+      }, 500); // Wait 500ms for pull data to be fully available
     };
 
-    window.addEventListener('dynoai:simulator-pull', handler);
-    return () => window.removeEventListener('dynoai:simulator-pull', handler);
+    // Listen for pull completion event (fires when pull finishes)
+    window.addEventListener('dynoai:simulator-pull-complete', handler);
+    return () => window.removeEventListener('dynoai:simulator-pull-complete', handler);
   }, [sessionId, v3]);
 
   const totalSteps = v3.initResult?.estimated_pulls
