@@ -39,6 +39,13 @@ from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# GP backend selection
+# ---------------------------------------------------------------------------
+# "sklearn" = original GaussianProcessRegressor with optimizer (default)
+# "numpy"   = pure-NumPy MaternGP with frozen hyperparameters (deterministic)
+GP_BACKEND: str = "numpy"
+
 # Extreme VE value threshold — observations beyond reasonable VE range are rejected
 # Typical VE range is 60-120%, so values outside ±50% from 85% mean are suspicious
 _MAX_VE_DEVIATION = 50.0  # Reject if |VE - 85| > 50 (i.e., VE < 35 or VE > 135)
@@ -164,10 +171,12 @@ class VESurrogate:
         rpm_bins: NDArray[np.float64],
         map_bins: NDArray[np.float64],
         engine_family: str,
+        backend: Optional[str] = None,
     ):
         self.rpm_bins = np.array(rpm_bins, dtype=np.float64)
         self.map_bins = np.array(map_bins, dtype=np.float64)
         self.engine_family = engine_family
+        self._backend = backend or GP_BACKEND
         self.observations: List[Observation] = []
         self.template_observation_count: int = 0
         
@@ -186,8 +195,8 @@ class VESurrogate:
         self._map_range = float(np.max(map_bins) - np.min(map_bins))
 
         logger.info(
-            "VESurrogate initialized: %s, %d RPM bins x %d MAP bins",
-            engine_family, len(rpm_bins), len(map_bins),
+            "VESurrogate initialized: %s, %d RPM bins x %d MAP bins, backend=%s",
+            engine_family, len(rpm_bins), len(map_bins), self._backend,
         )
 
     # ------------------------------------------------------------------
@@ -430,17 +439,19 @@ class VESurrogate:
                     predict_time_ms=elapsed,
                 )
 
-        # Guard: sklearn 1.8+ can leave GPR without alpha_ after fit in edge cases
-        if not hasattr(self._gp_model, "alpha_") or self._gp_model.alpha_ is None:
-            logger.warning("GP model not properly fitted (missing alpha_); returning prior")
-            elapsed = (time.time() - t0) * 1000
-            unc_map = np.full((n_rpm, n_map), 10.0)
-            return FullMapPrediction(
-                ve_map=np.zeros((n_rpm, n_map)),
-                uncertainty_map=unc_map,
-                confidence_map=_uncertainty_map_to_confidence(unc_map),
-                predict_time_ms=elapsed,
-            )
+        # Guard: sklearn 1.8+ can leave GPR without alpha_ after fit in edge cases.
+        # NumPy backend doesn't have this issue (deterministic Cholesky path).
+        if self._backend == "sklearn":
+            if not hasattr(self._gp_model, "alpha_") or self._gp_model.alpha_ is None:
+                logger.warning("GP model not properly fitted (missing alpha_); returning prior")
+                elapsed = (time.time() - t0) * 1000
+                unc_map = np.full((n_rpm, n_map), 10.0)
+                return FullMapPrediction(
+                    ve_map=np.zeros((n_rpm, n_map)),
+                    uncertainty_map=unc_map,
+                    confidence_map=_uncertainty_map_to_confidence(unc_map),
+                    predict_time_ms=elapsed,
+                )
 
         # Build an (n_rpm*n_map, 2) grid without Python loops.
         rr, mm = np.meshgrid(self.rpm_bins, self.map_bins, indexing="ij")
@@ -476,10 +487,11 @@ class VESurrogate:
         Uses at most _MAX_OBS_FOR_REFIT total points to keep fit time bounded.
         Template observations (pull_number == -1) are always retained in the fit
         so template priors are not lost.
-        """
-        from sklearn.gaussian_process import GaussianProcessRegressor
-        from sklearn.gaussian_process.kernels import Matern, WhiteKernel
 
+        Backend selection:
+            "sklearn" — GaussianProcessRegressor with optimizer (original)
+            "numpy"   — Pure NumPy MaternGP with frozen hyperparameters
+        """
         if len(self.observations) < 3:
             return
 
@@ -504,6 +516,28 @@ class VESurrogate:
 
         X_norm = self._normalize(X)
 
+        if self._backend == "numpy":
+            self._refit_numpy(X_norm, y)
+        else:
+            self._refit_sklearn(X_norm, y)
+
+        self.is_fitted = True
+        self._stale = False
+
+        self._last_fit_time_ms = (time.time() - t0) * 1000
+        logger.info(
+            "GP refit [%s]: %d used (of %d total), %.1f ms",
+            self._backend,
+            n_used,
+            len(self.observations),
+            self._last_fit_time_ms,
+        )
+
+    def _refit_sklearn(self, X_norm: NDArray, y: NDArray) -> None:
+        """Fit using sklearn GaussianProcessRegressor (original path)."""
+        from sklearn.gaussian_process import GaussianProcessRegressor
+        from sklearn.gaussian_process.kernels import Matern, WhiteKernel
+
         # Create fresh kernel for each fit
         # Note: Warm-start kernel copying causes issues with sklearn 1.8+
         # (missing alpha_ attribute after prediction). Fresh fit is fast enough
@@ -520,16 +554,19 @@ class VESurrogate:
             normalize_y=True,
         )
         self._gp_model.fit(X_norm, y)
-        self.is_fitted = True
-        self._stale = False
 
-        self._last_fit_time_ms = (time.time() - t0) * 1000
-        logger.info(
-            "GP refit: %d used (of %d total), %.1f ms",
-            n_used,
-            len(self.observations),
-            self._last_fit_time_ms,
+    def _refit_numpy(self, X_norm: NDArray, y: NDArray) -> None:
+        """Fit using pure NumPy MaternGP (deterministic, frozen hyperparameters)."""
+        from dynoai.core.gp_engine import MaternGP
+
+        self._gp_model = MaternGP(
+            length_scales=np.array([0.3, 0.3]),
+            signal_var=1.0,
+            noise_var=0.15,
+            jitter=1e-8,
+            normalize_y=True,
         )
+        self._gp_model.fit(X_norm, y)
 
     # ------------------------------------------------------------------
     # Normalization
@@ -553,6 +590,7 @@ class VESurrogate:
             "rpm_bins": self.rpm_bins.tolist(),
             "map_bins": self.map_bins.tolist(),
             "template_observation_count": self.template_observation_count,
+            "gp_backend": self._backend,
             "observations": [
                 {
                     "rpm": o.rpm,
@@ -581,7 +619,8 @@ class VESurrogate:
 
         rpm_bins = np.array(state["rpm_bins"], dtype=np.float64)
         map_bins = np.array(state["map_bins"], dtype=np.float64)
-        s = cls(rpm_bins, map_bins, state["engine_family"])
+        backend = state.get("gp_backend", GP_BACKEND)
+        s = cls(rpm_bins, map_bins, state["engine_family"], backend=backend)
         s.template_observation_count = state.get("template_observation_count", 0)
 
         for od in state["observations"]:

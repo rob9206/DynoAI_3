@@ -243,7 +243,7 @@ class TestGPSurrogate:
         assert pred.ve_map.shape == (len(RPM_BINS), len(MAP_BINS))
         assert pred.uncertainty_map.shape == pred.ve_map.shape
         assert pred.confidence_map.shape == pred.ve_map.shape
-        assert pred.predict_time_ms > 0
+        assert pred.predict_time_ms >= 0
 
     def test_template_seeding(self):
         """Template seeding reduces initial uncertainty."""
