@@ -2,21 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from 'next-themes';
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import Layout from './components/common/Layout';
 import LoadingSpinner from './components/common/LoadingSpinner';
-import { toast } from '@/lib/toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 
 // Code-split routes for better initial load performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -31,9 +19,13 @@ const JetDriveAutoTunePage = lazy(() => import('./pages/JetDriveAutoTunePage'));
 const OperatorTrainingPage = lazy(() => import('./pages/OperatorTrainingPage'));
 const AutoTuneDemo = lazy(() => import('./pages/AutoTuneDemo'));
 const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
+const TechViewPage = lazy(() => import('./pages/TechView'));
+const AdminViewPage = lazy(() => import('./pages/AdminView'));
 
 // ---------------------------------------------------------------------------
-// Types
+// Portal auth guard
+// Reads token and user name from localStorage and injects them as props.
+// Redirects to the main app if no token is found.
 // ---------------------------------------------------------------------------
 
 /** Matches the shape returned by GET /api/runs */
@@ -240,22 +232,7 @@ export function AdminView({ user, token, onLogout }: { user: { name: string }; t
     }
   };
 
-  const roleBadgeClass = (role: string) =>
-    ({ owner: 'bg-violet-600 text-white', tech: 'bg-blue-600 text-white', customer: 'bg-muted text-muted-foreground' }[role] ?? '');
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Owner Dashboard — {user.name}</h1>
-        <Button variant="ghost" onClick={onLogout}>Logout</Button>
-      </header>
-
-      <main className="p-6">
-        <Tabs defaultValue="users">
-          <TabsList>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="runs">All Runs</TabsTrigger>
-          </TabsList>
+  if (!token) return <Navigate to="/jetdrive" replace />;
 
           {/* -------- Users tab -------- */}
           <TabsContent value="users" className="space-y-6">
@@ -452,6 +429,12 @@ function App() {
                 <Route path="/engine-analyzer" element={<EngineAnalyzerPage />} />
                 <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
                 <Route path="/autotune-demo" element={<AutoTuneDemo />} />
+                <Route path="/portal/tech" element={
+                  <PortalGuard render={(token, user, onLogout) => <TechViewPage user={user} token={token} onLogout={onLogout} />} />
+                } />
+                <Route path="/portal/admin" element={
+                  <PortalGuard render={(token, user, onLogout) => <AdminViewPage user={user} token={token} onLogout={onLogout} />} />
+                } />
                 <Route path="*" element={<Navigate to="/jetdrive" replace />} />
               </Routes>
             </Suspense>
