@@ -1,27 +1,23 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
-import { defineConfig, PluginOption } from "vite";
-
-import sparkPlugin from "@github/spark/spark-vite-plugin";
-import createIconImportProxy from "@github/spark/vitePhosphorIconProxyPlugin";
+import { defineConfig } from "vite";
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // Always use __dirname for alias resolution to ensure @/ points to frontend/src
 const projectRoot = __dirname
-const enableSpark = process.env.SPARK === "true" || process.env.GITHUB_SPARK === "true"
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // DO NOT REMOVE
-    createIconImportProxy() as PluginOption,
-    // Spark plugin injects dev hooks (e.g. `/_spark/loaded`) that require Spark auth.
-    // Enable it only when running inside a Spark environment.
-    ...(enableSpark ? [sparkPlugin({ port: 5173 }) as PluginOption] : []),
+    // Spark plugins removed - install @github/spark and enable via SPARK env var if needed
+    // For GitHub Spark environments, uncomment and install @github/spark:
+    // import sparkPlugin from "@github/spark/spark-vite-plugin";
+    // import createIconImportProxy from "@github/spark/vitePhosphorIconProxyPlugin";
+    // ...(process.env.SPARK === "true" ? [createIconImportProxy(), sparkPlugin({ port: 5173 })] : []),
   ],
   resolve: {
     alias: {
@@ -78,7 +74,6 @@ export default defineConfig({
       'framer-motion',
       'recharts',
     ],
-    exclude: ['@github/spark'],
   },
   // Enable esbuild optimizations
   esbuild: {
