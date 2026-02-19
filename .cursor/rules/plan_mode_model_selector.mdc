@@ -1,0 +1,39 @@
+---
+description: 
+alwaysApply: true
+---
+
+# Plan Mode Model Selection
+
+**Required:** The first line of every plan MUST be: `**Recommended model:** \`<model>\` -- <one-line reason>`. Do this before any other plan content.
+
+When planning a task, (1) pick tier and task type, (2) output the recommended model line above, (3) then write the rest of the plan.
+
+## Complexity Assessment
+
+Classify every task into one of three tiers:
+- **Tier 1 (Simple)**: Single-file edits, renaming, formatting, boilerplate, quick questions, documentation tweaks.
+- **Tier 2 (Moderate)**: Multi-file features (2-5 files), bug investigation, test writing, moderate refactors, adding components.
+- **Tier 3 (Complex)**: Architecture changes, cross-service refactors, 5+ files, security-sensitive code, performance optimization, novel problem-solving.
+
+## Task Types
+
+Classify the task into one: **Reasoning/Debug** (tracing bugs, diagnosing), **Code Gen** (new features, components, scripts), **Refactor** (restructuring, renaming, cleanup), **Docs/Writing** (READMEs, comments), **Rapid Prototype** (quick experiments, fast iteration).
+
+## Model Matrix (Tier × Task Type → single model)
+
+**Tier 1:** Reasoning/Debug → `Haiku 4.5` | Code Gen → `GPT-5.1 Codex Mini` | Refactor → `GPT-5.2 Fast` | Docs/Writing → `Gemini 3 Flash` | Rapid Prototype → `Gemini 2.5 Flash`
+
+**Tier 2:** Reasoning/Debug → `Sonnet 4.5` | Code Gen → `GPT-5.2 Codex` | Refactor → `GPT-5.2 High` | Docs/Writing → `Gemini 3 Pro` | Rapid Prototype → `Sonnet 4`
+
+**Tier 3:** Reasoning/Debug → `Opus 4.6` | Code Gen → `GPT-5.2 Codex Extra High` | Refactor → `Opus 4.6 Max` | Docs/Writing → `Sonnet 4.5` | Rapid Prototype → `GPT-5.2 Extra High`
+
+## Auto-Selection
+
+- **Tier 1 and Tier 2**: Auto-select the matrix model and proceed.
+- **Tier 3**: Suggest the model and ask the user to confirm before building.
+
+## Overrides
+
+- **Long context needed**: Use `Sonnet 4 1M` or `Opus 4.6 Max`.
+- **Speed-critical**: Use Fast variant if available (e.g. `GPT-5.2 Codex Fast`).

@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
+import { playUiSound, type UiSoundKind } from "@/lib/ui-sounds"
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
@@ -40,10 +41,12 @@ function Button({
   variant,
   size,
   asChild = false,
+  uiSound,
   ...props
 }: ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    uiSound?: UiSoundKind | "none"
   }) {
   const Comp = asChild ? Slot : "button"
 
@@ -51,6 +54,29 @@ function Button({
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      onClick={(e: unknown) => {
+        // Preserve consumer onClick behavior first.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const evt = e as any
+        props.onClick?.(evt)
+
+        // Avoid sounds for disabled buttons or prevented events.
+        const disabled =
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          !!(props as any).disabled ||
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          !!(props as any)["aria-disabled"]
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const prevented = !!evt?.defaultPrevented
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const mouseButton = typeof evt?.button === "number" ? evt.button : 0
+
+        if (!disabled && !prevented && mouseButton === 0) {
+          const sound: UiSoundKind | null =
+            uiSound === "none" ? null : (uiSound ?? "click")
+          if (sound) playUiSound(sound)
+        }
+      }}
       {...props}
     />
   )

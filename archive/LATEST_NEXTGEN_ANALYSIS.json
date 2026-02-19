@@ -1,0 +1,1215 @@
+{
+  "schema_version": "dynoai.nextgen@1",
+  "run_id": "99f7459e-cef4-4bdf-b670-c058abefbccf",
+  "generated_at": "2026-01-28T06:44:29.275035+00:00",
+  "inputs_present": {
+    "rpm": true,
+    "map_kpa": true,
+    "tps": true,
+    "iat": true,
+    "ect": false,
+    "afr_meas_f": true,
+    "afr_meas_r": true,
+    "afr_meas": false,
+    "spark_f": true,
+    "spark_r": true,
+    "spark": false,
+    "knock": true
+  },
+  "mode_summary": {
+    "tip_out": 5118,
+    "tip_in": 4387,
+    "cruise": 1429,
+    "wot": 1066,
+    "idle": 0,
+    "decel": 0,
+    "heat_soak": 0,
+    "unknown": 0
+  },
+  "surfaces": {
+    "spark_front": {
+      "surface_id": "spark_front",
+      "title": "Spark Timing - Front",
+      "description": "Spark advance for front cylinder across RPM/MAP",
+      "rpm_axis": {
+        "name": "RPM",
+        "unit": "rpm",
+        "bins": [
+          1500,
+          2000,
+          2500,
+          3000,
+          3500,
+          4000,
+          4500,
+          5000,
+          5500,
+          6000,
+          6500
+        ]
+      },
+      "map_axis": {
+        "name": "MAP",
+        "unit": "kPa",
+        "bins": [
+          35,
+          50,
+          65,
+          80,
+          95
+        ]
+      },
+      "values": [
+        [
+          20.080056702566793,
+          20.644725834985653,
+          null,
+          20.53494210795022,
+          20.27001059807994
+        ],
+        [
+          21.957237681054135,
+          21.727194710660264,
+          null,
+          21.797460420429147,
+          21.678317236790907
+        ],
+        [
+          23.686881327866086,
+          23.876545232232896,
+          null,
+          23.804961717406155,
+          23.800017655592026
+        ],
+        [
+          25.641258196298203,
+          25.14898228607352,
+          26.016550463778106,
+          25.360624860326094,
+          25.66025859941052
+        ],
+        [
+          27.582400612320782,
+          null,
+          27.57159716463137,
+          null,
+          27.446887682814797
+        ],
+        [
+          29.31056387928339,
+          29.91857602805204,
+          28.98573792450566,
+          29.70017951614679,
+          29.296645084766727
+        ],
+        [
+          31.2643851066169,
+          31.15777584977317,
+          null,
+          31.264038974469333,
+          31.18545564517081
+        ],
+        [
+          33.2009485133849,
+          33.228684557157905,
+          null,
+          33.174703667569275,
+          33.32263436811926
+        ],
+        [
+          34.90882075796965,
+          34.37159576381869,
+          null,
+          34.46928275090929,
+          34.723265118963305
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "hit_count": [
+        [
+          108,
+          15,
+          0,
+          30,
+          96
+        ],
+        [
+          99,
+          56,
+          0,
+          63,
+          95
+        ],
+        [
+          56,
+          85,
+          0,
+          66,
+          39
+        ],
+        [
+          71,
+          16,
+          28,
+          17,
+          81
+        ],
+        [
+          67,
+          0,
+          54,
+          0,
+          99
+        ],
+        [
+          79,
+          27,
+          34,
+          32,
+          80
+        ],
+        [
+          53,
+          120,
+          0,
+          89,
+          26
+        ],
+        [
+          92,
+          99,
+          0,
+          65,
+          119
+        ],
+        [
+          129,
+          18,
+          0,
+          56,
+          136
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "stats": {
+        "min": 20.080056702566793,
+        "max": 34.90882075796965,
+        "mean": 27.507302826971486,
+        "p05": 20.481955805976163,
+        "p95": 34.52007922452009,
+        "non_nan_cells": 37,
+        "total_cells": 55,
+        "total_samples": 2495,
+        "coverage_pct": 67.3
+      },
+      "mask_info": "modes: wot, cruise"
+    },
+    "spark_rear": {
+      "surface_id": "spark_rear",
+      "title": "Spark Timing - Rear",
+      "description": "Spark advance for rear cylinder across RPM/MAP",
+      "rpm_axis": {
+        "name": "RPM",
+        "unit": "rpm",
+        "bins": [
+          1500,
+          2000,
+          2500,
+          3000,
+          3500,
+          4000,
+          4500,
+          5000,
+          5500,
+          6000,
+          6500
+        ]
+      },
+      "map_axis": {
+        "name": "MAP",
+        "unit": "kPa",
+        "bins": [
+          35,
+          50,
+          65,
+          80,
+          95
+        ]
+      },
+      "values": [
+        [
+          18.080056702566793,
+          18.644725834985646,
+          null,
+          18.534942107950226,
+          18.27001059807995
+        ],
+        [
+          19.95723768105414,
+          19.72719471066027,
+          null,
+          19.797460420429147,
+          19.678317236790903
+        ],
+        [
+          21.686881327866068,
+          21.876545232232893,
+          null,
+          21.80496171740615,
+          21.800017655592026
+        ],
+        [
+          23.6412581962982,
+          23.14898228607352,
+          24.016550463778106,
+          23.360624860326087,
+          23.66025859941052
+        ],
+        [
+          25.58240061232078,
+          null,
+          25.571597164631374,
+          null,
+          25.446887682814804
+        ],
+        [
+          27.3105638792834,
+          27.918576028052037,
+          26.98573792450566,
+          27.70017951614679,
+          27.29664508476673
+        ],
+        [
+          29.26438510661691,
+          29.157775849773174,
+          null,
+          29.26403897446934,
+          29.185455645170805
+        ],
+        [
+          31.20094851338489,
+          31.228684557157923,
+          null,
+          31.174703667569297,
+          31.32263436811926
+        ],
+        [
+          32.90882075796966,
+          32.37159576381869,
+          null,
+          32.46928275090928,
+          32.723265118963276
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "hit_count": [
+        [
+          108,
+          15,
+          0,
+          30,
+          96
+        ],
+        [
+          99,
+          56,
+          0,
+          63,
+          95
+        ],
+        [
+          56,
+          85,
+          0,
+          66,
+          39
+        ],
+        [
+          71,
+          16,
+          28,
+          17,
+          81
+        ],
+        [
+          67,
+          0,
+          54,
+          0,
+          99
+        ],
+        [
+          79,
+          27,
+          34,
+          32,
+          80
+        ],
+        [
+          53,
+          120,
+          0,
+          89,
+          26
+        ],
+        [
+          92,
+          99,
+          0,
+          65,
+          119
+        ],
+        [
+          129,
+          18,
+          0,
+          56,
+          136
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "stats": {
+        "min": 18.080056702566793,
+        "max": 32.90882075796966,
+        "mean": 25.507302826971486,
+        "p05": 18.48195580597617,
+        "p95": 32.520079224520074,
+        "non_nan_cells": 37,
+        "total_cells": 55,
+        "total_samples": 2495,
+        "coverage_pct": 67.3
+      },
+      "mask_info": "modes: wot, cruise"
+    },
+    "afr_error_front": {
+      "surface_id": "afr_error_front",
+      "title": "AFR Error - Front",
+      "description": "AFR error (measured - commanded) for front cylinder",
+      "rpm_axis": {
+        "name": "RPM",
+        "unit": "rpm",
+        "bins": [
+          1500,
+          2000,
+          2500,
+          3000,
+          3500,
+          4000,
+          4500,
+          5000,
+          5500,
+          6000,
+          6500
+        ]
+      },
+      "map_axis": {
+        "name": "MAP",
+        "unit": "kPa",
+        "bins": [
+          35,
+          50,
+          65,
+          80,
+          95
+        ]
+      },
+      "values": [
+        [
+          -0.04311962848845275,
+          -0.06911957500477406,
+          null,
+          0.04526843427085755,
+          0.0017098434838785498
+        ],
+        [
+          0.03344041717642602,
+          -0.013676423798659446,
+          null,
+          0.0706358325516198,
+          -0.0852884055309077
+        ],
+        [
+          -0.054846012405383476,
+          -0.11116313726734058,
+          null,
+          0.07545315783505549,
+          0.004185162558970957
+        ],
+        [
+          -0.002904287886968486,
+          0.08442849297177261,
+          0.05033131281611835,
+          0.009294478078229284,
+          0.03550659403109459
+        ],
+        [
+          -0.00770300467802394,
+          null,
+          0.007354832579004926,
+          null,
+          0.000265988413823237
+        ],
+        [
+          -0.000897166335461553,
+          -0.05552568107996917,
+          -0.013160850002665111,
+          -0.05747650120173306,
+          -0.023224162715454987
+        ],
+        [
+          0.0683358460883152,
+          0.04979171421880345,
+          null,
+          -0.03496357438161039,
+          -0.09400672846241784
+        ],
+        [
+          -0.02487883302298082,
+          -0.008585203098144218,
+          null,
+          0.013258651866733084,
+          0.05146894936338319
+        ],
+        [
+          0.03763367280410754,
+          0.08311826966992057,
+          null,
+          -0.0005940941179464554,
+          -0.007724307335891718
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "hit_count": [
+        [
+          108,
+          15,
+          0,
+          30,
+          96
+        ],
+        [
+          99,
+          56,
+          0,
+          63,
+          95
+        ],
+        [
+          56,
+          85,
+          0,
+          66,
+          39
+        ],
+        [
+          71,
+          16,
+          28,
+          17,
+          81
+        ],
+        [
+          67,
+          0,
+          54,
+          0,
+          99
+        ],
+        [
+          79,
+          27,
+          34,
+          32,
+          80
+        ],
+        [
+          53,
+          120,
+          0,
+          89,
+          26
+        ],
+        [
+          92,
+          99,
+          0,
+          65,
+          119
+        ],
+        [
+          129,
+          18,
+          0,
+          56,
+          136
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "stats": {
+        "min": -0.11116313726734058,
+        "max": 0.08442849297177261,
+        "mean": 0.00034119118819807113,
+        "p05": -0.08703207011720973,
+        "p95": 0.07698618020202848,
+        "non_nan_cells": 37,
+        "total_cells": 55,
+        "total_samples": 2495,
+        "coverage_pct": 67.3
+      },
+      "mask_info": "modes: wot, cruise"
+    },
+    "afr_error_rear": {
+      "surface_id": "afr_error_rear",
+      "title": "AFR Error - Rear",
+      "description": "AFR error (measured - commanded) for rear cylinder",
+      "rpm_axis": {
+        "name": "RPM",
+        "unit": "rpm",
+        "bins": [
+          1500,
+          2000,
+          2500,
+          3000,
+          3500,
+          4000,
+          4500,
+          5000,
+          5500,
+          6000,
+          6500
+        ]
+      },
+      "map_axis": {
+        "name": "MAP",
+        "unit": "kPa",
+        "bins": [
+          35,
+          50,
+          65,
+          80,
+          95
+        ]
+      },
+      "values": [
+        [
+          0.08182193037902924,
+          -0.1697029986479874,
+          null,
+          0.04183674086820267,
+          0.04365959537656112
+        ],
+        [
+          -0.13222498192454185,
+          0.10123325871852455,
+          null,
+          0.0906478264834313,
+          -0.0836966632816773
+        ],
+        [
+          -0.07047181230067151,
+          0.12107312149921362,
+          null,
+          0.13032755290698733,
+          -0.14719873207494216
+        ],
+        [
+          0.04101721239573591,
+          0.053788738412507496,
+          -0.08558513930848467,
+          0.024988126583453497,
+          0.0376067341616408
+        ],
+        [
+          0.13135809674774881,
+          null,
+          -0.1170627239559865,
+          null,
+          0.10308217399079457
+        ],
+        [
+          0.06414037262705814,
+          0.09341239595658624,
+          -0.006984236280186911,
+          -0.018464496093176387,
+          0.028802377611516116
+        ],
+        [
+          -0.07403078889116396,
+          0.08033386069987224,
+          null,
+          0.09897986390556564,
+          -0.16095953632542162
+        ],
+        [
+          -0.14550769629899682,
+          0.07173331691503772,
+          null,
+          0.14340155338553734,
+          -0.07224797123880093
+        ],
+        [
+          0.0912761099712413,
+          -0.1557452097822756,
+          null,
+          0.035755145186992056,
+          0.02472636723674848
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "hit_count": [
+        [
+          108,
+          15,
+          0,
+          30,
+          96
+        ],
+        [
+          99,
+          56,
+          0,
+          63,
+          95
+        ],
+        [
+          56,
+          85,
+          0,
+          66,
+          39
+        ],
+        [
+          71,
+          16,
+          28,
+          17,
+          81
+        ],
+        [
+          67,
+          0,
+          54,
+          0,
+          99
+        ],
+        [
+          79,
+          27,
+          34,
+          32,
+          80
+        ],
+        [
+          53,
+          120,
+          0,
+          89,
+          26
+        ],
+        [
+          92,
+          99,
+          0,
+          65,
+          119
+        ],
+        [
+          129,
+          18,
+          0,
+          56,
+          136
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "stats": {
+        "min": -0.1697029986479874,
+        "max": 0.14340155338553734,
+        "mean": 0.007976202313937095,
+        "p05": -0.1567880750909048,
+        "p95": 0.13053366167513963,
+        "non_nan_cells": 37,
+        "total_cells": 55,
+        "total_samples": 2495,
+        "coverage_pct": 67.3
+      },
+      "mask_info": "modes: wot, cruise"
+    },
+    "knock_activity": {
+      "surface_id": "knock_activity",
+      "title": "Knock Activity",
+      "description": "Knock sensor activity across RPM/MAP",
+      "rpm_axis": {
+        "name": "RPM",
+        "unit": "rpm",
+        "bins": [
+          1500,
+          2000,
+          2500,
+          3000,
+          3500,
+          4000,
+          4500,
+          5000,
+          5500,
+          6000,
+          6500
+        ]
+      },
+      "map_axis": {
+        "name": "MAP",
+        "unit": "kPa",
+        "bins": [
+          35,
+          50,
+          65,
+          80,
+          95
+        ]
+      },
+      "values": [
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.028111593721909137
+        ],
+        [
+          null,
+          null,
+          null,
+          0.0,
+          0.0
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "hit_count": [
+        [
+          0,
+          0,
+          0,
+          26,
+          96
+        ],
+        [
+          0,
+          0,
+          0,
+          63,
+          95
+        ],
+        [
+          0,
+          0,
+          0,
+          34,
+          39
+        ],
+        [
+          0,
+          0,
+          0,
+          5,
+          81
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          99
+        ],
+        [
+          0,
+          0,
+          0,
+          9,
+          80
+        ],
+        [
+          0,
+          0,
+          0,
+          43,
+          26
+        ],
+        [
+          0,
+          0,
+          0,
+          64,
+          119
+        ],
+        [
+          0,
+          0,
+          0,
+          51,
+          136
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "stats": {
+        "min": 0.0,
+        "max": 0.028111593721909137,
+        "mean": 0.0016536231601123022,
+        "p05": 0.0,
+        "p95": 0.005622318744381807,
+        "non_nan_cells": 17,
+        "total_cells": 55,
+        "total_samples": 1066,
+        "coverage_pct": 30.9
+      },
+      "mask_info": "modes: wot"
+    }
+  },
+  "spark_valley": [],
+  "cause_tree": {
+    "hypotheses": [
+      {
+        "hypothesis_id": "transient_fuel_lag",
+        "title": "Transient Fuel Compensation May Need Adjustment",
+        "confidence": 0.85,
+        "category": "transient",
+        "evidence": [
+          "Transient samples: 79.2% of data",
+          "Tip-in events: 4387 samples",
+          "Tip-out events: 5118 samples"
+        ],
+        "distinguishing_checks": [
+          "Perform controlled tip-in sweeps at different rates",
+          "Log AFR during roll-on acceleration from cruise",
+          "Compare warm vs cold engine transient response"
+        ]
+      },
+      {
+        "hypothesis_id": "knock_detected",
+        "title": "Knock Activity Detected in Data",
+        "confidence": 0.7,
+        "category": "knock_limit",
+        "evidence": [
+          "Maximum knock reading: 0.0",
+          "Mean knock level: 0.00"
+        ],
+        "distinguishing_checks": [
+          "Identify RPM/MAP cells with highest knock activity",
+          "Correlate knock events with spark timing",
+          "Check if knock occurs in valley RPM range"
+        ]
+      }
+    ],
+    "summary": "Top hypothesis: Transient Fuel Compensation May Need Adjustment (85% confidence). 2 high-confidence hypothesis(es) identified. Issues span 2 categories.",
+    "analysis_notes": [
+      "Analyzed 12000 samples across 5 surfaces",
+      "Generated 2 hypotheses"
+    ]
+  },
+  "next_tests": {
+    "steps": [
+      {
+        "name": "Fill 2500-4000 RPM @ 60-80 kPa",
+        "goal": "Tip-in transition: 2/8 cells need data (75% covered)",
+        "rpm_range": [
+          2500,
+          4000
+        ],
+        "map_range": [
+          60,
+          80
+        ],
+        "test_type": "steady_state_sweep",
+        "constraints": "Part throttle hold; 3-5 seconds per point",
+        "required_channels": [
+          "afr_meas_f",
+          "afr_meas_r",
+          "spark_f",
+          "spark_r"
+        ],
+        "success_criteria": "\u22653 samples per cell in 2 empty cells",
+        "risk_notes": "",
+        "priority": 1
+      },
+      {
+        "name": "Fill 3000-4500 RPM @ 80-100 kPa",
+        "goal": "WOT high-load midrange: 1/8 cells need data (88% covered)",
+        "rpm_range": [
+          3000,
+          4500
+        ],
+        "map_range": [
+          80,
+          100
+        ],
+        "test_type": "wot_pull",
+        "constraints": "Full WOT required; monitor knock and temperatures",
+        "required_channels": [
+          "afr_meas_f",
+          "afr_meas_r",
+          "spark_f",
+          "spark_r"
+        ],
+        "success_criteria": "\u22653 samples per cell in 1 empty cells",
+        "risk_notes": "High load - watch for knock events",
+        "priority": 1
+      },
+      {
+        "name": "Transient Response Characterization",
+        "goal": "Quantify tip-in/tip-out AFR behavior",
+        "rpm_range": [
+          2000,
+          4000
+        ],
+        "map_range": [
+          40,
+          80
+        ],
+        "test_type": "transient_rolloff",
+        "constraints": "Controlled throttle rate; 2-3 second tip-in from cruise",
+        "required_channels": [
+          "afr_meas_f",
+          "afr_meas_r",
+          "tps",
+          "map_kpa"
+        ],
+        "success_criteria": "Capture AFR during 3+ tip-in events with consistent rate",
+        "risk_notes": "Avoid full WOT if knock is a concern",
+        "priority": 1
+      },
+      {
+        "name": "Knock Characterization (both cylinder)",
+        "goal": "Measure knock activity at suspected limit: Knock Activity Detected in Data",
+        "rpm_range": [
+          3000,
+          5000
+        ],
+        "map_range": [
+          85,
+          100
+        ],
+        "test_type": "wot_pull",
+        "constraints": "Full WOT; monitor knock closely; abort if excessive",
+        "required_channels": [
+          "knock",
+          "spark_f",
+          "spark_r",
+          "afr_meas_f",
+          "afr_meas_r"
+        ],
+        "success_criteria": "Log knock count/retard during 3+ WOT pulls",
+        "risk_notes": "High detonation risk - monitor closely",
+        "priority": 1
+      },
+      {
+        "name": "Fill 2000-3500 RPM @ 50-70 kPa",
+        "goal": "Cruise part-throttle: 3/8 cells need data (62% covered)",
+        "rpm_range": [
+          2000,
+          3500
+        ],
+        "map_range": [
+          50,
+          70
+        ],
+        "test_type": "steady_state_sweep",
+        "constraints": "Maintain stable throttle; allow readings to settle",
+        "required_channels": [
+          "afr_meas_f",
+          "afr_meas_r",
+          "spark_f",
+          "spark_r"
+        ],
+        "success_criteria": "\u22653 samples per cell in 3 empty cells",
+        "risk_notes": "Low load - ensure adequate airflow for stable readings",
+        "priority": 2
+      }
+    ],
+    "priority_rationale": "5 test steps recommended. 4 are high priority. 3 coverage gaps identified. Top hypothesis: Transient Fuel Compensation May Need Adjustment.",
+    "coverage_gaps": [
+      "Tip-in transition: 2/8 cells need data (75% covered)",
+      "WOT high-load midrange: 1/8 cells need data (88% covered)",
+      "Cruise part-throttle: 3/8 cells need data (62% covered)"
+    ],
+    "total_estimated_pulls": 9
+  },
+  "notes_warnings": []
+}

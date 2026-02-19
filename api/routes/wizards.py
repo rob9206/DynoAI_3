@@ -16,7 +16,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
-from tuning_wizards import (
+from tools.utils.tuning_wizards import (
     analyze_heat_soak,
     generate_decel_fix_overlay,
     generate_idle_ve_overlay,
@@ -57,8 +57,17 @@ def preview_decel_fix():
     data = request.get_json() or {}
 
     severity = data.get("severity", "medium")
-    rpm_min = int(data.get("rpm_min", 1750))
-    rpm_max = int(data.get("rpm_max", 5500))
+    try:
+        rpm_min = int(data.get("rpm_min", 1750))
+        rpm_max = int(data.get("rpm_max", 5500))
+    except (TypeError, ValueError):
+        return jsonify({"error": "rpm_min and rpm_max must be valid integers"}), 400
+    
+    if not (500 <= rpm_min <= 10000) or not (500 <= rpm_max <= 10000):
+        return jsonify({"error": "rpm_min and rpm_max must be between 500 and 10000"}), 400
+    if rpm_min >= rpm_max:
+        return jsonify({"error": "rpm_min must be less than rpm_max"}), 400
+    
     cam_family = data.get("cam_family", "stock")
 
     result = generate_decel_fix_overlay(
@@ -98,8 +107,17 @@ def apply_decel_fix():
     data = request.get_json() or {}
 
     severity = data.get("severity", "medium")
-    rpm_min = int(data.get("rpm_min", 1750))
-    rpm_max = int(data.get("rpm_max", 5500))
+    try:
+        rpm_min = int(data.get("rpm_min", 1750))
+        rpm_max = int(data.get("rpm_max", 5500))
+    except (TypeError, ValueError):
+        return jsonify({"error": "rpm_min and rpm_max must be valid integers"}), 400
+    
+    if not (500 <= rpm_min <= 10000) or not (500 <= rpm_max <= 10000):
+        return jsonify({"error": "rpm_min and rpm_max must be between 500 and 10000"}), 400
+    if rpm_min >= rpm_max:
+        return jsonify({"error": "rpm_min must be less than rpm_max"}), 400
+    
     cam_family = data.get("cam_family", "stock")
     run_id = data.get("run_id")
 

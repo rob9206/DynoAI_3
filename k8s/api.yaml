@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynoai-api
+  namespace: dynoai
+  labels:
+    app: dynoai-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynoai-api
+  template:
+    metadata:
+      labels:
+        app: dynoai-api
+    spec:
+      containers:
+        - name: api
+          image: dynoai-api:latest
+          imagePullPolicy: Never  # Use local image
+          ports:
+            - containerPort: 5001
+          env:
+            - name: DYNOAI_HOST
+              value: "0.0.0.0"
+            - name: DYNOAI_PORT
+              value: "5001"
+            - name: DYNOAI_UPLOAD_DIR
+              value: "/app/uploads"
+            - name: DYNOAI_OUTPUT_DIR
+              value: "/app/outputs"
+            - name: DYNOAI_RUNS_DIR
+              value: "/app/runs"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /api/health/live
+              port: 5001
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: outputs
+              mountPath: /app/outputs
+            - name: runs
+              mountPath: /app/runs
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: dynoai-uploads
+        - name: outputs
+          persistentVolumeClaim:
+            claimName: dynoai-outputs
+        - name: runs
+          persistentVolumeClaim:
+            claimName: dynoai-runs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynoai-api
+  namespace: dynoai
+spec:
+  selector:
+    app: dynoai-api
+  ports:
+    - port: 5001
+      targetPort: 5001
+  type: ClusterIP

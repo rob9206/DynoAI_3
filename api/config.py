@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dynoai.version import __version__ as DYNOAI_VERSION
+
 
 def _get_bool_env(key: str, default: bool = False) -> bool:
     """Get boolean from environment variable."""
@@ -40,13 +42,22 @@ class StorageConfig:
     """File storage configuration."""
 
     upload_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_UPLOAD_DIR", "uploads"))
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_UPLOAD_DIR", "data/uploads")
+        )
     )
     output_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_OUTPUT_DIR", "outputs"))
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_OUTPUT_DIR", "data/outputs")
+        )
     )
     runs_folder: Path = field(
-        default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "runs"))
+        default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "data/runs"))
+    )
+    public_export_folder: Path = field(
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_PUBLIC_EXPORT_DIR", "data/public_export")
+        )
     )
     max_content_length: int = field(
         default_factory=lambda: _get_int_env("DYNOAI_MAX_UPLOAD_MB", 50) * 1024 * 1024
@@ -57,9 +68,10 @@ class StorageConfig:
 
     def __post_init__(self) -> None:
         """Ensure storage directories exist."""
-        self.upload_folder.mkdir(exist_ok=True)
-        self.output_folder.mkdir(exist_ok=True)
-        self.runs_folder.mkdir(exist_ok=True)
+        self.upload_folder.mkdir(parents=True, exist_ok=True)
+        self.output_folder.mkdir(parents=True, exist_ok=True)
+        self.runs_folder.mkdir(parents=True, exist_ok=True)
+        self.public_export_folder.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -208,8 +220,8 @@ class RateLimitConfig:
         == "true"
     )
     default: str = field(
-        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "100/minute")
-    )
+        default_factory=lambda: os.environ.get("RATE_LIMIT_DEFAULT", "3000/minute")
+    )  # 3000/min allows multiple live data pollers at 100-250ms intervals (50 req/sec)
     expensive: str = field(
         default_factory=lambda: os.environ.get(
             "RATE_LIMIT_EXPENSIVE", "5/minute;20/hour"
@@ -218,6 +230,247 @@ class RateLimitConfig:
     storage_uri: str = field(
         default_factory=lambda: os.environ.get("RATE_LIMIT_STORAGE", "memory://")
     )
+
+
+@dataclass
+class DrumConfig:
+    """Individual dyno drum configuration."""
+
+    serial_number: str = ""
+    mass_slugs: float = 0.0  # Drum mass in slugs (Dynoware calibration factor)
+    retarder_mass_slugs: float = 0.0  # Retarder/brake mass in slugs
+    circumference_ft: float = 0.0  # Drum circumference in feet
+    num_tabs: int = 1  # Number of pickup tabs
+
+    @property
+    def radius_ft(self) -> float:
+        """Calculate drum radius from circumference."""
+        import math
+
+        if self.circumference_ft <= 0:
+            return 0.0
+        return self.circumference_ft / (2 * math.pi)
+
+    @property
+    def radius_m(self) -> float:
+        """Drum radius in meters."""
+        return self.radius_ft * 0.3048
+
+    @property
+    def total_mass_slugs(self) -> float:
+        """Total rotating mass including retarder (slugs)."""
+        return self.mass_slugs + self.retarder_mass_slugs
+
+    @property
+    def rotational_inertia_slug_ft2(self) -> float:
+        """
+        Calculate rotational inertia (I = 0.5 × m × r²) for solid cylinder.
+        Uses slugs and feet for consistent imperial units.
+        Used for inertia-based power calculations.
+        """
+        if self.radius_ft <= 0 or self.total_mass_slugs <= 0:
+            return 0.0
+        return 0.5 * self.total_mass_slugs * (self.radius_ft**2)
+
+    @property
+    def rotational_inertia_lbft2(self) -> float:
+        """Rotational inertia in lb·ft² (for compatibility with simulator)."""
+        # IMPORTANT: slug·ft² and lb·ft² are dimensionally EQUIVALENT for rotational inertia
+        # when used in the torque equation τ = I·α.
+        # 
+        # This is because:
+        #   - slug = lb·s²/ft (definition of slug)
+        #   - For τ = I·α: [lb·ft] = [slug·ft²] × [rad/s²]
+        #   - Since rad is dimensionless: [lb·ft] = [slug·ft²] × [1/s²]
+        #   - Substituting slug = lb·s²/ft: [lb·ft] = [lb·s²/ft·ft²] × [1/s²] = [lb·ft] ✓
+        #
+        # Therefore, NO conversion factor is needed - the numeric value is the same.
+        return self.rotational_inertia_slug_ft2  # No conversion needed!
+
+    def is_configured(self) -> bool:
+        """Check if drum has valid configuration."""
+        return self.mass_slugs > 0 and self.circumference_ft > 0
+
+
+@dataclass
+class DynoConfig:
+    """
+    Dynoware RT hardware configuration.
+
+    Stores actual drum specifications from the connected dynamometer
+    for accurate power calculations. Values should match the Device
+    Information dialog in Dynoware RT software.
+
+    Power calculation for inertia dyno:
+        HP = (I × α × ω) / 5252
+    Where:
+        I = rotational inertia (lb·ft²)
+        α = angular acceleration (rad/s²)
+        ω = angular velocity (rad/s)
+    """
+
+    # Dyno identification
+    model: str = field(
+        default_factory=lambda: os.environ.get("DYNO_MODEL", "Dynoware RT-150")
+    )
+    serial_number: str = field(
+        default_factory=lambda: os.environ.get("DYNO_SERIAL", "RT00220413")
+    )
+    location: str = field(
+        default_factory=lambda: os.environ.get("DYNO_LOCATION", "Dawson Dynamics")
+    )
+
+    # Network configuration
+    # DYNO_IP is the actual dyno device IP (e.g., link-local 169.254.x.x)
+    # For JetDrive multicast, use JETDRIVE_MCAST_GROUP instead
+    ip_address: str = field(
+        default_factory=lambda: os.environ.get("DYNO_IP", "169.254.187.108")
+    )
+    jetdrive_port: int = field(
+        default_factory=lambda: _get_int_env("DYNO_JETDRIVE_PORT", 22344)
+    )
+
+    # Drum 1 configuration (primary/front drum)
+    # Values from Dynoware RT Device Information > Drum Information
+    drum1_serial: str = field(
+        default_factory=lambda: os.environ.get("DYNO_DRUM1_SERIAL", "1000588")
+    )
+    drum1_mass_slugs: float = field(
+        default_factory=lambda: float(os.environ.get("DYNO_DRUM1_MASS_SLUGS", "14.121"))
+    )
+    drum1_retarder_mass_slugs: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM1_RETARDER_MASS_SLUGS", "0.0")
+        )
+    )
+    drum1_circumference_ft: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM1_CIRCUMFERENCE_FT", "4.673")
+        )
+    )
+    drum1_tabs: int = field(default_factory=lambda: _get_int_env("DYNO_DRUM1_TABS", 1))
+
+    # Drum 2 configuration (secondary/rear drum, if equipped)
+    drum2_serial: str = field(
+        default_factory=lambda: os.environ.get("DYNO_DRUM2_SERIAL", "")
+    )
+    drum2_mass_slugs: float = field(
+        default_factory=lambda: float(os.environ.get("DYNO_DRUM2_MASS_SLUGS", "0.0"))
+    )
+    drum2_retarder_mass_slugs: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM2_RETARDER_MASS_SLUGS", "0.0")
+        )
+    )
+    drum2_circumference_ft: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNO_DRUM2_CIRCUMFERENCE_FT", "0.0")
+        )
+    )
+    drum2_tabs: int = field(default_factory=lambda: _get_int_env("DYNO_DRUM2_TABS", 0))
+
+    # Firmware/hardware info
+    firmware_version: str = field(
+        default_factory=lambda: os.environ.get("DYNO_FIRMWARE", "2.1.7034.17067")
+    )
+    atmo_version: str = field(
+        default_factory=lambda: os.environ.get("DYNO_ATMO_VERSION", "1.1")
+    )
+    num_modules: int = field(
+        default_factory=lambda: _get_int_env("DYNO_NUM_MODULES", 4)
+    )
+
+    @property
+    def drum1(self) -> DrumConfig:
+        """Get Drum 1 configuration object."""
+        return DrumConfig(
+            serial_number=self.drum1_serial,
+            mass_slugs=self.drum1_mass_slugs,
+            retarder_mass_slugs=self.drum1_retarder_mass_slugs,
+            circumference_ft=self.drum1_circumference_ft,
+            num_tabs=self.drum1_tabs,
+        )
+
+    @property
+    def drum2(self) -> DrumConfig:
+        """Get Drum 2 configuration object."""
+        return DrumConfig(
+            serial_number=self.drum2_serial,
+            mass_slugs=self.drum2_mass_slugs,
+            retarder_mass_slugs=self.drum2_retarder_mass_slugs,
+            circumference_ft=self.drum2_circumference_ft,
+            num_tabs=self.drum2_tabs,
+        )
+
+    def calculate_hp_from_force(self, force_lbs: float, rpm: float) -> float:
+        """
+        Calculate horsepower from drum force and RPM.
+
+        HP = (Force × Drum Surface Velocity) / 550
+           = (Force × π × Circumference × RPM) / (60 × 550)
+           = (Force × Circumference × RPM) / 10504.2
+
+        Args:
+            force_lbs: Force measured on drum (lbs)
+            rpm: Drum RPM
+
+        Returns:
+            Calculated horsepower
+        """
+        if rpm <= 0 or force_lbs <= 0:
+            return 0.0
+
+        # Surface velocity = circumference × RPM / 60 (ft/s)
+        surface_velocity_fps = self.drum1_circumference_ft * rpm / 60.0
+
+        # Power = Force × Velocity (ft-lbs/s)
+        # 1 HP = 550 ft-lbs/s
+        hp = (force_lbs * surface_velocity_fps) / 550.0
+
+        return hp
+
+    def calculate_torque_from_force(self, force_lbs: float) -> float:
+        """
+        Calculate torque from drum force.
+
+        Torque = Force × Radius
+
+        Args:
+            force_lbs: Force measured on drum (lbs)
+
+        Returns:
+            Calculated torque in ft-lbs
+        """
+        return force_lbs * self.drum1.radius_ft
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API responses."""
+        return {
+            "model": self.model,
+            "serial_number": self.serial_number,
+            "location": self.location,
+            "ip_address": self.ip_address,
+            "jetdrive_port": self.jetdrive_port,
+            "firmware_version": self.firmware_version,
+            "atmo_version": self.atmo_version,
+            "num_modules": self.num_modules,
+            "drum1": {
+                "serial_number": self.drum1_serial,
+                "mass_slugs": self.drum1_mass_slugs,
+                "retarder_mass_slugs": self.drum1_retarder_mass_slugs,
+                "circumference_ft": self.drum1_circumference_ft,
+                "num_tabs": self.drum1_tabs,
+                "radius_ft": self.drum1.radius_ft,
+                "inertia_lbft2": self.drum1.rotational_inertia_lbft2,
+                "configured": self.drum1.is_configured(),
+            },
+            "drum2": {
+                "serial_number": self.drum2_serial,
+                "mass_slugs": self.drum2_mass_slugs,
+                "circumference_ft": self.drum2_circumference_ft,
+                "configured": self.drum2.is_configured(),
+            },
+        }
 
 
 @dataclass
@@ -240,7 +493,7 @@ class AppConfig:
 
     # Application metadata
     app_name: str = "DynoAI"
-    version: str = "1.2.0"
+    version: str = DYNOAI_VERSION
 
     # Sub-configurations
     server: ServerConfig = field(default_factory=ServerConfig)
@@ -251,6 +504,7 @@ class AppConfig:
     xai: XAIConfig = field(default_factory=XAIConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
+    dyno: DynoConfig = field(default_factory=DynoConfig)
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -271,6 +525,7 @@ class AppConfig:
                 "upload_folder": str(self.storage.upload_folder),
                 "output_folder": str(self.storage.output_folder),
                 "runs_folder": str(self.storage.runs_folder),
+                "public_export_folder": str(self.storage.public_export_folder),
                 "max_content_length": self.storage.max_content_length,
             },
             "jetstream": self.jetstream.to_dict(mask_key=not include_secrets),
@@ -279,6 +534,7 @@ class AppConfig:
                 "api_url": self.xai.api_url,
                 "model": self.xai.model,
             },
+            "dyno": self.dyno.to_dict(),
         }
 
 

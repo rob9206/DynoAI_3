@@ -4,8 +4,8 @@
  * React hook for managing timeline state and playback.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getTimeline,
   replayStep,
@@ -28,11 +28,14 @@ interface UseTimelineReturn {
   totalSteps: number;
   currentReplay: ReplayStepResponse | null;
   diff: DiffResponse | null;
+  timelineHasMore: boolean;
+  timelineLoadedEvents: number;
   
   // Loading states
   isLoading: boolean;
   isLoadingReplay: boolean;
   isLoadingDiff: boolean;
+  isLoadingMoreTimeline: boolean;
   
   // Error states
   error: Error | null;
@@ -57,6 +60,9 @@ interface UseTimelineReturn {
   
   // Refresh
   refresh: () => void;
+
+  // Pagination
+  loadMoreTimeline: () => Promise<void>;
 }
 
 export function useTimeline({
@@ -74,19 +80,41 @@ export function useTimeline({
   
   // Refs for playback interval
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const ensureLoadingRef = useRef(false);
 
-  // Fetch timeline
+  // Fetch timeline (paginated)
   const {
-    data: timeline,
+    data: timelinePages,
     isLoading: isLoadingTimeline,
     error: timelineError,
     refetch: refetchTimeline,
-  } = useQuery({
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['timeline', runId],
-    queryFn: () => getTimeline(runId),
+    queryFn: ({ pageParam }) => getTimeline(runId, { limit: 50, offset: pageParam as number }),
+    initialPageParam: 0,
     enabled: enabled && !!runId,
     staleTime: 30000, // 30 seconds
+    getNextPageParam: (lastPage) => {
+      const pagination = lastPage.pagination;
+      if (!pagination || !pagination.has_more) return undefined;
+      return pagination.offset + pagination.limit;
+    },
   });
+
+  const timeline: TimelineResponse | null = useMemo(() => {
+    if (!timelinePages?.pages?.length) return null;
+    const pages = timelinePages.pages;
+    const last = pages[pages.length - 1];
+    return {
+      run_id: last.run_id,
+      summary: last.summary,
+      events: pages.flatMap((p) => p.events),
+      pagination: last.pagination,
+    };
+  }, [timelinePages]);
 
   // Fetch current step replay data
   const {
@@ -95,12 +123,22 @@ export function useTimeline({
   } = useQuery({
     queryKey: ['timeline-replay', runId, currentStep],
     queryFn: () => replayStep(runId, currentStep),
-    enabled: enabled && !!runId && currentStep > 0 && !!timeline?.events.length,
+    enabled: enabled && !!runId && currentStep > 0 && !!timeline?.summary,
     staleTime: 60000, // 1 minute
   });
 
-  // Total steps
-  const totalSteps = timeline?.events.length ?? 0;
+  // Total steps (prefer server total if provided)
+  const totalSteps = useMemo(() => {
+    if (!timeline) return 0;
+    return (
+      timeline.pagination?.total ??
+      timeline.summary?.total_events ??
+      timeline.events.length
+    );
+  }, [timeline]);
+
+  const timelineLoadedEvents = timeline?.events.length ?? 0;
+  const timelineHasMore = !!(hasNextPage ?? false);
 
   // ============================================================================
   // Navigation Actions
@@ -188,12 +226,7 @@ export function useTimeline({
   // ============================================================================
 
   const compareToCurrent = useCallback(async (snapshotId: string) => {
-    if (!currentReplay?.snapshot) return;
-    
-    // Find current snapshot ID
-    const currentEvent = timeline?.events[currentStep - 1];
-    const currentSnapshotId = currentEvent?.snapshot_after?.id;
-    
+    const currentSnapshotId = currentReplay?.event?.snapshot_after?.id;
     if (!currentSnapshotId) return;
     
     setIsLoadingDiff(true);
@@ -205,21 +238,23 @@ export function useTimeline({
     } finally {
       setIsLoadingDiff(false);
     }
-  }, [runId, timeline, currentStep, currentReplay]);
+  }, [runId, currentReplay]);
 
   const compareSteps = useCallback(async (fromStep: number, toStep: number) => {
-    if (!timeline?.events.length) return;
-    
-    const fromEvent = timeline.events[fromStep - 1];
-    const toEvent = timeline.events[toStep - 1];
-    
-    const fromSnapshotId = fromEvent?.snapshot_after?.id;
-    const toSnapshotId = toEvent?.snapshot_after?.id;
-    
-    if (!fromSnapshotId || !toSnapshotId) return;
+    if (!runId) return;
     
     setIsLoadingDiff(true);
     try {
+      const [fromReplay, toReplay] = await Promise.all([
+        replayStep(runId, fromStep),
+        replayStep(runId, toStep),
+      ]);
+
+      const fromSnapshotId = fromReplay?.event?.snapshot_after?.id;
+      const toSnapshotId = toReplay?.event?.snapshot_after?.id;
+
+      if (!fromSnapshotId || !toSnapshotId) return;
+
       const diffResult = await getDiff(runId, fromSnapshotId, toSnapshotId);
       setDiff(diffResult);
     } catch (err) {
@@ -227,7 +262,7 @@ export function useTimeline({
     } finally {
       setIsLoadingDiff(false);
     }
-  }, [runId, timeline]);
+  }, [runId]);
 
   const clearDiff = useCallback(() => {
     setDiff(null);
@@ -244,10 +279,34 @@ export function useTimeline({
 
   // Reset step when timeline changes
   useEffect(() => {
-    if (timeline && currentStep > timeline.events.length) {
-      setCurrentStep(Math.max(1, timeline.events.length));
+    if (timeline && totalSteps > 0 && currentStep > totalSteps) {
+      setCurrentStep(Math.max(1, totalSteps));
     }
-  }, [timeline, currentStep]);
+  }, [timeline, currentStep, totalSteps]);
+
+  // Ensure we have enough events loaded to render the sidebar list for current step
+  useEffect(() => {
+    if (!enabled || !runId) return;
+    if (!hasNextPage) return;
+    if (ensureLoadingRef.current) return;
+    if (currentStep <= timelineLoadedEvents) return;
+
+    ensureLoadingRef.current = true;
+    (async () => {
+      try {
+        while (currentStep > (timeline?.events.length ?? 0) && hasNextPage) {
+          await fetchNextPage();
+        }
+      } finally {
+        ensureLoadingRef.current = false;
+      }
+    })();
+  }, [enabled, runId, currentStep, timelineLoadedEvents, hasNextPage, fetchNextPage, timeline]);
+
+  const loadMoreTimeline = useCallback(async () => {
+    if (!hasNextPage) return;
+    await fetchNextPage();
+  }, [hasNextPage, fetchNextPage]);
 
   return {
     // Data
@@ -256,11 +315,14 @@ export function useTimeline({
     totalSteps,
     currentReplay: currentReplay ?? null,
     diff,
+    timelineHasMore,
+    timelineLoadedEvents,
     
     // Loading states
     isLoading: isLoadingTimeline,
     isLoadingReplay,
     isLoadingDiff,
+    isLoadingMoreTimeline: isFetchingNextPage,
     
     // Error states
     error: timelineError as Error | null,
@@ -285,6 +347,9 @@ export function useTimeline({
     
     // Refresh
     refresh,
+
+    // Pagination
+    loadMoreTimeline,
   };
 }
 

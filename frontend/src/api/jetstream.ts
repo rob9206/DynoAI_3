@@ -3,6 +3,7 @@
  */
 
 import axios from 'axios';
+import { encodePathSegment } from '@/lib/sanitize';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5001';
 
@@ -165,7 +166,7 @@ export async function listJetstreamRuns(
  * Get details for a specific run
  */
 export async function getJetstreamRun(runId: string): Promise<JetstreamRun> {
-  const response = await api.get<JetstreamRun>(`/api/jetstream/runs/${runId}`);
+  const response = await api.get<JetstreamRun>(`/api/jetstream/runs/${encodePathSegment(runId)}`);
   return response.data;
 }
 
@@ -184,9 +185,12 @@ export async function downloadRunFile(
   runId: string,
   filename: string
 ): Promise<Blob> {
-  const response = await api.get(`/api/jetstream/runs/${runId}/files/${filename}`, {
+  const response = await api.get(
+    `/api/jetstream/runs/${encodePathSegment(runId)}/files/${encodePathSegment(filename)}`,
+    {
     responseType: 'blob',
-  });
+    }
+  );
   return response.data as Blob;
 }
 
@@ -197,9 +201,12 @@ export async function getFileContent(
   runId: string,
   filename: string
 ): Promise<string> {
-  const response = await api.get<string>(`/api/jetstream/runs/${runId}/files/${filename}`, {
+  const response = await api.get<string>(
+    `/api/jetstream/runs/${encodePathSegment(runId)}/files/${encodePathSegment(filename)}`,
+    {
     responseType: 'text',
-  });
+    }
+  );
   return response.data;
 }
 

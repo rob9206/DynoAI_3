@@ -213,6 +213,10 @@ interface TimelineProps {
   onStepChange: (step: number) => void;
   isPlaying?: boolean;
   onPlayPause?: () => void;
+  totalSteps?: number;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
   className?: string;
 }
 
@@ -222,6 +226,10 @@ export function Timeline({
   onStepChange,
   isPlaying = false,
   onPlayPause,
+  totalSteps,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
   className,
 }: TimelineProps) {
   const { events, summary } = timeline;
@@ -361,7 +369,7 @@ export function Timeline({
       {/* Scrubber */}
       <TimelineScrubber
         currentStep={currentStep}
-        totalSteps={events.length}
+        totalSteps={totalSteps ?? events.length}
         events={events}
         onStepChange={onStepChange}
         isPlaying={isPlaying}
@@ -395,6 +403,25 @@ export function Timeline({
                   />
                 );
               })}
+
+              {hasMore && onLoadMore && (
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onLoadMore}
+                    disabled={isLoadingMore}
+                    className="w-full"
+                  >
+                    {isLoadingMore ? 'Loading…' : 'Load more events'}
+                  </Button>
+                  {typeof totalSteps === 'number' && totalSteps > events.length && (
+                    <p className="mt-2 text-xs text-muted-foreground text-center">
+                      Loaded {events.length} of {totalSteps}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground text-sm">

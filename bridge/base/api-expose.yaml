@@ -1,0 +1,18 @@
+#! api-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: api
+    namespace: dynoai-3
+    labels:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: api
+spec:
+    selector:
+        com.docker.compose.project: dynoai_3
+        com.docker.compose.service: api
+    ports:
+        - name: api-5001
+          port: 5001
+          targetPort: api-5001

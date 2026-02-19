@@ -9,7 +9,7 @@ import { FileArrowUp, Play, CheckCircle, DownloadSimple, ChartLine } from '@phos
 import { parseCSV, simulateAnalysis, downloadFile } from '@/lib/analysis';
 import { runRealAnalysis, downloadOutputFile } from '@/lib/analysis-api';
 import type { ManifestData, AnalysisStatus } from '@/lib/types';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface AnalyzeRunProps {
   onAnalysisComplete: (manifest: ManifestData) => void;

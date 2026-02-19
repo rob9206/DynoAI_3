@@ -315,11 +315,3 @@
         }
     }
 }
-{
-    "workbench.experimental.colorThemePaths": [
-        ".vscode/themes"
-    ],
-    "workbench.colorTheme": "Cursor Dark",
-    "workbench.preferredDarkColorTheme": "PG27AQDM Low-Strain Dark Night (Deuteranopia Friendly)",
-    "window.autoDetectColorScheme": false
-}

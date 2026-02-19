@@ -1,0 +1,1072 @@
+/**
+ * TuneImport - Import tune data from PVV files or engine presets
+ * 
+ * Provides:
+ * - PVV file upload (drag-drop or file picker)
+ * - Auto-parse VE tables and AFR targets
+ * - Engine preset fallback
+ * - Summary of imported data
+ */
+
+import { useState, useCallback, useRef } from 'react';
+import { Upload, FileCheck, Settings, AlertTriangle, Check, X, ChevronDown, ChevronUp, Table } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { Card, CardContent } from '../ui/card';
+import { parsePVV, getPVVSummary, extractAfrTargets, type ParsedPVV, type PVVTable } from '../../utils/pvvParser';
+import { listEnginePresets, getEnginePreset } from '../../utils/enginePresets';
+import { resampleVETable } from '../../utils/veResampler';
+import { toast } from '../../lib/toast';
+import {
+    discoverYourDynoRuns,
+    parseYourDynoRun,
+    type ParseYourDynoRunResponse,
+    type YourDynoFile,
+} from '../../lib/api';
+
+// ==================== VE Preview Table Component ====================
+
+interface VEPreviewTableProps {
+    table: PVVTable;
+    title: string;
+    maxRows?: number;
+    maxCols?: number;
+}
+
+/**
+ * Compact preview table for VE data with color-coded cells
+ */
+function VEPreviewTable({ table, title, maxRows = 8, maxCols = 8 }: VEPreviewTableProps) {
+    const { rows, columns, values } = table;
+    
+    // Sample rows and columns for preview
+    const displayRows = rows.slice(0, maxRows);
+    const displayCols = columns.slice(0, maxCols);
+    const hasMoreRows = rows.length > maxRows;
+    const hasMoreCols = columns.length > maxCols;
+    
+    // Get color for VE value (green = high efficiency, yellow = mid, red = low)
+    const getVEColor = (value: number): string => {
+        if (value >= 100) return 'bg-green-500/30 text-green-300';
+        if (value >= 90) return 'bg-emerald-500/20 text-emerald-300';
+        if (value >= 80) return 'bg-yellow-500/20 text-yellow-300';
+        if (value >= 70) return 'bg-orange-500/20 text-orange-300';
+        return 'bg-red-500/20 text-red-300';
+    };
+    
+    return (
+        <div className="space-y-2">
+            <div className="text-xs font-medium text-zinc-300">{title}</div>
+            <div className="overflow-x-auto">
+                <table className="text-[10px] border-collapse">
+                    <thead>
+                        <tr>
+                            <th className="px-1.5 py-1 text-zinc-500 font-normal text-left border-b border-zinc-700">
+                                RPM↓ / MAP→
+                            </th>
+                            {displayCols.map((col, i) => (
+                                <th key={i} className="px-1.5 py-1 text-zinc-400 font-medium text-center border-b border-zinc-700 min-w-[36px]">
+                                    {Math.round(col)}
+                                </th>
+                            ))}
+                            {hasMoreCols && (
+                                <th className="px-1.5 py-1 text-zinc-500 text-center border-b border-zinc-700">...</th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {displayRows.map((rpm, rowIdx) => (
+                            <tr key={rowIdx}>
+                                <td className="px-1.5 py-0.5 text-zinc-400 font-medium border-r border-zinc-700">
+                                    {Math.round(rpm)}
+                                </td>
+                                {displayCols.map((_, colIdx) => {
+                                    const value = values[rowIdx]?.[colIdx] ?? 0;
+                                    return (
+                                        <td 
+                                            key={colIdx} 
+                                            className={`px-1.5 py-0.5 text-center font-mono ${getVEColor(value)}`}
+                                        >
+                                            {value.toFixed(1)}
+                                        </td>
+                                    );
+                                })}
+                                {hasMoreCols && (
+                                    <td className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>
+                                )}
+                            </tr>
+                        ))}
+                        {hasMoreRows && (
+                            <tr>
+                                <td className="px-1.5 py-0.5 text-zinc-500 border-r border-zinc-700">...</td>
+                                {displayCols.map((_, i) => (
+                                    <td key={i} className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>
+                                ))}
+                                {hasMoreCols && <td className="px-1.5 py-0.5 text-zinc-500 text-center">...</td>}
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            <div className="text-[10px] text-zinc-500">
+                Showing {displayRows.length} of {rows.length} RPM bins × {displayCols.length} of {columns.length} MAP bins
+            </div>
+        </div>
+    );
+}
+
+/**
+ * AFR targets preview as a simple row
+ */
+function AFRPreviewTable({ table }: { table: PVVTable }) {
+    const { columns, values } = table;
+    
+    // Use middle row for AFR targets (typical operating RPM)
+    const midRowIdx = Math.floor(values.length / 2);
+    const afrRow = values[midRowIdx] || values[0] || [];
+    
+    // Show first 8 MAP bins
+    const displayCols = columns.slice(0, 8);
+    const displayValues = afrRow.slice(0, 8);
+    
+    const getAFRColor = (value: number): string => {
+        if (value >= 14.5) return 'text-blue-300'; // Lean
+        if (value >= 13.5) return 'text-green-300'; // Stoich/slightly rich
+        if (value >= 12.5) return 'text-yellow-300'; // Rich
+        return 'text-orange-300'; // Very rich
+    };
+    
+    return (
+        <div className="space-y-2">
+            <div className="text-xs font-medium text-zinc-300">AFR Targets (at {Math.round(table.rows[midRowIdx] || 0)} RPM)</div>
+            <div className="flex flex-wrap gap-2">
+                {displayCols.map((map, i) => (
+                    <div key={i} className="text-center">
+                        <div className="text-[10px] text-zinc-500">{Math.round(map)} kPa</div>
+                        <div className={`text-xs font-mono font-medium ${getAFRColor(displayValues[i] || 0)}`}>
+                            {(displayValues[i] || 0).toFixed(2)}
+                        </div>
+                    </div>
+                ))}
+                {columns.length > 8 && (
+                    <div className="text-center">
+                        <div className="text-[10px] text-zinc-500">...</div>
+                        <div className="text-xs text-zinc-500">+{columns.length - 8}</div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export interface TuneImportResult {
+    source: 'pvv' | 'preset' | 'yourdyno';
+    sourceName: string;
+    veFront?: PVVTable;
+    veRear?: PVVTable;
+    afrTargets: Record<number, number>;
+    rpmBins: number[];
+    mapBins: number[];
+}
+
+interface TuneImportProps {
+    onImport: (result: TuneImportResult) => void;
+    currentPreset?: string;
+    compact?: boolean;
+    sheet?: boolean; // New mode for sheet display - cleaner than full, more info than compact
+}
+
+export function TuneImport({ onImport, currentPreset = 'harley_m8', compact = false, sheet = false }: TuneImportProps) {
+    const [selectedSource, setSelectedSource] = useState<'pvv' | 'yourdyno' | 'preset'>('pvv');
+    const [isDragging, setIsDragging] = useState(false);
+    const [importedPVV, setImportedPVV] = useState<ParsedPVV | null>(null);
+    const [importError, setImportError] = useState<string | null>(null);
+    const [showPresets, setShowPresets] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+    const [isParsing, setIsParsing] = useState(false);
+    const [yourdynoRuns, setYourDynoRuns] = useState<YourDynoFile[]>([]);
+    const [selectedYourDynoFileId, setSelectedYourDynoFileId] = useState<string>('');
+    const [yourdynoPreview, setYourDynoPreview] = useState<ParseYourDynoRunResponse | null>(null);
+    const [isDiscoveringYourDyno, setIsDiscoveringYourDyno] = useState(false);
+    const [isParsingYourDyno, setIsParsingYourDyno] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFile = useCallback(async (file: File) => {
+        setSelectedSource('pvv');
+        setImportError(null);
+        
+        if (!file.name.toLowerCase().endsWith('.pvv')) {
+            setImportError('Please select a .pvv file from Power Vision');
+            return;
+        }
+
+        setIsParsing(true);
+        setShowPreview(false);  // Reset preview state
+        try {
+            const content = await file.text();
+            const parsed = parsePVV(content);
+            
+            console.log('[TuneImport] Parsed PVV file:', {
+                sourceFile: parsed.sourceFile,
+                veFront: parsed.veFront ? {
+                    name: parsed.veFront.name,
+                    rows: parsed.veFront.rows.length,
+                    columns: parsed.veFront.columns.length,
+                    sampleValues: parsed.veFront.values[0]?.slice(0, 3),
+                } : null,
+                veRear: parsed.veRear ? {
+                    name: parsed.veRear.name,
+                    rows: parsed.veRear.rows.length,
+                    columns: parsed.veRear.columns.length,
+                } : null,
+                afrTarget: parsed.afrTarget ? {
+                    name: parsed.afrTarget.name,
+                    rows: parsed.afrTarget.rows.length,
+                    columns: parsed.afrTarget.columns.length,
+                } : null,
+                allTables: Array.from(parsed.allTables.keys()),
+                parseErrors: parsed.parseErrors,
+            });
+            
+            if (parsed.parseErrors.length > 0 && !parsed.veFront && !parsed.afrTarget) {
+                setImportError(`Parse errors: ${parsed.parseErrors.join(', ')}`);
+                return;
+            }
+
+            // Warn if this looks like a DynoAI correction file, not a base tune
+            if (parsed.veFront) {
+                const tableName = parsed.veFront.name.toLowerCase();
+                const values = parsed.veFront.values;
+                const isCorrection = tableName.includes('correction') || tableName.includes('dynoai');
+                // Correction files have small values (percentage changes near 0)
+                // Base tune files have larger VE values (typically 50-120)
+                const sampleValues = values.flat().filter(v => Number.isFinite(v));
+                const avgAbsValue = sampleValues.length > 0 
+                    ? sampleValues.reduce((sum, v) => sum + Math.abs(v), 0) / sampleValues.length 
+                    : 0;
+                
+                if (isCorrection || avgAbsValue < 30) {
+                    console.warn('[TuneImport] This appears to be a correction file, not a base tune.',
+                        { tableName: parsed.veFront.name, avgAbsValue: avgAbsValue.toFixed(1) });
+                    setImportError(
+                        'This appears to be a VE correction file, not a base tune. ' +
+                        'Please import your original Power Vision tune file (.pvv) with base VE tables, ' +
+                        'or use a preset instead.'
+                    );
+                    return;
+                }
+            }
+
+            setImportedPVV(parsed);
+            setShowPreview(true);  // Auto-expand preview on successful import
+
+            // Extract and send data to parent
+            const afrTargets = parsed.afrTarget 
+                ? extractAfrTargets(parsed.afrTarget)
+                : getEnginePreset(currentPreset)?.afrTargets ?? {};
+
+            // Deduplicate bins - PVV files can have near-duplicate values that
+            // round to the same integer, causing duplicate rows/columns in the grid
+            const deduplicateBins = (bins: number[]): number[] => {
+                const rounded = bins.map(b => Math.round(b));
+                return [...new Set(rounded)].sort((a, b) => a - b);
+            };
+
+            const rawRpmBins = parsed.veFront?.rows ?? getEnginePreset(currentPreset)?.rpmBins ?? [];
+            const rawMapBins = parsed.veFront?.columns ?? getEnginePreset(currentPreset)?.mapBins ?? [];
+
+            console.log('[TuneImport] Before deduplication:', {
+                rawRpmBins: rawRpmBins.length,
+                rawMapBins: rawMapBins.length,
+                usingPresetRpm: !parsed.veFront?.rows,
+                usingPresetMap: !parsed.veFront?.columns,
+            });
+
+            const deduplicatedRpmBins = deduplicateBins(rawRpmBins);
+            const deduplicatedMapBins = deduplicateBins(rawMapBins);
+
+            // Resample VE tables if deduplication changed dimensions
+            let veFrontToUse = parsed.veFront;
+            let veRearToUse = parsed.veRear;
+            
+            if (parsed.veFront && 
+                (parsed.veFront.rows.length !== deduplicatedRpmBins.length ||
+                 parsed.veFront.columns.length !== deduplicatedMapBins.length)) {
+                try {
+                    const resampledFront = resampleVETable(
+                        parsed.veFront.values,
+                        parsed.veFront.rows,
+                        parsed.veFront.columns,
+                        deduplicatedRpmBins,
+                        deduplicatedMapBins
+                    );
+                    
+                    veFrontToUse = {
+                        ...parsed.veFront,
+                        rows: deduplicatedRpmBins,
+                        columns: deduplicatedMapBins,
+                        values: resampledFront,
+                    };
+                    
+                    toast.info('VE table resampled', {
+                        description: `Adjusted grid from ${parsed.veFront.rows.length}×${parsed.veFront.columns.length} to ${deduplicatedRpmBins.length}×${deduplicatedMapBins.length} (duplicate bins removed)`
+                    });
+                } catch (e) {
+                    console.error('[TuneImport] Failed to resample front VE:', e);
+                    toast.error('Failed to resample VE table', {
+                        description: String(e)
+                    });
+                }
+            }
+            
+            // Also resample rear cylinder if present
+            if (parsed.veRear && 
+                (parsed.veRear.rows.length !== deduplicatedRpmBins.length ||
+                 parsed.veRear.columns.length !== deduplicatedMapBins.length)) {
+                
+                try {
+                    const resampledRear = resampleVETable(
+                        parsed.veRear.values,
+                        parsed.veRear.rows,
+                        parsed.veRear.columns,
+                        deduplicatedRpmBins,
+                        deduplicatedMapBins
+                    );
+                    
+                    veRearToUse = {
+                        ...parsed.veRear,
+                        rows: deduplicatedRpmBins,
+                        columns: deduplicatedMapBins,
+                        values: resampledRear,
+                    };
+                } catch (e) {
+                    console.error('[TuneImport] Failed to resample rear VE:', e);
+                }
+            }
+
+            const result: TuneImportResult = {
+                source: 'pvv',
+                sourceName: parsed.sourceFile || file.name,
+                veFront: veFrontToUse,
+                veRear: veRearToUse,
+                afrTargets,
+                rpmBins: deduplicatedRpmBins,
+                mapBins: deduplicatedMapBins,
+            };
+
+            console.log('[TuneImport] Sending result to parent:', {
+                source: result.source,
+                sourceName: result.sourceName,
+                hasVeFront: !!result.veFront,
+                hasVeRear: !!result.veRear,
+                rpmBins: result.rpmBins,
+                mapBins: result.mapBins,
+                afrTargetKeys: Object.keys(result.afrTargets),
+            });
+
+            onImport(result);
+        } catch (e) {
+            console.error('[TuneImport] Error parsing file:', e);
+            setImportError(`Failed to read file: ${e}`);
+        } finally {
+            setIsParsing(false);
+        }
+    }, [currentPreset, onImport]);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            handleFile(file);
+        }
+    }, [handleFile]);
+
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleFile(file);
+        }
+    }, [handleFile]);
+
+    const handlePresetSelect = useCallback((presetKey: string) => {
+        setSelectedSource('preset');
+        const preset = getEnginePreset(presetKey);
+        if (!preset) return;
+
+        setImportedPVV(null);
+        setShowPresets(false);
+
+        const result: TuneImportResult = {
+            source: 'preset',
+            sourceName: preset.name,
+            afrTargets: preset.afrTargets,
+            rpmBins: preset.rpmBins,
+            mapBins: preset.mapBins,
+        };
+
+        onImport(result);
+    }, [onImport]);
+
+    const handleDiscoverYourDynoRuns = useCallback(async () => {
+        setSelectedSource('yourdyno');
+        setImportError(null);
+        setIsDiscoveringYourDyno(true);
+        try {
+            const discovered = await discoverYourDynoRuns();
+            setYourDynoRuns(discovered.files || []);
+            if ((discovered.files || []).length > 0) {
+                setSelectedYourDynoFileId(discovered.files[0].id);
+                toast.success(`Found ${discovered.count} YourDyno run file(s)`);
+            } else {
+                toast.info('No YourDyno run files found in default folders');
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to discover YourDyno runs';
+            setImportError(msg);
+        } finally {
+            setIsDiscoveringYourDyno(false);
+        }
+    }, []);
+
+    const handleParseSelectedYourDynoRun = useCallback(async () => {
+        setSelectedSource('yourdyno');
+        if (!selectedYourDynoFileId) {
+            setImportError('Select a YourDyno run file first');
+            return;
+        }
+
+        setImportError(null);
+        setIsParsingYourDyno(true);
+        try {
+            const parsed = await parseYourDynoRun(selectedYourDynoFileId);
+            if (!parsed.success) {
+                throw new Error(parsed.error || 'Failed to parse YourDyno run');
+            }
+
+            setYourDynoPreview(parsed);
+            setImportedPVV(null);
+
+            const preset = getEnginePreset(currentPreset);
+            const selectedFile = yourdynoRuns.find((f) => f.id === selectedYourDynoFileId);
+            onImport({
+                source: 'yourdyno',
+                sourceName: selectedFile?.name || 'YourDyno Run',
+                afrTargets: preset?.afrTargets ?? {},
+                rpmBins: preset?.rpmBins ?? [],
+                mapBins: preset?.mapBins ?? [],
+            });
+            toast.success('YourDyno run parsed successfully');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to parse YourDyno run';
+            setImportError(msg);
+        } finally {
+            setIsParsingYourDyno(false);
+        }
+    }, [selectedYourDynoFileId, currentPreset, yourdynoRuns, onImport]);
+
+    const clearImport = useCallback(() => {
+        setImportedPVV(null);
+        setYourDynoPreview(null);
+        setImportError(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    }, []);
+
+    const presets = listEnginePresets();
+
+    if (compact) {
+        return (
+            <div className="flex items-center gap-2">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pvv"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                />
+
+                <div className="flex items-center gap-1 rounded-md border border-zinc-700 p-1">
+                    <Button
+                        variant={selectedSource === 'pvv' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        onClick={() => setSelectedSource('pvv')}
+                    >
+                        PVV
+                    </Button>
+                    <Button
+                        variant={selectedSource === 'yourdyno' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        onClick={() => setSelectedSource('yourdyno')}
+                    >
+                        YourDyno
+                    </Button>
+                </div>
+
+                {selectedSource === 'pvv' ? (
+                    importedPVV ? (
+                        <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10">
+                            <FileCheck className="w-3 h-3 mr-1" />
+                            {importedPVV.sourceFile || 'PVV Loaded'}
+                        </Badge>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-xs"
+                        >
+                            <Upload className="w-3 h-3 mr-1" />
+                            Import PVV
+                        </Button>
+                    )
+                ) : (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                            if (yourdynoRuns.length === 0) {
+                                await handleDiscoverYourDynoRuns();
+                                return;
+                            }
+                            if (selectedYourDynoFileId) {
+                                await handleParseSelectedYourDynoRun();
+                            }
+                        }}
+                        disabled={isDiscoveringYourDyno || isParsingYourDyno}
+                        className="text-xs"
+                    >
+                        <Upload className="w-3 h-3 mr-1" />
+                        {isDiscoveringYourDyno || isParsingYourDyno ? 'Loading...' : 'Load YourDyno'}
+                    </Button>
+                )}
+
+                <div className="relative">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            setSelectedSource('preset');
+                            setShowPresets(!showPresets);
+                        }}
+                        className="text-xs"
+                    >
+                        <Settings className="w-3 h-3 mr-1" />
+                        Preset
+                    </Button>
+
+                    {showPresets && (
+                        <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[180px] z-50">
+                            {presets.map(p => (
+                                <button
+                                    key={p.key}
+                                    onClick={() => handlePresetSelect(p.key)}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 text-xs text-zinc-300"
+                                >
+                                    {p.name}
+                                    <span className="text-zinc-500 ml-1 text-[10px]">{p.description}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    if (sheet) {
+        return (
+            <div className="space-y-4">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pvv"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                />
+
+                {/* Import Status */}
+                {importedPVV ? (
+                    <div className="space-y-3">
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                                <Check className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div className="text-sm flex-1">
+                                    <div className="text-green-400 font-medium">
+                                        {importedPVV.sourceFile || 'PVV File Loaded'}
+                                    </div>
+                                    <div className="text-zinc-400 mt-1 text-xs">
+                                        {getPVVSummary(importedPVV)}
+                                    </div>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={clearImport}>
+                                    <X className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        {/* Simple Preview - Just show we have tables */}
+                        <div className="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+                            <div className="text-xs font-medium text-zinc-300 mb-2">Imported Tables</div>
+                            <div className="space-y-1 text-xs">
+                                {importedPVV.veFront && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                        <span className="text-zinc-400">Front VE: {importedPVV.veFront.rows.length}×{importedPVV.veFront.columns.length} grid</span>
+                                    </div>
+                                )}
+                                {importedPVV.veRear && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                        <span className="text-zinc-400">Rear VE: {importedPVV.veRear.rows.length}×{importedPVV.veRear.columns.length} grid</span>
+                                    </div>
+                                )}
+                                {importedPVV.afrTarget && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                                        <span className="text-zinc-400">AFR Targets: {importedPVV.afrTarget.rows.length}×{importedPVV.afrTarget.columns.length} grid</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : importError ? (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
+                            <div className="text-xs text-red-400">
+                                {importError}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* Drop Zone */
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Drop PVV file here or click to browse"
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                        onClick={() => !isParsing && fileInputRef.current?.click()}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); !isParsing && fileInputRef.current?.click(); } }}
+                        className={`
+                            border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
+                            ${isParsing
+                                ? 'border-orange-500 bg-orange-500/10 cursor-wait'
+                                : isDragging 
+                                    ? 'border-blue-500 bg-blue-500/10' 
+                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
+                            }
+                        `}
+                    >
+                        {isParsing ? (
+                            <>
+                                <div className="w-8 h-8 mx-auto mb-2 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                                <div className="text-sm text-orange-400">Parsing PVV file...</div>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
+                                <div className="text-sm text-zinc-400">
+                                    Drop .pvv file here or click to browse
+                                </div>
+                                <div className="text-xs text-zinc-600 mt-1">
+                                    Load VE tables from Power Vision
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* Engine Presets - Simplified */}
+                <div className="border-t border-zinc-800 pt-4">
+                    <div className="text-xs text-zinc-500 mb-2">Or use an engine preset:</div>
+                    <div className="grid grid-cols-2 gap-2">
+                        {presets.map(p => (
+                            <Button
+                                key={p.key}
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePresetSelect(p.key)}
+                                className={`justify-start text-xs ${
+                                    currentPreset === p.key 
+                                        ? 'border-orange-500/50 text-orange-400' 
+                                        : 'border-zinc-700'
+                                }`}
+                            >
+                                {p.name}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <Card className="bg-zinc-900/50 border-zinc-800">
+            <CardContent className="pt-4">
+                <div className="space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <Upload className="w-4 h-4 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-white">Import Tune</h3>
+                                <p className="text-[10px] text-zinc-500">Load VE tables from Power Vision</p>
+                            </div>
+                        </div>
+                        
+                        {importedPVV && (
+                            <Button variant="ghost" size="sm" onClick={clearImport}>
+                                <X className="w-3 h-3" />
+                            </Button>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 rounded-md border border-zinc-700 p-1 w-fit">
+                        <Button
+                            variant={selectedSource === 'pvv' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('pvv')}
+                        >
+                            Power Vision
+                        </Button>
+                        <Button
+                            variant={selectedSource === 'yourdyno' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('yourdyno')}
+                        >
+                            YourDyno
+                        </Button>
+                        <Button
+                            variant={selectedSource === 'preset' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => setSelectedSource('preset')}
+                        >
+                            Preset
+                        </Button>
+                    </div>
+
+                    {/* Import Status */}
+                    {selectedSource === 'yourdyno' ? (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleDiscoverYourDynoRuns}
+                                    disabled={isDiscoveringYourDyno}
+                                    className="text-xs"
+                                >
+                                    {isDiscoveringYourDyno ? 'Scanning...' : 'Discover Run Files'}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleParseSelectedYourDynoRun}
+                                    disabled={!selectedYourDynoFileId || isParsingYourDyno}
+                                    className="text-xs"
+                                >
+                                    {isParsingYourDyno ? 'Parsing...' : 'Parse Selected File'}
+                                </Button>
+                            </div>
+
+                            {yourdynoRuns.length > 0 && (
+                                <select
+                                    value={selectedYourDynoFileId}
+                                    onChange={(e) => setSelectedYourDynoFileId(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-200"
+                                >
+                                    {yourdynoRuns.map((f) => (
+                                        <option key={f.id} value={f.id}>
+                                            {f.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {yourdynoPreview?.success && (
+                                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 space-y-2">
+                                    <div className="text-xs text-green-300">
+                                        Parsed {yourdynoPreview.rows ?? 0} rows from YourDyno run.
+                                    </div>
+                                    <div className="text-xs text-zinc-300">
+                                        <span className="text-zinc-500">Detected channels:</span>{' '}
+                                        {Object.keys(yourdynoPreview.detected_columns || {}).length}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {Object.entries(yourdynoPreview.detected_columns || {}).slice(0, 10).map(([k, v]) => (
+                                            <Badge key={k} variant="outline" className="text-[10px] border-zinc-600 text-zinc-300">
+                                                {k}: {String(v)}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : importedPVV ? (
+                        <div className="space-y-3">
+                            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                <div className="flex items-start gap-2">
+                                    <Check className="w-4 h-4 text-green-400 mt-0.5" />
+                                    <div className="text-xs flex-1">
+                                        <div className="text-green-400 font-medium">
+                                            {importedPVV.sourceFile || 'PVV File Loaded'}
+                                        </div>
+                                        <div className="text-zinc-400 mt-1 whitespace-pre-line">
+                                            {getPVVSummary(importedPVV)}
+                                        </div>
+                                        
+                                        {/* Display table types and warn if TPS-based */}
+                                        {importedPVV.veFront && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-zinc-400">
+                                                    <span className="text-zinc-500">Front VE: </span>
+                                                    <span className="text-zinc-300 font-mono">{importedPVV.veFront.name}</span>
+                                                    {importedPVV.veFront.name.toLowerCase().includes('tps') && (
+                                                        <div className="text-amber-400 text-[11px] mt-1 flex items-start gap-1">
+                                                            <span>⚠</span>
+                                                            <span>This is a TPS-based table (throttle %), not MAP-based (kPa)</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {importedPVV.veRear && (
+                                            <div className="mt-1">
+                                                <div className="text-xs text-zinc-400">
+                                                    <span className="text-zinc-500">Rear VE: </span>
+                                                    <span className="text-zinc-300 font-mono">{importedPVV.veRear.name}</span>
+                                                    {importedPVV.veRear.name.toLowerCase().includes('tps') && (
+                                                        <div className="text-amber-400 text-[11px] mt-1 flex items-start gap-1">
+                                                            <span>⚠</span>
+                                                            <span>This is a TPS-based table (throttle %), not MAP-based (kPa)</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* Validation Warnings */}
+                                {importedPVV.validationWarnings && (
+                                    <>
+                                        {/* Grid Warnings */}
+                                        {importedPVV.validationWarnings.grid && importedPVV.validationWarnings.grid.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-blue-400 space-y-1">
+                                                    <div className="font-medium">Grid Validation:</div>
+                                                    {importedPVV.validationWarnings.grid.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-blue-300">
+                                                            <span className="text-blue-400">ℹ</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Bin Warnings */}
+                                        {importedPVV.validationWarnings.bins && importedPVV.validationWarnings.bins.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-amber-400 space-y-1">
+                                                    <div className="font-medium">Bin Validation:</div>
+                                                    {importedPVV.validationWarnings.bins.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-amber-300">
+                                                            <span className="text-amber-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Value Warnings */}
+                                        {importedPVV.validationWarnings.values && importedPVV.validationWarnings.values.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-amber-400 space-y-1">
+                                                    <div className="font-medium">Value Validation:</div>
+                                                    {importedPVV.validationWarnings.values.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-amber-300">
+                                                            <span className="text-amber-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Quality Warnings */}
+                                        {importedPVV.validationWarnings.quality && importedPVV.validationWarnings.quality.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-orange-400 space-y-1">
+                                                    <div className="font-medium">Data Quality:</div>
+                                                    {importedPVV.validationWarnings.quality.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-orange-300">
+                                                            <span className="text-orange-400">⚠</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Comparison Warnings */}
+                                        {importedPVV.validationWarnings.comparison && importedPVV.validationWarnings.comparison.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-zinc-700">
+                                                <div className="text-xs text-purple-400 space-y-1">
+                                                    <div className="font-medium">Table Comparison:</div>
+                                                    {importedPVV.validationWarnings.comparison.map((w, i) => (
+                                                        <div key={i} className="flex items-start gap-1 text-purple-300">
+                                                            <span className="text-purple-400">ℹ</span>
+                                                            <span>{w}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                            
+                            {/* Preview Data Toggle */}
+                            {(importedPVV.veFront || importedPVV.veRear || importedPVV.afrTarget) && (
+                                <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                                    <button
+                                        onClick={() => setShowPreview(!showPreview)}
+                                        className="w-full flex items-center justify-between px-3 py-2 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                                    >
+                                        <span className="flex items-center gap-2 text-xs text-zinc-300">
+                                            <Table className="w-3.5 h-3.5" />
+                                            Preview Data
+                                        </span>
+                                        {showPreview ? (
+                                            <ChevronUp className="w-4 h-4 text-zinc-400" />
+                                        ) : (
+                                            <ChevronDown className="w-4 h-4 text-zinc-400" />
+                                        )}
+                                    </button>
+                                    
+                                    {showPreview && (
+                                        <div className="p-3 space-y-4 bg-zinc-900/50">
+                                            {importedPVV.veFront && (
+                                                <VEPreviewTable 
+                                                    table={importedPVV.veFront} 
+                                                    title="Front Cylinder VE (%)"
+                                                />
+                                            )}
+                                            {importedPVV.veRear && (
+                                                <VEPreviewTable 
+                                                    table={importedPVV.veRear} 
+                                                    title="Rear Cylinder VE (%)"
+                                                />
+                                            )}
+                                            {importedPVV.afrTarget && (
+                                                <AFRPreviewTable table={importedPVV.afrTarget} />
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ) : importError ? (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
+                                <div className="text-xs text-red-400">
+                                    {importError}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Drop Zone */
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Drop PVV file here or click to browse"
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={handleDrop}
+                            onClick={() => !isParsing && fileInputRef.current?.click()}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); !isParsing && fileInputRef.current?.click(); } }}
+                            className={`
+                                border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
+                                ${isParsing
+                                    ? 'border-orange-500 bg-orange-500/10 cursor-wait'
+                                    : isDragging 
+                                        ? 'border-blue-500 bg-blue-500/10' 
+                                        : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
+                                }
+                            `}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pvv"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                disabled={isParsing}
+                            />
+                            {isParsing ? (
+                                <>
+                                    <div className="w-8 h-8 mx-auto mb-2 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                                    <div className="text-sm text-orange-400">Parsing PVV file...</div>
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-blue-400' : 'text-zinc-500'}`} />
+                                    <div className="text-sm text-zinc-400">
+                                        {selectedSource === 'preset'
+                                            ? 'Select an engine preset below'
+                                            : 'Drop .pvv file here or click to browse'}
+                                    </div>
+                                    <div className="text-xs text-zinc-600 mt-1">
+                                        {selectedSource === 'preset'
+                                            ? 'Preset mode loads AFR targets and default grid bins'
+                                            : 'Exports from Power Vision will auto-populate VE and AFR tables'}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Engine Presets */}
+                    <div className="border-t border-zinc-800 pt-4">
+                        <div className="text-xs text-zinc-500 mb-2">Or use an engine preset:</div>
+                        <div className="grid grid-cols-2 gap-2">
+                            {presets.map(p => (
+                                <Button
+                                    key={p.key}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePresetSelect(p.key)}
+                                    className={`justify-start text-xs ${
+                                        currentPreset === p.key 
+                                            ? 'border-orange-500/50 text-orange-400' 
+                                            : 'border-zinc-700'
+                                    }`}
+                                >
+                                    {p.name}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default TuneImport;

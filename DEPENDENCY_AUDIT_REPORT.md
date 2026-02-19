@@ -37,8 +37,8 @@ This report analyzes the Python and Node.js dependencies for the DynoAI project,
 ```bash
 # Consolidate to latest stable versions in both files:
 flask==3.1.0
-flask-cors==5.0.0
-werkzeug==3.1.4
+flask-cors==6.0.0
+werkzeug==3.1.5
 ```
 
 ### 1.2 Outdated Packages (MEDIUM Priority)
@@ -60,7 +60,7 @@ Based on dependency versions from January 2025:
 **High Priority Updates:**
 ```toml
 # pyproject.toml - Update to:
-pillow>=11.0.0  # Security fixes in v11
+pillow>=12.1.1  # Security fixes in v11
 flask>=3.1.0    # Latest stable
 flask-cors>=5.0.0  # Breaking changes, but better CORS handling
 werkzeug>=3.1.0
@@ -283,13 +283,13 @@ npm audit fix
    ```bash
    # Update both requirements.txt and api/requirements.txt:
    flask==3.1.0
-   flask-cors==5.0.0
-   werkzeug==3.1.4
+   flask-cors==6.0.0
+   werkzeug==3.1.5
    ```
 
 2. **Update Pillow for security**
    ```toml
-   pillow>=11.0.0
+   pillow>=12.1.1
    ```
 
 ### Priority 2: HIGH (Within 1-2 Weeks)
@@ -398,9 +398,9 @@ export default defineConfig({
 ## 6. Action Items Checklist
 
 ### Immediate Actions
-- [ ] Update requirements.txt: flask==3.1.0, flask-cors==5.0.0, werkzeug==3.1.4
-- [ ] Update api/requirements.txt: flask==3.1.0, flask-cors==5.0.0, werkzeug==3.1.4
-- [ ] Update pyproject.toml: pillow>=11.0.0
+- [ ] Update requirements.txt: flask==3.1.0, flask-cors==6.0.0, werkzeug==3.1.5
+- [ ] Update api/requirements.txt: flask==3.1.0, flask-cors==6.0.0, werkzeug==3.1.5
+- [ ] Update pyproject.toml: pillow>=12.1.1
 - [ ] Test application after Python updates
 
 ### Short-term Actions (1-2 weeks)
@@ -465,7 +465,7 @@ pandas==2.2.2
 matplotlib==3.9.2
 beautifulsoup4==4.12.3
 requests==2.32.3
-pillow==10.4.0  # ⚠️ UPDATE to 11.0.0
+pillow==12.1.1  # ✅ UPDATED
 pytesseract==0.3.10
 pyyaml==6.0.2
 jsonschema==4.23.0

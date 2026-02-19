@@ -1,0 +1,7 @@
+{
+  "api_url": "https://api.jetstream.dynojet.com",
+  "api_key": "dummy",
+  "poll_interval_seconds": 30,
+  "auto_process": true,
+  "enabled": true
+}

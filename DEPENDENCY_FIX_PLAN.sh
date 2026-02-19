@@ -36,7 +36,7 @@ pandas==2.2.2
 matplotlib==3.9.2
 beautifulsoup4==4.12.3
 requests==2.32.3
-pillow==11.0.0
+pillow==12.1.1
 pytesseract==0.3.10
 pyyaml==6.0.2
 jsonschema==4.23.0
@@ -45,10 +45,10 @@ black==24.8.0
 mypy==1.11.2
 pre-commit==3.8.0
 flask==3.1.0
-flask-cors==5.0.0
+flask-cors==6.0.0
 Flask-Limiter>=3.5.0
 flasgger>=0.9.7
-werkzeug==3.1.4
+werkzeug==3.1.5
 python-dotenv==1.0.0
 EOF
 echo -e "${GREEN}✓ Updated requirements.txt${NC}"
@@ -58,10 +58,10 @@ echo ""
 echo "Updating api/requirements.txt..."
 cat > api/requirements.txt << 'EOF'
 flask==3.1.0
-flask-cors==5.0.0
+flask-cors==6.0.0
 flask-limiter>=3.5.0
 flask-socketio>=5.3.0
-werkzeug==3.1.4
+werkzeug==3.1.5
 python-dotenv==1.0.0
 jsonschema==4.23.0
 flasgger>=0.9.7
@@ -73,7 +73,7 @@ echo ""
 
 # Update pyproject.toml
 echo "Updating pyproject.toml..."
-sed -i 's/pillow>=10.0.0/pillow>=11.0.0/' pyproject.toml
+sed -i 's/pillow>=12.1.1/pillow>=12.1.1/' pyproject.toml
 sed -i 's/flask>=3.0.0/flask>=3.1.0/' pyproject.toml
 sed -i 's/flask-cors>=4.0.0/flask-cors>=5.0.0/' pyproject.toml
 sed -i 's/werkzeug>=3.0.0/werkzeug>=3.1.0/' pyproject.toml

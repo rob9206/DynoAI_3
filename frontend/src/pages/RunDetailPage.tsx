@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   ArrowLeft,
   Clock,
@@ -31,10 +31,13 @@ import { useJetstreamRun } from '../hooks/useJetstream';
 import { useJetstreamProgress } from '../hooks/useJetstreamProgress';
 import { downloadRunFile } from '../api/jetstream';
 import type { RunStatus, OutputFile } from '../api/jetstream';
+import { sanitizeDownloadName } from '../lib/sanitize';
 import { VEHeatmap } from '../components/results/VEHeatmap';
 import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
+import { NextGenAnalysisPanel } from '../components/results/NextGenAnalysisPanel';
 import { useVEData } from '../hooks/useVEData';
 import { FilePreview, useFileContent } from '../components/results/FilePreview';
+import { SessionReplayViewer } from '../components/session-replay';
 import { cn } from '../lib/utils';
 
 const statusConfig: Record<
@@ -75,11 +78,9 @@ export default function RunDetailPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
+      a.download = sanitizeDownloadName(filename, 'download');
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       toast.success(`Downloaded ${filename}`);
     } catch (err) {
       console.error('Download failed:', err);
@@ -327,6 +328,9 @@ export default function RunDetailPage() {
             </CardContent>
           </Card>
 
+          {/* NextGen Analysis (Physics-Informed ECU Reasoning) */}
+          <NextGenAnalysisPanel runId={run.run_id} />
+
           {/* Decel Fuel Management Results */}
           {run.output_files?.some((f) => f.name === 'Decel_Fuel_Overlay.csv') && (
             <DecelResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
@@ -335,6 +339,24 @@ export default function RunDetailPage() {
           {/* Per-Cylinder Balance Results */}
           {run.output_files?.some((f) => f.name === 'Cylinder_Balance_Report.json') && (
             <BalanceResultsCard runId={run.run_id} outputFiles={run.output_files} onDownload={handleDownload} />
+          )}
+
+          {/* Session Replay */}
+          {run.output_files?.some((f) => f.name === 'session_replay.json') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Session Replay
+                </CardTitle>
+                <CardDescription>
+                  Timeline of all decisions made during tuning
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SessionReplayViewer runId={run.run_id} />
+              </CardContent>
+            </Card>
           )}
 
           <Card>

@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dynoai.version import __version__ as DYNOAI_VERSION
+
 from api.jetstream.models import RunError, RunStatus
 from api.services.run_manager import get_run_manager
 
@@ -524,7 +526,7 @@ def _write_manifest(stub: Dict[str, Any], files: List[Path]) -> None:
 
     manifest = {
         "schema_id": "dynoai.manifest@1",
-        "tool_version": "1.2.0",
+        "tool_version": DYNOAI_VERSION,
         "run_id": stub["run_id"],
         "status": {"code": "success", "message": "Completed", "last_stage": "export"},
         "input": {

@@ -8,11 +8,17 @@ Orchestrates the complete auto-tuning workflow:
 4. Export corrections to Power Core format (PVV XML, TuneLab)
 
 This is the UNIFIED analysis engine for all DynoAI data sources.
+
+NEW in v2.1: TuneLab-inspired features:
+- Distance-weighted cell accumulation (LogarithmicWeighting)
+- Configurable signal filtering (lowpass, outlier rejection)
+- Statistical outlier detection (2σ)
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -32,6 +38,40 @@ from api.services.powercore_integration import (
     parse_pvv_tune,
     powervision_log_to_dynoai_format,
 )
+from api.services.yourdyno import parse_yourdyno_run
+
+# Import TuneLab-inspired filtering and binning modules
+from dynoai.core.signal_filters import (
+    CompositeFilter,
+    FilteredSample,
+    FilterStatistics,
+    LowpassFilter,
+    MinMaxFilter,
+    SignalFilter,
+    StatisticalOutlierFilter,
+    TimeAwareMinMaxFilter,
+    create_tunelab_filter_chain,
+    filter_afr_samples,
+    samples_from_arrays,
+    samples_to_arrays,
+)
+
+# Import versioned VE math module
+from dynoai.core.ve_math import (
+    MathVersion,
+    calculate_ve_correction,
+    correction_to_percentage,
+)
+from dynoai.core.weighted_binning import (
+    LogarithmicWeighting,
+    UniformWeighting,
+    WeightedBinAccumulator,
+    WeightingStrategy,
+    create_ve_accumulator,
+    generate_sample_table_tunelab_style,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class DataSource(str, Enum):
@@ -39,6 +79,7 @@ class DataSource(str, Enum):
 
     POWER_VISION = "power_vision"
     JETDRIVE = "jetdrive"
+    YOURDYNO = "yourdyno"
     CSV = "csv"
     SIMULATION = "simulation"
 
@@ -156,8 +197,14 @@ class AutoTuneWorkflow:
     ]
     DEFAULT_MAP_AXIS = [20, 30, 40, 50, 60, 70, 80, 90, 100]
 
-    # DynoAI standard correction formula
+    # DynoAI standard correction formula (v1.0.0 legacy)
+    # DEPRECATED: Use math_version instead
     VE_PCT_PER_AFR_POINT = 7.0  # 7% VE change per 1 AFR point
+
+    # Default math version for VE calculations
+    # v1.0.0: Linear 7% per AFR point (legacy)
+    # v2.0.0: Ratio model AFR_measured/AFR_target (default, physically accurate)
+    DEFAULT_MATH_VERSION = MathVersion.V2_0_0
 
     # Safety limits
     MAX_CORRECTION_PCT = 10.0  # Maximum ±10% correction
@@ -182,11 +229,138 @@ class AutoTuneWorkflow:
         rpm_axis: Optional[list[float]] = None,
         map_axis: Optional[list[float]] = None,
         max_correction_pct: float = 10.0,
+        afr_targets: Optional[dict[int, float]] = None,
+        math_version: Optional[MathVersion] = None,
+        # TuneLab-inspired filtering options
+        enable_filtering: bool = False,
+        lowpass_rc_ms: float = 500.0,
+        afr_min: float = 10.0,
+        afr_max: float = 19.0,
+        exclude_time_ms: float = 50.0,
+        enable_statistical_filter: bool = True,
+        sigma_threshold: float = 2.0,
+        # TuneLab-inspired weighting options
+        use_weighted_binning: bool = False,
+        weighting_strategy: Optional[WeightingStrategy] = None,
     ) -> None:
+        """
+        Initialize AutoTuneWorkflow.
+
+        Args:
+            rpm_axis: Custom RPM bin values
+            map_axis: Custom MAP bin values (kPa)
+            max_correction_pct: Maximum correction percentage (±)
+            afr_targets: Custom AFR targets by MAP (kPa -> AFR)
+            math_version: VE calculation math version
+
+            # TuneLab-inspired filtering (NEW)
+            enable_filtering: Enable AFR signal filtering before analysis
+            lowpass_rc_ms: RC time constant for lowpass filter (higher = more smoothing)
+            afr_min: Minimum valid AFR (below = rejected)
+            afr_max: Maximum valid AFR (above = rejected)
+            exclude_time_ms: Time to exclude around outliers
+            enable_statistical_filter: Enable 2σ statistical outlier rejection
+            sigma_threshold: Standard deviations for outlier rejection
+
+            # TuneLab-inspired weighting (NEW)
+            use_weighted_binning: Use distance-weighted cell accumulation
+            weighting_strategy: Custom weighting strategy (default: LogarithmicWeighting)
+        """
         self.rpm_axis = rpm_axis or self.DEFAULT_RPM_AXIS
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
         self.max_correction_pct = max_correction_pct
+        self.math_version = math_version or self.DEFAULT_MATH_VERSION
+
+        # Allow custom AFR targets (keyed by MAP in kPa)
+        if afr_targets:
+            self.afr_targets_by_map = {int(k): float(v) for k, v in afr_targets.items()}
+        else:
+            self.afr_targets_by_map = dict(self.AFR_TARGETS_BY_MAP)
+
+        # TuneLab-inspired filtering configuration
+        self.enable_filtering = enable_filtering
+        self.lowpass_rc_ms = lowpass_rc_ms
+        self.afr_min = afr_min
+        self.afr_max = afr_max
+        self.exclude_time_ms = exclude_time_ms
+        self.enable_statistical_filter = enable_statistical_filter
+        self.sigma_threshold = sigma_threshold
+
+        # TuneLab-inspired weighting configuration
+        self.use_weighted_binning = use_weighted_binning
+        self.weighting_strategy = weighting_strategy or LogarithmicWeighting()
+
         self.sessions: dict[str, AutoTuneSession] = {}
+
+        # Build filter chain if filtering is enabled
+        self._filter_chain: Optional[CompositeFilter] = None
+        if self.enable_filtering:
+            self._build_filter_chain()
+
+    def _build_filter_chain(self) -> None:
+        """Build the AFR filter chain based on configuration."""
+        filters: list[SignalFilter] = []
+
+        # 1. Lowpass filter for noise reduction
+        filters.append(LowpassFilter(rc_ms=self.lowpass_rc_ms))
+
+        # 2. Time-aware range filter
+        filters.append(
+            TimeAwareMinMaxFilter(
+                min_val=self.afr_min,
+                max_val=self.afr_max,
+                exclude_leading_ms=self.exclude_time_ms,
+                exclude_trailing_ms=self.exclude_time_ms,
+            )
+        )
+
+        # 3. Statistical outlier rejection (optional)
+        if self.enable_statistical_filter:
+            filters.append(
+                StatisticalOutlierFilter(
+                    sigma_threshold=self.sigma_threshold,
+                )
+            )
+
+        self._filter_chain = CompositeFilter(filters)
+        logger.info(f"Built filter chain: {self._filter_chain.name}")
+
+    def _filter_afr_data(
+        self,
+        times_ms: list[float],
+        afr_values: list[float],
+    ) -> tuple[list[float], list[float], FilterStatistics]:
+        """
+        Apply configured filters to AFR data.
+
+        Args:
+            times_ms: Timestamps in milliseconds
+            afr_values: AFR readings
+
+        Returns:
+            Tuple of (filtered_times, filtered_values, statistics)
+        """
+        if self._filter_chain is None or not self.enable_filtering:
+            # No filtering - return as-is
+            return list(times_ms), list(afr_values), FilterStatistics()
+
+        # Create samples
+        samples = samples_from_arrays(times_ms, afr_values)
+
+        # Apply filter chain
+        filtered = self._filter_chain.filter(samples)
+
+        # Extract valid samples
+        filtered_times, filtered_values = samples_to_arrays(
+            filtered, include_invalid=False
+        )
+
+        logger.info(
+            f"AFR filtering: {len(times_ms)} -> {len(filtered_times)} samples "
+            f"({self._filter_chain.statistics.rejection_rate:.1f}% rejected)"
+        )
+
+        return filtered_times, filtered_values, self._filter_chain.statistics
 
     def create_session(
         self, run_id: Optional[str] = None, data_source: DataSource = DataSource.CSV
@@ -200,10 +374,25 @@ class AutoTuneWorkflow:
         return session
 
     def get_target_afr(self, map_kpa: float) -> float:
-        """Get target AFR based on MAP (load)."""
-        # Find nearest MAP bin
-        nearest_map = min(self.map_axis, key=lambda x: abs(x - map_kpa))
-        return self.AFR_TARGETS_BY_MAP.get(nearest_map, 14.0)
+        """Get target AFR based on MAP (load).
+
+        Uses custom afr_targets_by_map if set, otherwise falls back to defaults.
+        """
+        # Find nearest MAP bin from configured targets
+        target_keys = list(self.afr_targets_by_map.keys())
+        if not target_keys:
+            return 14.0
+        nearest_map = min(target_keys, key=lambda x: abs(x - map_kpa))
+        return self.afr_targets_by_map.get(nearest_map, 14.0)
+
+    def set_afr_targets(self, afr_targets: dict[int, float]) -> None:
+        """Update AFR targets.
+
+        Args:
+            afr_targets: Dict mapping MAP (kPa) to target AFR.
+                         Example: {20: 14.7, 100: 12.2}
+        """
+        self.afr_targets_by_map = {int(k): float(v) for k, v in afr_targets.items()}
 
     def import_log(self, session: AutoTuneSession, log_path: str) -> bool:
         """
@@ -262,6 +451,27 @@ class AutoTuneWorkflow:
             session.status = "error"
             return False
 
+    def import_yourdyno_run(self, session: AutoTuneSession, run_path: str) -> bool:
+        """
+        Import a YourDyno run/export file through the YourDyno parser.
+
+        Returns True if successful, False otherwise.
+        """
+        try:
+            session.log_file = run_path
+            session.data_source = DataSource.YOURDYNO
+
+            parsed = parse_yourdyno_run(run_path)
+            session.dynoai_data = parsed.normalized_data
+
+            self._extract_peak_performance(session)
+            session.status = "log_imported"
+            return True
+        except Exception as e:
+            session.errors.append(f"YourDyno import failed: {e}")
+            session.status = "error"
+            return False
+
     def import_dataframe(
         self,
         session: AutoTuneSession,
@@ -303,7 +513,8 @@ class AutoTuneWorkflow:
             session.status = "error"
             return False
 
-    def _estimate_map_from_rpm(self, rpm: float) -> float:
+    @staticmethod
+    def _estimate_map_from_rpm(rpm: float) -> float:
         """Estimate MAP from RPM when not available."""
         if rpm < 2000:
             return 35  # Vacuum at idle
@@ -314,17 +525,38 @@ class AutoTuneWorkflow:
         else:
             return 80  # High load / WOT
 
-    def _extract_peak_performance(self, session: AutoTuneSession) -> None:
+    @staticmethod
+    def _extract_peak_performance(session: AutoTuneSession) -> None:
         """Extract peak HP and torque from session data."""
         if session.dynoai_data is None:
             return
 
         df = session.dynoai_data
 
-        # Look for HP column
-        hp_col = next(
-            (c for c in df.columns if "Horsepower" in c or "HP" in c or "Power" in c),
-            None,
+        def _find_col_case_insensitive(columns, *, prefers: list[str]) -> str | None:
+            """
+            Find a likely column by case-insensitive substring matching.
+            `prefers` should be ordered from most-specific to least-specific.
+            """
+            for pref in prefers:
+                pref_l = pref.lower()
+                for c in columns:
+                    c_s = str(c)
+                    c_l = c_s.lower()
+                    if pref_l in c_l:
+                        return c_s
+            return None
+
+        # Look for HP column (case-insensitive; prefer explicit names)
+        hp_col = _find_col_case_insensitive(
+            df.columns,
+            prefers=[
+                "horsepower",
+                "horse power",
+                " hp",  # suffix form "Engine HP"
+                "hp ",  # prefix form "HP Engine"
+                "power",
+            ],
         )
         if hp_col and hp_col in df.columns:
             peak_idx = df[hp_col].idxmax()
@@ -333,8 +565,15 @@ class AutoTuneWorkflow:
             if rpm_col in df.columns:
                 session.peak_hp_rpm = float(df.loc[peak_idx, rpm_col])
 
-        # Look for torque column
-        tq_col = next((c for c in df.columns if "Torque" in c or "TQ" in c), None)
+        # Look for torque column (case-insensitive)
+        tq_col = _find_col_case_insensitive(
+            df.columns,
+            prefers=[
+                "torque",
+                " tq",
+                "tq ",
+            ],
+        )
         if tq_col and tq_col in df.columns:
             peak_idx = df[tq_col].idxmax()
             session.peak_tq = float(df.loc[peak_idx, tq_col])
@@ -342,7 +581,8 @@ class AutoTuneWorkflow:
             if rpm_col in df.columns:
                 session.peak_tq_rpm = float(df.loc[peak_idx, rpm_col])
 
-    def import_tune(self, session: AutoTuneSession, tune_path: str) -> bool:
+    @staticmethod
+    def import_tune(session: AutoTuneSession, tune_path: str) -> bool:
         """
         Import a PVV tune file as the base tune.
 
@@ -363,6 +603,15 @@ class AutoTuneWorkflow:
         Uses the DynoAI standard formula:
         - AFR error (points) = measured AFR - target AFR
         - VE correction (%) = +AFR_error * 7%  (7% per AFR point)
+
+        When enable_filtering=True, applies TuneLab-style filtering:
+        - Lowpass smoothing for noise reduction
+        - Time-aware range filtering with neighbor exclusion
+        - Statistical outlier rejection (2σ)
+
+        When use_weighted_binning=True, uses TuneLab-style weighting:
+        - Distance-weighted cell accumulation (logarithmic)
+        - Samples closer to cell center contribute more
 
         Requires log to be imported first.
         """
@@ -399,50 +648,132 @@ class AutoTuneWorkflow:
         df[afr_meas_col] = pd.to_numeric(df[afr_meas_col], errors="coerce")
         df = df.dropna(subset=[afr_meas_col])
 
+        # Find or create time column for filtering
+        time_col = next(
+            (c for c in df.columns if c in ["Time_ms", "timestamp_ms", "time_ms"]), None
+        )
+        if time_col is None and "Time_s" in df.columns:
+            df["Time_ms"] = df["Time_s"] * 1000
+            time_col = "Time_ms"
+        elif time_col is None:
+            # Create synthetic timestamps based on index
+            df["Time_ms"] = df.index * 10  # Assume 100Hz (10ms intervals)
+            time_col = "Time_ms"
+
+        # Apply filtering if enabled
+        filter_stats: Optional[FilterStatistics] = None
+        if self.enable_filtering and self._filter_chain is not None:
+            times_ms = df[time_col].tolist()
+            afr_values = df[afr_meas_col].tolist()
+
+            filtered_times, filtered_afr, filter_stats = self._filter_afr_data(
+                times_ms, afr_values
+            )
+
+            # Create filtered DataFrame by matching timestamps
+            # For simplicity, we'll filter the original df to only include rows
+            # where the time is in the filtered set
+            filtered_time_set = set(filtered_times)
+            df = df[df[time_col].isin(filtered_time_set)].copy()
+
+            logger.info(
+                f"After filtering: {len(df)} samples remain "
+                f"(rejected: {filter_stats.rejection_reasons})"
+            )
+
         # Initialize 2D matrices
         n_rpm = len(self.rpm_axis)
         n_map = len(self.map_axis)
         afr_error_matrix = np.full((n_rpm, n_map), np.nan)  # AFR points
         ve_delta_matrix = np.full((n_rpm, n_map), np.nan)  # VE %
         hit_matrix = np.zeros((n_rpm, n_map), dtype=int)
-        afr_sum = np.zeros((n_rpm, n_map))
 
-        # Helper to find nearest bin
-        def nearest_bin(val: float, bins: list) -> int:
-            return min(range(len(bins)), key=lambda i: abs(bins[i] - val))
+        # Use weighted binning if enabled
+        if self.use_weighted_binning:
+            # TuneLab-style weighted accumulation
+            accumulator = WeightedBinAccumulator(
+                x_axis=self.rpm_axis,
+                y_axis=self.map_axis,
+                weighting=self.weighting_strategy,
+                min_hits=self.MIN_HITS_PER_ZONE,
+            )
 
-        # Bin each sample into the grid
-        for _, row in df.iterrows():
-            rpm = row[rpm_col]
-            afr = row[afr_meas_col]
-            map_kpa = row[map_col]
+            # Add all samples
+            for _, row in df.iterrows():
+                rpm = row[rpm_col]
+                afr = row[afr_meas_col]
+                map_kpa = row[map_col]
 
-            if pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa):
-                continue
+                if not (pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa)):
+                    accumulator.add_sample(rpm, map_kpa, afr)
 
-            rpm_idx = nearest_bin(rpm, self.rpm_axis)
-            map_idx = nearest_bin(map_kpa, self.map_axis)
+            # Get weighted results
+            afr_table = accumulator.get_table()
+            hit_matrix = np.array(accumulator.get_hit_counts())
 
-            hit_matrix[rpm_idx, map_idx] += 1
-            afr_sum[rpm_idx, map_idx] += afr
+            # Calculate errors and VE deltas from weighted means
+            for i in range(n_rpm):
+                for j in range(n_map):
+                    mean_afr = afr_table[i][j]
+                    if (
+                        mean_afr is not None
+                        and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE
+                    ):
+                        target_afr = self.get_target_afr(self.map_axis[j])
+                        afr_error = mean_afr - target_afr
+                        afr_error_matrix[i, j] = afr_error
 
-        # Calculate mean AFR and error per cell
-        for i in range(n_rpm):
-            for j in range(n_map):
-                if hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
-                    mean_afr = afr_sum[i, j] / hit_matrix[i, j]
-                    target_afr = self.get_target_afr(self.map_axis[j])
+                        ve_correction = calculate_ve_correction(
+                            mean_afr, target_afr, version=self.math_version, clamp=False
+                        )
+                        ve_delta_pct = correction_to_percentage(ve_correction)
+                        ve_delta_matrix[i, j] = ve_delta_pct
 
-                    # AFR error in points (positive = lean, negative = rich)
-                    afr_error = mean_afr - target_afr
-                    afr_error_matrix[i, j] = afr_error
+            logger.info(f"Weighted binning stats: {accumulator.statistics}")
+        else:
+            # Original simple averaging approach
+            afr_sum = np.zeros((n_rpm, n_map))
 
-                    # VE correction using 7% per AFR point formula
-                    # afr_error = measured - target (positive = lean, negative = rich)
-                    # Lean (+error) -> need more fuel -> INCREASE VE -> positive VE delta %
-                    # Rich (-error) -> need less fuel -> DECREASE VE -> negative VE delta %
-                    ve_delta_pct = afr_error * self.VE_PCT_PER_AFR_POINT
-                    ve_delta_matrix[i, j] = ve_delta_pct
+            # Helper to find nearest bin
+            def nearest_bin(val: float, bins: list) -> int:
+                return min(range(len(bins)), key=lambda i: abs(bins[i] - val))
+
+            # Bin each sample into the grid
+            for _, row in df.iterrows():
+                rpm = row[rpm_col]
+                afr = row[afr_meas_col]
+                map_kpa = row[map_col]
+
+                if pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa):
+                    continue
+
+                rpm_idx = nearest_bin(rpm, self.rpm_axis)
+                map_idx = nearest_bin(map_kpa, self.map_axis)
+
+                hit_matrix[rpm_idx, map_idx] += 1
+                afr_sum[rpm_idx, map_idx] += afr
+
+            # Calculate mean AFR and error per cell
+            for i in range(n_rpm):
+                for j in range(n_map):
+                    if hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
+                        mean_afr = afr_sum[i, j] / hit_matrix[i, j]
+                        target_afr = self.get_target_afr(self.map_axis[j])
+
+                        # AFR error in points (positive = lean, negative = rich)
+                        afr_error = mean_afr - target_afr
+                        afr_error_matrix[i, j] = afr_error
+
+                        # VE correction using versioned math module
+                        # v2.0.0 (default): Ratio model - VE_correction = AFR_measured / AFR_target
+                        # v1.0.0 (legacy): Linear model - VE_correction = 1 + (AFR_error * 7%)
+                        # Lean (+error) -> need more fuel -> INCREASE VE -> positive VE delta %
+                        # Rich (-error) -> need less fuel -> DECREASE VE -> negative VE delta %
+                        ve_correction = calculate_ve_correction(
+                            mean_afr, target_afr, version=self.math_version, clamp=False
+                        )
+                        ve_delta_pct = correction_to_percentage(ve_correction)
+                        ve_delta_matrix[i, j] = ve_delta_pct
 
         # Create DataFrames with labeled axes
         error_df = pd.DataFrame(
@@ -563,8 +894,8 @@ class AutoTuneWorkflow:
         session.status = "corrections_calculated"
         return result
 
+    @staticmethod
     def export_tunelab_script(
-        self,
         session: AutoTuneSession,
         output_dir: str,
         correction_table: str = "Volumetric Efficiency",
@@ -596,8 +927,8 @@ class AutoTuneWorkflow:
         session.output_tunelab_script = str(script_path)
         return str(script_path)
 
+    @staticmethod
     def export_pvv_corrections(
-        self,
         session: AutoTuneSession,
         output_dir: str,
         table_name: str = "VE Correction",
@@ -729,6 +1060,9 @@ class AutoTuneWorkflow:
         if data_source == DataSource.JETDRIVE:
             if not self.import_jetdrive_csv(session, log_path):
                 return session
+        elif data_source == DataSource.YOURDYNO:
+            if not self.import_yourdyno_run(session, log_path):
+                return session
         else:
             if not self.import_log(session, log_path):
                 return session
@@ -750,8 +1084,85 @@ class AutoTuneWorkflow:
 
         return session
 
-    def get_session_summary(self, session: AutoTuneSession) -> dict:
+    @staticmethod
+    def get_session_summary(session: AutoTuneSession) -> dict:
         """Get a summary of the session for display."""
+
+        def _build_power_curve_from_df(df: "pd.DataFrame") -> list[dict[str, float]]:
+            try:
+                if df is None or df.empty:
+                    return []
+
+                rpm_col = next(
+                    (c for c in df.columns if c in ["Engine RPM", "RPM"]), None
+                )
+                if rpm_col is None:
+                    return []
+
+                def _find_col_case_insensitive(
+                    columns, *, prefers: list[str]
+                ) -> str | None:
+                    for pref in prefers:
+                        pref_l = pref.lower()
+                        for c in columns:
+                            c_s = str(c)
+                            c_l = c_s.lower()
+                            if pref_l in c_l:
+                                return c_s
+                    return None
+
+                hp_col = _find_col_case_insensitive(
+                    df.columns,
+                    prefers=[
+                        "horsepower",
+                        "horse power",
+                        " hp",
+                        "hp ",
+                        "power",
+                    ],
+                )
+                tq_col = _find_col_case_insensitive(
+                    df.columns,
+                    prefers=[
+                        "torque",
+                        " tq",
+                        "tq ",
+                    ],
+                )
+                if hp_col is None or tq_col is None:
+                    return []
+
+                work = df[[rpm_col, hp_col, tq_col]].copy()
+                work[rpm_col] = pd.to_numeric(work[rpm_col], errors="coerce")
+                work[hp_col] = pd.to_numeric(work[hp_col], errors="coerce")
+                work[tq_col] = pd.to_numeric(work[tq_col], errors="coerce")
+                work = work.dropna(subset=[rpm_col, hp_col, tq_col])
+                work = work[(work[rpm_col] > 0) & (work[rpm_col] < 20000)]
+                if work.empty:
+                    return []
+
+                rpm_bin_size = 100.0
+                work["_rpm_bin"] = (work[rpm_col] / rpm_bin_size).round() * rpm_bin_size
+                grouped = (
+                    work.groupby("_rpm_bin", as_index=False)
+                    .agg({hp_col: "max", tq_col: "max"})
+                    .sort_values("_rpm_bin")
+                )
+
+                curve: list[dict[str, float]] = []
+                for _, row in grouped.iterrows():
+                    rpm = float(row["_rpm_bin"])
+                    curve.append(
+                        {
+                            "rpm": float(int(round(rpm))),
+                            "hp": round(float(row[hp_col]), 2),
+                            "tq": round(float(row[tq_col]), 2),
+                        }
+                    )
+                return curve
+            except Exception:
+                return []
+
         summary: dict = {
             "run_id": session.id,
             "status": session.status,
@@ -815,6 +1226,16 @@ class AutoTuneWorkflow:
             if session.peak_tq > 0:
                 summary["analysis"]["peak_tq"] = round(session.peak_tq, 1)
                 summary["analysis"]["peak_tq_rpm"] = round(session.peak_tq_rpm, 0)
+
+        # Power curve for UI overlay charts (optional)
+        if session.dynoai_data is not None:
+            curve = _build_power_curve_from_df(session.dynoai_data)
+            if curve:
+                if "analysis" not in summary or not isinstance(
+                    summary.get("analysis"), dict
+                ):
+                    summary["analysis"] = {}
+                summary["analysis"]["power_curve"] = curve
 
         if session.ve_corrections:
             corr = session.ve_corrections

@@ -2,19 +2,14 @@
 
 import json
 import os
-import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from io_contracts import safe_path
+from dynoai.core.io_contracts import safe_path
 
 from .models import JetstreamRun, JetstreamRunMetadata
-
-# Add parent directory to path for io_contracts import
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 class JetstreamClient:
@@ -120,11 +115,28 @@ class JetstreamClient:
         except (ConnectionError, ValueError):
             return []
 
+        # Accept both "runs" and "jobs" from API (Jetstream may return either)
+        raw_list = response.get("runs") or response.get("jobs") or []
         runs = []
-        for run_data in response.get("runs", []):
+        for run_data in raw_list:
+            # Support id, job_id, or run_id as the run identifier
+            run_id = (
+                run_data.get("id")
+                or run_data.get("job_id")
+                or run_data.get("run_id")
+                or ""
+            )
+            if isinstance(run_id, dict):
+                run_id = (
+                    run_id.get("id")
+                    or run_id.get("job_id")
+                    or run_id.get("run_id")
+                    or ""
+                )
+            run_id = str(run_id) if run_id else ""
             runs.append(
                 JetstreamRun(
-                    run_id=run_data.get("id", ""),
+                    run_id=run_id,
                     timestamp=run_data.get("timestamp", ""),
                     vehicle=run_data.get("vehicle"),
                     dyno_type=run_data.get("dyno_type"),

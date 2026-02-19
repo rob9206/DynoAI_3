@@ -20,25 +20,25 @@ These are the fastest, highest-impact changes you can make right now.
 - flask==3.0.0
 + flask==3.1.0
 - flask-cors==4.0.0
-+ flask-cors==5.0.0
++ flask-cors==6.0.0
 - werkzeug==3.0.6
-+ werkzeug==3.1.4
++ werkzeug==3.1.5
 ```
 
 ### Update `api/requirements.txt` lines 1-5:
 ```diff
 - flask==3.0.3
 + flask==3.1.0
-- flask-cors==5.0.0  # Keep this version
-+ flask-cors==5.0.0
-- werkzeug==3.1.4    # Keep this version
-+ werkzeug==3.1.4
+- flask-cors==6.0.0  # Keep this version
++ flask-cors==6.0.0
+- werkzeug==3.1.5    # Keep this version
++ werkzeug==3.1.5
 ```
 
 ### Update `pyproject.toml` line 34, 37-39:
 ```diff
-- pillow>=10.0.0
-+ pillow>=11.0.0
+- pillow>=12.1.1
++ pillow>=12.1.1
 - flask>=3.0.0
 + flask>=3.1.0
 - flask-cors>=4.0.0

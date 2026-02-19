@@ -175,7 +175,8 @@ class ProgressBroadcaster:
                 except queue.Full:
                     pass
 
-    def _format_sse(self, event_type: str, data: Dict[str, Any]) -> str:
+    @staticmethod
+    def _format_sse(event_type: str, data: Dict[str, Any]) -> str:
         """Format data as SSE event string."""
         return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 

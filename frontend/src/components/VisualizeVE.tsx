@@ -8,7 +8,7 @@ import { VESurface } from '@/components/VESurface';
 import { generateVEData } from '@/lib/analysis';
 import { fetchVEData } from '@/lib/analysis-api';
 import type { VEData, ManifestData } from '@/lib/types';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface VisualizeVEProps {
   manifest: ManifestData | null;

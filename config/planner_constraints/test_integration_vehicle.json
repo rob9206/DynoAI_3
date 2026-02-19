@@ -1,0 +1,8 @@
+{
+  "min_rpm": 1500,
+  "max_rpm": 6500,
+  "min_map_kpa": 30,
+  "max_map_kpa": 100,
+  "max_pulls_per_session": 5,
+  "preferred_test_environment": "both"
+}

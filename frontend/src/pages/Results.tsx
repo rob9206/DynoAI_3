@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock } from 'lucide-react';
-import { toast } from 'sonner';
-import { getJobStatus, getVEData, getCoverageData, getDiagnostics, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest } from '../lib/api';
-import VEHeatmap from '../components/VEHeatmap';
+import { Download, ArrowLeft, FileText, Table, Box, Grid, Layers, AlertCircle, Clock, Activity } from 'lucide-react';
+import { toast } from '@/lib/toast';
+import { getJobStatus, getVEData, getCoverageData, getDiagnostics, getConfidenceReport, downloadFile, VEData, CoverageData, DiagnosticsData, AnalysisManifest, ConfidenceReport } from '../lib/api';
+import { sanitizeDownloadName } from '../lib/sanitize';
+import { VEHeatmap as VEGrid } from '../components/results/VEHeatmap';
+import { VEHeatmapLegend } from '../components/results/VEHeatmapLegend';
 import { VESurface } from '../components/VESurface';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
+import { SessionReplayViewer } from '../components/session-replay';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -48,6 +51,16 @@ export default function Results() {
           const coverageResult = await getCoverageData(runId!).catch(() => null);
           const diagResult = await getDiagnostics(runId!).catch(() => null);
 
+          // Try to load confidence report and merge with diagnostics
+          try {
+            const confidenceResult = await getConfidenceReport(runId!);
+            if (diagResult && confidenceResult) {
+              diagResult.confidence = confidenceResult;
+            }
+          } catch (err) {
+            console.warn('Confidence report not available:', err);
+          }
+
           setVeData(veResult);
           setCoverageData(coverageResult);
           setDiagnostics(diagResult);
@@ -77,11 +90,9 @@ export default function Results() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
+      a.download = sanitizeDownloadName(filename, 'download');
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       toast.success(`Downloaded ${filename}`);
     } catch (error) {
       toast.error(`Failed to download ${filename}`);
@@ -229,10 +240,11 @@ export default function Results() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md mb-6">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl mb-6">
           <TabsTrigger value="overview">Output Files</TabsTrigger>
           <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
           <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+          <TabsTrigger value="session-replay">Session Replay</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -338,18 +350,19 @@ export default function Results() {
                   </div>
 
                   {viewMode === '2d' ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <VEHeatmap
-                        data={veData.before}
-                        rpm={veData.rpm}
-                        load={veData.load}
-                        title="VE Table - Before Corrections"
-                      />
-                      <VEHeatmap
-                        data={veData.after}
-                        rpm={veData.rpm}
-                        load={veData.load}
-                        title="VE Table - After Corrections"
+                    <div className="space-y-4">
+                      <VEHeatmapLegend clampLimit={7} />
+                      <VEGrid
+                        data={veData.after.map((row, i) => row.map((val, j) => val - veData.before[i][j]))}
+                        rowLabels={veData.rpm.map(String)}
+                        colLabels={veData.load.map(String)}
+                        clampLimit={7}
+                        showClampIndicators={true}
+                        showValues={true}
+                        valueDecimals={1}
+                        valueLabel="Correction"
+                        tooltipLoadUnit="kPa"
+                        title="VE Correction Delta"
                       />
                     </div>
                   ) : (
@@ -386,22 +399,30 @@ export default function Results() {
               )}
 
               {coverageData?.front && (
-                <VEHeatmap
+                <VEGrid
                   data={coverageData.front.data}
-                  rpm={coverageData.front.rpm}
-                  load={coverageData.front.load}
+                  rowLabels={coverageData.front.rpm.map(String)}
+                  colLabels={coverageData.front.load.map(String)}
                   title="Data Coverage - Front Cylinder"
                   colorMode="sequential"
+                  showClampIndicators={false}
+                  valueDecimals={0}
+                  valueLabel="Hits"
+                  tooltipLoadUnit="kPa"
                 />
               )}
 
               {coverageData?.rear && (
-                <VEHeatmap
+                <VEGrid
                   data={coverageData.rear.data}
-                  rpm={coverageData.rear.rpm}
-                  load={coverageData.rear.load}
+                  rowLabels={coverageData.rear.rpm.map(String)}
+                  colLabels={coverageData.rear.load.map(String)}
                   title="Data Coverage - Rear Cylinder"
                   colorMode="sequential"
+                  showClampIndicators={false}
+                  valueDecimals={0}
+                  valueLabel="Hits"
+                  tooltipLoadUnit="kPa"
                 />
               )}
             </div>
@@ -428,6 +449,7 @@ export default function Results() {
             <DiagnosticsPanel
               anomalies={diagnostics.anomalies.anomalies || []}
               correctionDiagnostics={diagnostics.anomalies.correction_diagnostics}
+              confidenceReport={diagnostics.confidence}
             />
           ) : (
             <Card className="py-12 text-center">
@@ -436,6 +458,11 @@ export default function Results() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Session Replay Tab */}
+        <TabsContent value="session-replay">
+          <SessionReplayViewer runId={runId!} />
         </TabsContent>
       </Tabs>
     </div>
