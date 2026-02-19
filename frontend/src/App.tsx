@@ -39,8 +39,20 @@ const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
 /** Matches the shape returned by GET /api/runs */
 interface Run {
   runId: string
-  timestamp: string | null
+  userId: string | null
+  userEmail?: string | null
+  userName?: string | null
+  status: string
   inputFile: string | null
+  createdAt: string | null
+  completedAt?: string | null
+  rowsProcessed?: number | null
+  correctionsApplied?: number | null
+  analysisMetrics?: {
+    avgCorrection?: number | null
+    maxCorrection?: number | null
+  }
+  outputFiles?: string[]
 }
 
 /** Matches the shape returned by GET /api/users */
@@ -92,21 +104,43 @@ function AllRunsTable({ token, onLogout }: { token: string; onLogout: () => void
       <TableHeader>
         <TableRow>
           <TableHead>Date</TableHead>
-          <TableHead>Run ID</TableHead>
-          <TableHead>Input File</TableHead>
+          <TableHead>Customer</TableHead>
+          <TableHead>File</TableHead>
+          <TableHead>Corrections</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Downloads</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {runs.map((run) => (
           <TableRow key={run.runId}>
-            <TableCell>{run.timestamp ? new Date(run.timestamp).toLocaleString() : '—'}</TableCell>
-            <TableCell className="font-mono text-sm">{run.runId}</TableCell>
+            <TableCell>{run.createdAt ? new Date(run.createdAt).toLocaleString() : '—'}</TableCell>
+            <TableCell>{run.userName ?? run.userEmail ?? run.userId ?? '—'}</TableCell>
             <TableCell className="font-mono text-sm">{run.inputFile ?? '—'}</TableCell>
+            <TableCell>{run.correctionsApplied ?? '—'}</TableCell>
+            <TableCell>
+              <Badge variant={run.status === 'completed' ? 'default' : run.status === 'error' ? 'destructive' : 'secondary'}>
+                {run.status}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              {run.status === 'completed' && run.outputFiles && run.outputFiles.length > 0 && run.outputFiles.map((f) => (
+                <a
+                  key={f}
+                  href={`${API_BASE}/api/download/${run.runId}/${f}`}
+                  className="text-blue-500 underline mr-2 text-sm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {f}
+                </a>
+              ))}
+            </TableCell>
           </TableRow>
         ))}
         {runs.length === 0 && (
           <TableRow>
-            <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
               No runs found
             </TableCell>
           </TableRow>
