@@ -255,9 +255,9 @@ class TestHTTPMethodSecurity:
         assert client.patch("/api/health").status_code == 405
 
     @staticmethod
-    def test_runs_only_allows_get(client):
+    def test_runs_only_allows_get(client, auth_headers):
         """Runs endpoint only allows GET method."""
-        assert client.get("/api/runs").status_code == 200
+        assert client.get("/api/runs", headers=auth_headers).status_code == 200
         assert client.post("/api/runs").status_code == 405
         assert client.put("/api/runs").status_code == 405
         assert client.delete("/api/runs").status_code == 405

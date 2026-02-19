@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 import bcrypt
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String
 
 from api.models.base import Base
 
@@ -38,6 +38,13 @@ class User(Base):
         default="customer",
         comment="Role: owner, tech, customer",
     )
+    active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+        comment="Whether the account is active",
+    )
     created_at = Column(DateTime,
                         default=lambda: datetime.now(timezone.utc),
                         nullable=False)
@@ -59,6 +66,7 @@ class User(Base):
             "email": self.email,
             "name": self.name,
             "role": self.role,
+            "active": self.active,
             "created_at":
             self.created_at.isoformat() if self.created_at else None,
         }

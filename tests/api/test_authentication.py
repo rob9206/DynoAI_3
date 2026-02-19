@@ -349,10 +349,10 @@ class TestAuthIntegrationWithMainApp:
         assert response.status_code == 200
 
     @staticmethod
-    def test_runs_endpoint_public(client_auth_disabled):
-        """Runs endpoint works without authentication (read-only)."""
+    def test_runs_endpoint_requires_jwt(client_auth_disabled):
+        """Runs endpoint requires JWT authentication."""
         response = client_auth_disabled.get("/api/runs")
-        assert response.status_code == 200
+        assert response.status_code == 401
 
     @staticmethod
     def test_analyze_requires_auth_when_enabled(client_auth_enabled):

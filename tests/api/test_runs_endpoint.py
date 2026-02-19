@@ -13,34 +13,40 @@ class TestRunsListEndpoint:
     """Tests for the /api/runs endpoint."""
 
     @staticmethod
-    def test_runs_returns_200(client):
-        """Runs endpoint returns 200 status code."""
+    def test_runs_requires_auth(client):
+        """Runs endpoint returns 401 without auth token."""
         response = client.get("/api/runs")
+        assert response.status_code == 401
+
+    @staticmethod
+    def test_runs_returns_200(client, auth_headers):
+        """Runs endpoint returns 200 status code with valid auth."""
+        response = client.get("/api/runs", headers=auth_headers)
         assert response.status_code == 200
 
     @staticmethod
-    def test_runs_returns_json(client):
+    def test_runs_returns_json(client, auth_headers):
         """Runs endpoint returns JSON content type."""
-        response = client.get("/api/runs")
+        response = client.get("/api/runs", headers=auth_headers)
         assert response.content_type == "application/json"
 
     @staticmethod
-    def test_runs_returns_list(client):
+    def test_runs_returns_list(client, auth_headers):
         """Runs endpoint returns runs list in response."""
-        response = client.get("/api/runs")
+        response = client.get("/api/runs", headers=auth_headers)
         data = response.get_json()
         assert "runs" in data
         assert isinstance(data["runs"], list)
 
     @staticmethod
-    def test_runs_with_mock_data(client, mock_output_folder):
+    def test_runs_with_mock_data(client, auth_headers, mock_output_folder):
         """Runs endpoint returns run data when available."""
-        response = client.get("/api/runs")
+        response = client.get("/api/runs", headers=auth_headers)
         assert response.status_code == 200
         data = response.get_json()
         assert "runs" in data
         # Check if our mock run is present
-        run_ids = [run.get("runId") for run in data["runs"]]
+        run_ids = [run.get("id") for run in data["runs"]]
         assert mock_output_folder["run_id"] in run_ids
 
 
