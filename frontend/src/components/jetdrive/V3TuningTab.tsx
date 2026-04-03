@@ -34,6 +34,7 @@ import type {
   TemplateListResult,
 } from "@/api/v3Session";
 import { TuneImport, type TuneImportResult } from "./TuneImport";
+import type { EnginePreset } from "@/utils/enginePresets";
 
 // ---------------------------------------------------------------------------
 // Engine family options
@@ -75,6 +76,7 @@ export interface V3SetupSectionProps {
   localImportedTune: TuneImportResult | null;
   setLocalImportedTune: React.Dispatch<React.SetStateAction<TuneImportResult | null>>;
   importedTune: TuneImportResult | null;
+  currentPreset: EnginePreset;
   onStartSession: () => Promise<void>;
   isCreating: boolean;
   templates: TemplateListResult | undefined;
@@ -101,6 +103,7 @@ export function V3SetupSection({
   localImportedTune,
   setLocalImportedTune,
   importedTune,
+  currentPreset,
   onStartSession,
   isCreating,
   templates,
@@ -227,6 +230,7 @@ export function V3SetupSection({
         <CardContent>
           <TuneImport
             onImport={setLocalImportedTune}
+            currentPreset={currentPreset}
             compact={true}
           />
           {localImportedTune && (
@@ -562,6 +566,15 @@ export interface V3TuningTabProps {
   importedTune?: TuneImportResult | null;
 }
 
+function mapEngineFamilyToPreset(engineFamily: string): EnginePreset {
+  if (engineFamily === "tc_110") return "harley_tc_110";
+  if (engineFamily.startsWith("tc_")) return "harley_tc";
+  if (engineFamily.startsWith("m8_")) return "harley_m8";
+  if (engineFamily === "revmax_1250") return "harley_revmax_1250";
+  if (engineFamily === "revmax_975") return "harley_revmax_975";
+  return "harley_m8";
+}
+
 export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [localImportedTune, setLocalImportedTune] = useState<TuneImportResult | null>(
@@ -577,6 +590,10 @@ export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
   const [simMode, setSimMode] = useState<"quick" | "realistic">("realistic");
 
   const v3 = useV3Session(sessionId);
+  const currentPreset = useMemo<EnginePreset>(
+    () => mapEngineFamilyToPreset(config.engine_family),
+    [config.engine_family]
+  );
 
   // ---- Handlers ----
   const handleStartSession = useCallback(async () => {
@@ -668,6 +685,7 @@ export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
         localImportedTune={localImportedTune}
         setLocalImportedTune={setLocalImportedTune}
         importedTune={importedTune ?? null}
+        currentPreset={currentPreset}
         onStartSession={handleStartSession}
         isCreating={v3.isCreating}
         templates={v3.templates}

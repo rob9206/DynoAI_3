@@ -52,7 +52,7 @@ export function createSession(
   rpmAxis: number[],
   mapAxis: number[],
   enginePreset: string,
-  veBoundsPreset: VEBoundsPreset = 'na_harley',
+  veBoundsPreset: VEBoundsPreset = 'stock_harley',
   sourceFile?: string
 ): TuningSession {
   const now = new Date().toISOString();

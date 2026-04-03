@@ -151,7 +151,7 @@ export function TuningWizard({
   onAnalyze,
   onApply,
   onReset,
-  veBoundsPreset = 'na_harley',
+  veBoundsPreset = 'stock_harley',
   onVeBoundsPresetChange,
   renderLiveTable,
   renderApplyPreview,

@@ -981,7 +981,7 @@ function JetDriveAutoTunePageOld() {
     
     // Apply workflow state (Phase 3)
     const [applyPreviewOpen, setApplyPreviewOpen] = useState(false);
-    const [veBoundsPreset, setVeBoundsPreset] = useState<VEBoundsPreset>('na_harley');
+    const [veBoundsPreset, setVeBoundsPreset] = useState<VEBoundsPreset>('stock_harley');
 
     // Run state
     const [runId, setRunId] = useState(`dyno_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now().toString(36)}`);

@@ -78,7 +78,7 @@ export function useTuningWizard({
   liveData,
   isSimulatorActive,
   isCapturing,
-  veBoundsPreset = 'na_harley',
+  veBoundsPreset = 'stock_harley',
   config: userConfig,
 }: UseTuningWizardOptions): UseTuningWizardReturn {
   const config = { ...DEFAULT_CONFIG, ...userConfig };

@@ -6,7 +6,7 @@ Maintains a live probabilistic model of the entire VE map that updates
 after each pull, providing both predictions and uncertainty estimates at
 every cell.
 
-The GP model predicts absolute VE percentages (70-113%), not deltas or
+The GP model predicts absolute VE percentages (70-130%), not deltas or
 corrections. This aligns with Power Vision PVV format and provides intuitive
 display values.
 
@@ -116,7 +116,7 @@ class Observation:
     """A single measured data point from a dyno pull.
 
     Note: Despite the field name 've_delta', this stores absolute VE percentage values
-    (70-113%), not deltas. The naming is historical but the semantics are absolute VE.
+    (70-130%), not deltas. The naming is historical but the semantics are absolute VE.
     """
 
     rpm: float
@@ -130,7 +130,7 @@ class Observation:
 class PointPrediction:
     """Prediction at a single operating point.
 
-    Note: ve_delta stores absolute VE percentage (70-113%), not a delta.
+    Note: ve_delta stores absolute VE percentage (70-130%), not a delta.
     """
 
     ve_delta: float  # Absolute VE percentage (e.g., 92.3%)
@@ -143,7 +143,7 @@ class PointPrediction:
 class FullMapPrediction:
     """Prediction across the entire VE grid.
 
-    Note: ve_map contains absolute VE percentages (70-113%), not deltas.
+    Note: ve_map contains absolute VE percentages (70-130%), not deltas.
     """
 
     ve_map: NDArray[np.float64]  # Absolute VE percentages
@@ -263,7 +263,7 @@ class VESurrogate:
         Args:
             rpm: Array of RPM values
             map_kpa: Array of MAP values
-            ve: Array of absolute VE percentage values (70-113%)
+            ve: Array of absolute VE percentage values (70-130%)
             pull_number: Optional pull sequence number
 
         Returns:
@@ -326,7 +326,7 @@ class VESurrogate:
         can override them.
 
         Args:
-            template_ve: 2D array of absolute VE percentages (70-113%) from the template
+            template_ve: 2D array of absolute VE percentages (70-130%) from the template
             rpm_bins: RPM bins corresponding to template rows
             map_bins: MAP bins corresponding to template columns
         """

@@ -85,8 +85,9 @@ export interface VEBoundsConfig {
 }
 
 export type VEBoundsPreset =
-  | 'na_harley'
+  | 'stock_harley'
   | 'stage_1'
+  | 'stage_1_plus'
   | 'stage_2'
   | 'boosted'
   | 'custom';

@@ -140,7 +140,7 @@ export function calculateApply(
   hitCounts: DualCylinderHits,
   rpmAxis: number[],
   mapAxis: number[],
-  boundsPreset: VEBoundsPreset = 'na_harley'
+  boundsPreset: VEBoundsPreset = 'stock_harley'
 ): ApplyReport {
   const boundsConfig = VE_BOUNDS_PRESETS[boundsPreset];
 

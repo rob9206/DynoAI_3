@@ -58,7 +58,7 @@ export function ApplyPreviewPanel({
   hitCounts,
   rpmAxis,
   mapAxis,
-  boundsPreset = 'na_harley',
+  boundsPreset = 'stock_harley',
   onBoundsPresetChange,
   onApply,
   onCancel,

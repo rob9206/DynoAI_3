@@ -17,15 +17,17 @@ import {
  *
  * | Preset | Min | Max | Mode | Use Case |
  * |--------|-----|-----|------|----------|
- * | na_harley | 15% | 115% | Enforce | Stock/mild cams |
+ * | stock_harley | 15% | 115% | Enforce | Stock/mild cams |
  * | stage_1 | 15% | 120% | Enforce | Stage 1 cams |
+ * | stage_1_plus | 15% | 130% | Enforce | Stage 1 with breathing mods |
  * | stage_2 | 15% | 125% | Enforce | Stage 2+ cams |
  * | boosted | 10% | 200% | Warn only | Turbo/supercharged |
  * | custom | 0% | 999% | Warn only | No enforcement |
  */
 export const VE_BOUNDS_PRESETS: Record<VEBoundsPreset, VEBoundsConfig> = {
-  na_harley: { min: 15, max: 115, warnOnly: false },
+  stock_harley: { min: 15, max: 115, warnOnly: false },
   stage_1: { min: 15, max: 120, warnOnly: false },
+  stage_1_plus: { min: 15, max: 130, warnOnly: false },
   stage_2: { min: 15, max: 125, warnOnly: false },
   boosted: { min: 10, max: 200, warnOnly: true }, // Warn only, don't clamp
   custom: { min: 0, max: 999, warnOnly: true }, // No enforcement
@@ -81,9 +83,9 @@ export function getBoundsPresetInfo(preset: VEBoundsPreset): {
   range: string;
 } {
   switch (preset) {
-    case 'na_harley':
+    case 'stock_harley':
       return {
-        name: 'NA Harley',
+        name: 'Stock Harley',
         description: 'Stock or mild cam naturally aspirated',
         range: '15-115%',
       };
@@ -92,6 +94,12 @@ export function getBoundsPresetInfo(preset: VEBoundsPreset): {
         name: 'Stage 1',
         description: 'Stage 1 cam, intake, exhaust',
         range: '15-120%',
+      };
+    case 'stage_1_plus':
+      return {
+        name: 'Stage 1+',
+        description: 'Stage 1 with high-flow breathing mods',
+        range: '15-130%',
       };
     case 'stage_2':
       return {
