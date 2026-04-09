@@ -7,13 +7,11 @@ Provides REST API endpoints for the React frontend to interact with the Python t
 import json
 import logging
 import os
-import subprocess
 import sys
 import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from queue import Queue
 
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, request, send_file
@@ -25,13 +23,12 @@ from api.config import get_config
 from api.docs import init_swagger
 from api.errors import (
     AnalysisError,
-    FileNotAllowedError,
     NotFoundError,
     ValidationError,
     register_error_handlers,
     with_error_handling,
 )
-from api.metrics import init_metrics, record_analysis, record_file_upload
+from api.metrics import init_metrics, record_analysis
 
 # Configure logging to INFO level so logger.info() calls are visible
 logging.basicConfig(
@@ -314,6 +311,15 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize V3 Session: {e}")
 
+# Register v3 Calibration Library blueprint
+try:
+    from api.routes.calibration_library import calibration_library_bp
+
+    app.register_blueprint(calibration_library_bp)
+    print("[+] Calibration Library registered at /api/v3/calibration-library")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Calibration Library: {e}")
+
 # Register JWT Authentication blueprint
 try:
     from api.routes.auth import auth_bp
@@ -379,200 +385,10 @@ def allowed_file(filename: str) -> bool:
         ".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def run_dyno_analysis(
-    csv_path: Path,
-    output_dir: Path,
-    run_id: str,
-    params: dict = None,
-    progress_queue: Queue = None,
-) -> dict:
-    """
-    Run the DynoAI analysis toolkit on a CSV file with progress tracking
-
-    Args:
-        csv_path: Path to input CSV file
-        output_dir: Directory to write outputs
-        run_id: Unique identifier for this analysis run
-        params: Optional dict of tuning parameters
-        progress_queue: Optional queue for progress updates
-
-    Returns:
-        dict: Manifest data from analysis
-    """
-    # Check if running in standalone/PyInstaller mode
-    is_standalone = os.environ.get("DYNOAI_STANDALONE") or hasattr(
-        sys, "_MEIPASS")
-
-    if is_standalone:
-        # In standalone mode, use bundled resources
-        if hasattr(sys, "_MEIPASS"):
-            project_root = Path(sys._MEIPASS)
-        else:
-            project_root = Path(__file__).parent.parent
-        script_path = project_root / "tools" / "ai_tuner_toolkit_dyno_v1_2.py"
-        python_exe = sys.executable
-    else:
-        # Development mode - use project root and venv
-        project_root = Path(__file__).parent.parent
-        os.chdir(project_root)
-        script_path = project_root / "tools" / "ai_tuner_toolkit_dyno_v1_2.py"
-
-        # Find Python executable
-        venv_python = project_root / ".venv/Scripts/python.exe"
-        if not venv_python.exists():
-            venv_python = project_root / ".venv/bin/python"  # Unix/Mac
-        if not venv_python.exists():
-            venv_python = Path("python")  # Fallback to system Python
-        python_exe = str(venv_python)
-
-    # Verify script exists
-    if not script_path.exists():
-        from api.errors import AnalysisError
-
-        raise AnalysisError(f"Autotune script not found at {script_path}",
-                            stage="setup")
-
-    # Build command with optional parameters
-    cmd = [
-        str(python_exe),
-        str(script_path),
-        "--csv",
-        str(csv_path),
-        "--outdir",
-        str(output_dir),
-    ]
-
-    # Add optional parameters if provided
-    if params:
-        if "smooth_passes" in params:
-            cmd.extend(["--smooth_passes", str(params["smooth_passes"])])
-        if "clamp" in params:
-            cmd.extend(["--clamp", str(params["clamp"])])
-        if "rear_bias" in params:
-            cmd.extend(["--rear_bias", str(params["rear_bias"])])
-        if "rear_rule_deg" in params:
-            cmd.extend(["--rear_rule_deg", str(params["rear_rule_deg"])])
-        if "hot_extra" in params:
-            cmd.extend(["--hot_extra", str(params["hot_extra"])])
-
-        # Decel Fuel Management options
-        if params.get("decel_management"):
-            cmd.append("--decel-management")
-            if "decel_severity" in params:
-                cmd.extend(["--decel-severity", str(params["decel_severity"])])
-            if "decel_rpm_min" in params:
-                cmd.extend(["--decel-rpm-min", str(params["decel_rpm_min"])])
-            if "decel_rpm_max" in params:
-                cmd.extend(["--decel-rpm-max", str(params["decel_rpm_max"])])
-
-        # Per-Cylinder Auto-Balancing options
-        if params.get("balance_cylinders"):
-            cmd.append("--balance-cylinders")
-            if "balance_mode" in params:
-                cmd.extend(["--balance-mode", str(params["balance_mode"])])
-            if "balance_max_correction" in params:
-                cmd.extend([
-                    "--balance-max-correction",
-                    str(params["balance_max_correction"])
-                ])
-    else:
-        # Default parameters
-        cmd.extend(["--clamp", "15", "--smooth_passes", "2"])
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-
-    if result.returncode != 0:
-        # Collect both stdout and stderr for better debugging
-        stdout_msg = result.stdout.strip() if result.stdout else ""
-        stderr_msg = result.stderr.strip(
-        ) if result.stderr else "No error output"
-        error_details = (f"[STDOUT] {stdout_msg}\n[STDERR] {stderr_msg}"
-                         if stdout_msg else f"[ERROR] {stderr_msg}")
-        from api.errors import SubprocessError
-
-        raise SubprocessError(
-            error_details,
-            command=" ".join(cmd),
-            exit_code=result.returncode,
-        )
-
-    # Read the manifest file
-    manifest_path = output_dir / "manifest.json"
-    if not manifest_path.exists():
-        from api.errors import ManifestError
-
-        raise ManifestError("Manifest file not generated",
-                            manifest_path=str(manifest_path))
-
-    with open(manifest_path, "r") as f:
-        manifest = json.load(f)
-
-    # Record analysis in session timeline (Time Machine)
-    try:
-        from api.services.session_logger import SessionLogger
-
-        # Determine run directory (may be outputs/{run_id} or runs/{run_id})
-        run_dir = output_dir.parent if output_dir.name == "output" else output_dir
-        logger = SessionLogger(run_dir)
-
-        # Look for VE correction file to snapshot
-        ve_correction_path = output_dir / "VE_Correction_Delta_DYNO.csv"
-        if ve_correction_path.exists():
-            logger.record_analysis(
-                correction_path=ve_correction_path,
-                manifest=manifest,
-                description=f"Generated VE corrections from {Path(csv_path).name}",
-            )
-            print("[+] Recorded analysis in session timeline")
-    except Exception as e:
-        # Don't fail the analysis if timeline logging fails
-        print(f"[!] Warning: Could not record timeline event: {e}")
-
-    return manifest
-
-
-def convert_manifest_to_frontend_format(manifest: dict, run_id: str) -> dict:
-    """
-    Convert DynoAI manifest format to frontend-expected format
-
-    Args:
-        manifest: DynoAI manifest dict
-        run_id: Unique run identifier
-
-    Returns:
-        dict: Frontend-compatible manifest
-    """
-    return {
-        "runId":
-        run_id,
-        "timestamp":
-        manifest.get("timing", {}).get("start",
-                                       datetime.utcnow().isoformat()),
-        "inputFile":
-        manifest.get("input", {}).get("path", "unknown.csv"),
-        "rowsProcessed":
-        manifest.get("stats", {}).get("rows_read", 0),
-        "correctionsApplied":
-        manifest.get("stats", {}).get("front_accepted", 0) +
-        manifest.get("stats", {}).get("rear_accepted", 0),
-        "outputFiles": [{
-            "name": (output.get("name") or Path(output.get("path", "")).name),
-            "type": ("VE Table" if "VE" in (output.get("name") or output.get(
-                "path", "")) else "Analysis Data"),
-            "url":
-            f"/api/download/{run_id}/{Path(output.get('path') or output.get('name', '')).name}",
-        } for output in manifest.get("outputs", [])],
-        "analysisMetrics": {
-            "avgCorrection":
-            manifest.get("stats", {}).get("avg_correction", 0.0),
-            "maxCorrection":
-            manifest.get("stats", {}).get("max_correction", 0.0),
-            "targetAFR":
-            14.7,
-            "iterations":
-            manifest.get("config", {}).get("args", {}).get("smooth_passes", 2),
-        },
-    }
+from api.services.analysis_orchestrator import (  # noqa: E402
+    convert_manifest_to_frontend_format,
+    run_dyno_analysis,
+)
 
 
 @app.route("/api/analyze", methods=["POST"])

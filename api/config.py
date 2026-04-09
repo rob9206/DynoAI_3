@@ -54,6 +54,11 @@ class StorageConfig:
     runs_folder: Path = field(
         default_factory=lambda: Path(os.environ.get("DYNOAI_RUNS_DIR", "data/runs"))
     )
+    calibration_library_folder: Path = field(
+        default_factory=lambda: Path(
+            os.environ.get("DYNOAI_CALIBRATION_LIBRARY_DIR", "data/calibration_library")
+        )
+    )
     public_export_folder: Path = field(
         default_factory=lambda: Path(
             os.environ.get("DYNOAI_PUBLIC_EXPORT_DIR", "data/public_export")
@@ -71,6 +76,7 @@ class StorageConfig:
         self.upload_folder.mkdir(parents=True, exist_ok=True)
         self.output_folder.mkdir(parents=True, exist_ok=True)
         self.runs_folder.mkdir(parents=True, exist_ok=True)
+        self.calibration_library_folder.mkdir(parents=True, exist_ok=True)
         self.public_export_folder.mkdir(parents=True, exist_ok=True)
 
 
@@ -200,6 +206,44 @@ class AnalysisConfig:
 
 
 @dataclass
+class CalibrationLibraryPolicyConfig:
+    """Policy controls for calibration-library matching and seeding.
+
+    Promotion criteria (validated by shadow runs Apr 2026):
+        - top_n=5 provides sufficient blending diversity
+        - min_similarity=0.55 is a safe floor; stock configs score 1.0,
+          aftermarket configs cluster at 0.85, stage-2 mods at 0.70–0.85
+        - min_matches=1 allows seeding even with sparse corpus coverage
+        - To tighten: raise min_similarity to 0.70 for high-confidence only
+        - To loosen: lower min_similarity toward 0.40 (not recommended
+          without additional convergence analysis)
+    """
+
+    top_n: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_CALIBRATION_TOP_N", 5)
+    )
+    min_similarity: float = field(
+        default_factory=lambda: float(
+            os.environ.get("DYNOAI_CALIBRATION_MIN_SIMILARITY", "0.55")
+        )
+    )
+    min_matches: int = field(
+        default_factory=lambda: _get_int_env("DYNOAI_CALIBRATION_MIN_MATCHES", 1)
+    )
+
+    def __post_init__(self) -> None:
+        """Clamp invalid configuration values into safe ranges."""
+        if self.top_n <= 0:
+            self.top_n = 5
+        if self.min_matches <= 0:
+            self.min_matches = 1
+        if self.min_similarity < 0.0:
+            self.min_similarity = 0.0
+        if self.min_similarity > 1.0:
+            self.min_similarity = 1.0
+
+
+@dataclass
 class LoggingConfig:
     """Logging configuration."""
 
@@ -277,7 +321,7 @@ class DrumConfig:
         """Rotational inertia in lb·ft² (for compatibility with simulator)."""
         # IMPORTANT: slug·ft² and lb·ft² are dimensionally EQUIVALENT for rotational inertia
         # when used in the torque equation τ = I·α.
-        # 
+        #
         # This is because:
         #   - slug = lb·s²/ft (definition of slug)
         #   - For τ = I·α: [lb·ft] = [slug·ft²] × [rad/s²]
@@ -501,6 +545,9 @@ class AppConfig:
     jetstream: JetstreamConfig = field(default_factory=JetstreamConfig)
     cors: CORSConfig = field(default_factory=CORSConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    calibration_library_policy: CalibrationLibraryPolicyConfig = field(
+        default_factory=CalibrationLibraryPolicyConfig
+    )
     xai: XAIConfig = field(default_factory=XAIConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
@@ -525,10 +572,18 @@ class AppConfig:
                 "upload_folder": str(self.storage.upload_folder),
                 "output_folder": str(self.storage.output_folder),
                 "runs_folder": str(self.storage.runs_folder),
+                "calibration_library_folder": str(
+                    self.storage.calibration_library_folder
+                ),
                 "public_export_folder": str(self.storage.public_export_folder),
                 "max_content_length": self.storage.max_content_length,
             },
             "jetstream": self.jetstream.to_dict(mask_key=not include_secrets),
+            "calibration_library_policy": {
+                "top_n": self.calibration_library_policy.top_n,
+                "min_similarity": self.calibration_library_policy.min_similarity,
+                "min_matches": self.calibration_library_policy.min_matches,
+            },
             "xai": {
                 "enabled": self.xai.enabled,
                 "api_url": self.xai.api_url,

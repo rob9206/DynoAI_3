@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -25,10 +25,11 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from numpy.typing import NDArray
 
-from .gp_surrogate import VESurrogate, Observation
+from .gp_surrogate import VESurrogate
 from .grid_config import GridConfig
 from .physics_constraints import PhysicsConstraints
 from .pull_advisor import PullAdvisor, PullRecommendation, ConvergenceStatus
+from .calibration_library import CalibrationLibrary, CalibrationMatch
 from .template_library import HardwareConfig, TemplateLibrary, TemplateMatch
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,9 @@ class SessionInit:
     initial_plan: List[PullRecommendation]
     template_match: Optional[TemplateMatch] = None
     estimated_pulls: int = 0
+    seed_source: str = "default"
+    calibration_seed: Optional[Dict[str, Any]] = None
+    seed_warning: str = ""
 
 
 @dataclass
@@ -97,10 +101,20 @@ class TuningSession:
         config: HardwareConfig,
         templates_dir: Path,
         constraints_dir: Optional[Path] = None,
+        calibration_library_dir: Optional[Path] = None,
+        calibration_top_n: int = 5,
+        calibration_min_similarity: float = 0.55,
+        calibration_min_matches: int = 1,
     ):
         self.config = config
         self._templates_dir = Path(templates_dir)
         self._constraints_dir = constraints_dir
+        self._calibration_library_dir = Path(
+            calibration_library_dir or "data/calibration_library"
+        )
+        self._calibration_top_n = max(int(calibration_top_n), 1)
+        self._calibration_min_similarity = max(0.0, min(float(calibration_min_similarity), 1.0))
+        self._calibration_min_matches = max(int(calibration_min_matches), 1)
 
         # Initialize physics constraints
         self.constraints = PhysicsConstraints(
@@ -119,6 +133,11 @@ class TuningSession:
         self.advisor: Optional[PullAdvisor] = None
         self._template_lib: Optional[TemplateLibrary] = None
         self._template_match: Optional[TemplateMatch] = None
+        self._calibration_lib: Optional[CalibrationLibrary] = None
+        self._calibration_matches: List[CalibrationMatch] = []
+        self._seed_afr_targets: Dict[int, float] = {}
+        self._seed_source = "default"
+        self._seed_warning = ""
         self._convergence: Optional[ConvergenceStatus] = None
 
         logger.info(
@@ -146,6 +165,42 @@ class TuningSession:
         # 2. Find best template match
         self._template_match = self._template_lib.find_nearest(self.config)
 
+        # 2b. Find top-N calibration-library matches
+        self._calibration_matches = []
+        self._seed_afr_targets = {}
+        self._seed_source = "default"
+        self._seed_warning = ""
+        calibration_seed_payload: Dict[str, Any] = {
+            "used": False,
+            "top_n": self._calibration_top_n,
+            "min_similarity": self._calibration_min_similarity,
+            "min_matches": self._calibration_min_matches,
+            "match_count": 0,
+            "matches": [],
+            "seeded_afr_targets_count": 0,
+        }
+        try:
+            self._calibration_lib = CalibrationLibrary(self._calibration_library_dir)
+            if not skip_template_seed:
+                self._calibration_matches = self._calibration_lib.find_matches(
+                    self.config,
+                    top_n=self._calibration_top_n,
+                    min_similarity=self._calibration_min_similarity,
+                )
+                if (
+                    len(self._calibration_matches) > 0
+                    and len(self._calibration_matches) < self._calibration_min_matches
+                ):
+                    self._seed_warning = (
+                        "Calibration matches found but below minimum match count; "
+                        "falling back to template/default prior."
+                    )
+                    self._calibration_matches = []
+        except Exception as exc:
+            logger.warning("Calibration library unavailable; continuing without blend seed: %s", exc)
+            self._calibration_lib = None
+            self._calibration_matches = []
+
         # 3. Resolve authoritative grid (PVV > wizard > preset)
         self.grid_config = GridConfig.resolve(
             engine_family=self.config.engine_family,
@@ -165,9 +220,58 @@ class TuningSession:
             engine_family=self.config.engine_family,
         )
 
-        # 4. If template found with good match, seed GP (unless user provided import)
+        # 4. Seed GP in priority order:
+        #    user import (skip_template_seed=True, handled by caller) >
+        #    calibration library blend > template match > default prior
+        seeded_from_calibration = False
         if (
             not skip_template_seed
+            and self._calibration_lib is not None
+            and len(self._calibration_matches) > 0
+        ):
+            try:
+                blended = self._calibration_lib.blend(
+                    self._calibration_matches,
+                    target_rpm_bins=rpm_bins.tolist(),
+                    target_map_bins=map_bins.tolist(),
+                )
+                blend_ve = np.asarray(blended.ve_front, dtype=np.float64)
+                self.surrogate.seed_from_template(blend_ve, rpm_bins, map_bins)
+                seeded_from_calibration = True
+                self._seed_source = "calibration_library"
+                self._seed_afr_targets = {
+                    int(k): float(v) for k, v in blended.afr_targets.items()
+                }
+                logger.info(
+                    "GP seeded from calibration blend (%d matches, best=%.2f)",
+                    len(self._calibration_matches),
+                    self._calibration_matches[0].similarity_score,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Calibration blend seed failed; falling back to template/default prior: %s",
+                    exc,
+                )
+                self._seed_warning = (
+                    "Calibration blend failed; using template/default seed."
+                )
+
+        calibration_seed_payload["match_count"] = len(self._calibration_matches)
+        calibration_seed_payload["matches"] = [
+            {
+                "calibration_id": match.calibration_id,
+                "similarity_score": float(match.similarity_score),
+                "source_file_name": str(match.entry.metadata.get("source_file_name", "")),
+                "source_identity": str(match.entry.metadata.get("source_identity", "")),
+            }
+            for match in self._calibration_matches
+        ]
+        calibration_seed_payload["used"] = seeded_from_calibration
+        calibration_seed_payload["seeded_afr_targets_count"] = len(self._seed_afr_targets)
+
+        if (
+            not skip_template_seed
+            and not seeded_from_calibration
             and self._template_match is not None
             and self._template_match.is_usable
         ):
@@ -184,6 +288,7 @@ class TuningSession:
                 self.surrogate.seed_from_template(
                     template_ve, rpm_bins, map_bins,
                 )
+                self._seed_source = "template"
                 logger.info(
                     "GP seeded from template %s (similarity=%.2f)",
                     self._template_match.template_id,
@@ -209,6 +314,9 @@ class TuningSession:
             initial_plan=initial_plan,
             template_match=self._template_match,
             estimated_pulls=len(initial_plan),
+            seed_source=self._seed_source,
+            calibration_seed=calibration_seed_payload,
+            seed_warning=self._seed_warning,
         )
 
     # ------------------------------------------------------------------

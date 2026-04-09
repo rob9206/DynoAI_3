@@ -303,7 +303,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_uses_stats_avg_correction():
         """convert_manifest_to_frontend_format reads avgCorrection from stats."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {
@@ -332,7 +332,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_uses_stats_max_correction():
         """convert_manifest_to_frontend_format reads maxCorrection from stats."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {
@@ -361,7 +361,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_defaults_to_zero_when_stats_absent():
         """convert_manifest_to_frontend_format defaults metrics to 0.0 when missing."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {
@@ -387,7 +387,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_rows_processed():
         """convert_manifest_to_frontend_format maps rows_read to rowsProcessed."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {
@@ -412,7 +412,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_corrections_applied():
         """convert_manifest_to_frontend_format sums front+rear accepted as correctionsApplied."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {
@@ -437,7 +437,7 @@ class TestManifestConversion:
     @staticmethod
     def test_manifest_conversion_output_files_include_download_url():
         """convert_manifest_to_frontend_format includes correct download URLs."""
-        from api.app import convert_manifest_to_frontend_format
+        from api.services.analysis_orchestrator import convert_manifest_to_frontend_format
 
         manifest = {
             "timing": {

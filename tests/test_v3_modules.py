@@ -650,6 +650,71 @@ class TestSessionOrchestrator:
             assert status["state"] == "in_progress"
             assert status["pull_count"] == 1
 
+    def test_seed_priority_and_calibration_seed_metadata(self):
+        """Seed priority favors calibration library unless user import/template skip is requested."""
+        from dynoai_v3.calibration_library import CalibrationLibrary
+        from dynoai_v3.session_orchestrator import TuningSession
+        from dynoai_v3.template_library import HardwareConfig, TemplateLibrary
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            templates_dir = root / "templates"
+            calibration_library_dir = root / "calibration_library"
+            config = HardwareConfig(
+                engine_family="m8_114",
+                displacement_ci=114,
+                cam_spec="stock",
+                exhaust_type="2into1",
+                air_cleaner="high_flow",
+            )
+
+            # Template fallback candidate.
+            template_lib = TemplateLibrary(templates_dir)
+            template_lib.store_template(
+                config=config,
+                calibration={"ve_table_front": _synthetic_ve_table().tolist()},
+                operator="test",
+            )
+
+            # Calibration-library seed candidate.
+            cal_lib = CalibrationLibrary(calibration_library_dir)
+            cal_lib.ingest_from_parsed(
+                config=config,
+                ve_front=_synthetic_ve_table().tolist(),
+                ve_rear=None,
+                afr_targets={30: 14.6, 60: 13.5, 90: 12.8},
+                rpm_bins=[float(v) for v in RPM_BINS.tolist()],
+                map_bins=[float(v) for v in MAP_BINS.tolist()],
+                source_name="mastertune:C:/cal/seed_priority.mt8",
+                source_path="C:/cal/seed_priority.mt8",
+            )
+
+            session = TuningSession(
+                config,
+                templates_dir=templates_dir,
+                calibration_library_dir=calibration_library_dir,
+                calibration_top_n=5,
+                calibration_min_similarity=0.5,
+                calibration_min_matches=1,
+            )
+            init = session.initialize(skip_template_seed=False)
+            assert init.seed_source == "calibration_library"
+            assert init.calibration_seed is not None
+            assert init.calibration_seed["used"] is True
+            assert init.calibration_seed["match_count"] >= 1
+            assert init.calibration_seed["seeded_afr_targets_count"] >= 1
+
+            skip_session = TuningSession(
+                config,
+                templates_dir=templates_dir,
+                calibration_library_dir=calibration_library_dir,
+                calibration_top_n=5,
+                calibration_min_similarity=0.5,
+                calibration_min_matches=1,
+            )
+            skip_init = skip_session.initialize(skip_template_seed=True)
+            assert skip_init.seed_source != "calibration_library"
+
 
 # ===========================================================================
 # BOUNDED OVERLAY TESTS

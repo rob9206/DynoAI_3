@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, fields
-from typing import Iterable, Literal, Optional
+from typing import Literal, Optional, Sequence
 
 
 def _coerce_optional_float(value: object) -> Optional[float]:
@@ -30,7 +30,7 @@ def _clean_optional_str(value: object) -> Optional[str]:
 
 @dataclass
 class DynoChartMeta:
-    source: Literal["fuelmoto", "dynojet"]
+    source: Literal["fuelmoto", "dynojet", "mastertune"]
     id: str
     category: str
     title: str
@@ -132,7 +132,7 @@ def meta_from_row(row: dict[str, str]) -> DynoChartMeta:
     return DynoChartMeta(**clean_row)  # type: ignore[arg-type]
 
 
-__all__: Iterable[str] = [
+__all__: Sequence[str] = [
     "DynoChartMeta",
     "DynoCurveSpec",
     "slugify_title",

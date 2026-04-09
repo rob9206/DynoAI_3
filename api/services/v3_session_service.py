@@ -37,6 +37,8 @@ _sessions_lock = threading.Lock()
 
 _TEMPLATES_DIR = Path("data/v3_templates")
 _TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+_CALIBRATION_LIBRARY_DIR = get_config().storage.calibration_library_folder
+_CALIBRATION_LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _get_session(session_id: str):
@@ -117,6 +119,23 @@ def _ensure_bins_match(
         raise ValidationError(f"{label} bins do not match the session grid")
     if not np.allclose(session_bins, provided_bins, atol=atol):
         raise ValidationError(f"{label} bins do not match the session grid")
+
+
+def _target_afr_from_seed(session: Any, map_kpa: float) -> Optional[float]:
+    """Return AFR target interpolated from calibration-library seed if available."""
+    seed_targets = getattr(session, "_seed_afr_targets", None)
+    if not isinstance(seed_targets, dict) or not seed_targets:
+        return None
+    try:
+        keys = sorted(float(k) for k in seed_targets.keys())
+        vals = [float(seed_targets[int(round(k))]) for k in keys]
+    except Exception:
+        return None
+    key_arr = np.asarray(keys, dtype=np.float64)
+    val_arr = np.asarray(vals, dtype=np.float64)
+    if key_arr.size == 0:
+        return None
+    return float(np.interp(float(map_kpa), key_arr, val_arr, left=val_arr[0], right=val_arr[-1]))
 
 
 def _iso_utc_now() -> str:
@@ -366,7 +385,15 @@ def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         bool(config_dict.get("initial_ve_table")),
     )
 
-    session = TuningSession(config, templates_dir=_TEMPLATES_DIR)
+    policy = get_config().calibration_library_policy
+    session = TuningSession(
+        config,
+        templates_dir=_TEMPLATES_DIR,
+        calibration_library_dir=_CALIBRATION_LIBRARY_DIR,
+        calibration_top_n=policy.top_n,
+        calibration_min_similarity=policy.min_similarity,
+        calibration_min_matches=policy.min_matches,
+    )
 
     # Check if user provided an import; if so, skip template seeding
     has_import = bool(config_dict.get("initial_ve_table"))
@@ -397,6 +424,8 @@ def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
                     session.surrogate.rpm_bins,
                     session.surrogate.map_bins,
                 )
+                init.seed_source = "user_import"
+                init.seed_warning = ""
                 logger.info("GP seeded from imported tune (%d cells)", int(delta.size))
         except Exception as e:
             logger.warning("Could not seed from initial_ve_table: %s", e)
@@ -411,6 +440,9 @@ def create_session(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         "engine_family": init.engine_family,
         "estimated_pulls": init.estimated_pulls,
         "template_match": _template_match_to_dict(init.template_match),
+        "seed_source": init.seed_source,
+        "calibration_seed": init.calibration_seed,
+        "seed_warning": init.seed_warning,
         "initial_plan": [_rec_to_dict(r) for r in init.initial_plan],
     }
 
@@ -512,7 +544,12 @@ def ingest_pull(
             # Lookup targets based on MAP
             target_arr = np.zeros(count, dtype=np.float64)
             for i in range(count):
-                target_arr[i] = get_target_afr_for_map(float(map_arr[i]))
+                seeded_target = _target_afr_from_seed(session, float(map_arr[i]))
+                target_arr[i] = (
+                    float(seeded_target)
+                    if seeded_target is not None
+                    else get_target_afr_for_map(float(map_arr[i]))
+                )
                 
         # Determine Base VE (defaults to 100.0 if missing - simplistic but prevents crash)
         if base_ve is not None:

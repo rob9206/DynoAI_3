@@ -71,11 +71,33 @@ export interface TemplateMatchInfo {
   engine_family: string;
 }
 
+export type SeedSource = "user_import" | "calibration_library" | "template" | "default";
+
+export interface CalibrationSeedMatchInfo {
+  calibration_id: string;
+  similarity_score: number;
+  source_file_name: string;
+  source_identity: string;
+}
+
+export interface CalibrationSeedInfo {
+  used: boolean;
+  top_n: number;
+  min_similarity: number;
+  min_matches: number;
+  match_count: number;
+  matches: CalibrationSeedMatchInfo[];
+  seeded_afr_targets_count: number;
+}
+
 export interface SessionInitResult {
   session_id: string;
   engine_family: string;
   estimated_pulls: number;
   template_match: TemplateMatchInfo | null;
+  seed_source: SeedSource;
+  calibration_seed: CalibrationSeedInfo | null;
+  seed_warning: string;
   initial_plan: PullRecommendation[];
 }
 

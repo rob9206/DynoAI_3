@@ -34,6 +34,7 @@ import type {
   TemplateListResult,
 } from "@/api/v3Session";
 import { TuneImport, type TuneImportResult } from "./TuneImport";
+import { CalibrationLibraryPanel } from "./CalibrationLibraryPanel";
 import type { EnginePreset } from "@/utils/enginePresets";
 
 // ---------------------------------------------------------------------------
@@ -201,6 +202,7 @@ export function V3SetupSection({
               </SelectContent>
             </Select>
           </div>
+          <CalibrationLibraryPanel config={config} />
           <Button
             onClick={onStartSession}
             disabled={isCreating}
@@ -371,8 +373,61 @@ export function V3ActiveSession({
               Template {(v3.initResult.template_match.similarity_score * 100).toFixed(0)}%
             </Badge>
           )}
+          {v3.initResult?.seed_source === "calibration_library" && (
+            <Badge variant="secondary">
+              Library Seed ({v3.initResult.calibration_seed?.match_count ?? 0})
+            </Badge>
+          )}
+          {v3.initResult?.seed_source === "user_import" && (
+            <Badge variant="secondary">Imported Tune Seed</Badge>
+          )}
+          {v3.initResult?.seed_source === "default" && (
+            <Badge variant="secondary">Default Prior</Badge>
+          )}
         </div>
       </div>
+      {v3.initResult?.seed_warning && (
+        <Card className="border-amber-700/70">
+          <CardContent className="pt-4">
+            <p className="text-xs text-amber-300 flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {v3.initResult.seed_warning}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      {v3.initResult?.seed_source === "calibration_library" &&
+        v3.initResult.calibration_seed && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Calibration Seed Provenance</CardTitle>
+              <CardDescription>
+                Session seed came from matched calibration-library entries.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Match threshold:{" "}
+                {(v3.initResult.calibration_seed.min_similarity * 100).toFixed(0)}% •
+                Required matches: {v3.initResult.calibration_seed.min_matches} •
+                Used matches: {v3.initResult.calibration_seed.match_count}
+              </p>
+              <div className="space-y-1">
+                {v3.initResult.calibration_seed.matches.slice(0, 5).map((match) => (
+                  <div
+                    key={match.calibration_id}
+                    className="flex items-center justify-between text-xs border rounded px-2 py-1"
+                  >
+                    <span className="truncate">{match.source_file_name || match.calibration_id}</span>
+                    <span className="text-muted-foreground">
+                      {(match.similarity_score * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-between mb-2">
@@ -599,7 +654,7 @@ export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
   const handleStartSession = useCallback(async () => {
     try {
       const payload: CreateSessionPayload = { ...config };
-      const tuneToUse = localImportedTune || importedTune;
+      const tuneToUse = localImportedTune ?? importedTune;
       
       if (tuneToUse?.veFront?.values?.length) {
         payload.initial_ve_table = tuneToUse.veFront.values;
@@ -610,10 +665,17 @@ export function V3TuningTab({ importedTune = null }: V3TuningTabProps) {
       
       const result = await v3.startSession(payload);
       setSessionId(result.session_id);
-      const matchLabel = result.template_match
-        ? `Template match: ${(result.template_match.similarity_score * 100).toFixed(0)}%`
-        : "No template match (fresh session)";
-      toast.success(`Session started: ${result.engine_family} — ${matchLabel}`);
+      const seedLabel =
+        result.seed_source === "user_import"
+          ? "Seeded from imported tune"
+          : result.seed_source === "calibration_library"
+          ? `Seeded from calibration library (${result.calibration_seed?.match_count ?? 0} matches)`
+          : result.seed_source === "template"
+          ? `Seeded from template (${(
+              (result.template_match?.similarity_score ?? 0) * 100
+            ).toFixed(0)}%)`
+          : "Started from default prior";
+      toast.success(`Session started: ${result.engine_family} — ${seedLabel}`);
     } catch (err) {
       toast.error("Failed to start session");
     }

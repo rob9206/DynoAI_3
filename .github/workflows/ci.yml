@@ -38,15 +38,12 @@ jobs:
           pip install ruff black isort mypy bandit
 
       - name: Run Ruff
-        continue-on-error: true
         run: ruff check . --output-format=github
 
       - name: Run Black check
-        continue-on-error: true
         run: black --check --diff .
 
       - name: Run isort check
-        continue-on-error: true
         run: isort --check-only --diff .
 
       - name: Run Bandit security check
@@ -88,7 +85,14 @@ jobs:
       - name: Run pytest
         run: |
           pytest tests/ -v --cov=. --cov-report=xml --cov-report=term \
-            --ignore=tests/integration || echo "No tests found or tests failed"
+            --ignore=tests/integration
+
+      - name: Calibration library rollout gates
+        run: |
+          pytest tests/test_calibration_library.py \
+                 tests/api/test_calibration_library_routes.py \
+                 tests/api/test_v3_session_seed_metadata.py \
+                 -v --tb=short
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11' && github.event_name != 'pull_request'
@@ -120,7 +124,11 @@ jobs:
           pip install mypy types-requests types-PyYAML
 
       - name: Run mypy
-        run: mypy api dynoai --ignore-missing-imports || true
+        run: mypy api dynoai --ignore-missing-imports
+
+      - name: Run mypy for dynoai_v3 (advisory)
+        continue-on-error: true
+        run: mypy dynoai_v3 --ignore-missing-imports
 
   # =============================================================================
   # Frontend Checks
@@ -148,12 +156,13 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        continue-on-error: true
         run: npm run lint
 
       - name: TypeScript type check
-        continue-on-error: true
         run: npx tsc --noEmit
+
+      - name: Run calibration hook tests
+        run: npm run test -- src/hooks/__tests__/useCalibrationLibrary.test.tsx src/hooks/__tests__/useV3Session.test.tsx
 
   frontend-build:
     name: Frontend Build
@@ -207,11 +216,13 @@ jobs:
         run: pip install safety
 
       - name: Check for vulnerable packages
-        run: safety check -r requirements.txt || true
+        continue-on-error: true
+        run: safety check -r requirements.txt
 
       - name: Run npm audit
         working-directory: frontend
-        run: npm audit --audit-level=high || true
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   # =============================================================================
   # Integration Tests (optional, only on main/develop)
@@ -252,7 +263,7 @@ jobs:
           if [ -d tests/integration ]; then
             pytest tests/integration -v --tb=short
           else
-            echo "No integration tests found"
+            echo "No integration tests found, skipping..."
           fi
 
   # =============================================================================
@@ -266,6 +277,7 @@ jobs:
       [
         python-lint,
         python-test,
+        python-typecheck,
         frontend-lint,
         frontend-build,
         security-scan,
@@ -275,20 +287,25 @@ jobs:
     steps:
       - name: Check all jobs passed
         run: |
-          # Check required jobs (must succeed)
+          # Required jobs — must succeed
           if [[ "${{ needs.python-lint.result }}" != "success" ]] || \
              [[ "${{ needs.python-test.result }}" != "success" ]] || \
+             [[ "${{ needs.python-typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.frontend-lint.result }}" != "success" ]] || \
-             [[ "${{ needs.frontend-build.result }}" != "success" ]] || \
-             [[ "${{ needs.security-scan.result }}" != "success" ]]; then
-            echo "One or more required jobs failed"
+             [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
+            echo "::error::One or more required jobs failed"
             exit 1
           fi
 
-          # Check integration-test (conditional job - must succeed if it ran, skip if skipped)
+          # Advisory jobs — log but don't block
+          if [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "::warning::Security scan did not succeed (result: ${{ needs.security-scan.result }})"
+          fi
+
+          # Integration tests — must succeed if they ran
           if [[ "${{ needs.integration-test.result }}" == "failure" ]] || \
              [[ "${{ needs.integration-test.result }}" == "cancelled" ]]; then
-            echo "Integration tests failed or were cancelled"
+            echo "::error::Integration tests failed or were cancelled"
             exit 1
           fi
 
