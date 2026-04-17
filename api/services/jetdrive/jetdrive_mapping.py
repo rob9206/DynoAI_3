@@ -75,6 +75,16 @@ def lambda_to_afr(value: float) -> float:
     return value * 14.7
 
 
+def lc2_volts_to_afr(value: float) -> float:
+    """Convert Innovate LC-2 0-5V analog output to gasoline AFR.
+
+    Default LC-2 linear scaling:
+    - 0.00V = 7.35 AFR
+    - 5.00V = 22.39 AFR
+    """
+    return value * 3.008 + 7.35
+
+
 def afr_to_lambda(value: float) -> float:
     """Convert AFR to Lambda."""
     return value / 14.7
@@ -118,6 +128,7 @@ def identity(value: float) -> float:
 # Transform registry
 TRANSFORMS: dict[str, Callable[[float], float]] = {
     "lambda_to_afr": lambda_to_afr,
+    "lc2_volts_to_afr": lc2_volts_to_afr,
     "afr_to_lambda": afr_to_lambda,
     "nm_to_ftlb": nm_to_ftlb,
     "ftlb_to_nm": ftlb_to_nm,
@@ -634,8 +645,21 @@ CANONICAL_UNIT_TYPES = {
 # Heuristics for auto-mapping channels
 AUTO_MAP_PATTERNS = {
     "rpm": ["rpm", "engine rpm", "digital rpm", "motor rpm"],
-    "afr_front": ["afr 1", "afr front", "air/fuel ratio 1", "a/f 1"],
-    "afr_rear": ["afr 2", "afr rear", "air/fuel ratio 2", "a/f 2"],
+    "afr_front": [
+        "lc2 volts petrol afr",
+        "lc1 volts petrol afr",
+        "afr 1",
+        "afr front",
+        "air/fuel ratio 1",
+        "a/f 1",
+    ],
+    "afr_rear": [
+        "lc2 volts petrol afr2",
+        "afr 2",
+        "afr rear",
+        "air/fuel ratio 2",
+        "a/f 2",
+    ],
     "afr_combined": ["afr", "air/fuel", "a/f ratio"],
     "lambda_front": ["lambda 1", "lambda front"],
     "lambda_rear": ["lambda 2", "lambda rear"],
@@ -709,6 +733,27 @@ def score_channel_for_canonical(
         score += 0.3
         reasons.append(f"Name pattern match ('{matched_pattern}')")
 
+    # LC-2 "Volts Petrol AFR" channels are common dual-wideband analog outputs.
+    # Treat them as AFR with an explicit volts->AFR transform.
+    if canonical_name.startswith("afr_") and "volts" in channel_name_lower:
+        if "petrol" in channel_name_lower and "afr" in channel_name_lower:
+            transform = "lc2_volts_to_afr"
+            score += 0.2
+            reasons.append("Detected LC-2 voltage AFR channel")
+            warnings.append("Applying LC-2 volts-to-AFR conversion")
+
+    # Prefer channel 1 for front and channel 2 for rear when both exist.
+    if canonical_name == "afr_front":
+        if any(token in channel_name_lower for token in ("afr2", "rear", " 2")):
+            score -= 0.2
+        if any(token in channel_name_lower for token in ("afr1", "front", " 1")):
+            score += 0.1
+    elif canonical_name == "afr_rear":
+        if any(token in channel_name_lower for token in ("afr2", "rear", " 2")):
+            score += 0.2
+        if any(token in channel_name_lower for token in ("afr1", "front", " 1")):
+            score -= 0.1
+
     # 3. Disambiguation check (+0.2 if this is the best match)
     # Check if any other channel has a higher score for this canonical
     better_match_exists = False
@@ -737,8 +782,8 @@ def score_channel_for_canonical(
         score += 0.2
         reasons.append("Best match among available channels")
 
-    # Cap at 1.0
-    score = min(score, 1.0)
+    # Clamp score to [0.0, 1.0]
+    score = max(0.0, min(score, 1.0))
 
     # Add warnings based on confidence level
     if score < 0.5:

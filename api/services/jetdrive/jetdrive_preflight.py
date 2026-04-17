@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import statistics
 import time
 from dataclasses import dataclass, field
@@ -46,29 +47,64 @@ REQUIRED_CHANNEL_GROUPS = {
         "Engine RPM",
         "Digital RPM 1",
         "Digital RPM 2",
+        "RPM 1",
+        "RPM 2",
+        "Engine Speed",
         "RPM",
         "chan_10",
         "chan_11",
+        "chan_39",
+        "chan_40",
     ],
     "afr": [
         "Air/Fuel Ratio 1",
         "Air/Fuel Ratio 2",
+        "AFR Front",
+        "AFR Rear",
+        "AFR 1",
+        "AFR 2",
         "AFR",
+        "User Analog 1",
+        "User Analog 2",
+        "LC1 Volts Petrol AFR",
+        "LC2 Volts Petrol AFR",
+        "LC2 Volts Petrol AFR2",
         "AFR Meas F",
         "AFR Meas R",
         "Lambda 1",
         "Lambda 2",
         "chan_15",
         "chan_16",
+        "chan_20",
+        "chan_21",
+        "chan_24",
+        "chan_25",
+        "chan_26",
+        "chan_27",
     ],
 }
 
 # Recommended channels (nice to have, warn if missing)
 RECOMMENDED_CHANNELS = {
-    "map": ["MAP kPa", "MAP", "Manifold Pressure", "chan_20"],
-    "tps": ["TPS", "Throttle Position", "chan_21"],
+    "map": ["MAP kPa", "MAP", "MAP (kPa)", "Manifold Absolute Pressure", "Manifold Pressure", "chan_20", "chan_28"],
+    "tps": ["TPS", "TPS (%)", "Throttle Position", "Throttle Position Sensor Voltage", "chan_21", "chan_29"],
     "torque": ["Torque", "chan_3"],
-    "power": ["Horsepower", "Power", "chan_4"],
+    "power": ["Horsepower", "HP", "Power", "chan_4", "chan_5"],
+}
+
+# Fuzzy fallback tokens per channel group.
+# This keeps preflight resilient when JetDrive metadata names vary by firmware,
+# while still being specific enough to avoid obvious false positives.
+REQUIRED_GROUP_FUZZY_TOKENS = {
+    "rpm": ("rpm", "engine speed"),
+    "afr": ("air/fuel", "afr", "lambda", "user analog 1", "user analog 2", "lc1", "lc2"),
+}
+
+RECOMMENDED_GROUP_FUZZY_TOKENS = {
+    "map": ("map", "manifold absolute pressure", "manifold pressure"),
+    "tps": ("tps", "throttle position"),
+    "torque": ("torque", " tq "),
+    "power": ("horsepower", " hp ", "power"),
 }
 
 # Health thresholds
@@ -87,6 +123,21 @@ SEMANTIC_RANGES = {
 
 # Power/Torque/RPM relationship constant (HP = Torque * RPM / 5252)
 POWER_CONSTANT = 5252
+
+def _is_lc2_voltage_afr_channel(channel_name: str) -> bool:
+    """Return True when channel name indicates LC-2 voltage AFR output."""
+    name = channel_name.lower()
+    return "volts" in name and "petrol" in name and "afr" in name
+
+
+def _normalize_sample_value(channel_name: str, value: float) -> float:
+    """Normalize sample values for known channel encodings used in the field."""
+    if _is_lc2_voltage_afr_channel(channel_name):
+        # Default Innovate LC-2 analog scaling: 0V=7.35 AFR, 5V=22.39 AFR.
+        if 0.0 <= value <= 5.5:
+            return value * 3.008 + 7.35
+    return value
+
 
 # =============================================================================
 # Data Classes
@@ -301,11 +352,11 @@ def _check_required_channels(
     found_channels = {}
 
     for group_name, channel_names in REQUIRED_CHANNEL_GROUPS.items():
-        found = None
-        for name in channel_names:
-            if name in available_channels:
-                found = name
-                break
+        found = _find_channel_match(
+            available_channels,
+            channel_names,
+            REQUIRED_GROUP_FUZZY_TOKENS.get(group_name, ()),
+        )
         if found:
             found_channels[group_name] = found
         else:
@@ -356,11 +407,11 @@ def _check_recommended_channels(
     found_channels = {}
 
     for group_name, channel_names in RECOMMENDED_CHANNELS.items():
-        found = None
-        for name in channel_names:
-            if name in available_channels:
-                found = name
-                break
+        found = _find_channel_match(
+            available_channels,
+            channel_names,
+            RECOMMENDED_GROUP_FUZZY_TOKENS.get(group_name, ()),
+        )
         if found:
             found_channels[group_name] = found
         else:
@@ -384,6 +435,52 @@ def _check_recommended_channels(
         message="All recommended channels found",
         details={"found_channels": found_channels},
     )
+
+
+def _normalize_channel_name(name: str) -> str:
+    """Lowercase and normalize punctuation/whitespace for robust matching."""
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", name.lower())).strip()
+
+
+def _find_channel_match(
+    available_channels: set[str],
+    channel_names: list[str],
+    fuzzy_tokens: tuple[str, ...] = (),
+) -> str | None:
+    """
+    Find the best matching channel from the available set.
+
+    Matching order:
+    1) Exact name
+    2) Case-insensitive normalized equality
+    3) Group-specific fuzzy token match
+    """
+    if not available_channels:
+        return None
+
+    # 1) Exact match
+    for name in channel_names:
+        if name in available_channels:
+            return name
+
+    # 2) Case-insensitive normalized equality
+    normalized_available = {
+        _normalize_channel_name(name): name for name in sorted(available_channels)
+    }
+    for name in channel_names:
+        normalized_candidate = _normalize_channel_name(name)
+        if normalized_candidate in normalized_available:
+            return normalized_available[normalized_candidate]
+
+    # 3) Fuzzy token match
+    for available_name in sorted(available_channels):
+        normalized_available_name = f" {_normalize_channel_name(available_name)} "
+        for token in fuzzy_tokens:
+            token_norm = f" {_normalize_channel_name(token)} "
+            if token_norm.strip() and token_norm in normalized_available_name:
+                return available_name
+
+    return None
 
 
 def _check_health_thresholds(
@@ -692,12 +789,14 @@ async def run_preflight(
     # Check 2: Required channels
     logger.info("Preflight: Checking required channels...")
     required_check, missing_groups = _check_required_channels(available_channels)
+    required_check_index = len(checks)
     checks.append(required_check)
     missing_channels.extend(missing_groups)
 
     # Check 3: Recommended channels
     logger.info("Preflight: Checking recommended channels...")
     recommended_check = _check_recommended_channels(available_channels)
+    recommended_check_index = len(checks)
     checks.append(recommended_check)
 
     # Check 4 & 5: Sample data for health and semantic checks
@@ -711,13 +810,17 @@ async def run_preflight(
     sample_buffer: dict[str, list[float]] = {}
 
     def on_sample(s):
+        normalized_value = _normalize_sample_value(s.channel_name, float(s.value))
+        if normalized_value != s.value:
+            s.value = normalized_value
+
         # Record in validator
         validator.record_sample(s)
 
         # Buffer for semantic analysis
         if s.channel_name not in sample_buffer:
             sample_buffer[s.channel_name] = []
-        sample_buffer[s.channel_name].append(s.value)
+        sample_buffer[s.channel_name].append(float(s.value))
 
     # Create stop event for timed sampling
     stop_event = asyncio.Event()
@@ -745,6 +848,20 @@ async def run_preflight(
             await stop_task
         except asyncio.CancelledError:
             pass
+
+    # Re-check required/recommended channels using observed live sample names.
+    # Provider metadata can be sparse or mislabeled on some setups; sampled names
+    # are often more reliable once the stream is active.
+    observed_channels = set(sample_buffer.keys())
+    if observed_channels:
+        merged_channels = available_channels | observed_channels
+        refreshed_required_check, refreshed_missing = _check_required_channels(
+            merged_channels
+        )
+        refreshed_recommended_check = _check_recommended_channels(merged_channels)
+        checks[required_check_index] = refreshed_required_check
+        checks[recommended_check_index] = refreshed_recommended_check
+        missing_channels = list(refreshed_missing)
 
     # Check 4: Health thresholds
     logger.info("Preflight: Checking health thresholds...")

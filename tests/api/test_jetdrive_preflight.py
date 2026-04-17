@@ -355,6 +355,26 @@ class TestSemanticValidation:
         )
 
 
+class TestAfrVoltageNormalization:
+    """Test normalization of LC-2 AFR voltage channels."""
+
+    @staticmethod
+    def test_lc2_voltage_channel_is_converted_to_afr():
+        """LC2 0-5V AFR channels should be converted before semantic checks."""
+        from api.services.jetdrive.jetdrive_preflight import _normalize_sample_value
+
+        afr = _normalize_sample_value("LC2 Volts Petrol AFR", 2.5)
+        assert afr == pytest.approx(14.87, rel=0.01)
+
+    @staticmethod
+    def test_non_lc2_channel_value_is_unchanged():
+        """Non-voltage AFR channels should not be modified."""
+        from api.services.jetdrive.jetdrive_preflight import _normalize_sample_value
+
+        afr = _normalize_sample_value("Air/Fuel Ratio 1", 13.8)
+        assert afr == pytest.approx(13.8)
+
+
 # =============================================================================
 # Required Channels Tests
 # =============================================================================
@@ -395,6 +415,32 @@ class TestRequiredChannels:
 
         assert check.status.value == "failed"
         assert "afr" in missing
+
+    @staticmethod
+    def test_required_channels_detected_with_common_aliases():
+        """User Analog + RPM aliases should satisfy required groups."""
+        from api.services.jetdrive.jetdrive_preflight import _check_required_channels
+
+        available = {"RPM 1", "User Analog 1", "Throttle Position Sensor Voltage"}
+        check, missing = _check_required_channels(available)
+
+        assert check.status.value == "passed"
+        assert missing == []
+
+    @staticmethod
+    def test_recommended_channels_detected_with_fuzzy_names():
+        """Recommended groups should match common Power Core label variants."""
+        from api.services.jetdrive.jetdrive_preflight import _check_recommended_channels
+
+        available = {
+            "Manifold Absolute Pressure",
+            "Throttle Position Sensor Voltage",
+            "TQ",
+            "HP",
+        }
+        check = _check_recommended_channels(available)
+
+        assert check.status.value == "passed"
 
 
 # =============================================================================
@@ -541,3 +587,46 @@ class TestPreflightIntegration:
             assert connectivity_check.status.value == "passed"
             assert required_check.status.value == "passed"
             assert result.provider_id == 0x1001
+
+    @staticmethod
+    def test_preflight_reconciles_required_channels_from_live_samples():
+        """Required channels should pass when seen in live samples even if provider metadata is sparse."""
+        import asyncio
+
+        from api.services.jetdrive.jetdrive_client import ChannelInfo, JetDriveProviderInfo
+        from api.services.jetdrive.jetdrive_preflight import run_preflight
+
+        # Provider metadata missing explicit RPM/AFR names (common on some setups)
+        mock_provider = JetDriveProviderInfo(
+            provider_id=0xB994,
+            name="JetDrive Provider 0xB994",
+            host="192.168.1.86",
+            port=22344,
+            channels={
+                6: ChannelInfo(chan_id=6, name="Internal Sensor 6", unit=255),
+                7: ChannelInfo(chan_id=7, name="Internal Temp 1", unit=6),
+            },
+        )
+
+        with patch(
+            "api.services.jetdrive.jetdrive_client.discover_providers", new_callable=AsyncMock
+        ) as mock_discover:
+            mock_discover.return_value = [mock_provider]
+
+            async def mock_subscribe(provider, channels, callback, **kwargs):
+                for _ in range(20):
+                    callback(make_sample(0xB994, 39, "Digital RPM 1", 2800))
+                    callback(make_sample(0xB994, 20, "User Analog 1", 13.7))
+
+            with patch(
+                "api.services.jetdrive.jetdrive_client.subscribe", side_effect=mock_subscribe
+            ):
+                result = asyncio.run(run_preflight(sample_seconds=1))
+
+        required_check = next(
+            (c for c in result.checks if c.name == "required_channels"), None
+        )
+        assert required_check is not None
+        assert required_check.status.value == "passed"
+        assert "rpm" not in result.missing_channels
+        assert "afr" not in result.missing_channels

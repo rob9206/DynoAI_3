@@ -30,6 +30,19 @@ function getBoolean(value: unknown): boolean | null {
     return typeof value === 'boolean' ? value : null;
 }
 
+function isLc2VoltageAfrChannel(name: string): boolean {
+    const normalized = name.toLowerCase();
+    return normalized.includes('volts') && normalized.includes('petrol') && normalized.includes('afr');
+}
+
+function normalizeChannelValue(name: string, value: number): number {
+    if (isLc2VoltageAfrChannel(name) && value >= 0 && value <= 5.5) {
+        // Default Innovate LC-2 scaling: 0V=7.35 AFR, 5V=22.39 AFR.
+        return value * 3.008 + 7.35;
+    }
+    return value;
+}
+
 // Channel category types
 export type ChannelCategory = 'atmospheric' | 'dyno' | 'afr' | 'engine' | 'misc';
 
@@ -502,9 +515,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
             for (const [key, chRaw] of Object.entries(channelsRaw)) {
                 if (!isRecord(chRaw)) continue;
-                const value = getNumber(chRaw.value);
+                const rawValue = getNumber(chRaw.value);
                 const timestamp = getNumber(chRaw.timestamp);
-                if (value === null || timestamp === null) continue;
+                if (rawValue === null || timestamp === null) continue;
                 
                 // Parse the channel key (format: "0xPPPP:CC:Name")
                 // or fall back to legacy format for backwards compatibility
@@ -513,6 +526,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 const providerId = getNumber(chRaw.provider_id) ?? parsed?.providerId;
                 const channelId = getNumber(chRaw.id) ?? parsed?.channelId;
                 const displayName = getString(chRaw.name) ?? parsed?.name ?? key;
+                const value = normalizeChannelValue(displayName, rawValue);
                 
                 const config = getChannelConfig(displayName);
                 const apiCategory = getString(chRaw.category);
@@ -794,9 +808,10 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 for (const s of samples) {
                     if (!isRecord(s)) continue;
                     const name = getString(s.name);
-                    const value = getNumber(s.value);
+                    const rawValue = getNumber(s.value);
                     const timestamp = getNumber(s.timestamp);
-                    if (name === null || value === null || timestamp === null) continue;
+                    if (name === null || rawValue === null || timestamp === null) continue;
+                    const value = normalizeChannelValue(name, rawValue);
                     drainBufferRef.current.push({
                         name,
                         value,
@@ -832,12 +847,30 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         return samples;
     }, []);
 
-    // Auto-connect
+    // Auto-connect: when autoConnect is enabled, aggressively keep capture
+    // running so live data (and the VE heatmap that consumes it) stays
+    // populated whenever the user is on the Command Center — not only while
+    // a pull is actively recording. The backend handles "no providers" by
+    // exiting the capture thread and clearing `capturing`, so this effect
+    // will retry on the next tick once `isCapturing` flips back to false.
     useEffect(() => {
-        if (opts.autoConnect && monitorConnected && !isCapturing) {
+        if (!opts.autoConnect || isCapturing) return;
+
+        // Fire immediately on mount / whenever capture stops, then retry
+        // periodically so transient discovery failures self-heal.
+        let cancelled = false;
+        const attemptStart = () => {
+            if (cancelled || isCapturing) return;
             void startCapture().catch(() => undefined);
-        }
-    }, [opts.autoConnect, monitorConnected, isCapturing, startCapture]);
+        };
+        attemptStart();
+        const retry = setInterval(attemptStart, 5000);
+
+        return () => {
+            cancelled = true;
+            clearInterval(retry);
+        };
+    }, [opts.autoConnect, isCapturing, startCapture]);
 
     // Status sounds on connect/disconnect transitions
     useEffect(() => {
