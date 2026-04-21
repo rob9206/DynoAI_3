@@ -559,9 +559,12 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         def _c_to_f(c: float) -> float:
             return (float(c) * 9.0 / 5.0) + 32.0
 
+        from api.services.jetdrive.wideband_rescale import (
+            canonicalize_wideband_sample,
+        )
+
         def on_sample(s: JetDriveSample):
             validator.record_sample(s)
-            queue_mgr.on_sample(s)
 
             prov = providers_by_id.get(s.provider_id)
             meta = (prov.channels or {}).get(s.channel_id) if prov else None
@@ -571,6 +574,27 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             canonical_category = getattr(s, "category", "misc")
             canonical_units = getattr(s, "units", "")
             canonical_value = float(s.value)
+
+            queue_sample = s
+            wideband = canonicalize_wideband_sample(canonical_name, canonical_value)
+            if wideband is not None:
+                canonical_name = wideband.canonical_name
+                canonical_value = wideband.afr
+                canonical_units = wideband.units
+                canonical_category = wideband.category
+                queue_sample = JetDriveSample(
+                    provider_id=s.provider_id,
+                    channel_id=s.channel_id,
+                    channel_name=canonical_name,
+                    timestamp_ms=s.timestamp_ms,
+                    value=canonical_value,
+                    category=canonical_category,
+                    units=canonical_units,
+                )
+
+            # Queue processing should receive canonicalized AFR values so the
+            # 50 ms aggregation path and live CSV never ingest raw LC-2 volts.
+            queue_mgr.on_sample(queue_sample)
 
             if raw_unit == 7 and canonical_name.strip().lower() == "pressure":
                 has_atmo = any(
@@ -797,6 +821,14 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             asyncio.set_event_loop(None)
         except Exception:
             pass
+        # Always clear the capturing flag on exit so the frontend can retry
+        # starting capture. Without this, a failed discovery (no providers,
+        # transient multicast issue, etc.) leaves `capturing=True` stuck and
+        # every subsequent /hardware/live/start returns "already_capturing",
+        # which silently prevents live data from ever reaching the UI
+        # (e.g. VE heatmap cells stay empty on Command Center).
+        with _live_data_lock:
+            _live_data["capturing"] = False
         logger.info("Live capture loop ended")
 
 

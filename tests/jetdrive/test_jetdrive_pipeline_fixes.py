@@ -7,6 +7,7 @@ Tests for JetDrive pipeline performance fixes:
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import struct
 import threading
@@ -340,3 +341,128 @@ class TestSSEEventDriven:
         source = inspect.getsource(stream_live_data)
         assert "_live_data_event.wait" in source, "SSE should use _live_data_event.wait()"
         assert "time.sleep(0.25)" not in source, "SSE should NOT use the old 250ms sleep"
+
+
+# ===================================================================
+# Test 4: Wideband canonicalization ordering for queue manager
+# ===================================================================
+
+
+class TestWidebandCanonicalizationOrdering:
+    """Verify live queue receives canonicalized AFR (not raw LC-2 volts)."""
+
+    def test_queue_receives_canonicalized_wideband_sample(self, monkeypatch):
+        from api.routes.jetdrive import hardware
+        from api.routes.jetdrive._shared import _live_data, _live_data_lock, _sample_ring
+        from api.services.jetdrive.wideband_rescale import canonicalize_wideband_sample
+
+        queued_samples: list[jc.JetDriveSample] = []
+
+        class FakeQueueManager:
+            def on_sample(self, sample):
+                queued_samples.append(sample)
+
+            def start_processing(self):
+                pass
+
+            def force_flush(self):
+                pass
+
+            def stop_processing(self):
+                pass
+
+        class FakeValidator:
+            def set_active_provider(self, _provider_id):
+                pass
+
+            def reset(self, _provider_id):
+                pass
+
+            def record_sample(self, _sample):
+                pass
+
+            def record_frame_stats(self, _provider_id, total=1):
+                pass
+
+        provider_id = 0x1234
+        channel_id = 42
+        raw_sample = jc.JetDriveSample(
+            provider_id=provider_id,
+            channel_id=channel_id,
+            channel_name="LC2 Volts Petrol AFR1",
+            timestamp_ms=1000,
+            value=2.5,
+            category="misc",
+            units="V",
+        )
+        provider = jc.JetDriveProviderInfo(
+            provider_id=provider_id,
+            name="Fake Provider",
+            host="127.0.0.1",
+            port=22344,
+            channels={
+                channel_id: jc.ChannelInfo(
+                    chan_id=channel_id,
+                    name=raw_sample.channel_name,
+                    unit=int(jc.JDUnit.AFR),
+                )
+            },
+        )
+
+        async def fake_discover(_config, timeout=10.0):
+            return [provider]
+
+        async def fake_subscribe(
+            _provider,
+            _channel_names,
+            on_sample,
+            *,
+            config=None,
+            stop_event=None,
+            recv_timeout=2.0,
+            debug=True,
+            return_stats=True,
+        ):
+            on_sample(raw_sample)
+            if stop_event is not None:
+                stop_event.set()
+            return {"total_frames": 1, "dropped_frames": 0, "non_provider_frames": 0}
+
+        fake_queue_mgr = FakeQueueManager()
+        fake_validator = FakeValidator()
+
+        import api.services.jetdrive.jetdrive_client as client_mod
+        import api.services.jetdrive.jetdrive_live_queue as queue_mod
+        import api.services.jetdrive.jetdrive_validation as validation_mod
+
+        monkeypatch.setattr(client_mod, "discover_providers", fake_discover)
+        monkeypatch.setattr(client_mod, "subscribe", fake_subscribe)
+        monkeypatch.setattr(queue_mod, "reset_live_queue_manager", lambda: None)
+        monkeypatch.setattr(queue_mod, "get_live_queue_manager", lambda: fake_queue_mgr)
+        monkeypatch.setattr(validation_mod, "get_validator", lambda: fake_validator)
+
+        with _live_data_lock:
+            _live_data["capturing"] = True
+            _live_data["channels"] = {}
+            _live_data["last_update_ts"] = None
+            _live_data.pop("error", None)
+            _sample_ring.clear()
+
+        try:
+            hardware._live_capture_loop(requested_provider_id=provider_id)
+        except asyncio.CancelledError:
+            # _live_capture_loop cancels an internal check task on shutdown and
+            # may surface CancelledError during teardown in unit-test execution.
+            pass
+
+        assert queued_samples, "Expected at least one sample enqueued to live queue"
+        queued = queued_samples[0]
+        expected = canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 2.5)
+        assert expected is not None
+
+        assert queued.channel_name == expected.canonical_name
+        assert queued.value == pytest.approx(expected.afr, rel=1e-6)
+        assert queued.units == expected.units
+        # Ensure original sample remains raw and unchanged.
+        assert raw_sample.channel_name == "LC2 Volts Petrol AFR1"
+        assert raw_sample.value == pytest.approx(2.5)
