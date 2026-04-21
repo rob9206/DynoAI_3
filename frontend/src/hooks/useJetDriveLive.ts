@@ -30,18 +30,14 @@ function getBoolean(value: unknown): boolean | null {
     return typeof value === 'boolean' ? value : null;
 }
 
-function isLc2VoltageAfrChannel(name: string): boolean {
-    const normalized = name.toLowerCase();
-    return normalized.includes('volts') && normalized.includes('petrol') && normalized.includes('afr');
-}
-
-function normalizeChannelValue(name: string, value: number): number {
-    if (isLc2VoltageAfrChannel(name) && value >= 0 && value <= 5.5) {
-        // Default Innovate LC-2 scaling: 0V=7.35 AFR, 5V=22.39 AFR.
-        return value * 3.008 + 7.35;
-    }
-    return value;
-}
+// NOTE: LC-1/LC-2 voltage-to-AFR rescaling used to live here as
+// `isLc2VoltageAfrChannel` + `normalizeChannelValue`. It has been moved
+// to `api/services/jetdrive/wideband_rescale.py` (server-side) and is
+// applied at the ingest boundary in `_live_capture_loop`. Doing physics
+// in a React hook was the root cause of the "volts as AFR" corrections
+// bug and is now forbidden by `.cursor/rules/no-physics-in-frontend.mdc`.
+// The frontend receives AFR values directly from the backend and must
+// only render them.
 
 // Channel category types
 export type ChannelCategory = 'atmospheric' | 'dyno' | 'afr' | 'engine' | 'misc';
@@ -526,7 +522,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 const providerId = getNumber(chRaw.provider_id) ?? parsed?.providerId;
                 const channelId = getNumber(chRaw.id) ?? parsed?.channelId;
                 const displayName = getString(chRaw.name) ?? parsed?.name ?? key;
-                const value = normalizeChannelValue(displayName, rawValue);
+                const value = rawValue;
                 
                 const config = getChannelConfig(displayName);
                 const apiCategory = getString(chRaw.category);
@@ -811,7 +807,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                     const rawValue = getNumber(s.value);
                     const timestamp = getNumber(s.timestamp);
                     if (name === null || rawValue === null || timestamp === null) continue;
-                    const value = normalizeChannelValue(name, rawValue);
+                    const value = rawValue;
                     drainBufferRef.current.push({
                         name,
                         value,
