@@ -7,6 +7,7 @@ import os
 import pytest
 
 from api.services.parsers.file_index import reset_file_index
+from api.services.run_ingestion import maybe_promote as real_maybe_promote
 from api.services.watch_folder import maybe_start_watcher
 from api.services.watch_folder.broadcaster import WatchFolderBroadcaster
 from api.services.watch_folder.config import load_watch_folders
@@ -126,6 +127,45 @@ def test_handle_path_empty_csv_parse_is_failure(tmp_path, monkeypatch):
     reset_file_index()
 
 
+def test_handle_path_promotes_run_and_broadcasts_event(tmp_path, monkeypatch):
+    reset_file_index()
+    tmp_runs_dir = tmp_path / "runs"
+    csv_file = tmp_path / "pv.csv"
+    csv_file.write_text(
+        '"Dynojet Power Vision Log File"\n'
+        "\n"
+        '"Format:","Pro-XY CSV 1.0.0"\n'
+        "\n"
+        '1,"drv","id","RPM","rpm","",""\n'
+        '2,"drv","id","MAP","kPa","",""\n'
+        "\n"
+        '"Time(ms)","Signal","Value"\n'
+        "0,1,1000\n"
+        "0,2,40\n"
+        "100,1,2000\n"
+        "100,2,50\n",
+        encoding="utf-8",
+    )
+
+    broadcaster = WatchFolderBroadcaster(max_recent=20)
+    service = WatcherService(broadcaster=broadcaster)
+    monkeypatch.setattr(service, "_is_placeholder_stub", lambda _path: False)
+    monkeypatch.setattr(service, "_is_stable", lambda _path: True)
+    monkeypatch.setattr(
+        "api.services.watch_folder.service.maybe_promote",
+        lambda event, **_kwargs: real_maybe_promote(event, runs_dir=tmp_runs_dir),
+    )
+
+    payload = service.handle_path(csv_file, source="watchdog")
+    assert payload is not None
+
+    events = broadcaster.recent(limit=20)
+    assert any(event.get("event_type") == "run_promoted" for event in events)
+    promoted = next(event for event in events if event.get("event_type") == "run_promoted")
+    assert (tmp_runs_dir / promoted["run_id"] / "run.csv").exists()
+    reset_file_index()
+
+
 def test_rescan_requires_configured_folder(tmp_path):
     service = WatcherService()
     configured = tmp_path / "configured"
@@ -158,3 +198,11 @@ def test_watch_routes_status_and_rescan_validation(client):
     rescan_resp = client.post("/api/powercore/watch/rescan", json={})
     assert rescan_resp.status_code == 400
     assert "Missing required field: folder" in rescan_resp.get_json()["error"]
+
+    promote_resp = client.post("/api/powercore/watch/promote", json={})
+    assert promote_resp.status_code == 400
+    assert "Missing required field: path" in promote_resp.get_json()["error"]
+
+    promotions_resp = client.get("/api/powercore/watch/promotions?limit=5")
+    assert promotions_resp.status_code == 200
+    assert isinstance(promotions_resp.get_json().get("events"), list)

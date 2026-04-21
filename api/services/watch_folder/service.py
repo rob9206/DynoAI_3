@@ -15,6 +15,7 @@ from typing import Any
 from api.services.parsers.file_index import FileType, get_file_index
 from api.services.parsers.wp8_parser import parse_wp8_file
 from api.services.powercore_integration import parse_powervision_log
+from api.services.run_ingestion import classify_csv, maybe_promote
 from api.services.watch_folder.broadcaster import WatchFolderBroadcaster
 from api.services.watch_folder.config import load_watch_folders
 
@@ -179,17 +180,21 @@ class WatcherService:
         if parse_ok:
             try:
                 if ext == ".csv":
-                    parsed = parse_powervision_log(str(resolved))
-                    signal_count = len(parsed.signals)
-                    row_count = len(parsed.data)
-                    if signal_count <= 0 or row_count <= 0:
-                        parse_ok = False
-                        parse_detail = (
-                            "parse_failed: empty_or_incomplete_log "
-                            f"signals={signal_count} rows={row_count}"
-                        )
+                    csv_format = classify_csv(resolved)
+                    if csv_format == "dynoai":
+                        parse_detail = "dynoai_header_detected"
                     else:
-                        parse_detail = f"signals={signal_count} rows={row_count}"
+                        parsed = parse_powervision_log(str(resolved))
+                        signal_count = len(parsed.signals)
+                        row_count = len(parsed.data)
+                        if signal_count <= 0 or row_count <= 0:
+                            parse_ok = False
+                            parse_detail = (
+                                "parse_failed: empty_or_incomplete_log "
+                                f"signals={signal_count} rows={row_count}"
+                            )
+                        else:
+                            parse_detail = f"signals={signal_count} rows={row_count}"
                 elif ext == ".wp8":
                     parsed_wp8 = parse_wp8_file(str(resolved))
                     parse_detail = f"channels={len(parsed_wp8.channels)}"
@@ -210,6 +215,26 @@ class WatcherService:
         }
         self._logger.info("%s", json.dumps(payload, default=str))
         self._broadcaster.broadcast(payload)
+
+        promotion = None
+        try:
+            promotion = maybe_promote(payload, runs_dir=Path("runs"))
+        except Exception as exc:
+            self._logger.warning("run_ingestion failed: %s", exc)
+
+        if promotion and promotion.created:
+            promoted_event = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "source": "run_ingestion",
+                "event_type": "run_promoted",
+                "run_id": promotion.run_id,
+                "run_dir": str(promotion.run_dir),
+                "source_path": str(promotion.source_path),
+                "format": promotion.format,
+            }
+            self._broadcaster.broadcast(promoted_event)
+            self._logger.info("%s", json.dumps(promoted_event, default=str))
+
         return payload
 
     def rescan(self, folder: Path, limit: int = 50) -> dict[str, Any]:
