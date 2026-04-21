@@ -1,0 +1,7 @@
+# Copy this file to config/watch_folder.yaml to activate.
+# If config/watch_folder.yaml is absent, the watcher uses default Power Core directories.
+
+folders:
+  # Add extra machine-specific folders to monitor.
+  - C:\Users\Public\Documents\PowerCoreBackups
+  # - D:\Dyno\Imports

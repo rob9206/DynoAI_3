@@ -275,6 +275,17 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Power Core integration: {e}")
 
+# Register Power Core watch-folder blueprint
+try:
+    from api.routes.watch_folder import watch_bp
+    from api.services.watch_folder import maybe_start_watcher
+
+    app.register_blueprint(watch_bp)
+    maybe_start_watcher(app)
+    print("[+] Power Core watch-folder API registered at /api/powercore/watch")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize watch-folder service: {e}")
+
 # Register Reports blueprint (PDF generation)
 try:
     from api.routes.reports import reports_bp
