@@ -40,6 +40,39 @@ logger = logging.getLogger(__name__)
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
 
+
+# Emit JSON-spec-compliant responses: replace non-finite floats (Infinity/NaN)
+# with null instead of Python's non-standard "Infinity"/"NaN" tokens, which
+# JSON.parse in the browser rejects with errors like
+#   "Unexpected token 'I', ...\"st_value\":Infinity..."
+try:
+    import math as _math
+
+    from flask.json.provider import DefaultJSONProvider
+
+    class _FiniteJSONProvider(DefaultJSONProvider):
+        def default(self, o):  # type: ignore[override]
+            if isinstance(o, float) and not _math.isfinite(o):
+                return None
+            return super().default(o)
+
+        def dumps(self, obj, **kwargs):  # type: ignore[override]
+            def _scrub(value):
+                if isinstance(value, float):
+                    return value if _math.isfinite(value) else None
+                if isinstance(value, dict):
+                    return {k: _scrub(v) for k, v in value.items()}
+                if isinstance(value, (list, tuple)):
+                    return [_scrub(v) for v in value]
+                return value
+
+            kwargs.setdefault("allow_nan", False)
+            return super().dumps(_scrub(obj), **kwargs)
+
+    app.json = _FiniteJSONProvider(app)
+except Exception as _json_provider_exc:  # pragma: no cover - defensive
+    print(f"[!] Warning: JSON-safe provider not installed: {_json_provider_exc}")
+
 # Initialize Swagger UI for API documentation (available at /api/docs)
 try:
     swagger = init_swagger(app)
@@ -347,6 +380,15 @@ try:
     print("[+] Run history registered at /api/runs")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not register run history blueprint: {e}")
+
+# Register Tuning Workspace blueprint (Vehicle / Session / Iteration model)
+try:
+    from api.routes.workspace import workspace_bp
+
+    app.register_blueprint(workspace_bp)
+    print("[+] Tuning Workspace registered at /api/workspace")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not register workspace blueprint: {e}")
 
 # Initialize CORS after all blueprints are registered
 # Set intercept_exceptions=False and always_send=True to ensure CORS headers on all responses

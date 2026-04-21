@@ -33,6 +33,8 @@ const AutoTuneDemo = lazy(() => import('./pages/AutoTuneDemo'));
 const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
 const TechViewPage = lazy(() => import('./pages/TechView'));
 const AdminViewPage = lazy(() => import('./pages/AdminView'));
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const TuningSessionPage = lazy(() => import('./pages/TuningSessionPage'));
 
 // ---------------------------------------------------------------------------
 // Portal auth guard
@@ -495,6 +497,11 @@ function App() {
                 <Route path="/jetstream" element={<JetstreamPage />} />
                 <Route path="/runs/:runId" element={<RunDetailPage />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/workspace" element={<WorkspacePage />} />
+                <Route
+                  path="/workspace/:vehicleId/sessions/:sessionId"
+                  element={<TuningSessionPage />}
+                />
                 <Route path="/results/:runId" element={<Results />} />
                 <Route path="/time-machine/:runId" element={<TimeMachinePage />} />
                 <Route path="/history" element={<History />} />
