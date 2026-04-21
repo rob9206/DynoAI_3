@@ -47,7 +47,8 @@ def _ensure_watch_logger() -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "watch_folder.log"
     has_handler = any(
-        isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_path.resolve()
+        isinstance(h, RotatingFileHandler)
+        and Path(h.baseFilename) == log_path.resolve()
         for h in logger.handlers
     )
     if not has_handler:
@@ -68,7 +69,9 @@ class _WatchEventHandler(FileSystemEventHandler):
     def on_created(self, event: Any) -> None:  # pragma: no cover - integration behavior
         self._service.handle_path(Path(event.src_path), source="watchdog")
 
-    def on_modified(self, event: Any) -> None:  # pragma: no cover - integration behavior
+    def on_modified(
+        self, event: Any
+    ) -> None:  # pragma: no cover - integration behavior
         self._service.handle_path(Path(event.src_path), source="watchdog")
 
 
@@ -309,4 +312,3 @@ class WatcherService:
             last = self._last_seen.get(path_key)
             self._last_seen[path_key] = now
         return bool(last and (now - last) < DEDUP_SECONDS)
-

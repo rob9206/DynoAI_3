@@ -34,7 +34,9 @@ def get_service() -> WatcherService:
     global _SERVICE
     with _LOCK:
         if _SERVICE is None:
-            _SERVICE = WatcherService(broadcaster=WatchFolderBroadcaster(max_recent=200))
+            _SERVICE = WatcherService(
+                broadcaster=WatchFolderBroadcaster(max_recent=200)
+            )
         return _SERVICE
 
 
@@ -78,4 +80,3 @@ def stop_watcher() -> None:
         service = _SERVICE
     if service is not None:
         service.stop()
-

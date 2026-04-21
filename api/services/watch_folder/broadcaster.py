@@ -77,4 +77,3 @@ class WatchFolderBroadcaster:
     @staticmethod
     def _format_sse(event_type: str, data: dict[str, Any]) -> str:
         return f"event: {event_type}\ndata: {json.dumps(data, default=str)}\n\n"
-

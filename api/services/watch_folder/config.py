@@ -64,4 +64,3 @@ def load_watch_folders(config_path: Path | None = None) -> list[Path]:
         if resolved.exists() and resolved.is_dir():
             deduped.append(resolved)
     return deduped
-
