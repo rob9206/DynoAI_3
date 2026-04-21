@@ -161,7 +161,9 @@ def test_handle_path_promotes_run_and_broadcasts_event(tmp_path, monkeypatch):
 
     events = broadcaster.recent(limit=20)
     assert any(event.get("event_type") == "run_promoted" for event in events)
-    promoted = next(event for event in events if event.get("event_type") == "run_promoted")
+    promoted = next(
+        event for event in events if event.get("event_type") == "run_promoted"
+    )
     assert (tmp_runs_dir / promoted["run_id"] / "run.csv").exists()
     reset_file_index()
 

@@ -89,10 +89,7 @@ class CalibrationEntry:
             "config": self.config.to_dict(),
             "ve_front": self.ve_front,
             "ve_rear": self.ve_rear,
-            "afr_targets": {
-                str(int(k)): float(v)
-                for k, v in self.afr_targets.items()
-            },
+            "afr_targets": {str(int(k)): float(v) for k, v in self.afr_targets.items()},
             "rpm_bins": [float(v) for v in self.rpm_bins],
             "map_bins": [float(v) for v in self.map_bins],
             "source_pvv": self.source_pvv,
@@ -102,10 +99,7 @@ class CalibrationEntry:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CalibrationEntry":
         afr_targets_raw = data.get("afr_targets", {})
-        afr_targets = {
-            int(float(k)): float(v)
-            for k, v in afr_targets_raw.items()
-        }
+        afr_targets = {int(float(k)): float(v) for k, v in afr_targets_raw.items()}
         return cls(
             calibration_id=data["calibration_id"],
             config=HardwareConfig.from_dict(data["config"]),
@@ -147,10 +141,7 @@ class BlendedCalibration:
         return {
             "ve_front": self.ve_front,
             "ve_rear": self.ve_rear,
-            "afr_targets": {
-                str(int(k)): float(v)
-                for k, v in self.afr_targets.items()
-            },
+            "afr_targets": {str(int(k)): float(v) for k, v in self.afr_targets.items()},
             "rpm_bins": self.rpm_bins,
             "map_bins": self.map_bins,
             "confidence_map": self.confidence_map,
@@ -321,7 +312,9 @@ class CalibrationBlender:
         # Compute grid coverage: % of cells with confidence >= 2 (multiple sources, no pure extrapolation)
         total_cells = confidence.size
         well_covered_cells = int(np.sum(confidence >= 2))
-        grid_coverage_pct = (well_covered_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+        grid_coverage_pct = (
+            (well_covered_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+        )
 
         return BlendedCalibration(
             ve_front=ve_front.tolist(),
@@ -347,7 +340,9 @@ class CalibrationBlender:
         afr_vals = [float(afr_targets[int(k)]) for k in map_keys]
         map_arr = np.asarray(map_keys, dtype=np.float64)
         val_arr = np.asarray(afr_vals, dtype=np.float64)
-        return np.interp(target_map_bins, map_arr, val_arr, left=val_arr[0], right=val_arr[-1])
+        return np.interp(
+            target_map_bins, map_arr, val_arr, left=val_arr[0], right=val_arr[-1]
+        )
 
 
 class CalibrationLibrary:
@@ -391,9 +386,11 @@ class CalibrationLibrary:
         )
         if ve_rear_table is not None:
             rear_rpm, rear_map, rear_values = self._normalize_table(ve_rear_table)
-            if rear_values.shape != (len(rpm_bins), len(map_bins)) or not np.allclose(
-                rear_rpm, rpm_bins
-            ) or not np.allclose(rear_map, map_bins):
+            if (
+                rear_values.shape != (len(rpm_bins), len(map_bins))
+                or not np.allclose(rear_rpm, rpm_bins)
+                or not np.allclose(rear_map, map_bins)
+            ):
                 rear_values = resample_ve_table(
                     rear_values,
                     np.asarray(rear_rpm, dtype=np.float64),
@@ -448,9 +445,7 @@ class CalibrationLibrary:
             ),
             "last_ingested_at": ingest_ts,
             "ingest_count": (
-                int(existing.get("ingest_count", 1)) + 1
-                if existing is not None
-                else 1
+                int(existing.get("ingest_count", 1)) + 1 if existing is not None else 1
             ),
             "operator": operator or "unknown",
             "source_file_name": source_path.name,
@@ -552,10 +547,7 @@ class CalibrationLibrary:
                 )
             rear_values = rear_arr.tolist()
 
-        normalized_afr = {
-            int(float(k)): float(v)
-            for k, v in afr_targets.items()
-        }
+        normalized_afr = {int(float(k)): float(v) for k, v in afr_targets.items()}
 
         ingest_ts = time.time()
         source_identity = _source_identity(
@@ -589,9 +581,7 @@ class CalibrationLibrary:
             ),
             "last_ingested_at": ingest_ts,
             "ingest_count": (
-                int(existing.get("ingest_count", 1)) + 1
-                if existing is not None
-                else 1
+                int(existing.get("ingest_count", 1)) + 1 if existing is not None else 1
             ),
             "operator": operator or "parsed_import",
             "source_name": source_name,
@@ -669,7 +659,9 @@ class CalibrationLibrary:
         if engine_family:
             records = [r for r in records if r.get("engine_family") == engine_family]
 
-        records = sorted(records, key=lambda r: float(r.get("ingested_at", 0.0)), reverse=True)
+        records = sorted(
+            records, key=lambda r: float(r.get("ingested_at", 0.0)), reverse=True
+        )
         total = len(records)
         if offset < 0:
             offset = 0
@@ -691,7 +683,10 @@ class CalibrationLibrary:
         min_similarity: float = 0.0,
     ) -> List[CalibrationMatch]:
         query_family = query.engine_family
-        allowed_families = {query_family, _FAMILY_ALIASES.get(query_family, query_family)}
+        allowed_families = {
+            query_family,
+            _FAMILY_ALIASES.get(query_family, query_family),
+        }
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for record in self._index:
             if record.get("engine_family") not in allowed_families:
@@ -728,7 +723,9 @@ class CalibrationLibrary:
     def count(self, engine_family: Optional[str] = None) -> int:
         if engine_family is None:
             return len(self._index)
-        return sum(1 for record in self._index if record.get("engine_family") == engine_family)
+        return sum(
+            1 for record in self._index if record.get("engine_family") == engine_family
+        )
 
     def stats(self) -> Dict[str, Any]:
         by_family: Dict[str, int] = {}
@@ -742,7 +739,10 @@ class CalibrationLibrary:
             has_rear_value = record.get("has_rear")
             if has_rear_value is None:
                 try:
-                    has_rear_value = self.get_entry(str(record.get("calibration_id", ""))).ve_rear is not None
+                    has_rear_value = (
+                        self.get_entry(str(record.get("calibration_id", ""))).ve_rear
+                        is not None
+                    )
                 except Exception:
                     has_rear_value = False
             if not bool(has_rear_value):
@@ -751,7 +751,9 @@ class CalibrationLibrary:
             if afr_targets_count_value is None:
                 try:
                     afr_targets_count_value = len(
-                        self.get_entry(str(record.get("calibration_id", ""))).afr_targets
+                        self.get_entry(
+                            str(record.get("calibration_id", ""))
+                        ).afr_targets
                     )
                 except Exception:
                     afr_targets_count_value = 0
@@ -763,7 +765,9 @@ class CalibrationLibrary:
                 bad_shape_count += 1
             source_identity = str(record.get("source_identity", "")).strip()
             if source_identity:
-                source_identity_counts[source_identity] = source_identity_counts.get(source_identity, 0) + 1
+                source_identity_counts[source_identity] = (
+                    source_identity_counts.get(source_identity, 0) + 1
+                )
         duplicate_source_identities = sum(
             1 for count in source_identity_counts.values() if count > 1
         )
@@ -785,7 +789,9 @@ class CalibrationLibrary:
         if entry_path.exists():
             entry_path.unlink()
 
-        self._index = [r for r in self._index if str(r.get("calibration_id")) != calibration_id]
+        self._index = [
+            r for r in self._index if str(r.get("calibration_id")) != calibration_id
+        ]
         self._save_index()
         return True
 
@@ -798,7 +804,9 @@ class CalibrationLibrary:
                 return record
         return None
 
-    def _find_record_by_source_identity(self, source_identity: str) -> Optional[Dict[str, Any]]:
+    def _find_record_by_source_identity(
+        self, source_identity: str
+    ) -> Optional[Dict[str, Any]]:
         if not source_identity:
             return None
         for record in self._index:
@@ -826,7 +834,11 @@ class CalibrationLibrary:
         source_kind: str,
         source_calibration_id: str = "",
     ) -> Dict[str, Any]:
-        quality = entry.metadata.get("quality", {}) if isinstance(entry.metadata, dict) else {}
+        quality = (
+            entry.metadata.get("quality", {})
+            if isinstance(entry.metadata, dict)
+            else {}
+        )
         return {
             "calibration_id": entry.calibration_id,
             "engine_family": entry.config.engine_family,
@@ -838,12 +850,22 @@ class CalibrationLibrary:
             "source_path": source_path,
             "source_kind": source_kind,
             "source_identity": source_identity,
-            "ingested_at": float(entry.metadata.get("last_ingested_at", entry.metadata.get("ingested_at", time.time()))),
-            "first_ingested_at": float(entry.metadata.get("first_ingested_at", entry.metadata.get("ingested_at", time.time()))),
+            "ingested_at": float(
+                entry.metadata.get(
+                    "last_ingested_at", entry.metadata.get("ingested_at", time.time())
+                )
+            ),
+            "first_ingested_at": float(
+                entry.metadata.get(
+                    "first_ingested_at", entry.metadata.get("ingested_at", time.time())
+                )
+            ),
             "ingest_count": int(entry.metadata.get("ingest_count", 1)),
             "source_calibration_id": source_calibration_id or None,
             "has_rear": bool(quality.get("has_rear", entry.ve_rear is not None)),
-            "afr_targets_count": int(quality.get("afr_targets_count", len(entry.afr_targets))),
+            "afr_targets_count": int(
+                quality.get("afr_targets_count", len(entry.afr_targets))
+            ),
             "rows": int(quality.get("rows", len(entry.rpm_bins))),
             "cols": int(quality.get("cols", len(entry.map_bins))),
         }
@@ -982,7 +1004,9 @@ class CalibrationLibrary:
     @staticmethod
     def _normalize_map_bins(cols: Sequence[float], units: str) -> List[float]:
         unit_lower = (units or "").lower()
-        if "inhg" in unit_lower or ("kpa" not in unit_lower and max(cols, default=0.0) <= 35.0):
+        if "inhg" in unit_lower or (
+            "kpa" not in unit_lower and max(cols, default=0.0) <= 35.0
+        ):
             return [_inhg_to_kpa(v) for v in cols]
         return [round(float(v), 1) for v in cols]
 
@@ -1015,14 +1039,18 @@ class CalibrationLibrary:
             normalized_values.append(values_row)
 
         if not normalized_rows:
-            raise ValueError(f"Table {table.get('name', '<unknown>')} has no usable rows")
+            raise ValueError(
+                f"Table {table.get('name', '<unknown>')} has no usable rows"
+            )
 
         if _is_rpm_x1000(str(table.get("row_units", ""))):
             normalized_rows = [value * 1000.0 for value in normalized_rows]
         else:
             normalized_rows = [float(round(value, 0)) for value in normalized_rows]
 
-        normalized_cols = cls._normalize_map_bins(raw_cols, str(table.get("col_units", "")))
+        normalized_cols = cls._normalize_map_bins(
+            raw_cols, str(table.get("col_units", ""))
+        )
 
         # Dedupe map columns while preserving order.
         seen_cols = set()

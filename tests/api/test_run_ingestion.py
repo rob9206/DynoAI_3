@@ -15,9 +15,7 @@ from api.services.run_ingestion.promoter import (
 
 def _write_dynoai_csv(path: Path) -> None:
     path.write_text(
-        "Engine RPM,Horsepower,Torque\n"
-        "2000,40,100\n"
-        "3000,60,105\n",
+        "Engine RPM,Horsepower,Torque\n2000,40,100\n3000,60,105\n",
         encoding="utf-8",
     )
 

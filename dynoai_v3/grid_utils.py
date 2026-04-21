@@ -81,9 +81,7 @@ def resample_ve_table(
     )
 
     # Build destination grid points
-    dst_points = np.array([
-        [r, m] for r in dst_rpm_arr for m in dst_map_arr
-    ])
+    dst_points = np.array([[r, m] for r in dst_rpm_arr for m in dst_map_arr])
 
     resampled_flat = interp(dst_points)
     resampled = resampled_flat.reshape(len(dst_rpm_arr), len(dst_map_arr))
@@ -105,10 +103,14 @@ def resample_ve_table(
 
     logger.info(
         "Resampled VE table: (%d x %d) -> (%d x %d), MAP range src=[%.1f-%.1f] dst=[%.1f-%.1f]",
-        len(src_rpm_arr), len(src_map_arr),
-        len(dst_rpm_arr), len(dst_map_arr),
-        src_map_min, src_map_max,
-        dst_map_arr[0], dst_map_arr[-1],
+        len(src_rpm_arr),
+        len(src_map_arr),
+        len(dst_rpm_arr),
+        len(dst_map_arr),
+        src_map_min,
+        src_map_max,
+        dst_map_arr[0],
+        dst_map_arr[-1],
     )
 
     return resampled

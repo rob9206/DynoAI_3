@@ -23,7 +23,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -41,6 +41,7 @@ class HardwareConfig:
     engine_family and displacement_ci are required.  Other fields
     contribute to similarity scoring when matching templates.
     """
+
     # Required
     engine_family: str = ""
     displacement_ci: int = 0
@@ -114,10 +115,11 @@ class HardwareConfig:
 @dataclass
 class TemplateMatch:
     """Result of a template library search."""
+
     template_id: str
     config: HardwareConfig
     calibration: Dict[str, Any]
-    similarity_score: float     # 0.0 - 1.0
+    similarity_score: float  # 0.0 - 1.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -199,7 +201,7 @@ def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
         if isinstance(q_val, float):
             # Numeric comparison — compression_ratio
             if abs(q_val - s_val) < 0.1:
-                score += weight       # Exact
+                score += weight  # Exact
             elif abs(q_val - s_val) <= 0.5:
                 score += weight * 0.7  # Close
             elif abs(q_val - s_val) <= 1.0:
@@ -288,19 +290,23 @@ class TemplateLibrary:
             json.dump(record, f, indent=2)
 
         # Update index
-        self._index.append({
-            "template_id": template_id,
-            "engine_family": config.engine_family,
-            "displacement_ci": config.displacement_ci,
-            "signature": config.signature(),
-            "config": config.to_dict(),
-            "path": str(template_path.relative_to(self._dir)),
-        })
+        self._index.append(
+            {
+                "template_id": template_id,
+                "engine_family": config.engine_family,
+                "displacement_ci": config.displacement_ci,
+                "signature": config.signature(),
+                "config": config.to_dict(),
+                "path": str(template_path.relative_to(self._dir)),
+            }
+        )
         self._save_index()
 
         logger.info(
             "Template stored: %s (%s, %s)",
-            template_id, config.engine_family, config.signature(),
+            template_id,
+            config.engine_family,
+            config.signature(),
         )
         return template_id
 
@@ -360,9 +366,7 @@ class TemplateLibrary:
         """
         if engine_family is None:
             return len(self._index)
-        return sum(
-            1 for e in self._index if e["engine_family"] == engine_family
-        )
+        return sum(1 for e in self._index if e["engine_family"] == engine_family)
 
     # ------------------------------------------------------------------
     # Index management

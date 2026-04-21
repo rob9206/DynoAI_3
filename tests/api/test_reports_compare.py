@@ -64,7 +64,9 @@ def test_compare_runs_returns_pdf_metadata(client, monkeypatch, comparison_runs:
     assert Path(payload["report_path"]).exists()
 
 
-def test_compare_runs_download_true_returns_pdf(client, monkeypatch, comparison_runs: Path):
+def test_compare_runs_download_true_returns_pdf(
+    client, monkeypatch, comparison_runs: Path
+):
     monkeypatch.setattr("api.routes.reports.get_runs_dir", lambda: comparison_runs)
     response = client.post(
         "/api/reports/compare?download=true",
@@ -75,7 +77,9 @@ def test_compare_runs_download_true_returns_pdf(client, monkeypatch, comparison_
     assert len(response.data) > 1000
 
 
-def test_compare_runs_missing_run_returns_404(client, monkeypatch, comparison_runs: Path):
+def test_compare_runs_missing_run_returns_404(
+    client, monkeypatch, comparison_runs: Path
+):
     monkeypatch.setattr("api.routes.reports.get_runs_dir", lambda: comparison_runs)
     response = client.post(
         "/api/reports/compare",

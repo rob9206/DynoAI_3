@@ -177,7 +177,9 @@ def promote_path(path: Path, runs_dir: Path) -> RunPromotion:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     if _is_already_promoted(source_path, run_dir):
-        return _build_noop(run_id, run_dir, source_path, ext.lstrip("."), "already_promoted")
+        return _build_noop(
+            run_id, run_dir, source_path, ext.lstrip("."), "already_promoted"
+        )
 
     if ext == ".csv":
         fmt, bytes_copied = _promote_csv(source_path, run_dir)
@@ -219,7 +221,9 @@ def promote_path(path: Path, runs_dir: Path) -> RunPromotion:
             reason="promoted",
         )
 
-    return _build_noop(run_id, run_dir, source_path, ext.lstrip("."), "unsupported_extension")
+    return _build_noop(
+        run_id, run_dir, source_path, ext.lstrip("."), "unsupported_extension"
+    )
 
 
 def maybe_promote(event: dict[str, Any], runs_dir: Path) -> Optional[RunPromotion]:
@@ -246,4 +250,3 @@ def maybe_promote(event: dict[str, Any], runs_dir: Path) -> Optional[RunPromotio
     if not promotion.created and promotion.reason.startswith("unsupported"):
         return None
     return promotion
-
