@@ -337,9 +337,11 @@ def upload_to_session(vid: str, sid: str):
 
         try:
             classification = classify_upload(raw, safe_name, override=treat_as)
-        except Exception as exc:
+        except Exception:
             logger.exception("sniffer failed on %s", safe_name)
-            rejected.append({"name": safe_name, "reason": f"sniffer error: {exc}"})
+            rejected.append(
+                {"name": safe_name, "reason": "could not classify file"}
+            )
             continue
 
         file_type = classification.get("file_type")
@@ -389,9 +391,11 @@ def upload_to_session(vid: str, sid: str):
                 )
         except WorkspaceError as exc:
             rejected.append({"name": safe_name, "reason": str(exc)})
-        except Exception as exc:
+        except Exception:
             logger.exception("routing failed for %s", safe_name)
-            rejected.append({"name": safe_name, "reason": str(exc)})
+            rejected.append(
+                {"name": safe_name, "reason": "server error while routing file"}
+            )
 
     status = ws.compute_status(vid, sid)
     return (
