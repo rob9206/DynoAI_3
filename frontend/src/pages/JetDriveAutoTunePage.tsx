@@ -1229,9 +1229,10 @@ function JetDriveAutoTunePageOld() {
         return ch?.value || 0;
     }, [channels]);
 
-    // Dual-cylinder AFR extraction (LC1 = Front, LC2 = Rear)
+    // Dual-cylinder AFR extraction (default: LC2 channel 1 = front, channel 2 = rear)
     const currentAfrFront = useMemo(() => {
-        const ch = channels['LC1 Volts Petrol AFR'] || 
+        const ch = channels['LC2 Volts Petrol AFR'] ||
+                   channels['LC1 Volts Petrol AFR'] || 
                    channels['Air/Fuel Ratio 1'] || 
                    channels['AFR 1'] || 
                    channels['AFR'] || 

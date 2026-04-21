@@ -7,6 +7,7 @@ Tests for JetDrive pipeline performance fixes:
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import struct
 import threading
@@ -17,10 +18,10 @@ import pytest
 
 from api.services.jetdrive import jetdrive_client as jc
 
-
 # ---------------------------------------------------------------------------
 # Helpers: build wire frames with controllable sequence numbers
 # ---------------------------------------------------------------------------
+
 
 def _make_channel_values_frame(
     host: int = 0x1234,
@@ -34,7 +35,11 @@ def _make_channel_values_frame(
     for chan_id, ts, val in channels:
         payload.extend(struct.pack("<HIf", chan_id, ts, float(val)))
     return jc._Wire.encode(
-        jc.KEY_CHANNEL_VALUES, host=host, dest=jc.ALL_HOSTS, seq=seq, value=bytes(payload),
+        jc.KEY_CHANNEL_VALUES,
+        host=host,
+        dest=jc.ALL_HOSTS,
+        seq=seq,
+        value=bytes(payload),
     )
 
 
@@ -48,13 +53,18 @@ def _make_channel_info_frame(host: int = 0x1234, seq: int = 0) -> bytes:
         payload.extend(name.encode("utf-8").ljust(jc.CHANNEL_NAME_LEN, b"\0"))
         payload.append(int(unit))
     return jc._Wire.encode(
-        jc.KEY_CHANNEL_INFO, host=host, dest=jc.ALL_HOSTS, seq=seq, value=bytes(payload),
+        jc.KEY_CHANNEL_INFO,
+        host=host,
+        dest=jc.ALL_HOSTS,
+        seq=seq,
+        value=bytes(payload),
     )
 
 
 # ===================================================================
 # Test 1: SO_RCVBUF is set on subscribe socket
 # ===================================================================
+
 
 class TestUDPSocketBuffer:
     """Verify that the subscribe socket requests a 1 MB receive buffer."""
@@ -77,9 +87,15 @@ class TestUDPSocketBuffer:
                 return super().setsockopt(level, optname, value)
 
         provider = jc.JetDriveProviderInfo(
-            provider_id=0x1234, name="Test", host="127.0.0.1", port=22399, channels={},
+            provider_id=0x1234,
+            name="Test",
+            host="127.0.0.1",
+            port=22399,
+            channels={},
         )
-        cfg = jc.JetDriveConfig(multicast_group="224.0.2.10", port=22399, iface="127.0.0.1")
+        cfg = jc.JetDriveConfig(
+            multicast_group="224.0.2.10", port=22399, iface="127.0.0.1"
+        )
         stop_flag = [True]  # Stop immediately
 
         with patch("socket.socket", SpySocket):
@@ -97,21 +113,31 @@ class TestUDPSocketBuffer:
 # Test 2: Sequence gap detection
 # ===================================================================
 
+
 class TestSequenceGapDetection:
     """Verify that _subscribe_sync detects missing sequence numbers."""
 
     def _run_subscribe_with_frames(
-        self, frames: list[bytes], host: int = 0x1234,
+        self,
+        frames: list[bytes],
+        host: int = 0x1234,
     ) -> dict[str, int]:
         """Feed canned frames into _subscribe_sync and return stats."""
         frame_iter = iter(frames)
         call_count = [0]
 
         provider = jc.JetDriveProviderInfo(
-            provider_id=host, name="Test", host="127.0.0.1", port=22344,
-            channels={1: jc.ChannelInfo(chan_id=1, name="RPM", unit=jc.JDUnit.EngineSpeed)},
+            provider_id=host,
+            name="Test",
+            host="127.0.0.1",
+            port=22344,
+            channels={
+                1: jc.ChannelInfo(chan_id=1, name="RPM", unit=jc.JDUnit.EngineSpeed)
+            },
         )
-        cfg = jc.JetDriveConfig(multicast_group="224.0.2.10", port=22344, iface="127.0.0.1")
+        cfg = jc.JetDriveConfig(
+            multicast_group="224.0.2.10", port=22344, iface="127.0.0.1"
+        )
 
         samples_received: list[jc.JetDriveSample] = []
         stop_flag = [False]
@@ -120,16 +146,22 @@ class TestSequenceGapDetection:
         class FakeSocket:
             def __init__(self, *a, **kw):
                 pass
+
             def setsockopt(self, *a, **kw):
                 pass
+
             def getsockopt(self, *a, **kw):
                 return 0
+
             def bind(self, *a, **kw):
                 pass
+
             def settimeout(self, *a, **kw):
                 pass
+
             def close(self):
                 pass
+
             def recvfrom(self, bufsize):
                 try:
                     data = next(frame_iter)
@@ -140,8 +172,13 @@ class TestSequenceGapDetection:
 
         with patch("socket.socket", FakeSocket):
             stats = jc._subscribe_sync(
-                provider, [], lambda s: samples_received.append(s),
-                cfg, stop_flag, recv_timeout=0.1, debug=False,
+                provider,
+                [],
+                lambda s: samples_received.append(s),
+                cfg,
+                stop_flag,
+                recv_timeout=0.1,
+                debug=False,
             )
 
         return stats
@@ -213,10 +250,17 @@ class TestSequenceGapDetection:
         ]
         # Need to register both hosts as providers for accept_all_providers
         provider = jc.JetDriveProviderInfo(
-            provider_id=0xAAAA, name="Test", host="127.0.0.1", port=22344,
-            channels={1: jc.ChannelInfo(chan_id=1, name="RPM", unit=jc.JDUnit.EngineSpeed)},
+            provider_id=0xAAAA,
+            name="Test",
+            host="127.0.0.1",
+            port=22344,
+            channels={
+                1: jc.ChannelInfo(chan_id=1, name="RPM", unit=jc.JDUnit.EngineSpeed)
+            },
         )
-        cfg = jc.JetDriveConfig(multicast_group="224.0.2.10", port=22344, iface="127.0.0.1")
+        cfg = jc.JetDriveConfig(
+            multicast_group="224.0.2.10", port=22344, iface="127.0.0.1"
+        )
 
         frame_iter = iter(frames)
         stop_flag = [False]
@@ -224,16 +268,22 @@ class TestSequenceGapDetection:
         class FakeSocket:
             def __init__(self, *a, **kw):
                 pass
+
             def setsockopt(self, *a, **kw):
                 pass
+
             def getsockopt(self, *a, **kw):
                 return 0
+
             def bind(self, *a, **kw):
                 pass
+
             def settimeout(self, *a, **kw):
                 pass
+
             def close(self):
                 pass
+
             def recvfrom(self, bufsize):
                 try:
                     data = next(frame_iter)
@@ -244,8 +294,14 @@ class TestSequenceGapDetection:
 
         with patch("socket.socket", FakeSocket):
             stats = jc._subscribe_sync(
-                provider, [], lambda s: None, cfg, stop_flag,
-                recv_timeout=0.1, debug=False, accept_all_providers=True,
+                provider,
+                [],
+                lambda s: None,
+                cfg,
+                stop_flag,
+                recv_timeout=0.1,
+                debug=False,
+                accept_all_providers=True,
             )
 
         # Only host B had a gap of 4
@@ -262,17 +318,20 @@ class TestSequenceGapDetection:
 # Test 3: Event-driven SSE (_live_data_event)
 # ===================================================================
 
+
 class TestSSEEventDriven:
     """Verify that _live_data_event exists and is signaled on sample updates."""
 
     def test_live_data_event_exists(self):
         """_shared should export a threading.Event for SSE wake-up."""
         from api.routes.jetdrive._shared import _live_data_event
+
         assert isinstance(_live_data_event, threading.Event)
 
     def test_event_is_cleared_initially(self):
         """The event should not be set before any sample arrives."""
         from api.routes.jetdrive._shared import _live_data_event
+
         # Clear it to establish a known state
         _live_data_event.clear()
         assert not _live_data_event.is_set()
@@ -294,7 +353,11 @@ class TestSSEEventDriven:
             if not isinstance(channels, dict):
                 channels = {}
                 _live_data["channels"] = channels
-            channels["Test RPM"] = {"value": 3500, "name": "Test RPM", "timestamp": 1000}
+            channels["Test RPM"] = {
+                "value": 3500,
+                "name": "Test RPM",
+                "timestamp": 1000,
+            }
             _live_data["last_update_ts"] = time.time()
 
         # Signal the event (this is what on_sample does after the lock block)
@@ -335,8 +398,142 @@ class TestSSEEventDriven:
     def test_sse_stream_uses_event_not_fixed_sleep(self):
         """The SSE endpoint source should reference _live_data_event.wait, not time.sleep(0.25)."""
         import inspect
+
         from api.routes.jetdrive.hardware import stream_live_data
 
         source = inspect.getsource(stream_live_data)
-        assert "_live_data_event.wait" in source, "SSE should use _live_data_event.wait()"
-        assert "time.sleep(0.25)" not in source, "SSE should NOT use the old 250ms sleep"
+        assert "_live_data_event.wait" in source, (
+            "SSE should use _live_data_event.wait()"
+        )
+        assert "time.sleep(0.25)" not in source, (
+            "SSE should NOT use the old 250ms sleep"
+        )
+
+
+# ===================================================================
+# Test 4: Wideband canonicalization ordering for queue manager
+# ===================================================================
+
+
+class TestWidebandCanonicalizationOrdering:
+    """Verify live queue receives canonicalized AFR (not raw LC-2 volts)."""
+
+    def test_queue_receives_canonicalized_wideband_sample(self, monkeypatch):
+        from api.routes.jetdrive import hardware
+        from api.routes.jetdrive._shared import (
+            _live_data,
+            _live_data_lock,
+            _sample_ring,
+        )
+        from api.services.jetdrive.wideband_rescale import canonicalize_wideband_sample
+
+        queued_samples: list[jc.JetDriveSample] = []
+
+        class FakeQueueManager:
+            def on_sample(self, sample):
+                queued_samples.append(sample)
+
+            def start_processing(self):
+                pass
+
+            def force_flush(self):
+                pass
+
+            def stop_processing(self):
+                pass
+
+        class FakeValidator:
+            def set_active_provider(self, _provider_id):
+                pass
+
+            def reset(self, _provider_id):
+                pass
+
+            def record_sample(self, _sample):
+                pass
+
+            def record_frame_stats(self, _provider_id, total=1):
+                pass
+
+        provider_id = 0x1234
+        channel_id = 42
+        raw_sample = jc.JetDriveSample(
+            provider_id=provider_id,
+            channel_id=channel_id,
+            channel_name="LC2 Volts Petrol AFR1",
+            timestamp_ms=1000,
+            value=2.5,
+            category="misc",
+            units="V",
+        )
+        provider = jc.JetDriveProviderInfo(
+            provider_id=provider_id,
+            name="Fake Provider",
+            host="127.0.0.1",
+            port=22344,
+            channels={
+                channel_id: jc.ChannelInfo(
+                    chan_id=channel_id,
+                    name=raw_sample.channel_name,
+                    unit=int(jc.JDUnit.AFR),
+                )
+            },
+        )
+
+        async def fake_discover(_config, timeout=10.0):
+            return [provider]
+
+        async def fake_subscribe(
+            _provider,
+            _channel_names,
+            on_sample,
+            *,
+            config=None,
+            stop_event=None,
+            recv_timeout=2.0,
+            debug=True,
+            return_stats=True,
+        ):
+            on_sample(raw_sample)
+            if stop_event is not None:
+                stop_event.set()
+            return {"total_frames": 1, "dropped_frames": 0, "non_provider_frames": 0}
+
+        fake_queue_mgr = FakeQueueManager()
+        fake_validator = FakeValidator()
+
+        import api.services.jetdrive.jetdrive_client as client_mod
+        import api.services.jetdrive.jetdrive_live_queue as queue_mod
+        import api.services.jetdrive.jetdrive_validation as validation_mod
+
+        monkeypatch.setattr(client_mod, "discover_providers", fake_discover)
+        monkeypatch.setattr(client_mod, "subscribe", fake_subscribe)
+        monkeypatch.setattr(queue_mod, "reset_live_queue_manager", lambda: None)
+        monkeypatch.setattr(queue_mod, "get_live_queue_manager", lambda: fake_queue_mgr)
+        monkeypatch.setattr(validation_mod, "get_validator", lambda: fake_validator)
+
+        with _live_data_lock:
+            _live_data["capturing"] = True
+            _live_data["channels"] = {}
+            _live_data["last_update_ts"] = None
+            _live_data.pop("error", None)
+            _sample_ring.clear()
+
+        try:
+            hardware._live_capture_loop(requested_provider_id=provider_id)
+        except asyncio.CancelledError:
+            # _live_capture_loop cancels an internal check task on shutdown and
+            # may surface CancelledError during teardown in unit-test execution.
+            pass
+
+        assert queued_samples, "Expected at least one sample enqueued to live queue"
+        queued = queued_samples[0]
+        expected = canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 2.5)
+        assert expected is not None
+
+        assert queued.channel_name == expected.canonical_name
+        assert queued.value == pytest.approx(expected.afr, rel=1e-6)
+        assert queued.units == expected.units
+        # Ensure original sample remains raw and unchanged.
+        assert raw_sample.channel_name == "LC2 Volts Petrol AFR1"
+        assert raw_sample.value == pytest.approx(2.5)

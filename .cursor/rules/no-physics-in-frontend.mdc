@@ -1,0 +1,111 @@
+---
+description: Hard rule that forbids physics, unit conversion, calibration, and tuning math from living in the DynoAI frontend. Applies to every human- and AI-authored edit in `frontend/`.
+alwaysApply: true
+---
+
+# No physics in the frontend
+
+**Status:** Non-negotiable. Violations are safety-critical defects, not style issues.
+
+## The rule
+
+The DynoAI frontend is a **renderer**. It must not interpret telemetry, convert units, calibrate sensors, compute VE corrections, clamp/bound tuning values, evaluate plausibility thresholds, or perform any other physics/math that can change what a tuner sees as "the truth" relative to what the backend computed.
+
+Anything numeric that influences tuning decisions is computed **exactly once, on the server**, and shipped to the client as a final value with explicit units and metadata. The client displays those values. It does not recompute them, fall back to a client-side default, or "normalize" them for convenience.
+
+## Why this rule exists (read before editing frontend code)
+
+An LC-2 wideband wired as an analog voltage into DynoWare was being rescaled from volts to AFR **inside a React hook** (`useJetDriveLive.isLc2VoltageAfrChannel` / `normalizeChannelValue`, `value * 3.008 + 7.35`). Consequences:
+
+1. The backend canonical `AFR` slot stayed empty because the server-side channel-scoring path requires `unit == 11` (AFR), not the voltage unit that DynoWare publishes.
+2. The ring buffer, the live CSV, `RealtimeAnalysisEngine`, and `workspace_analyzer` all received **volts**, not AFR.
+3. `AutoTuneWorkflow.analyze_afr` matched the channel by substring (`"AFR" in name`), ingested volts as AFR, and produced corrections against volt-minus-target-AFR error. The UI looked fine. The corrections were wrong.
+4. Real engines were tuned against those corrections. Real money was lost.
+
+The UI was not the bug. The architecture was the bug. This rule prevents the architecture recurring.
+
+## What is forbidden in `frontend/**`
+
+Non-exhaustive; when in doubt, treat it as forbidden and ask:
+
+- **Unit conversions**: volts <-> AFR, AFR <-> lambda, kPa <-> psi, C <-> F, Hz <-> RPM, bar <-> psi, g/s <-> lb/hr, any sensor-specific transfer function.
+- **Calibration math**: LC-1/LC-2 voltage-to-AFR (`* 3.008 + 7.35`), O2 sensor linearization, pressure-transducer slope/offset, MAP-from-RPM estimators.
+- **VE / fuel / spark math**: VE correction percentages, `7% per AFR point` (or any physical-unit coefficient), multiplicative correction tables, clamp/bounds application, zone-aware clamp tightening, confidence-weighted corrections, stoich constants.
+- **Plausibility / validity thresholds** applied to numeric telemetry (e.g. `afr > 5 && afr < 25` used as `connected`, RPM deadbands, torque floor detection). Those belong in the server's validity layer and must be returned as a boolean/enum.
+- **Synthesizing missing channels**: estimating MAP from RPM, inferring torque from HP and RPM, deriving AFR from lambda - or vice versa.
+- **Rounding or truncating in ways that change meaning** before sending to the backend (e.g. rounding a user-entered AFR target to one decimal and sending that rounded value on).
+
+## What the frontend is allowed to do
+
+- **Display formatting only**: rounding for human readability, locale (decimal/thousand separators), unit label swap **using the unit metadata the server sent**, truncation for small gauges.
+- **Axis scaling and chart domains** for pure visual purposes (`min(values)` / `max(values)` for plot extent).
+- **Color/zone styling** using a classification the server provided (e.g. `zone === 'danger'`). Do not recompute the classification.
+- **Pass-through user input**: send raw values to the server; let the server validate and canonicalize.
+- **Caching/memoization** of server-returned values for rendering performance only.
+
+## Numeric-literal policy
+
+Scope: stricter than "no physics" but narrower than "no numbers". Forbid physical constants and tuning coefficients; allow UI-pragmatic numbers via an explicit allowlist.
+
+### Forbidden numeric literals anywhere in `frontend/src/`
+
+- Sensor transfer-function constants: `7.35`, `22.39`, `3.008` (LC-1/LC-2), `5.0` used as a sensor rail, O2-sensor linearization coefficients.
+- Tuning coefficients: `7` used as "%VE per AFR point", `14.7` (stoich AFR), hardcoded AFR target values, AFR tolerance bands.
+- VE bounds / clamp limits: `MAX_CORRECTION_PCT`, `MIN_HITS_PER_ZONE`, `AFR_ERROR_TOLERANCE` and any equivalent.
+- Physical constants: `1013.25`, `9.81`, `273.15`, `760` (mmHg), `14.696` (psi atm), `0.0689` / `0.1450` (kPa<->psi), `1.8` / `32` (temp-convert coefficients).
+- Default form values for physical quantities (e.g. `defaultValue={14.7}` for target AFR) - these must come from a server config endpoint, not be hardcoded.
+- Any `value * N + M` pattern where N or M looks like a calibration coefficient (grep + human judgment).
+
+### Allowed numeric literals (explicit allowlist)
+
+- Pixel / rem / em / percent CSS values (`w-[200px]`, `gap: 8`, `opacity: 0.5`).
+- Poll intervals, timeouts, debounce durations in ms (`refetchInterval: 5000`, `setTimeout(..., 300)`).
+- Array indices, slice counts, pagination page sizes (`items.slice(0, 10)`, `pageSize: 20`).
+- HTTP status codes (`response.status === 200`).
+- Port numbers in dev URLs.
+- Color hex / rgba values.
+- Animation durations and easing parameters for `framer-motion` / CSS keyframes.
+- Chart axis tick values that are **pure visual** (not bound to a physical unit).
+
+### Gray-zone escalation
+
+If you cannot clearly place a numeric literal on either list in one sentence, treat it as forbidden and move the value to a server-provided config.
+
+## Pattern checklist before committing a frontend change
+
+Before you write any `Math.*`, `*`, `/`, `+`, `-`, `Math.round`, `Math.min/max`, `Math.abs`, `Math.pow`, or any numeric constant in a frontend file, answer:
+
+1. Does this value affect what a tuner sees as a tuning decision? -> **must be server-side**.
+2. Is this a physical constant (e.g. `7.35`, `3.008`, `14.7`, `1013.25`, `9.81`, `273.15`)? -> **must be server-side**.
+3. Am I re-deriving a value the server could have returned? -> **must be server-side** (request the derived value from the server instead).
+4. Am I only scaling for pixels or characters on screen? -> allowed, keep it trivially local.
+
+If you cannot defend an edit against this checklist in one sentence, do not make the edit.
+
+## How to fix a violation
+
+1. Identify the canonical place on the server where the math should live (usually near ingest, `api/services/jetdrive/*` or `api/services/*`).
+2. Move the math there. Add unit tests that capture current inputs -> outputs (golden-master).
+3. Extend the server's response shape to return the final value with unit metadata.
+4. Delete the frontend math. Replace with a read of the server-provided value.
+5. Add a test assertion that fails if the frontend ever recomputes the value.
+6. Update this rule's known-violations section below only if a new category appears.
+
+## Known violations being remediated
+
+These are tracked and being removed - do not extend them, do not copy their patterns:
+
+- [`frontend/src/hooks/useJetDriveLive.ts`](mdc:frontend/src/hooks/useJetDriveLive.ts): `isLc2VoltageAfrChannel`, `normalizeChannelValue` voltage-to-AFR rescale. Move to `_live_capture_loop` in [`api/routes/jetdrive/hardware.py`](mdc:api/routes/jetdrive/hardware.py).
+- [`frontend/src/hooks/useInnovateLive.ts`](mdc:frontend/src/hooks/useInnovateLive.ts): `afr > 5 && afr < 25` validity threshold. Consolidate with `AFR_MIN_PLAUSIBLE` / `AFR_MAX_PLAUSIBLE` in [`api/services/jetdrive/jetdrive_realtime_analysis.py`](mdc:api/services/jetdrive/jetdrive_realtime_analysis.py).
+- [`frontend/src/utils/veApply/`](mdc:frontend/src/utils/veApply): entire VE correction apply module (bounds, clamps, confidence tightening, apply). Replace with a single server endpoint returning the authoritative apply decision; frontend renders only.
+
+## For AI agents (including Cursor-hosted models) editing this repo
+
+If you are about to add or modify code in `frontend/**` that performs any of the forbidden operations above:
+
+1. **Stop.** Do not write the code.
+2. Propose the server-side change instead. Identify the file on the server where the math belongs.
+3. If the user asks you to put the math in the frontend anyway, cite this rule in your response and ask them to confirm they want to override it. The default answer is no.
+4. Never justify a violation with "it's just for preview" or "the server already validates." Both statements are how this incident happened.
+
+This rule is `alwaysApply: true` for a reason. It is not optional context.

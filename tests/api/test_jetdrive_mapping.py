@@ -41,6 +41,7 @@ from api.services.jetdrive.jetdrive_mapping import (  # Signature; Transforms; D
     hp_to_kw,
     kw_to_hp,
     lambda_to_afr,
+    lc2_volts_to_afr,
     list_mappings,
     nm_to_ftlb,
     parse_provider_signature,
@@ -184,6 +185,13 @@ class TestTransforms:
         assert afr_to_lambda(12.0) == pytest.approx(0.816, rel=0.01)
 
     @staticmethod
+    def test_lc2_volts_to_afr():
+        """LC-2 default analog scaling should convert volts to AFR."""
+        assert lc2_volts_to_afr(0.0) == pytest.approx(7.35, rel=0.001)
+        assert lc2_volts_to_afr(5.0) == pytest.approx(22.39, rel=0.001)
+        assert lc2_volts_to_afr(2.5) == pytest.approx(14.87, rel=0.01)
+
+    @staticmethod
     def test_nm_to_ftlb():
         """100 Nm ≈ 73.76 ft-lb."""
         assert nm_to_ftlb(100) == pytest.approx(73.76, rel=0.01)
@@ -229,6 +237,7 @@ class TestTransforms:
         """All documented transforms should be in registry."""
         expected = [
             "lambda_to_afr",
+            "lc2_volts_to_afr",
             "afr_to_lambda",
             "nm_to_ftlb",
             "ftlb_to_nm",
@@ -337,7 +346,9 @@ class TestMappingPersistence:
     @staticmethod
     def test_save_and_load_mapping(mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             sig = "4097_192.168.1.100_abc123"
             mapping = ProviderMapping(
                 provider_signature=sig,
@@ -361,14 +372,18 @@ class TestMappingPersistence:
     @staticmethod
     def test_get_nonexistent_mapping(temp_mapping_dir):
         """Test loading a mapping that doesn't exist."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             mapping = get_mapping("nonexistent_signature")
             assert mapping is None
 
     @staticmethod
     def test_delete_mapping(temp_mapping_dir):
         """Test deleting a mapping file."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             sig = "to_delete"
             mapping = ProviderMapping(provider_signature=sig)
             save_mapping(mapping)
@@ -385,7 +400,9 @@ class TestMappingPersistence:
     @staticmethod
     def test_list_mappings(temp_mapping_dir):
         """Test listing all mappings."""
-        with patch("api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir):
+        with patch(
+            "api.services.jetdrive.jetdrive_mapping.MAPPING_DIR", temp_mapping_dir
+        ):
             # Save a few mappings
             for i in range(3):
                 mapping = ProviderMapping(
@@ -480,6 +497,30 @@ class TestAutoMapping:
         assert mapping.provider_signature == sig
         assert len(mapping.channels) > 0
         assert mapping.provider_id == mock_provider.provider_id
+
+    @staticmethod
+    def test_auto_map_prefers_lc2_channel_1_front_and_2_rear():
+        """LC2 voltage channels should default to front=1 and rear=2 with conversion."""
+        provider = MockProvider(
+            provider_id=0x1001,
+            name="LC2 Dyno",
+            host="192.168.1.100",
+            port=22344,
+            channels={
+                17: MockChannelInfo(chan_id=17, name="LC2 Volts Petrol AFR", unit=255),
+                23: MockChannelInfo(chan_id=23, name="LC2 Volts Petrol AFR2", unit=255),
+                10: MockChannelInfo(chan_id=10, name="Digital RPM 1", unit=8),
+            },
+        )
+
+        mappings = auto_map_channels(provider)
+
+        assert "afr_front" in mappings
+        assert "afr_rear" in mappings
+        assert mappings["afr_front"].source_name == "LC2 Volts Petrol AFR"
+        assert mappings["afr_rear"].source_name == "LC2 Volts Petrol AFR2"
+        assert mappings["afr_front"].transform == "lc2_volts_to_afr"
+        assert mappings["afr_rear"].transform == "lc2_volts_to_afr"
 
 
 # =============================================================================

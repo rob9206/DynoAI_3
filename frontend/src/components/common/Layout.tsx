@@ -1,6 +1,6 @@
 import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX, Shield, Database } from 'lucide-react';
+import { History, Home, Radio, Sparkles, Gauge, Volume2, VolumeX, Shield, Database, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
@@ -35,6 +35,17 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
+      {/* JetDrive hides the full nav; surface Workspace here so Analyze (session page) is discoverable */}
+      {isJetDrivePage && (
+        <Link
+          to="/workspace"
+          className="fixed top-3 right-3 z-[100] inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-3 py-2 text-sm font-medium text-zinc-100 shadow-lg backdrop-blur-sm hover:bg-zinc-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+          title="Open tuning workspace — upload files and run Analyze on a session"
+        >
+          <FlaskConical className="h-4 w-4 shrink-0 text-orange-400" aria-hidden />
+          Workspace
+        </Link>
+      )}
       {!isJetDrivePage && (
         <header className={`border-b sticky top-0 z-50 transition-colors ${isJetDrivePage
           ? 'bg-zinc-950/95 backdrop-blur-md border-zinc-800'
@@ -93,6 +104,16 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   <Home className="h-4 w-4" />
                   <span>Control</span>
+                </Link>
+                <Link
+                  to="/workspace"
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/workspace')
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                    }`}
+                >
+                  <FlaskConical className="h-4 w-4" />
+                  <span>Workspace</span>
                 </Link>
                 <Link
                   to="/wizards"
