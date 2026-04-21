@@ -28,7 +28,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
-    from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
+    from watchdog.events import (
+        FileCreatedEvent,
+        FileModifiedEvent,
+        FileSystemEventHandler,
+    )
     from watchdog.observers import Observer
 
     _WATCHDOG_AVAILABLE = True
@@ -49,7 +53,6 @@ from api.services.tuning_workspace import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 SUPPORTED_SUFFIXES = {".wp8", ".pvv", ".pvm", ".txt", ".csv", ".pti"}
 
@@ -282,7 +285,7 @@ class WorkspaceWatcher:
         with self._lock:
             self._recent_events.append(event)
             if len(self._recent_events) > self._max_history:
-                self._recent_events = self._recent_events[-self._max_history :]
+                self._recent_events = self._recent_events[-self._max_history:]
 
 
 class _VehicleFolderHandler(FileSystemEventHandler):  # type: ignore[misc]
@@ -319,7 +322,6 @@ class _VehicleFolderHandler(FileSystemEventHandler):  # type: ignore[misc]
 # -----------------------------------------------------------------------------
 # Singleton
 # -----------------------------------------------------------------------------
-
 
 _watcher: Optional[WorkspaceWatcher] = None
 _watcher_lock = threading.Lock()

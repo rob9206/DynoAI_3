@@ -40,7 +40,6 @@ logger = logging.getLogger(__name__)
 load_dotenv()  # Load environment variables from .env if present
 app = Flask(__name__)
 
-
 # Emit JSON-spec-compliant responses: replace non-finite floats (Infinity/NaN)
 # with null instead of Python's non-standard "Infinity"/"NaN" tokens, which
 # JSON.parse in the browser rejects with errors like

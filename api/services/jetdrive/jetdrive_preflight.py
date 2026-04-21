@@ -86,8 +86,23 @@ REQUIRED_CHANNEL_GROUPS = {
 
 # Recommended channels (nice to have, warn if missing)
 RECOMMENDED_CHANNELS = {
-    "map": ["MAP kPa", "MAP", "MAP (kPa)", "Manifold Absolute Pressure", "Manifold Pressure", "chan_20", "chan_28"],
-    "tps": ["TPS", "TPS (%)", "Throttle Position", "Throttle Position Sensor Voltage", "chan_21", "chan_29"],
+    "map": [
+        "MAP kPa",
+        "MAP",
+        "MAP (kPa)",
+        "Manifold Absolute Pressure",
+        "Manifold Pressure",
+        "chan_20",
+        "chan_28",
+    ],
+    "tps": [
+        "TPS",
+        "TPS (%)",
+        "Throttle Position",
+        "Throttle Position Sensor Voltage",
+        "chan_21",
+        "chan_29",
+    ],
     "torque": ["Torque", "chan_3"],
     "power": ["Horsepower", "HP", "Power", "chan_4", "chan_5"],
 }
@@ -97,7 +112,15 @@ RECOMMENDED_CHANNELS = {
 # while still being specific enough to avoid obvious false positives.
 REQUIRED_GROUP_FUZZY_TOKENS = {
     "rpm": ("rpm", "engine speed"),
-    "afr": ("air/fuel", "afr", "lambda", "user analog 1", "user analog 2", "lc1", "lc2"),
+    "afr": (
+        "air/fuel",
+        "afr",
+        "lambda",
+        "user analog 1",
+        "user analog 2",
+        "lc1",
+        "lc2",
+    ),
 }
 
 RECOMMENDED_GROUP_FUZZY_TOKENS = {
@@ -123,6 +146,7 @@ SEMANTIC_RANGES = {
 
 # Power/Torque/RPM relationship constant (HP = Torque * RPM / 5252)
 POWER_CONSTANT = 5252
+
 
 def _is_lc2_voltage_afr_channel(channel_name: str) -> bool:
     """Return True when channel name indicates LC-2 voltage AFR output."""

@@ -40,7 +40,6 @@ from api.services.tuning_workspace import (
 
 logger = logging.getLogger(__name__)
 
-
 __all__ = [
     "WorkspaceAnalysisResult",
     "analyze_iteration",
@@ -120,9 +119,7 @@ def analyze_iteration(
 
     chosen, df, source, peak = _select_primary_pull(pulls)
     if chosen is None or df is None or df.empty:
-        result.errors.append(
-            "no parseable pull found (tried TXT, CSV, WP8)"
-        )
+        result.errors.append("no parseable pull found (tried TXT, CSV, WP8)")
         return result
 
     result.primary_pull = chosen.name
@@ -134,9 +131,7 @@ def analyze_iteration(
         result.peak_tq = peak.get("peak_torque")
 
     workflow = AutoTuneWorkflow()
-    autotune_session = workflow.create_session(
-        run_id=f"{session.id}_{iteration.id}"
-    )
+    autotune_session = workflow.create_session(run_id=f"{session.id}_{iteration.id}")
 
     dataframe_for_autotune = _shape_for_autotune(df)
     imported = workflow.import_dataframe(autotune_session, dataframe_for_autotune)
@@ -161,13 +156,9 @@ def analyze_iteration(
         return result
 
     if autotune_session.afr_analysis:
-        result.afr_mean_error_pct = float(
-            autotune_session.afr_analysis.mean_error_pct
-        )
+        result.afr_mean_error_pct = float(autotune_session.afr_analysis.mean_error_pct)
     if autotune_session.ve_corrections:
-        result.zones_adjusted = int(
-            autotune_session.ve_corrections.zones_adjusted
-        )
+        result.zones_adjusted = int(autotune_session.ve_corrections.zones_adjusted)
     if not result.peak_hp and autotune_session.peak_hp:
         result.peak_hp = float(autotune_session.peak_hp)
         result.peak_hp_rpm = float(autotune_session.peak_hp_rpm)
@@ -179,9 +170,7 @@ def analyze_iteration(
     output_dir = iter_dir / "autotune"
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        pvv_path = workflow.export_pvv_corrections(
-            autotune_session, str(output_dir)
-        )
+        pvv_path = workflow.export_pvv_corrections(autotune_session, str(output_dir))
         if pvv_path:
             result.correction_pvv_path = pvv_path
             import shutil

@@ -34,7 +34,6 @@ __all__ = [
     "looks_like_dynojet_txt",
 ]
 
-
 _NUMERIC_RE = re.compile(r"^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 
 HEADER_HINTS = {
@@ -171,7 +170,9 @@ def parse_dynojet_txt(text: str) -> tuple[pd.DataFrame, DynojetTxtReport]:
         mode_width = widths[0]
     data_rows = [r for r in data_rows if len(r) == mode_width]
 
-    rechunked = _chunk_header_to_width(raw_header_line, mode_width) if raw_header_line else None
+    rechunked = (
+        _chunk_header_to_width(raw_header_line, mode_width) if raw_header_line else None
+    )
     if rechunked and len(rechunked) == mode_width:
         cols = rechunked
     elif header_cols and len(header_cols) == mode_width:
@@ -314,7 +315,9 @@ def _infer_columns(width: int, rows: list[list[float]]) -> list[str]:
         if label in available_labels:
             available_labels.remove(label)
 
-    def range_match(col_idx: int, lo: float, hi: float, mean_lo: float, mean_hi: float) -> bool:
+    def range_match(
+        col_idx: int, lo: float, hi: float, mean_lo: float, mean_hi: float
+    ) -> bool:
         s = df[col_idx]
         if not len(s):
             return False

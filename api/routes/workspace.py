@@ -31,21 +31,21 @@ PVV -> base tune or patch; WP8/TXT/CSV -> pulls.
 from __future__ import annotations
 
 import logging
+
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
 from api.errors import ValidationError, with_error_handling
 from api.services.ingest.sniffer import classify_upload
+from api.services.ingest.watcher import get_watcher
 from api.services.tuning_workspace import (
     WorkspaceError,
     get_workspace,
 )
 from api.services.workspace_analyzer import analyze_iteration
-from api.services.ingest.watcher import get_watcher
 
 logger = logging.getLogger(__name__)
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/api/workspace")
-
 
 # =============================================================================
 # Vehicles
@@ -167,9 +167,7 @@ def get_session_status(vid: str, sid: str):
 # =============================================================================
 
 
-@workspace_bp.route(
-    "/vehicles/<vid>/sessions/<sid>/iterations", methods=["GET"]
-)
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/iterations", methods=["GET"])
 @with_error_handling
 def list_iterations(vid: str, sid: str):
     try:
@@ -180,9 +178,7 @@ def list_iterations(vid: str, sid: str):
     return jsonify([i.to_dict() for i in iters]), 200
 
 
-@workspace_bp.route(
-    "/vehicles/<vid>/sessions/<sid>/iterations", methods=["POST"]
-)
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/iterations", methods=["POST"])
 @with_error_handling
 def create_iteration(vid: str, sid: str):
     data = request.get_json(silent=True) or {}
@@ -247,9 +243,7 @@ def list_analyses(vid: str, sid: str, iid: str):
 # =============================================================================
 
 
-@workspace_bp.route(
-    "/vehicles/<vid>/sessions/<sid>/analyze", methods=["POST"]
-)
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/analyze", methods=["POST"])
 @with_error_handling
 def analyze_active_iteration(vid: str, sid: str):
     """Run AutoTune analysis on the active (or specified) iteration."""
@@ -282,9 +276,7 @@ def analyze_specific_iteration(vid: str, sid: str, iid: str):
 # =============================================================================
 
 
-@workspace_bp.route(
-    "/vehicles/<vid>/sessions/<sid>/upload", methods=["POST"]
-)
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/upload", methods=["POST"])
 @with_error_handling
 def upload_to_session(vid: str, sid: str):
     """Accept one or more files, sniff content, route to the right slot."""
@@ -339,9 +331,7 @@ def upload_to_session(vid: str, sid: str):
             classification = classify_upload(raw, safe_name, override=treat_as)
         except Exception:
             logger.exception("sniffer failed on %s", safe_name)
-            rejected.append(
-                {"name": safe_name, "reason": "could not classify file"}
-            )
+            rejected.append({"name": safe_name, "reason": "could not classify file"})
             continue
 
         file_type = classification.get("file_type")
@@ -362,9 +352,7 @@ def upload_to_session(vid: str, sid: str):
                     }
                 )
             elif target_slot == "patches":
-                dst = ws.add_patch(
-                    vid, sid, active_iteration.id, safe_name, raw
-                )
+                dst = ws.add_patch(vid, sid, active_iteration.id, safe_name, raw)
                 routed.append(
                     {
                         "name": safe_name,
@@ -376,9 +364,7 @@ def upload_to_session(vid: str, sid: str):
                     }
                 )
             else:
-                dst = ws.add_pull(
-                    vid, sid, active_iteration.id, safe_name, raw
-                )
+                dst = ws.add_pull(vid, sid, active_iteration.id, safe_name, raw)
                 routed.append(
                     {
                         "name": safe_name,

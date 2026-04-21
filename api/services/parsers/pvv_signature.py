@@ -19,7 +19,6 @@ from typing import Iterable, Optional
 
 __all__ = ["compute_pvv_signature"]
 
-
 # Tables that change only when the calibration truly changes.
 # Any one of these present is enough to fingerprint the tune; we use the
 # union of whatever we find.
@@ -37,7 +36,6 @@ CORE_TABLE_HINTS: tuple[str, ...] = (
     "spark advance front",
     "spark advance rear",
 )
-
 
 _ITEM_RE = re.compile(
     r'<Item\b[^>]*\bname="([^"]+)"[^>]*>(.*?)</Item>',

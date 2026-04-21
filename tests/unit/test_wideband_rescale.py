@@ -122,14 +122,8 @@ class TestCanonicalization:
     def test_out_of_range_voltage_returns_none(self):
         # Values well outside the 0-5V rail (plus 10% pad) are rejected
         # so an already-AFR reading cannot be mistakenly rescaled again.
-        assert (
-            canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 14.7)
-            is None
-        )
-        assert (
-            canonicalize_wideband_sample("LC2 Volts Petrol AFR1", -1.0)
-            is None
-        )
+        assert canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 14.7) is None
+        assert canonicalize_wideband_sample("LC2 Volts Petrol AFR1", -1.0) is None
 
     def test_voltage_just_outside_rail_is_allowed(self):
         # Brief transients at the sensor rails (within 10% pad) are OK.
@@ -138,7 +132,8 @@ class TestCanonicalization:
 
     def test_non_numeric_value_returns_none(self):
         result = canonicalize_wideband_sample(
-            "LC2 Volts Petrol AFR1", "not a number"  # type: ignore[arg-type]
+            "LC2 Volts Petrol AFR1",
+            "not a number",  # type: ignore[arg-type]
         )
         assert result is None
 
@@ -157,9 +152,7 @@ class TestCalibrationOverride:
         )
         try:
             set_active_calibration(custom)
-            result = canonicalize_wideband_sample(
-                "LC2 Volts Petrol AFR1", 2.5
-            )
+            result = canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 2.5)
             assert result is not None
             assert math.isclose(result.afr, 15.0, abs_tol=1e-6)
         finally:
@@ -203,8 +196,6 @@ class TestRegressionScenarioForOriginalBug:
     def test_stoich_voltage_is_near_stoich_afr(self):
         # DynoWare analog out is calibrated so 2.375V maps to ~14.5 AFR by
         # default LC-2 spec. Check within a loose tolerance.
-        result = canonicalize_wideband_sample(
-            "LC2 Volts Petrol AFR1", 2.375
-        )
+        result = canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 2.375)
         assert result is not None
         assert 14.0 <= result.afr <= 15.5

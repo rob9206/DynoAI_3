@@ -6,8 +6,8 @@ relying on filenames/folders.
 """
 
 from api.services.ingest.sniffer import (
-    FileType,
     Classification,
+    FileType,
     classify_upload,
 )
 

@@ -19,10 +19,7 @@ try:
 except Exception:
     _HAS_WATCHDOG = False
 
-
-pytestmark = pytest.mark.skipif(
-    not _HAS_WATCHDOG, reason="watchdog not installed"
-)
+pytestmark = pytest.mark.skipif(not _HAS_WATCHDOG, reason="watchdog not installed")
 
 
 def test_hot_folder_routes_pvv_and_wp8(tmp_path: Path):

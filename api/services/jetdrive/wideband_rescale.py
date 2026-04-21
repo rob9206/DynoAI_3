@@ -151,11 +151,7 @@ def match_wideband_channel(name: str) -> Optional[str]:
         return None
 
     lowered = name.lower()
-    if not (
-        "volts" in lowered
-        and "petrol" in lowered
-        and "afr" in lowered
-    ):
+    if not ("volts" in lowered and "petrol" in lowered and "afr" in lowered):
         return None
 
     if "1" in lowered or "front" in lowered:

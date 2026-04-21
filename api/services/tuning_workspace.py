@@ -51,7 +51,6 @@ __all__ = [
     "get_workspace",
 ]
 
-
 # =============================================================================
 # Errors
 # =============================================================================
@@ -139,7 +138,6 @@ class SessionStatus:
 # =============================================================================
 # Helpers
 # =============================================================================
-
 
 _SLUG_RE = re.compile(r"[^a-z0-9_-]+")
 
@@ -410,14 +408,10 @@ class TuningWorkspace:
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(pvv_bytes)
             digest = _sha256_bytes(pvv_bytes)
-            self.update_session(
-                vehicle_id, session_id, base_tune_sha256=digest
-            )
+            self.update_session(vehicle_id, session_id, base_tune_sha256=digest)
             return {"path": str(dst), "sha256": digest, "size": len(pvv_bytes)}
 
-    def get_base_tune_path(
-        self, vehicle_id: str, session_id: str
-    ) -> Optional[Path]:
+    def get_base_tune_path(self, vehicle_id: str, session_id: str) -> Optional[Path]:
         p = self.base_tune_path(vehicle_id, session_id)
         return p if p.exists() else None
 
@@ -425,9 +419,7 @@ class TuningWorkspace:
     # Iterations
     # -------------------------------------------------------------------------
 
-    def list_iterations(
-        self, vehicle_id: str, session_id: str
-    ) -> list[Iteration]:
+    def list_iterations(self, vehicle_id: str, session_id: str) -> list[Iteration]:
         idir = self.iterations_dir(vehicle_id, session_id)
         if not idir.exists():
             return []
@@ -490,16 +482,13 @@ class TuningWorkspace:
         self, vehicle_id: str, session_id: str, iteration_id: str
     ) -> Iteration:
         ijson = (
-            self.iteration_dir(vehicle_id, session_id, iteration_id)
-            / "iteration.json"
+            self.iteration_dir(vehicle_id, session_id, iteration_id) / "iteration.json"
         )
         if not ijson.exists():
             raise WorkspaceError(f"iteration not found: {iteration_id}")
         return Iteration(**_read_json(ijson))
 
-    def get_active_iteration(
-        self, vehicle_id: str, session_id: str
-    ) -> Iteration:
+    def get_active_iteration(self, vehicle_id: str, session_id: str) -> Iteration:
         session = self.get_session(vehicle_id, session_id)
         if session.active_iteration_id:
             try:
@@ -629,9 +618,7 @@ class TuningWorkspace:
     AFR_EXTENSIONS = {".txt", ".csv"}
     PULL_EXTENSIONS = {".wp8", ".txt", ".csv"}
 
-    def compute_status(
-        self, vehicle_id: str, session_id: str
-    ) -> SessionStatus:
+    def compute_status(self, vehicle_id: str, session_id: str) -> SessionStatus:
         try:
             session = self.get_session(vehicle_id, session_id)
         except WorkspaceError:
@@ -753,7 +740,6 @@ class TuningWorkspace:
 # =============================================================================
 # Global singleton (configured via env or default "vehicles/")
 # =============================================================================
-
 
 _workspace: Optional[TuningWorkspace] = None
 _workspace_lock = threading.Lock()

@@ -28,9 +28,7 @@ from api.services.parsers.pvv_signature import compute_pvv_signature
 
 logger = logging.getLogger(__name__)
 
-
 __all__ = ["FileType", "Classification", "classify_upload"]
-
 
 WP8_MAGIC = b"\xfe\xce\xfa\xce"
 HEAD_BYTES = 64 * 1024

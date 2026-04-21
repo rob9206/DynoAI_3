@@ -65,9 +65,7 @@ class TestSessionLifecycle:
         assert session["active_iteration_id"] == "iter_0"
 
         sid = session["id"]
-        status_resp = client.get(
-            f"/api/workspace/vehicles/dyna/sessions/{sid}/status"
-        )
+        status_resp = client.get(f"/api/workspace/vehicles/dyna/sessions/{sid}/status")
         assert status_resp.status_code == 200
         status = status_resp.get_json()
         assert status["ready_to_analyze"] is False

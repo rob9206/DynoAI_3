@@ -12,8 +12,8 @@ def test_stable_across_whitespace_changes():
         b'<Cell value="1.0"/><Cell value="1.05"/></Item></PVV>'
     )
     b = (
-        b"<?xml version=\"1.0\"?>\n"
-        b'<PVV>\n'
+        b'<?xml version="1.0"?>\n'
+        b"<PVV>\n"
         b'    <Item name="tbl_ve_tps_based_front_cyl">\n'
         b'        <Cell value="1.0"/>\n'
         b'        <Cell value="1.05"/>\n'
@@ -42,7 +42,9 @@ def test_non_pvv_returns_none():
 
 
 def test_pvv_without_core_tables_falls_back_to_weak_signature():
-    data = b'<?xml version="1.0"?><PVV><Item name="random"><Cell value="0"/></Item></PVV>'
+    data = (
+        b'<?xml version="1.0"?><PVV><Item name="random"><Cell value="0"/></Item></PVV>'
+    )
     sig = compute_pvv_signature(data)
     assert sig is not None
     assert sig.startswith("weak:")
