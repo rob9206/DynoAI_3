@@ -1,9 +1,19 @@
-import { useMemo, useRef, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Database, FileUp, FlaskConical, Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CollapsibleSection } from "@/components/jetdrive/CollapsibleSection";
 import { toast } from "@/lib/toast";
 import { handleApiError } from "@/lib/api";
@@ -18,6 +28,7 @@ const BLEND_MIN_SIMILARITY = 0.55;
 
 export function CalibrationLibraryPanel({ config }: CalibrationLibraryPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const library = useCalibrationLibrary(config.engine_family);
 
   const entries = library.list?.entries ?? [];
@@ -61,12 +72,15 @@ export function CalibrationLibraryPanel({ config }: CalibrationLibraryPanelProps
     }
   };
 
-  const handleDelete = async (calibrationId: string) => {
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
     try {
-      await library.deleteCalibration(calibrationId);
-      toast.success(`Deleted calibration ${calibrationId.slice(0, 8)}`);
+      await library.deleteCalibration(deleteTarget.id);
+      toast.success(`Deleted calibration ${deleteTarget.id.slice(0, 8)}`);
     } catch (error) {
       toast.error(handleApiError(error));
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -143,37 +157,41 @@ export function CalibrationLibraryPanel({ config }: CalibrationLibraryPanelProps
                 No entries yet for this family. Upload a PVV to seed it.
               </p>
             ) : (
-              entries.map((entry) => (
-                <div
-                  key={entry.calibration_id}
-                  className="flex items-center justify-between rounded border p-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">
-                      {entry.source_file_name ?? entry.calibration_id}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {entry.calibration_id.slice(0, 8)} •{" "}
-                      {formatIngestedTime(entry.ingested_at)}
-                      {typeof entry.ingest_count === "number" && entry.ingest_count > 1
-                        ? ` • re-ingested x${entry.ingest_count}`
-                        : ""}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleDelete(entry.calibration_id)}
-                    disabled={library.isDeleting}
-                    title="Delete calibration"
+              entries.map((entry) => {
+                const displayName = entry.source_file_name ?? entry.calibration_id;
+                return (
+                  <div
+                    key={entry.calibration_id}
+                    className="flex items-center justify-between rounded border p-2"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))
-            )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate" title={displayName}>
+                        {displayName}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {entry.calibration_id.slice(0, 8)} •{" "}
+                        {formatIngestedTime(entry.ingested_at)}
+                        {typeof entry.ingest_count === "number" && entry.ingest_count > 1
+                          ? ` • re-ingested x${entry.ingest_count}`
+                          : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setDeleteTarget({ id: entry.calibration_id, name: displayName })}
+                      disabled={library.isDeleting}
+                      aria-label={`Delete calibration ${displayName}`}
+                      title="Delete calibration"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              }))
+            }
           </div>
         </div>
 
@@ -221,6 +239,28 @@ export function CalibrationLibraryPanel({ config }: CalibrationLibraryPanelProps
           <p className="text-xs text-red-400">{handleApiError(library.blendError)}</p>
         )}
       </div>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete calibration?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove{" "}
+              <span className="font-medium text-foreground">{deleteTarget?.name}</span>{" "}
+              from the library. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirmed}
+              className="bg-red-600 hover:bg-red-500"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </CollapsibleSection>
   );
 }

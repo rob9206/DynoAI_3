@@ -23,7 +23,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -41,6 +41,7 @@ class HardwareConfig:
     engine_family and displacement_ci are required.  Other fields
     contribute to similarity scoring when matching templates.
     """
+
     # Required
     engine_family: str = ""
     displacement_ci: int = 0
@@ -114,10 +115,11 @@ class HardwareConfig:
 @dataclass
 class TemplateMatch:
     """Result of a template library search."""
+
     template_id: str
     config: HardwareConfig
     calibration: Dict[str, Any]
-    similarity_score: float     # 0.0 - 1.0
+    similarity_score: float  # 0.0 - 1.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -137,6 +139,46 @@ _SIMILARITY_WEIGHTS = {
     "throttle_body_mm": 0.10,
     "fuel_type": 0.10,
 }
+
+
+def _string_similarity(query_val: str, stored_val: str) -> float:
+    """Fuzzy string similarity for cam_spec/exhaust_type matching.
+
+    Returns 0.0–1.0 credit fraction:
+      1.0 = exact match
+      0.6 = query token found inside the stored free-text value
+      0.3 = "stock" vs "stock" substring inside a longer description
+      0.0 = no relation detected
+    """
+    q = query_val.lower().strip()
+    s = stored_val.lower().strip()
+    if q == s:
+        return 1.0
+
+    # Normalise underscores/hyphens to spaces for token matching
+    q_norm = q.replace("_", " ").replace("-", " ")
+    s_norm = s.replace("_", " ").replace("-", " ")
+
+    if q_norm == s_norm:
+        return 1.0
+
+    # Token-in-string: e.g. query="se_255" matches stored="1690 with se 255 cams …"
+    q_tokens = q_norm.split()
+    if len(q_tokens) >= 2:
+        joined = " ".join(q_tokens)
+        if joined in s_norm:
+            return 0.7
+
+    # Single meaningful token: e.g. query="open" matches stored="open pipe …"
+    for token in q_tokens:
+        if len(token) >= 3 and token in s_norm:
+            return 0.4
+
+    # Both "stock" — partial credit even if stored has extra text
+    if "stock" in q_norm and "stock" in s_norm:
+        return 0.5
+
+    return 0.0
 
 
 def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
@@ -159,7 +201,7 @@ def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
         if isinstance(q_val, float):
             # Numeric comparison — compression_ratio
             if abs(q_val - s_val) < 0.1:
-                score += weight       # Exact
+                score += weight  # Exact
             elif abs(q_val - s_val) <= 0.5:
                 score += weight * 0.7  # Close
             elif abs(q_val - s_val) <= 1.0:
@@ -174,10 +216,9 @@ def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
             elif abs(q_val - s_val) <= 4:
                 score += weight * 0.3
         else:
-            # String comparison
-            if q_val == s_val:
-                score += weight
-            # No partial credit for string mismatches
+            # String comparison with fuzzy matching
+            credit = _string_similarity(str(q_val), str(s_val))
+            score += weight * credit
 
     if total_weight > 0:
         return score / total_weight
@@ -249,19 +290,23 @@ class TemplateLibrary:
             json.dump(record, f, indent=2)
 
         # Update index
-        self._index.append({
-            "template_id": template_id,
-            "engine_family": config.engine_family,
-            "displacement_ci": config.displacement_ci,
-            "signature": config.signature(),
-            "config": config.to_dict(),
-            "path": str(template_path.relative_to(self._dir)),
-        })
+        self._index.append(
+            {
+                "template_id": template_id,
+                "engine_family": config.engine_family,
+                "displacement_ci": config.displacement_ci,
+                "signature": config.signature(),
+                "config": config.to_dict(),
+                "path": str(template_path.relative_to(self._dir)),
+            }
+        )
         self._save_index()
 
         logger.info(
             "Template stored: %s (%s, %s)",
-            template_id, config.engine_family, config.signature(),
+            template_id,
+            config.engine_family,
+            config.signature(),
         )
         return template_id
 
@@ -321,9 +366,7 @@ class TemplateLibrary:
         """
         if engine_family is None:
             return len(self._index)
-        return sum(
-            1 for e in self._index if e["engine_family"] == engine_family
-        )
+        return sum(1 for e in self._index if e["engine_family"] == engine_family)
 
     # ------------------------------------------------------------------
     # Index management
