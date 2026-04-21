@@ -17,9 +17,13 @@ export interface PVVTable {
     units: string;
     columnUnits: string;
     rowUnits: string;
-    columns: number[];      // MAP bins
+    columns: number[];      // MAP bins (normalized to kPa)
     rows: number[];         // RPM bins (in actual RPM, not x1000)
     values: number[][];     // [rowIdx][colIdx]
+    /** Original column values before unit normalization (e.g. inHg). */
+    originalColumns?: number[];
+    /** The detected source unit for columns before normalization. */
+    sourceColumnUnit?: 'kpa' | 'inhg' | 'unknown';
 }
 
 /** Engine family values we can infer from PVV displacement (for V3 session config). */
@@ -645,6 +649,44 @@ export function parsePVV(xmlContent: string): ParsedPVV {
     return result;
 }
 
+export const INHG_TO_KPA = 3.38639;
+
+export function normalizeMapColumns(
+    rawColumns: number[],
+    columnUnits: string,
+): { columns: number[]; originalColumns: number[]; sourceUnit: 'kpa' | 'inhg' | 'unknown' } {
+    const unitLower = columnUnits.toLowerCase().replace(/\s+/g, '');
+    const isInhg =
+        unitLower.includes('inchesofmercury') ||
+        unitLower.includes('inhg') ||
+        unitLower.includes('in-hg') ||
+        unitLower.includes('inches_of_mercury');
+    const isKpa =
+        unitLower.includes('kpa') ||
+        unitLower.includes('kilopascal');
+
+    if (isInhg) {
+        return {
+            columns: rawColumns.map((v) => Math.round(v * INHG_TO_KPA * 10) / 10),
+            originalColumns: [...rawColumns],
+            sourceUnit: 'inhg',
+        };
+    }
+    if (isKpa) {
+        return { columns: [...rawColumns], originalColumns: [...rawColumns], sourceUnit: 'kpa' };
+    }
+    // Heuristic: if max value <= 35, likely inHg (MAP vacuum range)
+    const maxVal = rawColumns.length > 0 ? Math.max(...rawColumns) : 0;
+    if (maxVal > 0 && maxVal <= 35) {
+        return {
+            columns: rawColumns.map((v) => Math.round(v * INHG_TO_KPA * 10) / 10),
+            originalColumns: [...rawColumns],
+            sourceUnit: 'inhg',
+        };
+    }
+    return { columns: [...rawColumns], originalColumns: [...rawColumns], sourceUnit: 'unknown' };
+}
+
 /**
  * Parse a single Item element into a PVVTable
  */
@@ -699,25 +741,28 @@ function parseTableItem(item: Element): PVVTable | null {
         }
     }
 
-    const table = {
+    const normalized = normalizeMapColumns(columns, columnUnits);
+
+    const table: PVVTable = {
         name,
         units,
         columnUnits,
         rowUnits,
-        columns,
+        columns: normalized.columns,
         rows,
         values,
+        originalColumns: normalized.originalColumns,
+        sourceColumnUnit: normalized.sourceUnit,
     };
     
-    // DIAGNOSTIC: Log parsed table structure
     if (name.toLowerCase().includes('ve') && name.toLowerCase().includes('front')) {
         console.log('[pvvParser] Parsed VE Front table:', {
             name,
             rowsCount: rows.length,
-            columnsCount: columns.length,
-            rowsSample: rows.slice(0, 5),
-            columnsSample: columns.slice(0, 5),
-            columnsFull: columns,
+            columnsCount: normalized.columns.length,
+            sourceUnit: normalized.sourceUnit,
+            columnsSample: normalized.columns.slice(0, 5),
+            originalColumnsSample: normalized.originalColumns.slice(0, 5),
             valuesShape: `${values.length}x${values[0]?.length}`,
         });
     }

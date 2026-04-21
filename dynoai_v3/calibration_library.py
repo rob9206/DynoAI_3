@@ -140,6 +140,8 @@ class BlendedCalibration:
     map_bins: List[float]
     confidence_map: List[List[int]]
     source_matches: List[Dict[str, Any]]
+    grid_coverage_pct: float = 0.0
+    native_resolution_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -153,6 +155,8 @@ class BlendedCalibration:
             "map_bins": self.map_bins,
             "confidence_map": self.confidence_map,
             "source_matches": self.source_matches,
+            "grid_coverage_pct": self.grid_coverage_pct,
+            "native_resolution_count": self.native_resolution_count,
         }
 
 
@@ -186,10 +190,11 @@ class CalibrationBlender:
         afr_weights = np.zeros(len(dst_map), dtype=np.float64)
 
         source_matches: List[Dict[str, Any]] = []
+        native_resolution_count = 0
 
         for match in matches:
-            weight = max(float(match.similarity_score), 0.0) ** 2
-            if weight <= 0.0:
+            base_weight = max(float(match.similarity_score), 0.0) ** 2
+            if base_weight <= 0.0:
                 continue
 
             entry = match.entry
@@ -206,6 +211,48 @@ class CalibrationBlender:
                     len(src_map),
                 )
                 continue
+
+            if src_front.max() < 50.0:
+                logger.warning(
+                    "Skipping calibration %s: max VE=%.1f suggests AFR/lambda data stored as VE",
+                    entry.calibration_id,
+                    float(src_front.max()),
+                )
+                continue
+
+            # Grid-resolution quality multiplier
+            src_cols = len(src_map)
+            dst_cols = len(dst_map)
+            col_coverage = src_cols / dst_cols if dst_cols > 0 else 0.0
+            if col_coverage >= 0.9:
+                grid_quality = 1.5  # Native or near-native resolution
+                native_resolution_count += 1
+            elif col_coverage < 0.6:
+                grid_quality = 0.7  # Coarse grid, less reliable after resampling
+            else:
+                grid_quality = 1.0  # Moderate resolution
+
+            # Verified-entry trust boost
+            source_kind = entry.metadata.get("source_kind", "")
+            quality_verified = entry.metadata.get("quality", {}).get("verified", False)
+            if source_kind == "power_core_screenshot" or quality_verified:
+                verified_boost = 1.5
+            else:
+                verified_boost = 1.0
+
+            # Combined weight
+            weight = base_weight * grid_quality * verified_boost
+
+            logger.debug(
+                "Blend weight for %s: base=%.3f grid_q=%.2f verified=%.2f final=%.3f (cols %d/%d)",
+                entry.calibration_id[:12],
+                base_weight,
+                grid_quality,
+                verified_boost,
+                weight,
+                src_cols,
+                dst_cols,
+            )
 
             front_resampled = resample_ve_table(
                 src_front, src_rpm, src_map, dst_rpm, dst_map
@@ -271,6 +318,11 @@ class CalibrationBlender:
                 float(afr_sum[idx] / afr_weights[idx]), 3
             )
 
+        # Compute grid coverage: % of cells with confidence >= 2 (multiple sources, no pure extrapolation)
+        total_cells = confidence.size
+        well_covered_cells = int(np.sum(confidence >= 2))
+        grid_coverage_pct = (well_covered_cells / total_cells * 100.0) if total_cells > 0 else 0.0
+
         return BlendedCalibration(
             ve_front=ve_front.tolist(),
             ve_rear=ve_rear,
@@ -279,6 +331,8 @@ class CalibrationBlender:
             map_bins=[float(v) for v in dst_map.tolist()],
             confidence_map=confidence.tolist(),
             source_matches=source_matches,
+            grid_coverage_pct=round(grid_coverage_pct, 1),
+            native_resolution_count=native_resolution_count,
         )
 
     @staticmethod

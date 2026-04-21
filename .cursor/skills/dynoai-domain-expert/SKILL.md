@@ -35,6 +35,7 @@ Version single source: `dynoai/version.py`
 | Flask app + blueprint registration | `api/app.py` |
 | Custom exceptions | `api/errors.py` |
 | Centralized config | `api/config.py` |
+| Calibration library ingestion/blending | `dynoai_v3/calibration_library.py`, `api/services/calibration_library_service.py`, `api/routes/calibration_library.py` |
 | Auth (API key) | `api/auth.py` |
 | Rate limiting | `api/rate_limit.py` |
 | Shared TS types | `frontend/src/types/veApplyTypes.ts`, `frontend/src/lib/types.ts` |
@@ -109,6 +110,25 @@ Front and rear cylinders are analyzed separately. Key metrics:
 ### Coverage
 
 Zone-weighted metric: `sum(sufficientCells * weight) / sum(totalCells * weight)`. Grades: A (>=90%), B (>=75%), C (>=60%), D (>=40%), F (<40%). Warns if cruise zone < 60%.
+
+### V3 Calibration Library
+
+The v3 calibration library is a **reference tune corpus** (PVV-derived), separate from the template library:
+
+- **Calibration library** (`data/calibration_library/`): imported real-world PVV calibrations used for blend seeding.
+- **Template library** (`data/v3_templates/`): completed-session templates automatically saved by v3 finalize.
+
+Storage pattern (calibration library):
+- `index.json` with metadata, engine family, and relative file paths.
+- Per-family directories (e.g., `tc_110/`) containing calibration JSON files.
+
+Session seed priority for v3 initialization:
+1. User PVV import (`initial_ve_table`)
+2. Calibration library blend (top-N similarity matches)
+3. Template library nearest match
+4. Static/default surrogate prior
+
+Similarity scoring for calibration matching reuses template-library hardware weights (`_compute_similarity`) and blends with squared weights (`similarity^2`) to emphasize closer matches.
 
 ## Safety Constraints (CRITICAL)
 

@@ -86,6 +86,8 @@ export interface CalibrationLibraryBlendResponse {
     similarity_score: number;
     weight: number;
   }[];
+  grid_coverage_pct: number;
+  native_resolution_count: number;
 }
 
 export async function ingestCalibrationLibrary(

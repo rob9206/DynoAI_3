@@ -13,9 +13,8 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 
 from api.services.report_generator import (
-    DynoReportGenerator,
-    ReportData,
-    ShopBranding,
+    generate_comparison_report_from_runs,
+    get_comparison_summary_from_runs,
     generate_report_from_run,
     load_shop_branding,
 )
@@ -23,6 +22,24 @@ from api.services.report_generator import (
 logger = logging.getLogger(__name__)
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/reports")
+
+
+def _safe_filename_component(run_id: str) -> str:
+    """Convert run IDs into filesystem-safe filename components."""
+    return run_id.replace("\\", "_").replace("/", "_").replace("..", "_")
+
+
+def _resolve_run_path(runs_dir: Path, run_id: str) -> Path:
+    """Resolve and validate a run path stays within runs_dir."""
+    if not run_id or not isinstance(run_id, str):
+        raise ValueError("Invalid run_id")
+    candidate = (runs_dir / run_id).resolve()
+    root = runs_dir.resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Invalid run_id path") from exc
+    return candidate
 
 
 def get_project_root() -> Path:
@@ -143,8 +160,11 @@ def generate_report(run_id: str):
     """
     # Validate run exists
     runs_dir = get_runs_dir()
-    run_path = runs_dir / run_id
-    
+    try:
+        run_path = _resolve_run_path(runs_dir, run_id)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid run_id"}), 400
+
     if not run_path.exists():
         return jsonify({"success": False, "error": f"Run not found: {run_id}"}), 404
     
@@ -157,9 +177,6 @@ def generate_report(run_id: str):
     
     # Query params
     download = request.args.get("download", "false").lower() == "true"
-    include_heatmaps = request.args.get("include_heatmaps", "true").lower() != "false"
-    include_power_curve = request.args.get("include_power_curve", "true").lower() != "false"
-    
     try:
         # Generate output path
         output_filename = f"DynoAI_Report_{run_id}.pdf"
@@ -201,6 +218,115 @@ def generate_report(run_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@reports_bp.route("/compare", methods=["POST"])
+def compare_runs():
+    """
+    Generate a side-by-side comparison report for two run IDs.
+    """
+    data = request.get_json() or {}
+    run_a_id = data.get("run_a_id", "")
+    run_b_id = data.get("run_b_id", "")
+    customer_name = data.get("customer_name", "Valued Customer")
+    vehicle_info = data.get("vehicle_info", "")
+    tuner_notes = data.get("tuner_notes", "")
+
+    if not run_a_id or not run_b_id:
+        return jsonify({"success": False, "error": "run_a_id and run_b_id are required"}), 400
+    if run_a_id == run_b_id:
+        return jsonify({"success": False, "error": "run_a_id and run_b_id must be different"}), 400
+
+    download = request.args.get("download", "false").lower() == "true"
+    include_afr = request.args.get("include_afr", "true").lower() != "false"
+    runs_dir = get_runs_dir()
+    try:
+        run_a_path = _resolve_run_path(runs_dir, run_a_id)
+        run_b_path = _resolve_run_path(runs_dir, run_b_id)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid run_id"}), 400
+
+    if not run_a_path.exists():
+        return jsonify({"success": False, "error": f"Run not found: {run_a_id}"}), 404
+    if not run_b_path.exists():
+        return jsonify({"success": False, "error": f"Run not found: {run_b_id}"}), 404
+
+    try:
+        comparisons_dir = runs_dir / "comparisons"
+        comparisons_dir.mkdir(parents=True, exist_ok=True)
+        safe_a = _safe_filename_component(run_a_id)
+        safe_b = _safe_filename_component(run_b_id)
+        output_filename = f"DynoAI_Compare_{safe_a}__vs__{safe_b}.pdf"
+        output_path = comparisons_dir / output_filename
+
+        pdf_bytes = generate_comparison_report_from_runs(
+            run_a_id=run_a_id,
+            run_b_id=run_b_id,
+            runs_dir=str(runs_dir),
+            customer_name=customer_name,
+            vehicle_info=vehicle_info,
+            tuner_notes=tuner_notes,
+            include_afr=include_afr,
+            output_path=str(output_path),
+        )
+        summary = get_comparison_summary_from_runs(run_a_id, run_b_id, runs_dir=str(runs_dir))
+
+        logger.info(
+            "Generated comparison report %s vs %s (%d bytes)",
+            run_a_id,
+            run_b_id,
+            len(pdf_bytes),
+        )
+
+        if download:
+            return send_file(
+                output_path,
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=output_filename,
+            )
+
+        return jsonify({
+            "success": True,
+            "run_a_id": run_a_id,
+            "run_b_id": run_b_id,
+            "report_path": str(output_path),
+            "download_url": f"/api/reports/compare/download?run_a_id={run_a_id}&run_b_id={run_b_id}",
+            "size_bytes": len(pdf_bytes),
+            "summary": summary,
+        })
+
+    except FileNotFoundError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+    except Exception as e:
+        logger.exception("Failed to generate comparison report %s vs %s", run_a_id, run_b_id)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@reports_bp.route("/compare/download", methods=["GET"])
+def download_compare_report():
+    """Download a previously generated run comparison PDF."""
+    run_a_id = request.args.get("run_a_id", "")
+    run_b_id = request.args.get("run_b_id", "")
+    if not run_a_id or not run_b_id:
+        return jsonify({"success": False, "error": "run_a_id and run_b_id are required"}), 400
+
+    runs_dir = get_runs_dir()
+    safe_a = _safe_filename_component(run_a_id)
+    safe_b = _safe_filename_component(run_b_id)
+    report_path = runs_dir / "comparisons" / f"DynoAI_Compare_{safe_a}__vs__{safe_b}.pdf"
+    if not report_path.exists():
+        return jsonify({
+            "success": False,
+            "error": "Comparison report not found. Generate it first using POST /api/reports/compare",
+        }), 404
+
+    return send_file(
+        report_path,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=report_path.name,
+    )
+
+
 @reports_bp.route("/download/<run_id>", methods=["GET"])
 def download_report(run_id: str):
     """
@@ -213,8 +339,12 @@ def download_report(run_id: str):
         PDF file
     """
     runs_dir = get_runs_dir()
+    try:
+        run_path = _resolve_run_path(runs_dir, run_id)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid run_id"}), 400
     output_filename = f"DynoAI_Report_{run_id}.pdf"
-    report_path = runs_dir / run_id / output_filename
+    report_path = run_path / output_filename
     
     if not report_path.exists():
         return jsonify({
@@ -244,8 +374,11 @@ def preview_report_data(run_id: str):
         JSON with report data preview
     """
     runs_dir = get_runs_dir()
-    run_path = runs_dir / run_id
-    
+    try:
+        run_path = _resolve_run_path(runs_dir, run_id)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid run_id"}), 400
+
     if not run_path.exists():
         return jsonify({"success": False, "error": f"Run not found: {run_id}"}), 404
     

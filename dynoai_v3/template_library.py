@@ -139,6 +139,46 @@ _SIMILARITY_WEIGHTS = {
 }
 
 
+def _string_similarity(query_val: str, stored_val: str) -> float:
+    """Fuzzy string similarity for cam_spec/exhaust_type matching.
+
+    Returns 0.0–1.0 credit fraction:
+      1.0 = exact match
+      0.6 = query token found inside the stored free-text value
+      0.3 = "stock" vs "stock" substring inside a longer description
+      0.0 = no relation detected
+    """
+    q = query_val.lower().strip()
+    s = stored_val.lower().strip()
+    if q == s:
+        return 1.0
+
+    # Normalise underscores/hyphens to spaces for token matching
+    q_norm = q.replace("_", " ").replace("-", " ")
+    s_norm = s.replace("_", " ").replace("-", " ")
+
+    if q_norm == s_norm:
+        return 1.0
+
+    # Token-in-string: e.g. query="se_255" matches stored="1690 with se 255 cams …"
+    q_tokens = q_norm.split()
+    if len(q_tokens) >= 2:
+        joined = " ".join(q_tokens)
+        if joined in s_norm:
+            return 0.7
+
+    # Single meaningful token: e.g. query="open" matches stored="open pipe …"
+    for token in q_tokens:
+        if len(token) >= 3 and token in s_norm:
+            return 0.4
+
+    # Both "stock" — partial credit even if stored has extra text
+    if "stock" in q_norm and "stock" in s_norm:
+        return 0.5
+
+    return 0.0
+
+
 def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
     """
     Weighted similarity score between two hardware configs.
@@ -174,10 +214,9 @@ def _compute_similarity(query: HardwareConfig, stored: HardwareConfig) -> float:
             elif abs(q_val - s_val) <= 4:
                 score += weight * 0.3
         else:
-            # String comparison
-            if q_val == s_val:
-                score += weight
-            # No partial credit for string mismatches
+            # String comparison with fuzzy matching
+            credit = _string_similarity(str(q_val), str(s_val))
+            score += weight * credit
 
     if total_weight > 0:
         return score / total_weight

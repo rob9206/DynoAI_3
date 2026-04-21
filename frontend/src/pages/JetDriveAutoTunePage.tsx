@@ -14,7 +14,7 @@
  * - One-click export
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,7 +96,15 @@ const NAV_ITEMS = [
     { label: 'History', to: '/history' },
 ];
 
-const UnifiedTuningTab = (_props: Record<string, unknown>) => null;
+const LazyV3TuningTab = lazy(() =>
+    import('../components/jetdrive/V3TuningTab').then((m) => ({ default: m.V3TuningTab }))
+);
+const LazyBaseMapGenerator = lazy(() =>
+    import('../components/jetdrive/BaseMapGenerator').then((m) => ({ default: m.BaseMapGenerator }))
+);
+
+type ActiveView = 'command-center' | 'tuning';
+type TuningSubTab = 'base-map' | 'session';
 
 export default function JetDriveAutoTunePage() {
     const location = useLocation();
@@ -106,6 +114,8 @@ export default function JetDriveAutoTunePage() {
     const [isTriggeringPull, setIsTriggeringPull] = useState(false);
     const [simThrottle, setSimThrottle] = useState(0);
     const [activeLiveSource, setActiveLiveSource] = useState<'jetdrive' | 'yourdyno'>('jetdrive');
+    const [activeView, setActiveView] = useState<ActiveView>('command-center');
+    const [tuningSubTab, setTuningSubTab] = useState<TuningSubTab>('base-map');
     const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
     const jetdriveLive = useJetDriveLive({
@@ -295,7 +305,32 @@ export default function JetDriveAutoTunePage() {
                 </div>
 
                 <nav className="flex items-center gap-2 text-xs">
-                    {NAV_ITEMS.map((item) => (
+                    <button
+                        type="button"
+                        onClick={() => setActiveView('command-center')}
+                        className={cn(
+                            'rounded-md px-3 py-2 transition-colors font-medium',
+                            activeView === 'command-center'
+                                ? 'bg-zinc-800 text-white'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900',
+                        )}
+                    >
+                        JetDrive
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveView('tuning')}
+                        className={cn(
+                            'rounded-md px-3 py-2 transition-colors font-medium',
+                            activeView === 'tuning'
+                                ? 'bg-zinc-800 text-white'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900',
+                        )}
+                    >
+                        Tuning
+                    </button>
+                    <div className="w-px h-4 bg-zinc-700 mx-1" />
+                    {NAV_ITEMS.filter((item) => item.to !== '/jetdrive').map((item) => (
                         <Link
                             key={item.to}
                             to={item.to}
@@ -388,7 +423,8 @@ export default function JetDriveAutoTunePage() {
                 </div>
             </header>
 
-            <div className="flex flex-1 flex-col min-h-0">
+            {/* Command Center view */}
+            <div className={cn('flex flex-1 flex-col min-h-0', activeView !== 'command-center' && 'hidden')}>
                 {isSimulatorActive && (
                     <>
                         <div className="flex h-6 items-center justify-center bg-yellow-500/10 border-b border-yellow-500/30 text-xs font-bold uppercase tracking-widest text-yellow-400">
@@ -430,6 +466,50 @@ export default function JetDriveAutoTunePage() {
                         hardwareOpen={hardwareOpen}
                         onHardwareOpenChange={setHardwareOpen}
                     />
+                </div>
+            </div>
+
+            {/* Tuning view with sub-tabs */}
+            <div className={cn('flex flex-1 flex-col min-h-0 bg-zinc-950', activeView !== 'tuning' && 'hidden')}>
+                <div className="flex items-center gap-1 border-b border-zinc-800 px-6 py-2">
+                    <button
+                        type="button"
+                        onClick={() => setTuningSubTab('base-map')}
+                        className={cn(
+                            'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                            tuningSubTab === 'base-map'
+                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800',
+                        )}
+                    >
+                        Base Map Explorer
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setTuningSubTab('session')}
+                        className={cn(
+                            'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                            tuningSubTab === 'session'
+                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800',
+                        )}
+                    >
+                        Accelerated Session
+                    </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                    <Suspense fallback={
+                        <div className="flex items-center justify-center h-64 text-zinc-400 text-sm">
+                            Loading...
+                        </div>
+                    }>
+                        <div className={cn('mx-auto max-w-6xl px-4 py-6', tuningSubTab !== 'base-map' && 'hidden')}>
+                            <LazyBaseMapGenerator />
+                        </div>
+                        <div className={cn('mx-auto max-w-3xl px-6 py-8', tuningSubTab !== 'session' && 'hidden')}>
+                            <LazyV3TuningTab />
+                        </div>
+                    </Suspense>
                 </div>
             </div>
         </div>
