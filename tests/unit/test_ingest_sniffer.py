@@ -80,3 +80,46 @@ def test_generic_csv_falls_back_to_pulls():
     out = classify_upload(data, "generic.csv")
     assert out["file_type"] == FileType.GENERIC_CSV.value
     assert out["routed_to"] == "pulls"
+
+
+# -----------------------------------------------------------------------------
+# BOM tolerance: some Windows tools (PowerShell Set-Content -Encoding UTF8,
+# certain editors) prepend a BOM to text files. The classifier must still
+# recognise these as PVV/XML rather than rejecting them as binary garbage.
+# -----------------------------------------------------------------------------
+
+
+def test_pvv_with_utf8_bom_classified_as_pvv():
+    data = (
+        b"\xef\xbb\xbf"  # UTF-8 BOM
+        b'<?xml version="1.0"?><PVV>'
+        b'<Item name="tbl_ve"><Cell value="1.0"/></Item></PVV>'
+    )
+    out = classify_upload(data, "tune.pvv")
+    assert out["file_type"] == FileType.PVV.value
+    assert out["routed_to"] == "base_tune"
+
+
+def test_pvv_with_utf16_le_bom_classified_as_pvv():
+    # UTF-16 LE BOM (FF FE) followed by null-padded ASCII via Python's
+    # built-in encode (yields the same bytes as PowerShell's UTF-16 output).
+    text = '<PVV><Item name="VE Correction"><Cell value="1.02"/></Item></PVV>'
+    data = b"\xff\xfe" + text.encode("utf-16-le")
+    out = classify_upload(data, "patch.pvv")
+    assert out["file_type"] == FileType.PVV.value
+    # `VE Correction` content marks it as a DynoAI-style patch.
+    assert out["routed_to"] == "patches"
+
+
+def test_pvv_with_utf16_be_bom_classified_as_pvv():
+    text = "<PVV><Item><Cell/></Item></PVV>"
+    data = b"\xfe\xff" + text.encode("utf-16-be")
+    out = classify_upload(data, "tune.pvv")
+    assert out["file_type"] == FileType.PVV.value
+
+
+def test_non_pvv_xml_with_bom_still_rejected():
+    data = b"\xef\xbb\xbf<?xml version='1.0'?><html>not a pvv</html>"
+    out = classify_upload(data, "wrong.xml")
+    assert out["file_type"] == FileType.UNKNOWN.value
+    assert out["routed_to"] == "rejected"
