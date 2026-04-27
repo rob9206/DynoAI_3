@@ -97,11 +97,9 @@ def analyze_iteration(
     ws = workspace or get_workspace()
 
     session: TuningSession = ws.get_session(vehicle_id, session_id)
-    iteration: Iteration = (
-        ws.get_iteration(vehicle_id, session_id, iteration_id)
-        if iteration_id
-        else ws.get_active_iteration(vehicle_id, session_id)
-    )
+    iteration: Iteration = (ws.get_iteration(vehicle_id, session_id,
+                                             iteration_id) if iteration_id else
+                            ws.get_active_iteration(vehicle_id, session_id))
 
     result = WorkspaceAnalysisResult(
         vehicle_id=session.vehicle_id,
@@ -140,12 +138,15 @@ def analyze_iteration(
         result.peak_tq = peak.get("peak_torque")
 
     workflow = AutoTuneWorkflow()
-    autotune_session = workflow.create_session(run_id=f"{session.id}_{iteration.id}")
+    autotune_session = workflow.create_session(
+        run_id=f"{session.id}_{iteration.id}")
 
     dataframe_for_autotune = _shape_for_autotune(df)
-    imported = workflow.import_dataframe(autotune_session, dataframe_for_autotune)
+    imported = workflow.import_dataframe(autotune_session,
+                                         dataframe_for_autotune)
     if not imported:
-        result.errors.extend(autotune_session.errors or ["import_dataframe failed"])
+        result.errors.extend(autotune_session.errors
+                             or ["import_dataframe failed"])
         return result
 
     base_tune_path = ws.get_base_tune_path(vehicle_id, session_id)
@@ -165,9 +166,11 @@ def analyze_iteration(
         return result
 
     if autotune_session.afr_analysis:
-        result.afr_mean_error_pct = float(autotune_session.afr_analysis.mean_error_pct)
+        result.afr_mean_error_pct = float(
+            autotune_session.afr_analysis.mean_error_pct)
     if autotune_session.ve_corrections:
-        result.zones_adjusted = int(autotune_session.ve_corrections.zones_adjusted)
+        result.zones_adjusted = int(
+            autotune_session.ve_corrections.zones_adjusted)
     if not result.peak_hp and autotune_session.peak_hp:
         result.peak_hp = float(autotune_session.peak_hp)
         result.peak_hp_rpm = float(autotune_session.peak_hp_rpm)
@@ -179,7 +182,8 @@ def analyze_iteration(
     output_dir = iter_dir / "autotune"
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        pvv_path = workflow.export_pvv_corrections(autotune_session, str(output_dir))
+        pvv_path = workflow.export_pvv_corrections(autotune_session,
+                                                   str(output_dir))
         if pvv_path:
             result.correction_pvv_path = pvv_path
             patch_name = f"autotune_correction_{iteration.id}.pvv"
@@ -200,11 +204,11 @@ def analyze_iteration(
     # persisted file with `success=False` and `analysis_json_path=null` even
     # when the API returned `success=True` with the correct path.
     analysis_filename = f"autotune_{_timestamp()}.json"
-    analyses_dir = (
-        ws.iteration_dir(vehicle_id, session_id, iteration.id) / ws.ANALYSES_DIRNAME
-    )
+    analyses_dir = (ws.iteration_dir(vehicle_id, session_id, iteration.id) /
+                    ws.ANALYSES_DIRNAME)
     result.analysis_json_path = str(analyses_dir / analysis_filename)
-    result.success = len(result.errors) == 0 or result.correction_pvv_path is not None
+    result.success = len(
+        result.errors) == 0 or result.correction_pvv_path is not None
 
     persisted_path = ws.add_analysis(
         vehicle_id,
@@ -246,7 +250,8 @@ def _atomic_rewrite_analysis_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _select_primary_pull(
     pulls: list[Path],
-) -> tuple[Optional[Path], Optional[pd.DataFrame], Optional[str], Optional[dict]]:
+) -> tuple[Optional[Path], Optional[pd.DataFrame], Optional[str],
+           Optional[dict]]:
     """Pick the richest pull file and return its DataFrame + metadata."""
     preference = {".txt": 0, ".csv": 1, ".wp8": 2}
     ordered = sorted(pulls, key=lambda p: preference.get(p.suffix.lower(), 99))
@@ -340,13 +345,14 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
         if front_col and rear_col:
             front = pd.to_numeric(renamed[front_col], errors="coerce")
             rear = pd.to_numeric(renamed[rear_col], errors="coerce")
-            renamed["AFR Meas"] = pd.concat([front, rear], axis=1).mean(
-                axis=1, skipna=True
-            )
+            renamed["AFR Meas"] = pd.concat([front, rear],
+                                            axis=1).mean(axis=1, skipna=True)
         elif front_col:
-            renamed["AFR Meas"] = pd.to_numeric(renamed[front_col], errors="coerce")
+            renamed["AFR Meas"] = pd.to_numeric(renamed[front_col],
+                                                errors="coerce")
         elif rear_col:
-            renamed["AFR Meas"] = pd.to_numeric(renamed[rear_col], errors="coerce")
+            renamed["AFR Meas"] = pd.to_numeric(renamed[rear_col],
+                                                errors="coerce")
 
     if "Engine RPM" not in renamed.columns and "mph" in renamed.columns:
         renamed["Engine RPM"] = renamed["mph"] * 60.0
@@ -362,11 +368,8 @@ def _find_column_ci(df: pd.DataFrame, target: str) -> Optional[str]:
 
 
 def _utc_now() -> str:
-    return (
-        datetime.now(timezone.utc)
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z")
-    )
+    return (datetime.now(timezone.utc).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z"))
 
 
 def _timestamp() -> str:
