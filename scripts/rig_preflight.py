@@ -85,13 +85,15 @@ def _validate_local_url(url: str) -> str:
 
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
-        raise ValueError(f"only http/https URLs allowed, got scheme={parsed.scheme!r}")
+        raise ValueError(
+            f"only http/https URLs allowed, got scheme={parsed.scheme!r}")
     host = parsed.hostname or ""
     # Allow common loopback/local-network forms only. The rig laptop talks
     # to its own DynoAI API on localhost or LAN; never to public hosts.
     if host in {"localhost", "127.0.0.1", "::1"}:
         return url
-    if host.startswith("10.") or host.startswith("192.168.") or host.startswith("172."):
+    if host.startswith("10.") or host.startswith(
+            "192.168.") or host.startswith("172."):
         return url
     raise ValueError(
         f"--api host {host!r} is not local; preflight only talks to local APIs"
@@ -101,7 +103,8 @@ def _validate_local_url(url: str) -> str:
 def _http_get(url: str, timeout: float = 5.0) -> tuple[int, dict]:
     safe_url = _validate_local_url(url)
     req = urllib.request.Request(safe_url, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 -- validated above
+    with urllib.request.urlopen(
+            req, timeout=timeout) as resp:  # noqa: S310 -- validated above
         body = resp.read().decode("utf-8", errors="replace")
         try:
             return resp.status, json.loads(body) if body else {}
@@ -109,14 +112,19 @@ def _http_get(url: str, timeout: float = 5.0) -> tuple[int, dict]:
             return resp.status, {"raw": body[:500]}
 
 
-def _http_post(url: str, payload: dict | None = None, timeout: float = 5.0) -> tuple[int, dict]:
+def _http_post(url: str,
+               payload: dict | None = None,
+               timeout: float = 5.0) -> tuple[int, dict]:
     safe_url = _validate_local_url(url)
     body = json.dumps(payload or {}).encode("utf-8")
     req = urllib.request.Request(
-        safe_url, data=body, method="POST",
+        safe_url,
+        data=body,
+        method="POST",
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 -- validated above
+    with urllib.request.urlopen(
+            req, timeout=timeout) as resp:  # noqa: S310 -- validated above
         body = resp.read().decode("utf-8", errors="replace")
         try:
             return resp.status, json.loads(body) if body else {}
@@ -128,176 +136,185 @@ def check_api_reachable(api: str, report: PreflightReport) -> None:
     try:
         status, data = _http_get(f"{api}/api/health")
         if status == 200 and data.get("status") in {"healthy", "degraded"}:
-            report.add(CheckResult(
-                name="API reachable",
-                passed=True,
-                detail=f"version={data.get('version', '?')} status={data.get('status')}",
-            ))
+            report.add(
+                CheckResult(
+                    name="API reachable",
+                    passed=True,
+                    detail=f"version={data.get('version', '?')} status={data.get('status')}",
+                ))
         else:
-            report.add(CheckResult(
+            report.add(
+                CheckResult(
+                    name="API reachable",
+                    passed=False,
+                    detail=f"status={status} body={data}",
+                    fix_hint=(
+                        "Start the API: python -m flask --app api.app run "
+                        "--host 0.0.0.0 --port 5001 --no-reload"),
+                ))
+    except (urllib.error.URLError, OSError) as exc:
+        report.add(
+            CheckResult(
                 name="API reachable",
                 passed=False,
-                detail=f"status={status} body={data}",
-                fix_hint=(
-                    "Start the API: python -m flask --app api.app run "
-                    "--host 0.0.0.0 --port 5001 --no-reload"
-                ),
+                detail=f"{type(exc).__name__}: {exc}",
+                fix_hint=f"Confirm the API process is running and listening at {api}",
             ))
-    except (urllib.error.URLError, OSError) as exc:
-        report.add(CheckResult(
-            name="API reachable",
-            passed=False,
-            detail=f"{type(exc).__name__}: {exc}",
-            fix_hint=f"Confirm the API process is running and listening at {api}",
-        ))
 
 
 def check_workspace_blueprint(api: str, report: PreflightReport) -> None:
     try:
         status, data = _http_get(f"{api}/api/workspace/vehicles")
         if status == 200 and isinstance(data, list):
-            report.add(CheckResult(
-                name="Workspace blueprint registered",
-                passed=True,
-                detail=f"vehicles_known={len(data)}",
-            ))
+            report.add(
+                CheckResult(
+                    name="Workspace blueprint registered",
+                    passed=True,
+                    detail=f"vehicles_known={len(data)}",
+                ))
         else:
-            report.add(CheckResult(
+            report.add(
+                CheckResult(
+                    name="Workspace blueprint registered",
+                    passed=False,
+                    detail=f"status={status} body={data}",
+                    fix_hint=("On startup the API should print "
+                              "'[+] Tuning Workspace registered at /api/workspace'. "
+                              "If it didn't, check the import error in the server log."
+                              ),
+                ))
+    except urllib.error.HTTPError as exc:
+        report.add(
+            CheckResult(
                 name="Workspace blueprint registered",
                 passed=False,
-                detail=f"status={status} body={data}",
-                fix_hint=(
-                    "On startup the API should print "
-                    "'[+] Tuning Workspace registered at /api/workspace'. "
-                    "If it didn't, check the import error in the server log."
-                ),
+                detail=f"HTTP {exc.code}: {exc.reason}",
+                fix_hint="Workspace blueprint is missing; check api/app.py registration.",
             ))
-    except urllib.error.HTTPError as exc:
-        report.add(CheckResult(
-            name="Workspace blueprint registered",
-            passed=False,
-            detail=f"HTTP {exc.code}: {exc.reason}",
-            fix_hint="Workspace blueprint is missing; check api/app.py registration.",
-        ))
 
 
-def check_jetdrive_discovery(api: str, report: PreflightReport, timeout: float = 5.0) -> None:
+def check_jetdrive_discovery(api: str,
+                             report: PreflightReport,
+                             timeout: float = 5.0) -> None:
     try:
         url = f"{api}/api/jetdrive/hardware/discover?timeout={timeout}"
         status, data = _http_get(url, timeout=timeout + 5.0)
     except (urllib.error.URLError, OSError) as exc:
-        report.add(CheckResult(
-            name="JetDrive multicast discovery",
-            passed=False,
-            detail=f"request failed: {exc}",
-            fix_hint=(
-                "Check JETDRIVE_IFACE env var is set to the right NIC IP. "
-                "Confirm laptop and DynoWare are on the same subnet."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="JetDrive multicast discovery",
+                passed=False,
+                detail=f"request failed: {exc}",
+                fix_hint=(
+                    "Check JETDRIVE_IFACE env var is set to the right NIC IP. "
+                    "Confirm laptop and DynoWare are on the same subnet."),
+            ))
         return
 
     if status != 200 or not data.get("success"):
-        report.add(CheckResult(
-            name="JetDrive multicast discovery",
-            passed=False,
-            detail=f"status={status} body={data}",
-        ))
+        report.add(
+            CheckResult(
+                name="JetDrive multicast discovery",
+                passed=False,
+                detail=f"status={status} body={data}",
+            ))
         return
 
     found = data.get("providers_found", 0)
     providers = data.get("providers", [])
     if found == 0:
-        report.add(CheckResult(
-            name="JetDrive multicast discovery",
-            passed=False,
-            detail="0 providers found",
-            fix_hint=(
-                "Confirm DynoWare RT-150 is powered on and has a link light. "
-                "Check that the laptop NIC is on the same VLAN. Try "
-                "JETDRIVE_MCAST_GROUP=239.255.60.60 if using legacy multicast."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="JetDrive multicast discovery",
+                passed=False,
+                detail="0 providers found",
+                fix_hint=("Confirm DynoWare RT-150 is powered on and has a link light. "
+                          "Check that the laptop NIC is on the same VLAN. Try "
+                          "JETDRIVE_MCAST_GROUP=239.255.60.60 if using legacy multicast."
+                          ),
+            ))
         return
 
     summary = ", ".join(
         f"{p.get('name', 'unknown')}@{p.get('host', '?')} ({len(p.get('channels', []))} ch)"
-        for p in providers
-    )
-    report.add(CheckResult(
-        name="JetDrive multicast discovery",
-        passed=True,
-        detail=f"providers_found={found}: {summary}",
-    ))
+        for p in providers)
+    report.add(
+        CheckResult(
+            name="JetDrive multicast discovery",
+            passed=True,
+            detail=f"providers_found={found}: {summary}",
+        ))
 
 
 def check_wideband_calibration(report: PreflightReport) -> None:
     try:
         from api.services.jetdrive.wideband_rescale import get_active_calibration
     except ImportError as exc:
-        report.add(CheckResult(
-            name="Wideband calibration loaded",
-            passed=False,
-            detail=f"cannot import wideband_rescale: {exc}",
-            fix_hint="api/services/jetdrive/wideband_rescale.py missing or broken.",
-        ))
+        report.add(
+            CheckResult(
+                name="Wideband calibration loaded",
+                passed=False,
+                detail=f"cannot import wideband_rescale: {exc}",
+                fix_hint="api/services/jetdrive/wideband_rescale.py missing or broken.",
+            ))
         return
 
     cal = get_active_calibration()
-    detail = (
-        f"name={cal.name!r} v={cal.v_min}-{cal.v_max} -> AFR={cal.afr_min}-{cal.afr_max}"
-    )
+    detail = f"name={cal.name!r} v={cal.v_min}-{cal.v_max} -> AFR={cal.afr_min}-{cal.afr_max}"
     # Sanity check: slope must be plausible (Innovate LC-2 default ~3.008,
     # custom values should still be in [1, 10]).
     if not (1.0 <= cal.slope <= 10.0):
-        report.add(CheckResult(
-            name="Wideband calibration loaded",
-            passed=False,
-            detail=detail + f" (slope={cal.slope:.3f} out of range)",
-            fix_hint=(
-                "DYNOAI_WIDEBAND_V_MIN/MAX/AFR_MIN/AFR_MAX env vars look wrong. "
-                "Default LC-2 petrol: 0/5/7.35/22.39."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="Wideband calibration loaded",
+                passed=False,
+                detail=detail + f" (slope={cal.slope:.3f} out of range)",
+                fix_hint=("DYNOAI_WIDEBAND_V_MIN/MAX/AFR_MIN/AFR_MAX env vars look wrong. "
+                          "Default LC-2 petrol: 0/5/7.35/22.39."),
+            ))
         return
-    report.add(CheckResult(
-        name="Wideband calibration loaded",
-        passed=True,
-        detail=detail,
-    ))
+    report.add(
+        CheckResult(
+            name="Wideband calibration loaded",
+            passed=True,
+            detail=detail,
+        ))
 
 
 def check_workspace_root(report: PreflightReport) -> None:
     root = os.environ.get("DYNOAI_WORKSPACE_ROOT", "vehicles")
     abs_root = os.path.abspath(root)
     if not os.path.isdir(abs_root):
-        report.add(CheckResult(
-            name="DYNOAI_WORKSPACE_ROOT exists",
-            passed=False,
-            detail=f"{abs_root}: directory does not exist",
-            fix_hint=(
-                "Workspace will create it lazily on first use, but for a rig "
-                "test you should pre-create it: "
-                f"mkdir -p {abs_root}"
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="DYNOAI_WORKSPACE_ROOT exists",
+                passed=False,
+                detail=f"{abs_root}: directory does not exist",
+                fix_hint=("Workspace will create it lazily on first use, but for a rig "
+                          "test you should pre-create it: "
+                          f"mkdir -p {abs_root}"),
+            ))
         return
     if not os.access(abs_root, os.W_OK):
-        report.add(CheckResult(
-            name="DYNOAI_WORKSPACE_ROOT writable",
-            passed=False,
-            detail=f"{abs_root}: not writable",
-            fix_hint="Check filesystem permissions on the workspace directory.",
-        ))
+        report.add(
+            CheckResult(
+                name="DYNOAI_WORKSPACE_ROOT writable",
+                passed=False,
+                detail=f"{abs_root}: not writable",
+                fix_hint="Check filesystem permissions on the workspace directory.",
+            ))
         return
-    report.add(CheckResult(
-        name="DYNOAI_WORKSPACE_ROOT writable",
-        passed=True,
-        detail=abs_root,
-    ))
+    report.add(
+        CheckResult(
+            name="DYNOAI_WORKSPACE_ROOT writable",
+            passed=True,
+            detail=abs_root,
+        ))
 
 
-def check_live_canonicalization(api: str, report: PreflightReport, capture_seconds: float = 10.0) -> None:
+def check_live_canonicalization(api: str,
+                                report: PreflightReport,
+                                capture_seconds: float = 10.0) -> None:
     """OPT-IN: start live capture, look at AFR channels, stop.
 
     Triggered with --live. Will not fire pulls or change ECM state.
@@ -305,18 +322,20 @@ def check_live_canonicalization(api: str, report: PreflightReport, capture_secon
     try:
         status, _ = _http_post(f"{api}/api/jetdrive/hardware/start")
         if status != 200:
-            report.add(CheckResult(
-                name="Live capture starts",
-                passed=False,
-                detail=f"start returned status={status}",
-            ))
+            report.add(
+                CheckResult(
+                    name="Live capture starts",
+                    passed=False,
+                    detail=f"start returned status={status}",
+                ))
             return
     except (urllib.error.URLError, OSError) as exc:
-        report.add(CheckResult(
-            name="Live capture starts",
-            passed=False,
-            detail=f"start failed: {exc}",
-        ))
+        report.add(
+            CheckResult(
+                name="Live capture starts",
+                passed=False,
+                detail=f"start failed: {exc}",
+            ))
         return
 
     time.sleep(capture_seconds)
@@ -325,51 +344,45 @@ def check_live_canonicalization(api: str, report: PreflightReport, capture_secon
         status, data = _http_get(f"{api}/api/jetdrive/hardware/live/data")
     except Exception as exc:
         _http_post(f"{api}/api/jetdrive/hardware/stop")
-        report.add(CheckResult(
-            name="Live capture starts",
-            passed=False,
-            detail=f"read failed: {exc}",
-        ))
+        report.add(
+            CheckResult(
+                name="Live capture starts",
+                passed=False,
+                detail=f"read failed: {exc}",
+            ))
         return
 
     _http_post(f"{api}/api/jetdrive/hardware/stop")
 
     channels = data.get("channels", {})
     if not channels:
-        report.add(CheckResult(
-            name="Live data populated",
-            passed=False,
-            detail="no channels received during 10s capture window",
-            fix_hint=(
-                "Provider visible to discover but emitting no values. "
-                "Check Power Core is showing live data on its scope."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="Live data populated",
+                passed=False,
+                detail="no channels received during 10s capture window",
+                fix_hint=(
+                    "Provider visible to discover but emitting no values. "
+                    "Check Power Core is showing live data on its scope."),
+            ))
         return
 
     afr_channels = {}
     for name, ch in channels.items():
         n = name.lower()
-        if (
-            "afr" in n
-            or "air/fuel" in n
-            or "a/f" in n
-            or "lambda" in n
-            or "wbo2" in n
-            or "wideband" in n
-        ):
+        if ("afr" in n or "air/fuel" in n or "a/f" in n or "lambda" in n
+                or "wbo2" in n or "wideband" in n):
             afr_channels[name] = ch.get("value")
     if not afr_channels:
-        report.add(CheckResult(
-            name="AFR channels canonicalized",
-            passed=False,
-            detail="no AFR/lambda channels found in live data",
-            fix_hint=(
-                "Provider may not include wideband. If using LC-2 via voltage, "
-                "check the channel name in DynoWare matches "
-                "match_wideband_channel() in wideband_rescale.py."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="AFR channels canonicalized",
+                passed=False,
+                detail="no AFR/lambda channels found in live data",
+                fix_hint=("Provider may not include wideband. If using LC-2 via voltage, "
+                          "check the channel name in DynoWare matches "
+                          "match_wideband_channel() in wideband_rescale.py."),
+            ))
         return
 
     suspect: list[str] = []
@@ -386,23 +399,24 @@ def check_live_canonicalization(api: str, report: PreflightReport, capture_secon
                 canonicalized.append(f"{name}={value:.2f}")
 
     if suspect:
-        report.add(CheckResult(
-            name="AFR channels canonicalized",
-            passed=False,
-            detail="suspect raw-voltage values: " + ", ".join(suspect),
-            fix_hint=(
-                "wideband_rescale didn't fire on these channels. Either the "
-                "channel name doesn't match (extend match_wideband_channel) "
-                "or the active calibration is wrong (set DYNOAI_WIDEBAND_* "
-                "env vars)."
-            ),
-        ))
+        report.add(
+            CheckResult(
+                name="AFR channels canonicalized",
+                passed=False,
+                detail="suspect raw-voltage values: " + ", ".join(suspect),
+                fix_hint=("wideband_rescale didn't fire on these channels. Either the "
+                          "channel name doesn't match (extend match_wideband_channel) "
+                          "or the active calibration is wrong (set DYNOAI_WIDEBAND_* "
+                          "env vars)."),
+            ))
     else:
-        report.add(CheckResult(
-            name="AFR channels canonicalized",
-            passed=True,
-            detail=", ".join(canonicalized) if canonicalized else "none seen",
-        ))
+        report.add(
+            CheckResult(
+                name="AFR channels canonicalized",
+                passed=True,
+                detail=", ".join(canonicalized)
+                if canonicalized else "none seen",
+            ))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -422,15 +436,17 @@ def main(argv: list[str] | None = None) -> int:
         "--live",
         action="store_true",
         help="Also start a 10s live capture and verify AFR canonicalization. "
-             "Safe: stops automatically. Skips by default to keep the script "
-             "side-effect free.",
+        "Safe: stops automatically. Skips by default to keep the script "
+        "side-effect free.",
     )
     args = parser.parse_args(argv)
 
     report = PreflightReport()
     print("Tier 5 rig pre-flight checks")
     print(f"  API: {args.api}")
-    print(f"  WORKSPACE_ROOT: {os.environ.get('DYNOAI_WORKSPACE_ROOT', '<unset, defaults to ./vehicles>')}")
+    print(
+        f"  WORKSPACE_ROOT: {os.environ.get('DYNOAI_WORKSPACE_ROOT', '<unset, defaults to ./vehicles>')}"
+    )
     print()
 
     check_api_reachable(args.api, report)
