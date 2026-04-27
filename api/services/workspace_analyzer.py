@@ -62,6 +62,11 @@ class WorkspaceAnalysisResult:
     zones_adjusted: Optional[int] = None
     peak_hp: Optional[float] = None
     peak_hp_rpm: Optional[float] = None
+    # Wheel speed at peak HP, captured separately from `peak_hp_rpm` because
+    # Dynojet TXT exports report mph (not RPM) and the two are different
+    # physical quantities. Only one will typically be populated for a pull,
+    # depending on which source produced the peaks.
+    peak_hp_mph: Optional[float] = None
     peak_tq: Optional[float] = None
     peak_tq_rpm: Optional[float] = None
     correction_pvv_path: Optional[str] = None
@@ -127,7 +132,11 @@ def analyze_iteration(
     result.data_source = source
     if peak:
         result.peak_hp = peak.get("peak_hp")
-        result.peak_hp_rpm = peak.get("peak_hp_rpm") or peak.get("peak_hp_mph")
+        # `peak_hp_mph` from Dynojet TXT is wheel speed, not engine RPM.
+        # Keep them in separate fields; the autotune-session fallback below
+        # may still populate `peak_hp_rpm` from real RPM data when present.
+        result.peak_hp_rpm = peak.get("peak_hp_rpm")
+        result.peak_hp_mph = peak.get("peak_hp_mph")
         result.peak_tq = peak.get("peak_torque")
 
     workflow = AutoTuneWorkflow()
@@ -173,8 +182,6 @@ def analyze_iteration(
         pvv_path = workflow.export_pvv_corrections(autotune_session, str(output_dir))
         if pvv_path:
             result.correction_pvv_path = pvv_path
-            import shutil
-
             patch_name = f"autotune_correction_{iteration.id}.pvv"
             dest_patch = ws.add_patch(
                 vehicle_id,
@@ -188,17 +195,48 @@ def analyze_iteration(
         logger.exception("pvv export failed")
         result.errors.append(f"pvv export failed: {exc}")
 
-    analysis_path = ws.add_analysis(
+    # Finalize derived fields BEFORE persisting so the on-disk JSON matches
+    # the API response. Earlier this wrote first then mutated, leaving the
+    # persisted file with `success=False` and `analysis_json_path=null` even
+    # when the API returned `success=True` with the correct path.
+    analysis_filename = f"autotune_{_timestamp()}.json"
+    analyses_dir = (
+        ws.iteration_dir(vehicle_id, session_id, iteration.id) / ws.ANALYSES_DIRNAME
+    )
+    result.analysis_json_path = str(analyses_dir / analysis_filename)
+    result.success = len(result.errors) == 0 or result.correction_pvv_path is not None
+
+    persisted_path = ws.add_analysis(
         vehicle_id,
         session_id,
         iteration.id,
-        f"autotune_{_timestamp()}.json",
+        analysis_filename,
         result.to_dict(),
     )
-    result.analysis_json_path = str(analysis_path)
-
-    result.success = len(result.errors) == 0 or result.correction_pvv_path is not None
+    # `add_analysis` may de-duplicate to a "-1.json" suffix if the file
+    # already exists; reflect the actual final path.
+    if str(persisted_path) != result.analysis_json_path:
+        result.analysis_json_path = str(persisted_path)
+        # Re-write so the file's `analysis_json_path` field also matches.
+        _atomic_rewrite_analysis_json(persisted_path, result.to_dict())
     return result
+
+
+def _atomic_rewrite_analysis_json(path: Path, payload: dict[str, Any]) -> None:
+    """Re-write an already-persisted analysis JSON in place.
+
+    Used only when `add_analysis` had to disambiguate the filename and we
+    need the on-disk content's self-referential `analysis_json_path` to
+    match the actual final path.
+    """
+    import json
+
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    tmp.replace(path)
 
 
 # -----------------------------------------------------------------------------

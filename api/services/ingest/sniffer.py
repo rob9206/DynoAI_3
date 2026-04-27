@@ -134,14 +134,51 @@ def _classify_wp8(data: bytes, filename: str) -> Classification:
 # -----------------------------------------------------------------------------
 
 
+_UTF8_BOM = b"\xef\xbb\xbf"
+_UTF16_LE_BOM = b"\xff\xfe"
+_UTF16_BE_BOM = b"\xfe\xff"
+
+
+def _strip_bom(data: bytes) -> tuple[bytes, str]:
+    """Return ``(payload, encoding_hint)`` after removing any leading BOM.
+
+    Files saved by Windows tools (PowerShell ``Set-Content -Encoding UTF8``,
+    some editors) often carry a BOM. The XML detector and PVV substring
+    search both fail when the BOM offsets the content, so we normalize here.
+    """
+    if data.startswith(_UTF8_BOM):
+        return data[len(_UTF8_BOM):], "utf-8"
+    if data.startswith(_UTF16_LE_BOM):
+        return data[len(_UTF16_LE_BOM):], "utf-16-le"
+    if data.startswith(_UTF16_BE_BOM):
+        return data[len(_UTF16_BE_BOM):], "utf-16-be"
+    return data, "utf-8"
+
+
 def _looks_like_xml(head: bytes) -> bool:
-    stripped = head.lstrip()
-    return stripped.startswith(b"<?xml") or stripped.startswith(b"<")
+    payload, _ = _strip_bom(head)
+    stripped = payload.lstrip()
+    if stripped.startswith(b"<?xml") or stripped.startswith(b"<"):
+        return True
+    # UTF-16 payload without BOM: the angle bracket appears as `<\x00` (LE)
+    # or `\x00<` (BE). Detect both so a BOM-less UTF-16 PVV still classifies.
+    if stripped.startswith(b"<\x00") or stripped.startswith(b"\x00<"):
+        return True
+    return False
 
 
 def _classify_xml(data: bytes, filename: str) -> Classification:
+    payload, encoding_hint = _strip_bom(data)
+    if encoding_hint == "utf-8" and (
+        payload.lstrip().startswith(b"<\x00")
+        or payload.lstrip().startswith(b"\x00<")
+    ):
+        # BOM-less UTF-16 (rare but real on some Windows-exported PVVs).
+        encoding_hint = (
+            "utf-16-le" if payload.lstrip().startswith(b"<\x00") else "utf-16-be"
+        )
     try:
-        text = data.decode("utf-8", errors="replace")
+        text = payload.decode(encoding_hint, errors="replace")
     except Exception:
         return Classification(
             file_type=FileType.UNKNOWN.value,

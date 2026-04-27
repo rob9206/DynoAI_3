@@ -171,3 +171,97 @@ class TestUploadRouting:
             content_type="multipart/form-data",
         )
         assert resp.status_code == 400
+
+
+# -----------------------------------------------------------------------------
+# Persisted-result consistency: the on-disk autotune_<ts>.json must match the
+# API response. The earlier ordering wrote first then mutated success/path,
+# leaving stale values in the file.
+# -----------------------------------------------------------------------------
+
+
+class TestAnalyzeResultPersistenceConsistency:
+    @staticmethod
+    def _bootstrap_with_pulls(client):
+        client.post("/api/workspace/vehicles", json={"name": "Dyna"})
+        resp = client.post("/api/workspace/vehicles/dyna/sessions", json={})
+        sid = resp.get_json()["id"]
+
+        pvv = (
+            b'<?xml version="1.0"?><PVV>'
+            b'<Item name="tbl_ve_tps_based_front_cyl">'
+            b'<Cell value="1.0"/></Item></PVV>'
+        )
+        # Real Dynojet TXT shape with all six columns: time, mph, ft-lbs, hp,
+        # LC1 Volts Petrol AFR, LC2 Volts Petrol AFR2 (volts here are decoy
+        # column names; the values in this fixture are already AFR-range).
+        dyno_txt = (
+            b"Time\tmph\tft-lbs\thp\tLC1 Volts Petrol AFR\tLC2 Volts Petrol AFR2\n"
+            b"0.5\t30.0\t12.0\t10.0\t13.5\t13.4\n"
+            b"1.0\t40.0\t18.0\t22.0\t13.2\t13.1\n"
+            b"1.5\t55.0\t30.0\t35.0\t12.9\t12.8\n"
+            b"2.0\t70.0\t42.0\t48.0\t12.7\t12.6\n"
+            b"2.5\t85.0\t52.0\t55.0\t12.6\t12.5\n"
+        )
+        data = MultiDict(
+            [
+                ("files", (io.BytesIO(pvv), "tune.pvv")),
+                ("files", (io.BytesIO(dyno_txt), "pull.txt")),
+            ]
+        )
+        client.post(
+            f"/api/workspace/vehicles/dyna/sessions/{sid}/upload",
+            data=data,
+            content_type="multipart/form-data",
+        )
+        return sid
+
+    @staticmethod
+    def test_persisted_json_matches_api_response(client, tmp_path):
+        import json
+        from pathlib import Path
+
+        sid = TestAnalyzeResultPersistenceConsistency._bootstrap_with_pulls(client)
+
+        resp = client.post(
+            f"/api/workspace/vehicles/dyna/sessions/{sid}/analyze", json={}
+        )
+        body = resp.get_json()
+        assert body["analysis_json_path"], "API must surface the analysis path"
+        assert "success" in body
+
+        on_disk = Path(body["analysis_json_path"])
+        assert on_disk.exists(), "analysis JSON must be on disk at the reported path"
+
+        persisted = json.loads(on_disk.read_text(encoding="utf-8"))
+        assert persisted["success"] == body["success"], (
+            "persisted success must match API response"
+        )
+        assert persisted["analysis_json_path"] == body["analysis_json_path"], (
+            "persisted analysis_json_path must self-reference its own file"
+        )
+        assert persisted["correction_pvv_path"] == body["correction_pvv_path"]
+
+
+class TestPeakHpUnitsAreNotConflated:
+    """
+    Dynojet TXT exports report `peak_hp_mph` (wheel speed at peak HP), not
+    engine RPM. Earlier the analyzer fell back to mph as if it were RPM. The
+    two are distinct fields now.
+    """
+
+    @staticmethod
+    def test_peak_hp_mph_kept_separate_from_peak_hp_rpm(client):
+        sid = TestAnalyzeResultPersistenceConsistency._bootstrap_with_pulls(client)
+        resp = client.post(
+            f"/api/workspace/vehicles/dyna/sessions/{sid}/analyze", json={}
+        )
+        body = resp.get_json()
+        assert "peak_hp_mph" in body, "peak_hp_mph field must exist on result"
+        # The Dynojet TXT path populates peak_hp_mph.
+        assert body["peak_hp_mph"] is not None
+        # peak_hp_rpm comes only from real RPM data; this fixture has no RPM
+        # column so it must stay None rather than be impersonated by mph.
+        assert body["peak_hp_rpm"] is None or (
+            body["peak_hp_rpm"] != body["peak_hp_mph"]
+        )
