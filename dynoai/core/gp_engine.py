@@ -143,9 +143,8 @@ class MaternGP:
         # `.copy()` here gives each instance its own array so in-place
         # tweaks (e.g. for hyperparameter sweeps) can't contaminate the
         # module-level default or sibling instances.
-        ls_source = (
-            length_scales if length_scales is not None else DEFAULT_LENGTH_SCALES
-        )
+        ls_source = (length_scales
+                     if length_scales is not None else DEFAULT_LENGTH_SCALES)
         self.length_scales = np.array(ls_source, dtype=np.float64, copy=True)
         self.signal_var = float(signal_var)
         self.noise_var = float(noise_var)
@@ -181,8 +180,7 @@ class MaternGP:
         if X.ndim != 2:
             raise ValueError(
                 f"X_train must be 2D with shape (n_samples, n_features); "
-                f"got shape={X.shape!r}"
-            )
+                f"got shape={X.shape!r}")
         n = X.shape[0]
         if n == 0:
             self._cache = None
@@ -190,12 +188,10 @@ class MaternGP:
         if X.shape[1] != self.length_scales.shape[0]:
             raise ValueError(
                 f"X_train has {X.shape[1]} features but length_scales has "
-                f"{self.length_scales.shape[0]}; both must match"
-            )
+                f"{self.length_scales.shape[0]}; both must match")
         if y.shape[0] != n:
             raise ValueError(
-                f"X_train has {n} samples but y_train has {y.shape[0]}; "
-                f"both must match"
+                f"X_train has {n} samples but y_train has {y.shape[0]}; both must match"
             )
 
         # -- y normalization (center + scale) --
@@ -235,8 +231,7 @@ class MaternGP:
                 "matrix is numerically not positive definite with current "
                 f"noise_var={self.noise_var} and jitter={self.jitter}. "
                 "Try increasing one of them (jitter is a safer numerical "
-                "stabilizer; noise_var also affects model fit)."
-            ) from exc
+                "stabilizer; noise_var also affects model fit).") from exc
 
         # -- Solve for alpha: K^{-1} y_norm via two triangular solves --
         # L v = y_norm  →  v = L^{-1} y_norm
@@ -295,13 +290,11 @@ class MaternGP:
         if X_pred.ndim != 2:
             raise ValueError(
                 f"X_pred must be 2D with shape (n_samples, n_features); "
-                f"got shape={X_pred.shape!r}"
-            )
+                f"got shape={X_pred.shape!r}")
         if X_pred.shape[1] != c.length_scales.shape[0]:
             raise ValueError(
                 f"X_pred has {X_pred.shape[1]} features but model was fitted "
-                f"with {c.length_scales.shape[0]}; both must match"
-            )
+                f"with {c.length_scales.shape[0]}; both must match")
 
         # Empty prediction set is a legitimate query shape (e.g. a caller
         # filtered out all candidates by mask). Return same-typed empties

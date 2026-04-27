@@ -46,7 +46,8 @@ def _make_training_data(n: int, d: int = 2, seed: int = 42):
     rng = np.random.RandomState(seed)
     X = rng.rand(n, d)
     # Smooth target: y = 85 + 10*sin(pi*x0) + 15*x1 + noise
-    y = 85.0 + 10.0 * np.sin(np.pi * X[:, 0]) + 15.0 * X[:, 1] + rng.randn(n) * 0.5
+    y = 85.0 + 10.0 * np.sin(
+        np.pi * X[:, 0]) + 15.0 * X[:, 1] + rng.randn(n) * 0.5
     return X, y
 
 
@@ -76,8 +77,7 @@ def _sklearn_fixed_predict(X_train, y_train, X_pred, return_std=True):
 
     # Fixed kernel (n_restarts_optimizer=0 disables optimization)
     kernel = Matern(nu=2.5, length_scale=LENGTH_SCALES.tolist()) + WhiteKernel(
-        noise_level=NOISE_VAR
-    )
+        noise_level=NOISE_VAR)
     gp = GaussianProcessRegressor(
         kernel=kernel,
         n_restarts_optimizer=0,
@@ -122,21 +122,21 @@ class TestMathParity:
         rpm_norm, map_norm = GRID_SHAPES[grid_name]
         X_pred = _make_pred_grid(rpm_norm, map_norm)
 
-        mean_sk, _ = _sklearn_fixed_predict(X_train, y_train, X_pred, return_std=False)
+        mean_sk, _ = _sklearn_fixed_predict(X_train,
+                                            y_train,
+                                            X_pred,
+                                            return_std=False)
         mean_np, _ = _numpy_predict(X_train, y_train, X_pred, return_std=False)
 
         max_diff = float(np.max(np.abs(mean_sk - mean_np)))
         mae = float(np.mean(np.abs(mean_sk - mean_np)))
 
-        print(
-            f"\n  Mean parity [{grid_name}, n={n_train}]: "
-            f"max_diff={max_diff:.2e}, MAE={mae:.2e}"
-        )
+        print(f"\n  Mean parity [{grid_name}, n={n_train}]: "
+              f"max_diff={max_diff:.2e}, MAE={mae:.2e}")
 
         # Tight tolerance — this is the same math, just different implementation
         assert max_diff < 1e-6, (
-            f"Mean parity failed: max_diff={max_diff:.2e} (tolerance: 1e-6)"
-        )
+            f"Mean parity failed: max_diff={max_diff:.2e} (tolerance: 1e-6)")
 
     @pytest.mark.parametrize("n_train", [10, 50, 120])
     @pytest.mark.parametrize("grid_name", ["11x5", "16x16"])
@@ -167,15 +167,12 @@ class TestMathParity:
         std_np_observation = np.sqrt(std_np**2 + NOISE_VAR * y_std_val**2)
 
         max_diff = float(np.max(np.abs(std_sk - std_np_observation)))
-        print(
-            f"\n  Std parity [{grid_name}, n={n_train}]: "
-            f"max_diff={max_diff:.2e} (after noise correction)"
-        )
+        print(f"\n  Std parity [{grid_name}, n={n_train}]: "
+              f"max_diff={max_diff:.2e} (after noise correction)")
 
         # After accounting for the noise term, should match tightly
         assert max_diff < 1e-4, (
-            f"Std parity failed: max_diff={max_diff:.2e} (tolerance: 1e-4)"
-        )
+            f"Std parity failed: max_diff={max_diff:.2e} (tolerance: 1e-4)")
 
         # Also verify the raw difference matches expected noise contribution
         raw_diff = float(np.max(np.abs(std_sk - std_np)))
@@ -229,9 +226,9 @@ class TestNumpyLatency:
         """fit() must complete within budget."""
         X_train, y_train = _make_training_data(n_train)
 
-        gp = MaternGP(
-            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
-        )
+        gp = MaternGP(length_scales=LENGTH_SCALES,
+                      signal_var=SIGNAL_VAR,
+                      noise_var=NOISE_VAR)
 
         timings = []
         for _ in range(10):
@@ -241,10 +238,8 @@ class TestNumpyLatency:
             timings.append((time.perf_counter() - t0) * 1000)
 
         median_ms = float(np.median(timings))
-        print(
-            f"\n  Fit latency [n={n_train}]: median={median_ms:.2f}ms, "
-            f"all={[f'{t:.2f}' for t in timings]}"
-        )
+        print(f"\n  Fit latency [n={n_train}]: median={median_ms:.2f}ms, "
+              f"all={[f'{t:.2f}' for t in timings]}")
 
         # Contract: < 10ms for ≤ 150 points
         assert median_ms < 10.0, f"Fit too slow: {median_ms:.2f}ms (budget: 10ms)"
@@ -257,9 +252,9 @@ class TestNumpyLatency:
         rpm_norm, map_norm = GRID_SHAPES[grid_name]
         X_pred = _make_pred_grid(rpm_norm, map_norm)
 
-        gp = MaternGP(
-            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
-        )
+        gp = MaternGP(length_scales=LENGTH_SCALES,
+                      signal_var=SIGNAL_VAR,
+                      noise_var=NOISE_VAR)
         gp.fit(X_train, y_train)
 
         timings = []
@@ -272,8 +267,7 @@ class TestNumpyLatency:
         n_pred = X_pred.shape[0]
         print(
             f"\n  Predict latency [{grid_name}, n_train={n_train}, n_pred={n_pred}]: "
-            f"median={median_ms:.2f}ms"
-        )
+            f"median={median_ms:.2f}ms")
 
         # Contract: cached prediction stays well under one-frame budget.
         # The original 2ms threshold flagged false-positives on slower CI
@@ -294,16 +288,16 @@ class TestEdgeCases:
         X = np.array([[0.5, 0.5]])
         y = np.array([90.0])
 
-        gp = MaternGP(
-            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
-        )
+        gp = MaternGP(length_scales=LENGTH_SCALES,
+                      signal_var=SIGNAL_VAR,
+                      noise_var=NOISE_VAR)
         gp.fit(X, y)
 
         X_pred = np.array([[0.5, 0.5], [0.0, 0.0], [1.0, 1.0]])
         mean, std = gp.predict(X_pred)
 
-        assert mean.shape == (3,)
-        assert std.shape == (3,)
+        assert mean.shape == (3, )
+        assert std.shape == (3, )
         assert np.all(std >= 0)
         # Near the training point, mean should be close to 90
         assert abs(mean[0] - 90.0) < 1.0
@@ -313,9 +307,9 @@ class TestEdgeCases:
         X = np.random.RandomState(42).rand(20, 2)
         y = np.full(20, 85.0)
 
-        gp = MaternGP(
-            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
-        )
+        gp = MaternGP(length_scales=LENGTH_SCALES,
+                      signal_var=SIGNAL_VAR,
+                      noise_var=NOISE_VAR)
         gp.fit(X, y)
 
         X_pred = np.array([[0.5, 0.5]])
@@ -370,14 +364,14 @@ class TestEdgeCases:
         map_norm = np.linspace(0, 1, 32)
         X_pred = _make_pred_grid(rpm_norm, map_norm)
 
-        gp = MaternGP(
-            length_scales=LENGTH_SCALES, signal_var=SIGNAL_VAR, noise_var=NOISE_VAR
-        )
+        gp = MaternGP(length_scales=LENGTH_SCALES,
+                      signal_var=SIGNAL_VAR,
+                      noise_var=NOISE_VAR)
         gp.fit(X_train, y_train)
         mean, std = gp.predict(X_pred)
 
-        assert mean.shape == (1024,)
-        assert std.shape == (1024,)
+        assert mean.shape == (1024, )
+        assert std.shape == (1024, )
         assert np.all(np.isfinite(mean))
         assert np.all(std >= 0)
 
@@ -445,7 +439,8 @@ class TestShapeValidation:
         gp = MaternGP()
         X = np.random.RandomState(0).rand(10, 3)
         y = np.zeros(10)
-        with pytest.raises(ValueError, match="3 features but length_scales has 2"):
+        with pytest.raises(ValueError,
+                           match="3 features but length_scales has 2"):
             gp.fit(X, y)
 
     def test_predict_rejects_1d_X(self):
@@ -459,7 +454,8 @@ class TestShapeValidation:
         gp = MaternGP()
         X, y = _make_training_data(20)
         gp.fit(X, y)
-        with pytest.raises(ValueError, match="3 features but model was fitted with 2"):
+        with pytest.raises(ValueError,
+                           match="3 features but model was fitted with 2"):
             gp.predict(np.random.RandomState(0).rand(5, 3))
 
 
@@ -473,16 +469,16 @@ class TestPredictEmptyInput:
         X, y = _make_training_data(20)
         gp.fit(X, y)
         mean, std = gp.predict(np.zeros((0, 2)))
-        assert mean.shape == (0,)
+        assert mean.shape == (0, )
         assert std is not None
-        assert std.shape == (0,)
+        assert std.shape == (0, )
 
     def test_predict_with_empty_X_and_no_std(self):
         gp = MaternGP()
         X, y = _make_training_data(20)
         gp.fit(X, y)
         mean, std = gp.predict(np.zeros((0, 2)), return_std=False)
-        assert mean.shape == (0,)
+        assert mean.shape == (0, )
         assert std is None
 
 
