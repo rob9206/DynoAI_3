@@ -137,10 +137,16 @@ class MaternGP:
             normalize_y: If True, center+scale y by mean/std before fitting,
                          and un-transform on prediction (replicates sklearn behavior).
         """
-        self.length_scales = np.asarray(
-            length_scales if length_scales is not None else DEFAULT_LENGTH_SCALES,
-            dtype=np.float64,
+        # `np.asarray` aliases its input when the input is already an
+        # ndarray, so two MaternGP() instances built without an explicit
+        # `length_scales` argument would share `DEFAULT_LENGTH_SCALES`. A
+        # `.copy()` here gives each instance its own array so in-place
+        # tweaks (e.g. for hyperparameter sweeps) can't contaminate the
+        # module-level default or sibling instances.
+        ls_source = (
+            length_scales if length_scales is not None else DEFAULT_LENGTH_SCALES
         )
+        self.length_scales = np.array(ls_source, dtype=np.float64, copy=True)
         self.signal_var = float(signal_var)
         self.noise_var = float(noise_var)
         self.jitter = float(jitter)
@@ -168,11 +174,29 @@ class MaternGP:
         """
         X = np.asarray(X_train, dtype=np.float64)
         y = np.asarray(y_train, dtype=np.float64).ravel()
-        n = X.shape[0]
 
+        # Shape validation: catch caller mistakes early with an informative
+        # error rather than letting them surface as cryptic broadcasting
+        # failures inside the kernel computation.
+        if X.ndim != 2:
+            raise ValueError(
+                f"X_train must be 2D with shape (n_samples, n_features); "
+                f"got shape={X.shape!r}"
+            )
+        n = X.shape[0]
         if n == 0:
             self._cache = None
             return
+        if X.shape[1] != self.length_scales.shape[0]:
+            raise ValueError(
+                f"X_train has {X.shape[1]} features but length_scales has "
+                f"{self.length_scales.shape[0]}; both must match"
+            )
+        if y.shape[0] != n:
+            raise ValueError(
+                f"X_train has {n} samples but y_train has {y.shape[0]}; "
+                f"both must match"
+            )
 
         # -- y normalization (center + scale) --
         if self.normalize_y:
@@ -200,7 +224,19 @@ class MaternGP:
         K[np.diag_indices(n)] += diag_add
 
         # -- Cholesky factorization --
-        L = np.linalg.cholesky(K)  # (n, n) lower triangular
+        # Wrap the LinAlgError so callers get an actionable hint about the
+        # two knobs they can adjust (jitter, noise_var) instead of a bare
+        # "Matrix is not positive definite" from numpy.
+        try:
+            L = np.linalg.cholesky(K)  # (n, n) lower triangular
+        except np.linalg.LinAlgError as exc:
+            raise RuntimeError(
+                "MaternGP.fit(): Cholesky decomposition failed. The covariance "
+                "matrix is numerically not positive definite with current "
+                f"noise_var={self.noise_var} and jitter={self.jitter}. "
+                "Try increasing one of them (jitter is a safer numerical "
+                "stabilizer; noise_var also affects model fit)."
+            ) from exc
 
         # -- Solve for alpha: K^{-1} y_norm via two triangular solves --
         # L v = y_norm  →  v = L^{-1} y_norm
@@ -253,6 +289,27 @@ class MaternGP:
 
         c = self._cache
         X_pred = np.asarray(X_pred, dtype=np.float64)
+
+        # Shape validation, same rationale as in fit(): better to fail
+        # loudly here than inside the kernel matmul.
+        if X_pred.ndim != 2:
+            raise ValueError(
+                f"X_pred must be 2D with shape (n_samples, n_features); "
+                f"got shape={X_pred.shape!r}"
+            )
+        if X_pred.shape[1] != c.length_scales.shape[0]:
+            raise ValueError(
+                f"X_pred has {X_pred.shape[1]} features but model was fitted "
+                f"with {c.length_scales.shape[0]}; both must match"
+            )
+
+        # Empty prediction set is a legitimate query shape (e.g. a caller
+        # filtered out all candidates by mask). Return same-typed empties
+        # rather than running through the kernel and producing zero-row
+        # numpy artifacts.
+        if X_pred.shape[0] == 0:
+            empty = np.empty(0, dtype=np.float64)
+            return empty, (empty.copy() if return_std else None)
 
         # -- Scale prediction inputs --
         X_pred_scaled = X_pred / c.length_scales  # (m, d)
