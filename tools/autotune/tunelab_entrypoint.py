@@ -183,7 +183,24 @@ def _normalize_argv(argv: Sequence[str] | None) -> list[str]:
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    rename_map = {k: v for k, v in COLUMN_ALIASES.items() if k in df.columns}
+    """Rename alias columns to canonical names, but never produce duplicates.
+
+    If a canonical target column (e.g. ``AFR Meas F``) already exists, we
+    leave the alias column alone rather than renaming on top of it. Renaming
+    into an existing name yields duplicate column labels and turns
+    ``df[col]`` from a Series into a DataFrame, which silently breaks
+    downstream ``pd.to_numeric`` calls.
+    """
+    occupied: set[str] = set(df.columns)
+    rename_map: dict[str, str] = {}
+    for column in df.columns:
+        target = COLUMN_ALIASES.get(column)
+        if target is None:
+            continue
+        if target in occupied:
+            continue
+        rename_map[column] = target
+        occupied.add(target)
     if not rename_map:
         return df
     return df.rename(columns=rename_map)
