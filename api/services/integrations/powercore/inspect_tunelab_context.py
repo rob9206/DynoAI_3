@@ -8,7 +8,11 @@ import clr
 clr.AddReference("System")
 clr.AddReference("System.Windows.Forms")
 
-from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon  # noqa: E402
+from System.Windows.Forms import (  # noqa: E402
+    MessageBox,
+    MessageBoxButtons,
+    MessageBoxIcon,
+)
 
 APP_TITLE = "DynoAI TuneLab Context Probe"
 VE_FRONT_TABLE_CANDIDATES = [
@@ -62,7 +66,9 @@ def Run():
     lines = []
     context_names = _safe_dir(context)  # noqa: F821
     lines.append("context attrs (%d):" % len(context_names))
-    lines.append(", ".join(context_names[:80]) + ("..." if len(context_names) > 80 else ""))
+    lines.append(
+        ", ".join(context_names[:80]) + ("..." if len(context_names) > 80 else "")
+    )
 
     try:
         tune_obj = context.tune  # noqa: F821
@@ -72,7 +78,9 @@ def Run():
         tune_names = _safe_dir(tune_obj)
         lines.append("")
         lines.append("tune attrs (%d):" % len(tune_names))
-        lines.append(", ".join(tune_names[:80]) + ("..." if len(tune_names) > 80 else ""))
+        lines.append(
+            ", ".join(tune_names[:80]) + ("..." if len(tune_names) > 80 else "")
+        )
 
     lines.append("")
     lines.append("Front table candidates:")

@@ -6,23 +6,10 @@
 # mypy: ignore-errors
 
 try:
-    import json as _py_json
-except Exception:
-    _py_json = None
-
-import re
-import clr
-
-clr.AddReference("System")
-clr.AddReference("System.Windows.Forms")
-clr.AddReference("System.Drawing")
+import json as _py_json
 
 from System import DateTime, Environment, Guid
 from System.Diagnostics import Process, ProcessStartInfo
-try:
-    from System.Drawing import Color, Point, Size
-except Exception:
-    from Drawing import Color, Point, Size
 from System.IO import Directory, File, Path
 from System.Windows.Forms import (
     Button,
@@ -37,6 +24,24 @@ from System.Windows.Forms import (
     MessageBoxIcon,
 )
 from tunelab import ConfigurableChannelProvider
+
+except Exception:
+    _py_json = None
+
+import re
+
+import clr
+
+clr.AddReference("System")
+clr.AddReference("System.Windows.Forms")
+clr.AddReference("System.Drawing")
+
+
+try:
+    from System.Drawing import Color, Point, Size
+except Exception:
+    from Drawing import Color, Point, Size
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -257,7 +262,6 @@ DIAG_PROBE_NAMES = (
         "TQ",
     ]
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -529,7 +533,9 @@ def _estimate_map_from_rpm(rpm_value):
     return 80.0
 
 
-def _resolve_afr_or_voltage(file_handle, afr_aliases, volt_aliases, lambda_aliases=None):
+def _resolve_afr_or_voltage(
+    file_handle, afr_aliases, volt_aliases, lambda_aliases=None
+):
     """Resolve AFR input: prefer AFR-unit, fall back to voltage, then Lambda.
 
     Returns (channel, column_name). ``column_name`` is:
@@ -617,12 +623,13 @@ def _raise_channel_error(file_handle, missing, found_afr_f, found_afr_r):
 
     if ("AFR Front" in missing) or ("AFR Rear" in missing):
         raise RuntimeError(
-            "Cannot find any AFR channel in the loaded log." + nl
-            + "Missing: " + ", ".join(missing) + extra
+            "Cannot find any AFR channel in the loaded log."
+            + nl
+            + "Missing: "
+            + ", ".join(missing)
+            + extra
         )
-    raise RuntimeError(
-        "Missing required channels: " + ", ".join(missing) + extra
-    )
+    raise RuntimeError("Missing required channels: " + ", ".join(missing) + extra)
 
 
 def _channel_score(file_handle):
@@ -684,7 +691,9 @@ def _export_loaded_log_csv(file_handle, csv_path):
         missing.append("AFR Front")
         missing.append("AFR Rear")
     if missing:
-        _raise_channel_error(file_handle, missing, afr_f_ch is not None, afr_r_ch is not None)
+        _raise_channel_error(
+            file_handle, missing, afr_f_ch is not None, afr_r_ch is not None
+        )
 
     rpm_samples = _read_samples(rpm_ch)
     map_samples = _read_samples(map_ch)
@@ -1020,7 +1029,9 @@ def _extract_table_grid(table_obj, rows, cols):
             for r in range(rows):
                 row = []
                 for c in range(cols):
-                    row.append(_table_get_value(table_obj, r + base_index, c + base_index))
+                    row.append(
+                        _table_get_value(table_obj, r + base_index, c + base_index)
+                    )
                 grid.append(row)
             return grid, base_index
         except Exception as exc:
@@ -1137,7 +1148,9 @@ class PreviewDialog(Form):
         mode = str(_safe_get(self.summary, "mode", "dual_cylinder"))
         safety = _safe_get(self.summary, "safety", {}) or {}
         apply_blocked = bool(_safe_get(safety, "apply_blocked", False))
-        warn_threshold = float(_safe_get(safety, "warn_threshold_pct", WARN_THRESHOLD_PCT))
+        warn_threshold = float(
+            _safe_get(safety, "warn_threshold_pct", WARN_THRESHOLD_PCT)
+        )
         over_warn = bool(_safe_get(self.summary, "over_warn_threshold"))
         if apply_blocked and mode == MODE_DUAL:
             banner.Text = "APPLY BLOCKED: safety gates must pass before write-back."
@@ -1178,12 +1191,9 @@ class PreviewDialog(Form):
         footer = Label()
         footer.Location = Point(15, 315)
         footer.Size = Size(520, 40)
-        footer.Text = (
-            "run_id: %s\nsummary schema: v%s"
-            % (
-                _safe_get(self.summary, "run_id", "unknown"),
-                _safe_get(self.summary, "schema_version", "?"),
-            )
+        footer.Text = "run_id: %s\nsummary schema: v%s" % (
+            _safe_get(self.summary, "run_id", "unknown"),
+            _safe_get(self.summary, "schema_version", "?"),
         )
         self.Controls.Add(footer)
 
@@ -1257,7 +1267,9 @@ class PreviewDialog(Form):
             group.Controls.Add(na_label)
             return group
 
-        self._add_metric(group, "zones_adjusted", _safe_get(section, "zones_adjusted"), 30)
+        self._add_metric(
+            group, "zones_adjusted", _safe_get(section, "zones_adjusted"), 30
+        )
         self._add_metric(
             group,
             "max_correction_pct",
@@ -1270,7 +1282,9 @@ class PreviewDialog(Form):
             _to_metric(_safe_get(section, "min_pct", 0.0), 2),
             90,
         )
-        self._add_metric(group, "clipped_zones", _safe_get(section, "clipped_zones"), 120)
+        self._add_metric(
+            group, "clipped_zones", _safe_get(section, "clipped_zones"), 120
+        )
         self._add_metric(
             group,
             "mean_afr_error",
@@ -1377,12 +1391,13 @@ class _ErrorViewForm(Form):
 
         try:
             from System.Windows.Forms import (
-                ScrollBars,
-                TextBox as _TextBox,
                 DockStyle,
+                ScrollBars,
             )
+            from System.Windows.Forms import TextBox as _TextBox
         except Exception:
-            from Windows.Forms import ScrollBars, TextBox as _TextBox, DockStyle
+            from Windows.Forms import DockStyle, ScrollBars
+            from Windows.Forms import TextBox as _TextBox
 
         tb = _TextBox()
         tb.Multiline = True
@@ -1517,7 +1532,9 @@ class DynoAIAutotune(ConfigurableChannelProvider):
 
         parsed_paths = _extract_apply_paths(stdout)
         if not parsed_paths:
-            raise RuntimeError("Apply CLI output parse failed.\r\nstdout:\r\n%s" % stdout)
+            raise RuntimeError(
+                "Apply CLI output parse failed.\r\nstdout:\r\n%s" % stdout
+            )
         apply_front_csv, apply_rear_csv, session_log_path = parsed_paths
         if not File.Exists(apply_front_csv) or not File.Exists(apply_rear_csv):
             raise RuntimeError(
@@ -1537,7 +1554,10 @@ class DynoAIAutotune(ConfigurableChannelProvider):
                 "Applied CSV axes do not match preview grid. "
                 "Check table shape compatibility before retrying."
             )
-        if len(front_applied_grid) != expected_rows or len(rear_applied_grid) != expected_rows:
+        if (
+            len(front_applied_grid) != expected_rows
+            or len(rear_applied_grid) != expected_rows
+        ):
             raise RuntimeError("Applied CSV row count mismatch with preview grid.")
         if (
             front_applied_grid
@@ -1668,7 +1688,10 @@ class DynoAIAutotune(ConfigurableChannelProvider):
                 return
 
             export_dir = _copy_export_outputs(summary, summary_path)
-            msg = "Export complete.\n\nSaved files to:\n%s\n\nOpen folder now?" % export_dir
+            msg = (
+                "Export complete.\n\nSaved files to:\n%s\n\nOpen folder now?"
+                % export_dir
+            )
             result = MessageBox.Show(
                 msg,
                 APP_TITLE_SHORT,

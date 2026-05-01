@@ -28,7 +28,6 @@ SAFETY: SafetyThresholds = {
     "warn_coverage_pct": 50.0,
 }
 
-
 BlockReasonType = Literal[
     "extreme_correction",
     "missing_base",
@@ -140,9 +139,7 @@ def check_block_conditions(
         ("hitCounts.rear", hit_counts["rear"]),
     ]
     mismatches = [
-        name
-        for name, grid in grids
-        if _shape(grid) != (expected_rows, expected_cols)
+        name for name, grid in grids if _shape(grid) != (expected_rows, expected_cols)
     ]
     if mismatches:
         blocks.append(

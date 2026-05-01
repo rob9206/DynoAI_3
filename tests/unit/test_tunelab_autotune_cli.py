@@ -100,7 +100,9 @@ def _load_grid(csv_path: Path) -> pd.DataFrame:
     return df
 
 
-def _write_base_ve_csv(path: Path, rpm_axis: list[float], map_axis: list[float], value: float) -> None:
+def _write_base_ve_csv(
+    path: Path, rpm_axis: list[float], map_axis: list[float], value: float
+) -> None:
     def _fmt(axis_value: float) -> str:
         as_float = float(axis_value)
         if as_float.is_integer():
@@ -115,7 +117,9 @@ def _write_base_ve_csv(path: Path, rpm_axis: list[float], map_axis: list[float],
 
 
 def test_cli_missing_afr_column_returns_nonzero(tmp_path: Path) -> None:
-    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.5).drop(columns=["AFR Meas R"])
+    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.5).drop(
+        columns=["AFR Meas R"]
+    )
     log_csv = tmp_path / "missing_rear.csv"
     frame.to_csv(log_csv, index=False)
 
@@ -207,11 +211,16 @@ def test_preview_blocks_on_extreme_correction(tmp_path: Path) -> None:
     summary = _load_summary(out_dir / "correction_summary.json")
     safety = summary["safety"]
     assert safety["apply_blocked"] is True
-    assert any(reason["type"] == "extreme_correction" for reason in safety["apply_blocked_reasons"])
+    assert any(
+        reason["type"] == "extreme_correction"
+        for reason in safety["apply_blocked_reasons"]
+    )
 
 
 def test_preview_blocks_in_single_cylinder_mode(tmp_path: Path) -> None:
-    frame = _build_dual_afr_frame(front_afr=14.1, rear_afr=13.1).drop(columns=["AFR Meas F"])
+    frame = _build_dual_afr_frame(front_afr=14.1, rear_afr=13.1).drop(
+        columns=["AFR Meas F"]
+    )
     log_csv = tmp_path / "single_mode.csv"
     out_dir = tmp_path / "out"
     frame.to_csv(log_csv, index=False)
@@ -226,7 +235,10 @@ def test_preview_blocks_in_single_cylinder_mode(tmp_path: Path) -> None:
     summary = _load_summary(out_dir / "correction_summary.json")
     safety = summary["safety"]
     assert safety["apply_blocked"] is True
-    assert any(reason["type"] == "partial_cylinder" for reason in safety["apply_blocked_reasons"])
+    assert any(
+        reason["type"] == "partial_cylinder"
+        for reason in safety["apply_blocked_reasons"]
+    )
 
 
 def test_preview_emit_pvv_patch_writes_pvv(tmp_path: Path) -> None:
@@ -299,7 +311,9 @@ def test_apply_subcommand_writes_ve_applied_and_session_log(tmp_path: Path) -> N
         assert "session_log=" in apply_result.stdout
 
         line = next(
-            line for line in apply_result.stdout.splitlines() if line.startswith("[F1][OK]")
+            line
+            for line in apply_result.stdout.splitlines()
+            if line.startswith("[F1][OK]")
         )
         match = re.search(
             r"apply_front=(\S+)\s+apply_rear=(\S+)\s+session_log=(\S+)",
@@ -320,7 +334,9 @@ def test_apply_subcommand_writes_ve_applied_and_session_log(tmp_path: Path) -> N
 
         session_log = json.loads(session_log_path.read_text(encoding="utf-8"))
         apply_events = [
-            event for event in session_log.get("events", []) if event.get("type") == "apply"
+            event
+            for event in session_log.get("events", [])
+            if event.get("type") == "apply"
         ]
         assert len(apply_events) >= 2
     finally:
@@ -456,7 +472,9 @@ def test_cli_accepts_lc2_voltage_columns(tmp_path: Path) -> None:
 
 def test_cli_single_cylinder_rear_only_emits_rear_outputs(tmp_path: Path) -> None:
     """--single-cylinder rear with only rear AFR present must succeed and write only rear CSV."""
-    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.2).drop(columns=["AFR Meas F"])
+    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.2).drop(
+        columns=["AFR Meas F"]
+    )
     log_csv = tmp_path / "rear_only.csv"
     out_dir = tmp_path / "out"
     frame.to_csv(log_csv, index=False)
@@ -479,7 +497,9 @@ def test_cli_single_cylinder_rear_only_emits_rear_outputs(tmp_path: Path) -> Non
 
 def test_cli_single_cylinder_front_only_emits_front_outputs(tmp_path: Path) -> None:
     """--single-cylinder front with only front AFR present must succeed and write only front CSV."""
-    frame = _build_dual_afr_frame(front_afr=14.5, rear_afr=13.2).drop(columns=["AFR Meas R"])
+    frame = _build_dual_afr_frame(front_afr=14.5, rear_afr=13.2).drop(
+        columns=["AFR Meas R"]
+    )
     log_csv = tmp_path / "front_only.csv"
     out_dir = tmp_path / "out"
     frame.to_csv(log_csv, index=False)
@@ -500,9 +520,13 @@ def test_cli_single_cylinder_front_only_emits_front_outputs(tmp_path: Path) -> N
     assert isinstance(summary["front"], dict)
 
 
-def test_cli_single_cylinder_flag_overrides_missing_column_error(tmp_path: Path) -> None:
+def test_cli_single_cylinder_flag_overrides_missing_column_error(
+    tmp_path: Path,
+) -> None:
     """Without the flag, missing AFR Meas F errors. With --single-cylinder rear, CLI succeeds."""
-    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.2).drop(columns=["AFR Meas F"])
+    frame = _build_dual_afr_frame(front_afr=14.0, rear_afr=13.2).drop(
+        columns=["AFR Meas F"]
+    )
     log_csv = tmp_path / "needs_override.csv"
     frame.to_csv(log_csv, index=False)
 

@@ -14,7 +14,11 @@ import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 
 from api.services.autotune.safety_gates import SAFETY, check_block_conditions
-from api.services.autotune_workflow import AutoTuneWorkflow, DataSource, VECorrectionResult
+from api.services.autotune_workflow import (
+    AutoTuneWorkflow,
+    DataSource,
+    VECorrectionResult,
+)
 from api.services.jetdrive.jetdrive_mapping import lambda_to_afr
 from api.services.jetdrive.wideband_rescale import (
     canonicalize_wideband_sample,
@@ -289,11 +293,15 @@ def _rescale_lambda_values_in_afr_columns(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         df[column] = [
-            None
-            if pd.isna(v)
-            else (lambda_to_afr(float(v))
-                  if LAMBDA_MIN_PLAUSIBLE <= float(v) <= LAMBDA_MAX_PLAUSIBLE
-                  else None)
+            (
+                None
+                if pd.isna(v)
+                else (
+                    lambda_to_afr(float(v))
+                    if LAMBDA_MIN_PLAUSIBLE <= float(v) <= LAMBDA_MAX_PLAUSIBLE
+                    else None
+                )
+            )
             for v in numeric
         ]
 
@@ -439,7 +447,9 @@ def _neutral_grid(rows: int, cols: int, value: float) -> list[list[float]]:
 def _build_dual_grids_for_safety(
     results: dict[str, dict[str, Any]],
     active_sides: Sequence[str],
-) -> tuple[dict[str, list[list[float]]], dict[str, list[list[float]]], list[float], list[float]]:
+) -> tuple[
+    dict[str, list[list[float]]], dict[str, list[list[float]]], list[float], list[float]
+]:
     reference_side = active_sides[0]
     rpm_axis = [float(v) for v in results[reference_side]["rpm_axis"]]
     map_axis = [float(v) for v in results[reference_side]["map_axis"]]
@@ -538,8 +548,7 @@ def _build_safety_block(
                 "type": "extreme_correction",
                 "message": (
                     "Requested correction exceeds ±%.0f%% before clamp "
-                    "(overall_max_pct=%.2f%%)."
-                    % (block_threshold, overall_max_pct)
+                    "(overall_max_pct=%.2f%%)." % (block_threshold, overall_max_pct)
                 ),
             }
         )
@@ -552,11 +561,15 @@ def _build_safety_block(
     }
 
 
-def _load_multiplier_csv(multiplier_csv: Path) -> tuple[list[str], list[int], list[list[float]]]:
+def _load_multiplier_csv(
+    multiplier_csv: Path,
+) -> tuple[list[str], list[int], list[list[float]]]:
     try:
         frame = pd.read_csv(multiplier_csv)
     except Exception as exc:
-        raise RuntimeError(f"unable_to_read_multiplier_csv: {multiplier_csv} ({exc})") from exc
+        raise RuntimeError(
+            f"unable_to_read_multiplier_csv: {multiplier_csv} ({exc})"
+        ) from exc
 
     if frame.empty or len(frame.columns) < 2:
         raise RuntimeError(f"invalid_multiplier_csv: {multiplier_csv}")
@@ -587,7 +600,10 @@ def _write_percent_factor_csv(
         writer = csv.writer(handle)
         writer.writerow(["RPM", *map_axis])
         for rpm, multiplier_row in zip(rpm_axis, multiplier_grid):
-            percent_row = [f"{(float(multiplier) - 1.0) * 100.0:.6f}" for multiplier in multiplier_row]
+            percent_row = [
+                f"{(float(multiplier) - 1.0) * 100.0:.6f}"
+                for multiplier in multiplier_row
+            ]
             writer.writerow([rpm, *percent_row])
 
 
@@ -665,7 +681,9 @@ def run_preview_cli(
             output_dir=output_dir,
         )
 
-    overall_max_pct = max(float(results[side]["requested_max_pct"]) for side in active_sides)
+    overall_max_pct = max(
+        float(results[side]["requested_max_pct"]) for side in active_sides
+    )
     safety = _build_safety_block(
         results=results,
         active_sides=active_sides,
