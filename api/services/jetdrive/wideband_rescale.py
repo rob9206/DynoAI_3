@@ -168,24 +168,20 @@ def match_wideband_channel(name: str) -> Optional[str]:
 
     is_innovate_canonical = "petrol" in lowered and "afr" in lowered
     is_lc_short_form = (
-        ("lc1" in lowered or "lc2" in lowered or "lc-1" in lowered or "lc-2" in lowered)
-        and "afr" in lowered
-    )
-    is_wb_marker = (
-        "wbo2" in lowered or "wideband" in lowered or "innovate" in lowered
-    )
+        "lc1" in lowered or "lc2" in lowered or "lc-1" in lowered or "lc-2" in lowered
+    ) and "afr" in lowered
+    is_wb_marker = "wbo2" in lowered or "wideband" in lowered or "innovate" in lowered
     is_afr_volts_form = (
-        ("afr volts " in f"{lowered} " or " volts afr" in f" {lowered}")
-        and (
-            "1" in lowered
-            or "2" in lowered
-            or " f " in f" {lowered} "
-            or " r " in f" {lowered} "
-            or "front" in lowered
-            or "rear" in lowered
-            or lowered.endswith(" f")
-            or lowered.endswith(" r")
-        )
+        "afr volts " in f"{lowered} " or " volts afr" in f" {lowered}"
+    ) and (
+        "1" in lowered
+        or "2" in lowered
+        or " f " in f" {lowered} "
+        or " r " in f" {lowered} "
+        or "front" in lowered
+        or "rear" in lowered
+        or lowered.endswith(" f")
+        or lowered.endswith(" r")
     )
     if not (
         is_innovate_canonical or is_lc_short_form or is_wb_marker or is_afr_volts_form

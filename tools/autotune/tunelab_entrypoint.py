@@ -633,9 +633,7 @@ def _resolve_run_dir(run_id: str) -> Path:
     as a defense-in-depth guard.
     """
     runs_root = (REPO_ROOT / "runs").resolve()
-    raw_parts = [
-        part for part in run_id.replace("\\", "/").split("/") if part.strip()
-    ]
+    raw_parts = [part for part in run_id.replace("\\", "/").split("/") if part.strip()]
     safe_parts = [_safe_run_slug(part) for part in raw_parts]
     safe_parts = [part for part in safe_parts if part and part not in (".", "..")]
     if not safe_parts:

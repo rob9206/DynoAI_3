@@ -35,8 +35,10 @@ clr.AddReference("System.Drawing")
 
 # json: prefer stdlib, fall back to None on stripped IronPython distributions.
 # Single-line guarded form so isort/black/yapf cannot split a `try:` block.
-try: import json as _py_json  # noqa: E701,E401
-except Exception: _py_json = None  # noqa: E701,E722
+try:
+    import json as _py_json  # noqa: E701,E401
+except Exception:
+    _py_json = None  # noqa: E701,E722
 
 # CLR namespaces -- IronPython 2.7 sometimes exposes these without the System.
 # prefix on legacy Power Core builds, so each block is its own try/except.
@@ -77,20 +79,11 @@ try:
     )
 except Exception:
     from Windows.Forms import (  # type: ignore[no-redef]
-        Button,
-        DialogResult,
-        Form,
-        FormBorderStyle,
-        FormStartPosition,
-        GroupBox,
-        Label,
-        MessageBox,
-        MessageBoxButtons,
-        MessageBoxIcon,
+        Button, DialogResult, Form, FormBorderStyle, FormStartPosition,
+        GroupBox, Label, MessageBox, MessageBoxButtons, MessageBoxIcon,
     )
 
 from tunelab import ConfigurableChannelProvider
-
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -116,7 +109,6 @@ MODE_SINGLE_FRONT = "single_cylinder_front"
 MODE_SINGLE_REAR = "single_cylinder_rear"
 MODE_CHOICES = (MODE_DUAL, MODE_SINGLE_FRONT, MODE_SINGLE_REAR)
 
-
 _RUN_SLUG_INVALID_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -139,6 +131,7 @@ def _safe_run_slug(run_id):
     if not slug or slug in (".", ".."):
         return "run"
     return slug
+
 
 VE_FRONT_TABLE_CANDIDATES = [
     VE_FRONT_TABLE_NAME,
@@ -305,44 +298,37 @@ TPS_ALIASES = [
 ]
 
 # Broad probe list for diagnostics when strict aliases fail.
-DIAG_PROBE_NAMES = (
-    RPM_CHANNEL_ALIASES
-    + MAP_CHANNEL_ALIASES
-    + AFR_F_ALIASES
-    + AFR_R_ALIASES
-    + AFR_F_VOLT_ALIASES
-    + AFR_R_VOLT_ALIASES
-    + TPS_ALIASES
-    + [
-        "B+",
-        "VBatt",
-        "Battery",
-        "Battery Voltage",
-        "ET",
-        "Engine Temp",
-        "ECT",
-        "Coolant Temp",
-        "Engine Temperature",
-        "IAT",
-        "Intake Air Temp",
-        "Intake Temperature",
-        "Vehicle Speed",
-        "Gear",
-        "Spark Advance",
-        "Ignition Timing",
-        "Injector Duty",
-        "Injector Pulse Width",
-        "Fuel Pressure",
-        "Oil Pressure",
-        "Oil Temp",
-        "Knock",
-        "Knock Retard",
-        "Horsepower",
-        "HP",
-        "Torque",
-        "TQ",
-    ]
-)
+DIAG_PROBE_NAMES = (RPM_CHANNEL_ALIASES + MAP_CHANNEL_ALIASES + AFR_F_ALIASES +
+                    AFR_R_ALIASES + AFR_F_VOLT_ALIASES + AFR_R_VOLT_ALIASES +
+                    TPS_ALIASES + [
+                        "B+",
+                        "VBatt",
+                        "Battery",
+                        "Battery Voltage",
+                        "ET",
+                        "Engine Temp",
+                        "ECT",
+                        "Coolant Temp",
+                        "Engine Temperature",
+                        "IAT",
+                        "Intake Air Temp",
+                        "Intake Temperature",
+                        "Vehicle Speed",
+                        "Gear",
+                        "Spark Advance",
+                        "Ignition Timing",
+                        "Injector Duty",
+                        "Injector Pulse Width",
+                        "Fuel Pressure",
+                        "Oil Pressure",
+                        "Oil Temp",
+                        "Knock",
+                        "Knock Retard",
+                        "Horsepower",
+                        "HP",
+                        "Torque",
+                        "TQ",
+                    ])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -482,7 +468,8 @@ def _list_channel_names(file_handle):
             continue
         try:
             for item in result:
-                name_attr = getattr(item, "Name", None) or getattr(item, "name", None)
+                name_attr = getattr(item, "Name", None) or getattr(
+                    item, "name", None)
                 if name_attr is not None:
                     _add(name_attr)
                 else:
@@ -546,9 +533,8 @@ def _value_at_or_before(samples, target_ms, idx_hint):
 
 
 def _create_temp_dir():
-    temp_dir = Path.Combine(
-        Path.GetTempPath(), "dynoai_autotune_" + Guid.NewGuid().ToString("N")
-    )
+    temp_dir = Path.Combine(Path.GetTempPath(),
+                            "dynoai_autotune_" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(temp_dir)
     return temp_dir
 
@@ -614,9 +600,10 @@ def _estimate_map_from_rpm(rpm_value):
     return 80.0
 
 
-def _resolve_afr_or_voltage(
-    file_handle, afr_aliases, volt_aliases, lambda_aliases=None
-):
+def _resolve_afr_or_voltage(file_handle,
+                            afr_aliases,
+                            volt_aliases,
+                            lambda_aliases=None):
     """Resolve AFR input: prefer AFR-unit, fall back to voltage, then Lambda.
 
     Returns (channel, column_name). ``column_name`` is:
@@ -660,11 +647,11 @@ def _resolve_channels(file_handle):
     rpm_ch = _try_channel(file_handle, RPM_CHANNEL_ALIASES)
     map_ch = _try_channel(file_handle, MAP_CHANNEL_ALIASES)
     afr_f_ch, front_volt_name = _resolve_afr_or_voltage(
-        file_handle, AFR_F_ALIASES, AFR_F_VOLT_ALIASES, AFR_F_LAMBDA_ALIASES
-    )
-    afr_r_ch, rear_volt_name = _resolve_afr_or_voltage(
-        file_handle, AFR_R_ALIASES, AFR_R_VOLT_ALIASES, AFR_R_LAMBDA_ALIASES
-    )
+        file_handle, AFR_F_ALIASES, AFR_F_VOLT_ALIASES, AFR_F_LAMBDA_ALIASES)
+    afr_r_ch, rear_volt_name = _resolve_afr_or_voltage(file_handle,
+                                                       AFR_R_ALIASES,
+                                                       AFR_R_VOLT_ALIASES,
+                                                       AFR_R_LAMBDA_ALIASES)
     tps_ch = _try_channel(file_handle, TPS_ALIASES)
     return {
         "rpm_ch": rpm_ch,
@@ -703,26 +690,24 @@ def _raise_channel_error(file_handle, missing, found_afr_f, found_afr_r):
     extra = nl.join(extra_lines)
 
     if ("AFR Front" in missing) or ("AFR Rear" in missing):
-        raise RuntimeError(
-            "Cannot find any AFR channel in the loaded log."
-            + nl
-            + "Missing: "
-            + ", ".join(missing)
-            + extra
-        )
-    raise RuntimeError("Missing required channels: " + ", ".join(missing) + extra)
+        raise RuntimeError("Cannot find any AFR channel in the loaded log." +
+                           nl + "Missing: " + ", ".join(missing) + extra)
+    raise RuntimeError("Missing required channels: " + ", ".join(missing) +
+                       extra)
 
 
 def _channel_score(file_handle):
     score = 0
     rpm_ch = _try_channel(file_handle, RPM_CHANNEL_ALIASES)
     map_ch = _try_channel(file_handle, MAP_CHANNEL_ALIASES)
-    afr_f_ch, front_raw_name = _resolve_afr_or_voltage(
-        file_handle, AFR_F_ALIASES, AFR_F_VOLT_ALIASES, AFR_F_LAMBDA_ALIASES
-    )
-    afr_r_ch, rear_raw_name = _resolve_afr_or_voltage(
-        file_handle, AFR_R_ALIASES, AFR_R_VOLT_ALIASES, AFR_R_LAMBDA_ALIASES
-    )
+    afr_f_ch, front_raw_name = _resolve_afr_or_voltage(file_handle,
+                                                       AFR_F_ALIASES,
+                                                       AFR_F_VOLT_ALIASES,
+                                                       AFR_F_LAMBDA_ALIASES)
+    afr_r_ch, rear_raw_name = _resolve_afr_or_voltage(file_handle,
+                                                      AFR_R_ALIASES,
+                                                      AFR_R_VOLT_ALIASES,
+                                                      AFR_R_LAMBDA_ALIASES)
     if rpm_ch is not None:
         score += 1
     if map_ch is not None:
@@ -772,9 +757,8 @@ def _export_loaded_log_csv(file_handle, csv_path):
         missing.append("AFR Front")
         missing.append("AFR Rear")
     if missing:
-        _raise_channel_error(
-            file_handle, missing, afr_f_ch is not None, afr_r_ch is not None
-        )
+        _raise_channel_error(file_handle, missing, afr_f_ch is not None,
+                             afr_r_ch is not None)
 
     rpm_samples = _read_samples(rpm_ch)
     map_samples = _read_samples(map_ch)
@@ -831,7 +815,8 @@ def _export_loaded_log_csv(file_handle, csv_path):
 
         for t_ms, rpm_value in rpm_samples:
             if map_samples:
-                map_value, map_idx = _value_at_or_before(map_samples, t_ms, map_idx)
+                map_value, map_idx = _value_at_or_before(
+                    map_samples, t_ms, map_idx)
             else:
                 map_value = _estimate_map_from_rpm(rpm_value)
             if map_value is None:
@@ -845,27 +830,28 @@ def _export_loaded_log_csv(file_handle, csv_path):
 
             if front_has_data:
                 afr_f_value, afr_f_idx = _value_at_or_before(
-                    afr_f_samples, t_ms, afr_f_idx
-                )
+                    afr_f_samples, t_ms, afr_f_idx)
                 if afr_f_value is None:
                     continue
                 row_values.append("%.3f" % afr_f_value)
             if rear_has_data:
                 afr_r_value, afr_r_idx = _value_at_or_before(
-                    afr_r_samples, t_ms, afr_r_idx
-                )
+                    afr_r_samples, t_ms, afr_r_idx)
                 if afr_r_value is None:
                     continue
                 row_values.append("%.3f" % afr_r_value)
             if tps_samples:
-                tps_value, tps_idx = _value_at_or_before(tps_samples, t_ms, tps_idx)
-                row_values.append("" if tps_value is None else ("%.3f" % tps_value))
+                tps_value, tps_idx = _value_at_or_before(
+                    tps_samples, t_ms, tps_idx)
+                row_values.append("" if tps_value is None else ("%.3f" %
+                                                                tps_value))
 
             handle.write(",".join([str(v) for v in row_values]) + "\n")
             row_count += 1
 
     if row_count == 0:
-        raise RuntimeError("No aligned rows could be exported from loaded channels.")
+        raise RuntimeError(
+            "No aligned rows could be exported from loaded channels.")
 
     return row_count, mode
 
@@ -943,7 +929,8 @@ def _load_summary(summary_path):
         raw_value = serializer.DeserializeObject(raw_text)
         return _dotnet_to_python(raw_value)
     except Exception as exc:
-        raise RuntimeError("Unable to parse correction_summary.json: %s" % str(exc))
+        raise RuntimeError("Unable to parse correction_summary.json: %s" %
+                           str(exc))
 
 
 def _to_metric(value, decimals):
@@ -1053,7 +1040,8 @@ def _write_ve_csv(csv_path, rpm_axis, map_axis, grid):
         handle.write((",".join(header) + "\n"))
         for rpm, row in zip(rpm_axis, grid):
             values = ["%.6f" % float(v) for v in row]
-            handle.write((_format_axis_value(rpm) + "," + ",".join(values) + "\n"))
+            handle.write(
+                (_format_axis_value(rpm) + "," + ",".join(values) + "\n"))
 
 
 def _table_get_value(table_obj, row_idx, col_idx):
@@ -1071,9 +1059,8 @@ def _table_get_value(table_obj, row_idx, col_idx):
     try:
         return float(table_obj[row_idx][col_idx])
     except Exception as exc:
-        raise RuntimeError(
-            "Unable to read table cell (%d,%d): %s" % (row_idx, col_idx, str(exc))
-        )
+        raise RuntimeError("Unable to read table cell (%d,%d): %s" %
+                           (row_idx, col_idx, str(exc)))
 
 
 def _table_set_value(table_obj, row_idx, col_idx, value):
@@ -1097,9 +1084,8 @@ def _table_set_value(table_obj, row_idx, col_idx, value):
         table_obj[row_idx][col_idx] = value
         return
     except Exception as exc:
-        raise RuntimeError(
-            "Unable to write table cell (%d,%d): %s" % (row_idx, col_idx, str(exc))
-        )
+        raise RuntimeError("Unable to write table cell (%d,%d): %s" %
+                           (row_idx, col_idx, str(exc)))
 
 
 def _extract_table_grid(table_obj, rows, cols):
@@ -1111,8 +1097,8 @@ def _extract_table_grid(table_obj, rows, cols):
                 row = []
                 for c in range(cols):
                     row.append(
-                        _table_get_value(table_obj, r + base_index, c + base_index)
-                    )
+                        _table_get_value(table_obj, r + base_index,
+                                         c + base_index))
                 grid.append(row)
             return grid, base_index
         except Exception as exc:
@@ -1124,7 +1110,8 @@ def _extract_table_grid(table_obj, rows, cols):
 def _apply_grid_to_table(table_obj, grid, base_index):
     for r, row in enumerate(grid):
         for c, value in enumerate(row):
-            _table_set_value(table_obj, r + base_index, c + base_index, float(value))
+            _table_set_value(table_obj, r + base_index, c + base_index,
+                             float(value))
 
 
 def _context_probe_lines():
@@ -1146,16 +1133,15 @@ def _resolve_table_from_candidates(candidates, expected_rows, expected_cols):
             if table_obj is None:
                 attempts.append("%s: returned None" % name)
                 continue
-            _, base_index = _extract_table_grid(table_obj, expected_rows, expected_cols)
+            _, base_index = _extract_table_grid(table_obj, expected_rows,
+                                                expected_cols)
             return table_obj, name, base_index
         except Exception as exc:
             attempts.append("%s: %s" % (name, str(exc)))
     detail = "\r\n".join(attempts) if attempts else "No candidates attempted."
-    raise RuntimeError(
-        "Could not resolve VE table from candidates.\r\n"
-        "Candidates: %s\r\n%s\r\ncontext: %s"
-        % (", ".join(candidates), detail, _context_probe_lines())
-    )
+    raise RuntimeError("Could not resolve VE table from candidates.\r\n"
+                       "Candidates: %s\r\n%s\r\ncontext: %s" %
+                       (", ".join(candidates), detail, _context_probe_lines()))
 
 
 def _extract_apply_paths(stdout):
@@ -1171,13 +1157,13 @@ def _extract_apply_paths(stdout):
     return None
 
 
-def _append_apply_audit_log(
-    summary, file_desc, front_table_name, rear_table_name, session_log_path
-):
+def _append_apply_audit_log(summary, file_desc, front_table_name,
+                            rear_table_name, session_log_path):
     logs_dir = Path.Combine(DEFAULT_REPO_ROOT, "logs")
     Directory.CreateDirectory(logs_dir)
     audit_path = Path.Combine(logs_dir, "autotune_applied.log")
-    backup_path = Path.Combine(Path.GetDirectoryName(session_log_path), "snapshots")
+    backup_path = Path.Combine(Path.GetDirectoryName(session_log_path),
+                               "snapshots")
     record = {
         "ts": DateTime.UtcNow.ToString("o"),
         "run_id": _safe_get(summary, "run_id", ""),
@@ -1209,6 +1195,7 @@ def _axes_match(expected_axis, actual_axis, epsilon=1e-6):
 
 
 class PreviewDialog(Form):
+
     def __init__(self, summary, preview_dir):
         self.summary = summary
         self.preview_dir = preview_dir
@@ -1230,8 +1217,7 @@ class PreviewDialog(Form):
         safety = _safe_get(self.summary, "safety", {}) or {}
         apply_blocked = bool(_safe_get(safety, "apply_blocked", False))
         warn_threshold = float(
-            _safe_get(safety, "warn_threshold_pct", WARN_THRESHOLD_PCT)
-        )
+            _safe_get(safety, "warn_threshold_pct", WARN_THRESHOLD_PCT))
         over_warn = bool(_safe_get(self.summary, "over_warn_threshold"))
         if apply_blocked and mode == MODE_DUAL:
             banner.Text = "APPLY BLOCKED: safety gates must pass before write-back."
@@ -1239,20 +1225,17 @@ class PreviewDialog(Form):
         elif over_warn:
             banner.Text = (
                 "WARNING: max correction exceeds %.0f%%. Review before any apply."
-                % warn_threshold
-            )
+                % warn_threshold)
             banner.ForeColor = Color.DarkOrange
         elif mode == "single_cylinder_front":
             banner.Text = (
                 "Single-wideband log (front). Only front correction will be exported. "
-                "Rear is unchanged."
-            )
+                "Rear is unchanged.")
             banner.ForeColor = Color.DarkOrange
         elif mode == "single_cylinder_rear":
             banner.Text = (
                 "Single-wideband log (rear). Only rear correction will be exported. "
-                "Front is unchanged."
-            )
+                "Front is unchanged.")
             banner.ForeColor = Color.DarkOrange
         else:
             banner.Text = "Preview only. Review outputs before any manual flash."
@@ -1260,11 +1243,9 @@ class PreviewDialog(Form):
         self.Controls.Add(banner)
 
         front_group = self._build_cylinder_group(
-            "Front (VE F)", _safe_get(self.summary, "front"), 15
-        )
+            "Front (VE F)", _safe_get(self.summary, "front"), 15)
         rear_group = self._build_cylinder_group(
-            "Rear (VE R)", _safe_get(self.summary, "rear"), 285
-        )
+            "Rear (VE R)", _safe_get(self.summary, "rear"), 285)
         self.Controls.Add(front_group)
         self.Controls.Add(rear_group)
 
@@ -1300,9 +1281,8 @@ class PreviewDialog(Form):
                 reason_label.Location = Point(15, 340)
                 reason_label.Size = Size(520, 20)
                 reason_label.ForeColor = Color.Red
-                reason_label.Text = "Blocked: %s" % (
-                    "; ".join(messages) if messages else "Unknown safety reason."
-                )
+                reason_label.Text = "Blocked: %s" % ("; ".join(
+                    messages) if messages else "Unknown safety reason.")
                 self.Controls.Add(reason_label)
 
         btn_export = Button()
@@ -1339,18 +1319,15 @@ class PreviewDialog(Form):
             na_label = Label()
             na_label.Location = Point(10, 30)
             na_label.Size = Size(235, 60)
-            na_label.Text = (
-                "Not computed.\n"
-                "This cylinder had no wideband samples\n"
-                "in the loaded log."
-            )
+            na_label.Text = ("Not computed.\n"
+                             "This cylinder had no wideband samples\n"
+                             "in the loaded log.")
             na_label.ForeColor = Color.Gray
             group.Controls.Add(na_label)
             return group
 
-        self._add_metric(
-            group, "zones_adjusted", _safe_get(section, "zones_adjusted"), 30
-        )
+        self._add_metric(group, "zones_adjusted",
+                         _safe_get(section, "zones_adjusted"), 30)
         self._add_metric(
             group,
             "max_correction_pct",
@@ -1363,9 +1340,8 @@ class PreviewDialog(Form):
             _to_metric(_safe_get(section, "min_pct", 0.0), 2),
             90,
         )
-        self._add_metric(
-            group, "clipped_zones", _safe_get(section, "clipped_zones"), 120
-        )
+        self._add_metric(group, "clipped_zones",
+                         _safe_get(section, "clipped_zones"), 120)
         self._add_metric(
             group,
             "mean_afr_error",
@@ -1422,17 +1398,22 @@ def show_preview(summary, preview_dir):
 
 
 def _copy_export_outputs(summary, summary_path, extra_files=None):
-    run_id = str(_safe_get(summary, "run_id") or "").replace("\\", "/").strip("/")
+    run_id = str(_safe_get(summary, "run_id") or "").replace("\\",
+                                                             "/").strip("/")
     if not run_id:
-        raise RuntimeError("Summary missing run_id; cannot resolve export destination.")
+        raise RuntimeError(
+            "Summary missing run_id; cannot resolve export destination.")
 
     # Sanitize each path segment so a hostile or accidentally-malformed
     # run_id (".." or absolute paths) cannot escape DEFAULT_REPO_ROOT/runs.
     raw_parts = [part for part in run_id.split("/") if part.strip()]
     safe_parts = [_safe_run_slug(part) for part in raw_parts]
-    safe_parts = [part for part in safe_parts if part and part not in (".", "..")]
+    safe_parts = [
+        part for part in safe_parts if part and part not in (".", "..")
+    ]
     if not safe_parts:
-        raise RuntimeError("Summary run_id resolves to empty segments after sanitization.")
+        raise RuntimeError(
+            "Summary run_id resolves to empty segments after sanitization.")
 
     dest_dir = Path.Combine(DEFAULT_REPO_ROOT, "runs")
     for part in safe_parts:
@@ -1552,12 +1533,13 @@ def _show_cli_error(exit_code, stdout, stderr):
 
 
 class DynoAIAutotune(ConfigurableChannelProvider):
+
     def _perform_apply(self, summary, summary_path, temp_dir, file_handle):
         mode = str(_safe_get(summary, "mode", MODE_DUAL))
         if mode != MODE_DUAL:
             raise RuntimeError(
-                "Apply is only supported in dual-cylinder mode. Current mode: %s" % mode
-            )
+                "Apply is only supported in dual-cylinder mode. Current mode: %s"
+                % mode)
 
         confirm = MessageBox.Show(
             "Apply dual-cylinder corrections to the loaded tune?\r\n\r\n"
@@ -1579,18 +1561,14 @@ class DynoAIAutotune(ConfigurableChannelProvider):
         expected_rows = len(rpm_axis)
         expected_cols = len(map_axis)
         front_table, front_table_name, _ = _resolve_table_from_candidates(
-            VE_FRONT_TABLE_CANDIDATES, expected_rows, expected_cols
-        )
+            VE_FRONT_TABLE_CANDIDATES, expected_rows, expected_cols)
         rear_table, rear_table_name, _ = _resolve_table_from_candidates(
-            VE_REAR_TABLE_CANDIDATES, expected_rows, expected_cols
-        )
+            VE_REAR_TABLE_CANDIDATES, expected_rows, expected_cols)
 
         front_grid, front_index_base = _extract_table_grid(
-            front_table, expected_rows, expected_cols
-        )
+            front_table, expected_rows, expected_cols)
         rear_grid, rear_index_base = _extract_table_grid(
-            rear_table, expected_rows, expected_cols
-        )
+            rear_table, expected_rows, expected_cols)
 
         front_base_csv = Path.Combine(temp_dir, "VE_Front_Base.csv")
         rear_base_csv = Path.Combine(temp_dir, "VE_Rear_Base.csv")
@@ -1614,7 +1592,8 @@ class DynoAIAutotune(ConfigurableChannelProvider):
             "--max-adjust-pct",
             str(APPLY_MAX_ADJUST_PCT),
         ]
-        rc, stdout, stderr = run_cli(apply_args, timeout_seconds=APPLY_TIMEOUT_SECONDS)
+        rc, stdout, stderr = run_cli(apply_args,
+                                     timeout_seconds=APPLY_TIMEOUT_SECONDS)
         if rc != 0:
             _show_cli_error(rc, stdout, stderr)
             return None
@@ -1622,39 +1601,32 @@ class DynoAIAutotune(ConfigurableChannelProvider):
         parsed_paths = _extract_apply_paths(stdout)
         if not parsed_paths:
             raise RuntimeError(
-                "Apply CLI output parse failed.\r\nstdout:\r\n%s" % stdout
-            )
+                "Apply CLI output parse failed.\r\nstdout:\r\n%s" % stdout)
         apply_front_csv, apply_rear_csv, session_log_path = parsed_paths
         if not File.Exists(apply_front_csv) or not File.Exists(apply_rear_csv):
             raise RuntimeError(
                 "Apply CLI succeeded but expected applied CSVs are missing.\r\n"
-                "front=%s\r\nrear=%s" % (apply_front_csv, apply_rear_csv)
-            )
+                "front=%s\r\nrear=%s" % (apply_front_csv, apply_rear_csv))
 
-        front_rpm, front_map, front_applied_grid = _parse_ve_csv(apply_front_csv)
+        front_rpm, front_map, front_applied_grid = _parse_ve_csv(
+            apply_front_csv)
         rear_rpm, rear_map, rear_applied_grid = _parse_ve_csv(apply_rear_csv)
-        if (
-            not _axes_match(rpm_axis, front_rpm)
-            or not _axes_match(map_axis, front_map)
-            or not _axes_match(rpm_axis, rear_rpm)
-            or not _axes_match(map_axis, rear_map)
-        ):
+        if (not _axes_match(rpm_axis, front_rpm)
+                or not _axes_match(map_axis, front_map)
+                or not _axes_match(rpm_axis, rear_rpm)
+                or not _axes_match(map_axis, rear_map)):
             raise RuntimeError(
                 "Applied CSV axes do not match preview grid. "
-                "Check table shape compatibility before retrying."
-            )
-        if (
-            len(front_applied_grid) != expected_rows
-            or len(rear_applied_grid) != expected_rows
-        ):
-            raise RuntimeError("Applied CSV row count mismatch with preview grid.")
-        if (
-            front_applied_grid
-            and len(front_applied_grid[0]) != expected_cols
-            or rear_applied_grid
-            and len(rear_applied_grid[0]) != expected_cols
-        ):
-            raise RuntimeError("Applied CSV column count mismatch with preview grid.")
+                "Check table shape compatibility before retrying.")
+        if (len(front_applied_grid) != expected_rows
+                or len(rear_applied_grid) != expected_rows):
+            raise RuntimeError(
+                "Applied CSV row count mismatch with preview grid.")
+        if (front_applied_grid and len(front_applied_grid[0]) != expected_cols
+                or rear_applied_grid
+                and len(rear_applied_grid[0]) != expected_cols):
+            raise RuntimeError(
+                "Applied CSV column count mismatch with preview grid.")
 
         _apply_grid_to_table(front_table, front_applied_grid, front_index_base)
         _apply_grid_to_table(rear_table, rear_applied_grid, rear_index_base)
@@ -1680,8 +1652,7 @@ class DynoAIAutotune(ConfigurableChannelProvider):
             "session_log: %s\r\n"
             "audit_log: %s\r\n"
             "exports: %s\r\n\r\n"
-            "Review and flash using Power Core's native File menu."
-            % (
+            "Review and flash using Power Core's native File menu." % (
                 front_table_name,
                 rear_table_name,
                 session_log_path,
@@ -1734,7 +1705,8 @@ class DynoAIAutotune(ConfigurableChannelProvider):
             run_id = _build_run_id(file_handle)
             temp_dir = _create_temp_dir()
             input_csv = Path.Combine(temp_dir, "tunelab_input.csv")
-            _row_count, detected_mode = _export_loaded_log_csv(file_handle, input_csv)
+            _row_count, detected_mode = _export_loaded_log_csv(
+                file_handle, input_csv)
 
             args = [
                 "-m",
@@ -1752,7 +1724,8 @@ class DynoAIAutotune(ConfigurableChannelProvider):
             elif detected_mode == "single_rear":
                 args.extend(["--single-cylinder", "rear"])
 
-            rc, stdout, stderr = run_cli(args, timeout_seconds=CLI_TIMEOUT_SECONDS)
+            rc, stdout, stderr = run_cli(args,
+                                         timeout_seconds=CLI_TIMEOUT_SECONDS)
             if rc != 0:
                 _show_cli_error(rc, stdout, stderr)
                 return
@@ -1771,16 +1744,16 @@ class DynoAIAutotune(ConfigurableChannelProvider):
             summary = _load_summary(summary_path)
             action = show_preview(summary, Path.GetDirectoryName(summary_path))
             if action == "apply":
-                self._perform_apply(summary, summary_path, temp_dir, file_handle)
+                self._perform_apply(summary, summary_path, temp_dir,
+                                    file_handle)
                 return
             if action != "export":
                 return
 
             export_dir = _copy_export_outputs(summary, summary_path)
             msg = (
-                "Export complete.\n\nSaved files to:\n%s\n\nOpen folder now?"
-                % export_dir
-            )
+                "Export complete.\n\nSaved files to:\n%s\n\nOpen folder now?" %
+                export_dir)
             result = MessageBox.Show(
                 msg,
                 APP_TITLE_SHORT,
