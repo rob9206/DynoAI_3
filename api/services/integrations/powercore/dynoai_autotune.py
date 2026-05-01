@@ -4,29 +4,18 @@
 # IronPython 2.7 script loaded by Power Core TuneLab.
 # Preview/export only: no PutTable writes in this release.
 # mypy: ignore-errors
-
-try:
-import json as _py_json
-
-from System import DateTime, Environment, Guid
-from System.Diagnostics import Process, ProcessStartInfo
-from System.IO import Directory, File, Path
-from System.Windows.Forms import (
-    Button,
-    DialogResult,
-    Form,
-    FormBorderStyle,
-    FormStartPosition,
-    GroupBox,
-    Label,
-    MessageBox,
-    MessageBoxButtons,
-    MessageBoxIcon,
-)
-from tunelab import ConfigurableChannelProvider
-
-except Exception:
-    _py_json = None
+# fmt: off
+# isort: skip_file
+# autopep8: off
+#
+# IMPORTANT FOR AUTOFORMATTERS:
+# Do not reorder these imports. The CLR / System.* imports must follow
+# clr.AddReference(), and the optional-import fallbacks below are flat
+# top-level statements on purpose. A previous autoformat pass split a single
+# `try: ... except:` block across CLR imports and produced a P0 IndentationError
+# that prevented the script from loading inside Power Core. Keep the structure
+# below: each fallback is its own self-contained `try/except`, and the json
+# fallback uses a single-line guarded assignment that no formatter will break.
 
 import re
 
@@ -36,11 +25,63 @@ clr.AddReference("System")
 clr.AddReference("System.Windows.Forms")
 clr.AddReference("System.Drawing")
 
+# json: prefer stdlib, fall back to None on stripped IronPython distributions.
+# Single-line guarded form so isort/black/yapf cannot split a `try:` block.
+try: import json as _py_json  # noqa: E701,E401
+except Exception: _py_json = None  # noqa: E701,E722
+
+# CLR namespaces -- IronPython 2.7 sometimes exposes these without the System.
+# prefix on legacy Power Core builds, so each block is its own try/except.
+try:
+    from System import DateTime, Environment, Guid
+except Exception:
+    from DateTime import DateTime  # type: ignore[no-redef]
+    from Environment import Environment  # type: ignore[no-redef]
+    from Guid import Guid  # type: ignore[no-redef]
+
+try:
+    from System.Diagnostics import Process, ProcessStartInfo
+except Exception:
+    from Diagnostics import Process, ProcessStartInfo  # type: ignore[no-redef]
 
 try:
     from System.Drawing import Color, Point, Size
 except Exception:
-    from Drawing import Color, Point, Size
+    from Drawing import Color, Point, Size  # type: ignore[no-redef]
+
+try:
+    from System.IO import Directory, File, Path
+except Exception:
+    from IO import Directory, File, Path  # type: ignore[no-redef]
+
+try:
+    from System.Windows.Forms import (
+        Button,
+        DialogResult,
+        Form,
+        FormBorderStyle,
+        FormStartPosition,
+        GroupBox,
+        Label,
+        MessageBox,
+        MessageBoxButtons,
+        MessageBoxIcon,
+    )
+except Exception:
+    from Windows.Forms import (  # type: ignore[no-redef]
+        Button,
+        DialogResult,
+        Form,
+        FormBorderStyle,
+        FormStartPosition,
+        GroupBox,
+        Label,
+        MessageBox,
+        MessageBoxButtons,
+        MessageBoxIcon,
+    )
+
+from tunelab import ConfigurableChannelProvider
 
 
 # ---------------------------------------------------------------------------
