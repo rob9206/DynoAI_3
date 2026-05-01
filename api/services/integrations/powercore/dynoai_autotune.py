@@ -1,8 +1,16 @@
 # api/services/integrations/powercore/dynoai_autotune.py
-# DynoAI TuneLab autotune preview bridge (F1).
+# DynoAI TuneLab autotune preview + apply bridge (F1).
 #
-# IronPython 2.7 script loaded by Power Core TuneLab.
-# Preview/export only: no PutTable writes in this release.
+# IronPython 2.7 script loaded by Power Core TuneLab. Provides three actions
+# from the preview dialog:
+#   - Preview / Export Only:  copies summary + correction CSVs into
+#                             runs/<run_id>/corrections/, no tune writes.
+#   - Apply (dual-cylinder):  shells the CLI in apply mode, then writes the
+#                             reconciled VE tables back via context.PutTable.
+#   - Cancel:                 closes the dialog with no side effects.
+# Apply is gated by safety_gates.check_block_conditions on the server side
+# (extreme correction / shape mismatch / partial cylinder / invalid base VE)
+# before any PutTable can run.
 # mypy: ignore-errors
 # fmt: off
 # isort: skip_file

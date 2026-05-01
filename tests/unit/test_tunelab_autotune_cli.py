@@ -434,7 +434,8 @@ def test_cli_front_and_rear_correction_differ(tmp_path: Path) -> None:
 def test_cli_accepts_lc2_voltage_columns(tmp_path: Path) -> None:
     """Voltage-labeled LC-2 columns should be converted server-side via wideband_rescale."""
     # LC-2 default: 0V->7.35 AFR, 5V->22.39 AFR (slope 3.008, intercept 7.35).
-    # Voltages chosen to stay inside AutoTuneWorkflow's valid AFR range [9, 20].
+    # Voltages chosen to stay inside MathConfig's AFR_MIN/AFR_MAX bounds
+    # (currently 7.0/23.0, widened to cover LC-1/LC-2 sensor rails).
     #   v=3.5V -> ~17.88 AFR (lean vs target ~13.5 @ MAP 60)
     #   v=2.0V -> ~13.37 AFR (near target)
     rows: list[dict[str, float]] = []

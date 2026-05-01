@@ -112,8 +112,10 @@ class MathConfig:
     Attributes:
         version: Math version to use (default: V2_0_0)
         max_correction_pct: Maximum correction percentage (default: 15.0 for ±15%)
-        afr_min: Minimum valid AFR value (default: 9.0)
-        afr_max: Maximum valid AFR value (default: 20.0)
+        afr_min: Minimum valid AFR value (default: AFR_MIN, currently 7.0,
+            covers the Innovate LC-1/LC-2 lower rail at 0V = 7.35 AFR).
+        afr_max: Maximum valid AFR value (default: AFR_MAX, currently 23.0,
+            covers the Innovate LC-1/LC-2 upper rail at 5V = 22.39 AFR).
         clamp_enabled: Whether to apply safety clamping (default: True)
     """
 
