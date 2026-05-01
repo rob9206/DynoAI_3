@@ -100,6 +100,38 @@ VE_FRONT_TABLE_NAME = "Volumetric Efficiency Front"
 VE_REAR_TABLE_NAME = "Volumetric Efficiency Rear"
 APPLY_MAX_ADJUST_PCT = 15.0
 
+# CLI <-> IronPython mode constants. Must mirror tools/autotune/tunelab_entrypoint.py.
+# Previously referenced as bare globals in `_perform_apply` without being defined,
+# producing NameError before the apply dialog could render.
+MODE_DUAL = "dual_cylinder"
+MODE_SINGLE_FRONT = "single_cylinder_front"
+MODE_SINGLE_REAR = "single_cylinder_rear"
+MODE_CHOICES = (MODE_DUAL, MODE_SINGLE_FRONT, MODE_SINGLE_REAR)
+
+
+_RUN_SLUG_INVALID_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _safe_run_slug(run_id):
+    """Sanitize run_id to a filesystem-safe segment.
+
+    Mirrors tools.autotune.tunelab_entrypoint._safe_run_slug so a single
+    run_id sanitizer is applied on both sides of the CLI boundary. Strips
+    `..`, slashes, and any non [A-Za-z0-9._-] characters; collapses runs of
+    invalid characters into a single underscore. Returns "run" if the
+    result is empty so we never produce a zero-length path segment.
+    """
+    if run_id is None:
+        return "run"
+    text = str(run_id).strip()
+    if not text:
+        return "run"
+    slug = _RUN_SLUG_INVALID_RE.sub("_", text)
+    slug = slug.strip("_")
+    if not slug or slug in (".", ".."):
+        return "run"
+    return slug
+
 VE_FRONT_TABLE_CANDIDATES = [
     VE_FRONT_TABLE_NAME,
     "VE Front",
