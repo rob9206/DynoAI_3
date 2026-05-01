@@ -66,9 +66,12 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-# Valid AFR range for gasoline engines
-AFR_MIN: float = 9.0   # Below this = extreme rich or sensor error
-AFR_MAX: float = 20.0  # Above this = extreme lean or sensor error
+# Valid AFR range for gasoline engines.
+# Widened to [7.0, 23.0] to cover the full Innovate LC-1/LC-2 sensor rails
+# (7.35 - 22.39 AFR by default calibration). Values outside this window still
+# indicate a sensor error or a misrouted (Lambda / voltage) reading.
+AFR_MIN: float = 7.0   # Below this = extreme rich or sensor error
+AFR_MAX: float = 23.0  # Above this = extreme lean or sensor error
 
 # Stoichiometric AFR for gasoline (used for reference, not in calculation)
 STOICH_AFR_GASOLINE: float = 14.7
