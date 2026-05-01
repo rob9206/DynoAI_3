@@ -608,13 +608,34 @@ def _write_percent_factor_csv(
 
 
 def _resolve_run_dir(run_id: str) -> Path:
-    run_dir = REPO_ROOT / "runs"
-    for part in run_id.replace("\\", "/").split("/"):
-        cleaned = part.strip()
-        if cleaned:
-            run_dir = run_dir / cleaned
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
+    """Resolve runs/<sanitized_run_id> within REPO_ROOT.
+
+    Sanitizes each path segment via ``_safe_run_slug`` so values containing
+    ``..``, drive letters, or stray separators cannot escape the runs root.
+    The final resolved path is also re-checked against ``runs_root.resolve()``
+    as a defense-in-depth guard.
+    """
+    runs_root = (REPO_ROOT / "runs").resolve()
+    raw_parts = [
+        part for part in run_id.replace("\\", "/").split("/") if part.strip()
+    ]
+    safe_parts = [_safe_run_slug(part) for part in raw_parts]
+    safe_parts = [part for part in safe_parts if part and part not in (".", "..")]
+    if not safe_parts:
+        raise RuntimeError(f"invalid_run_id_after_sanitization: {run_id!r}")
+
+    run_dir = runs_root
+    for part in safe_parts:
+        run_dir = run_dir / part
+    resolved = run_dir.resolve()
+    try:
+        resolved.relative_to(runs_root)
+    except ValueError as exc:  # pragma: no cover - defensive guard
+        raise RuntimeError(
+            f"run_id_escapes_runs_root: {run_id!r} -> {resolved}"
+        ) from exc
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
 
 def _load_summary(summary_path: Path) -> dict[str, Any]:

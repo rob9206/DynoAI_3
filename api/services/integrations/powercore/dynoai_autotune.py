@@ -1418,8 +1418,16 @@ def _copy_export_outputs(summary, summary_path, extra_files=None):
     if not run_id:
         raise RuntimeError("Summary missing run_id; cannot resolve export destination.")
 
+    # Sanitize each path segment so a hostile or accidentally-malformed
+    # run_id (".." or absolute paths) cannot escape DEFAULT_REPO_ROOT/runs.
+    raw_parts = [part for part in run_id.split("/") if part.strip()]
+    safe_parts = [_safe_run_slug(part) for part in raw_parts]
+    safe_parts = [part for part in safe_parts if part and part not in (".", "..")]
+    if not safe_parts:
+        raise RuntimeError("Summary run_id resolves to empty segments after sanitization.")
+
     dest_dir = Path.Combine(DEFAULT_REPO_ROOT, "runs")
-    for part in run_id.split("/"):
+    for part in safe_parts:
         dest_dir = Path.Combine(dest_dir, part)
     dest_dir = Path.Combine(dest_dir, "corrections")
     Directory.CreateDirectory(dest_dir)
