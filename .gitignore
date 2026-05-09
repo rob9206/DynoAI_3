@@ -82,6 +82,18 @@ installer_output/
 .env
 .env.local
 .env.*.local
+# Frontend env files are local-only; commit examples (frontend/.env.*.example) instead.
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+frontend/.env.*.local
+
+# Local hardware/runtime mappings (auto-saved per device signature).
+# Anything matching IP/MAC patterns is local-only; commit *.example.json templates instead.
+config/jetdrive_mappings/*.json
+!config/jetdrive_mappings/*.example.json
+!config/jetdrive_mappings/.gitkeep
 
 # Temporary files and IDE artifacts
 tmpclaude-*-cwd
