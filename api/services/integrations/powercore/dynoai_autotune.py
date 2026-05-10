@@ -12,6 +12,7 @@
 # (extreme correction / shape mismatch / partial cylinder / invalid base VE)
 # before any PutTable can run.
 # mypy: ignore-errors
+# ruff: noqa: E402,SIM105,UP031,UP034,UP015,B904
 # fmt: off
 # isort: skip_file
 # autopep8: off
@@ -109,7 +110,7 @@ MODE_SINGLE_FRONT = "single_cylinder_front"
 MODE_SINGLE_REAR = "single_cylinder_rear"
 MODE_CHOICES = (MODE_DUAL, MODE_SINGLE_FRONT, MODE_SINGLE_REAR)
 
-_RUN_SLUG_INVALID_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_RUN_SLUG_INVALID_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
 
 def _safe_run_slug(run_id):
@@ -343,6 +344,7 @@ def _decode(data):
         if isinstance(data, unicode):
             return data
     except NameError:
+        # Python 3 runtime: ``unicode`` symbol is undefined by design.
         pass
     if isinstance(data, str):
         try:
@@ -393,6 +395,7 @@ def run_cli(args, timeout_seconds):
         try:
             proc.Kill()
         except Exception:
+            # Process can already be gone when timeout races with exit.
             pass
         return 124, _decode(raw_out), "[F1][ERR] cli_timeout"
 
@@ -546,6 +549,7 @@ def _safe_delete_dir(path_value):
         if Directory.Exists(path_value):
             Directory.Delete(path_value, True)
     except Exception:
+        # Temp cleanup is best-effort only.
         pass
 
 
@@ -880,6 +884,7 @@ def _dotnet_to_python(value):
         if isinstance(value, unicode):  # noqa: F821 - IronPython 2.7
             return value
     except NameError:
+        # Python 3 runtime: ``unicode`` symbol is undefined.
         pass
     if isinstance(value, str):
         return value
@@ -952,11 +957,13 @@ def _safe_get(mapping, key, default=None):
     try:
         return mapping.get(key, default)
     except AttributeError:
+        # .NET Dictionary types don't expose Python's dict.get.
         pass
     try:
         if mapping.ContainsKey(key):
             return mapping[key]
     except Exception:
+        # Mapping may be a plain dict without ContainsKey.
         pass
     try:
         return mapping[key]
@@ -1764,6 +1771,7 @@ class DynoAIAutotune(ConfigurableChannelProvider):
                 try:
                     Process.Start("explorer.exe", export_dir)
                 except Exception:
+                    # Opening Explorer is optional UX sugar.
                     pass
 
         except Exception as exc:
@@ -1773,6 +1781,7 @@ class DynoAIAutotune(ConfigurableChannelProvider):
                 try:
                     context.FreeFiles()  # noqa: F821
                 except Exception:
+                    # TuneLab file-handle release should not mask prior errors.
                     pass
             _safe_delete_dir(temp_dir)
 
@@ -1783,14 +1792,11 @@ class DynoAIAutotune(ConfigurableChannelProvider):
 autotune = DynoAIAutotune()
 correction = autotune
 
-_autotune_executed = False
-
 
 def _execute_autotune_once():
-    global _autotune_executed
-    if _autotune_executed:
+    if getattr(_execute_autotune_once, "_executed", False):
         return
-    _autotune_executed = True
+    _execute_autotune_once._executed = True
     autotune.Run()
 
 

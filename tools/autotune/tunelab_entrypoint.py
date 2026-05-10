@@ -501,7 +501,8 @@ def _build_dual_grids_for_safety(
 
 
 def _safe_run_slug(run_id: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", run_id.strip())
+    # Keep slugs filesystem-safe and traversal-resistant.
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "_", run_id.strip())
     return slug.strip("_") or "run"
 
 
@@ -547,9 +548,9 @@ def _build_safety_block(
         "rear": _neutral_grid(rows, cols, 100.0),
     }
     block_reasons = check_block_conditions(
-        base_ve=base_ve,  # type: ignore[arg-type]
-        corrections=corrections,  # type: ignore[arg-type]
-        hit_counts=hit_counts,  # type: ignore[arg-type]
+        base_ve=base_ve,
+        corrections=corrections,
+        hit_counts=hit_counts,
         rpm_axis=rpm_axis,
         map_axis=map_axis,
     )
@@ -564,8 +565,8 @@ def _build_safety_block(
             {
                 "type": "extreme_correction",
                 "message": (
-                    "Requested correction exceeds ±%.0f%% before clamp "
-                    "(overall_max_pct=%.2f%%)." % (block_threshold, overall_max_pct)
+                    f"Requested correction exceeds ±{block_threshold:.0f}% before clamp "
+                    f"(overall_max_pct={overall_max_pct:.2f}%)."
                 ),
             }
         )

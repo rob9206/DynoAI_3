@@ -53,6 +53,11 @@ from api.services.workspace_analyzer import analyze_iteration
 logger = logging.getLogger(__name__)
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/api/workspace")
 
+
+def _not_found_error(message: str = "resource not found"):
+    """Return sanitized NOT_FOUND payload without leaking internals."""
+    return jsonify({"error": {"code": "NOT_FOUND", "message": message}}), 404
+
 # =============================================================================
 # Vehicles
 # =============================================================================
@@ -93,8 +98,8 @@ def create_vehicle():
 def get_vehicle(vid: str):
     try:
         vehicle = get_workspace().get_vehicle(vid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(vehicle.to_dict()), 200
 
 
@@ -104,8 +109,8 @@ def patch_vehicle(vid: str):
     data = request.get_json(silent=True) or {}
     try:
         vehicle = get_workspace().update_vehicle(vid, **data)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(vehicle.to_dict()), 200
 
 
@@ -119,8 +124,8 @@ def patch_vehicle(vid: str):
 def list_sessions(vid: str):
     try:
         get_workspace().get_vehicle(vid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     sessions = get_workspace().list_sessions(vid)
     return jsonify([s.to_dict() for s in sessions]), 200
 
@@ -145,8 +150,8 @@ def create_session(vid: str):
 def get_session(vid: str, sid: str):
     try:
         session = get_workspace().get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
 
 
@@ -156,8 +161,8 @@ def patch_session(vid: str, sid: str):
     data = request.get_json(silent=True) or {}
     try:
         session = get_workspace().update_session(vid, sid, **data)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
 
 
@@ -167,8 +172,8 @@ def get_session_v3(vid: str, sid: str):
     ws = get_workspace()
     try:
         session = ws.get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     if not session.v3:
         return (
             jsonify(
@@ -195,8 +200,8 @@ def upsert_session_v3(vid: str, sid: str):
     payload.setdefault("session_id", sid)
     try:
         session = ws.set_session_v3(vid, sid, payload)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
 
 
@@ -218,8 +223,8 @@ def resolve_session_v3_blocker(vid: str, sid: str):
             resolved_by=data.get("resolved_by"),
             evidence=data.get("evidence"),
         )
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
 
 
@@ -231,8 +236,8 @@ def get_dispatch_readiness(vid: str, sid: str):
     ws = get_workspace()
     try:
         session = ws.get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     status = ws.compute_status(vid, sid)
     readiness = evaluate_dispatch_readiness(session, status)
     return jsonify(readiness), 200
@@ -244,8 +249,8 @@ def get_session_phases(vid: str, sid: str):
     ws = get_workspace()
     try:
         v3 = ws.get_session_v3(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     if not v3:
         return (
             jsonify(
@@ -266,8 +271,8 @@ def complete_session_phase(vid: str, sid: str):
         raise ValidationError("phase_id is required")
     try:
         v3 = ws.get_session_v3(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     if not v3:
         return (
             jsonify(
@@ -292,8 +297,8 @@ def run_p0_plausibility(vid: str, sid: str):
     try:
         session = ws.get_session(vid, sid)
         vehicle = ws.get_vehicle(vid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
 
     v3 = session.v3 or {}
     build = v3.get("build_spec") if isinstance(v3, dict) else {}
@@ -340,8 +345,8 @@ def get_session_status(vid: str, sid: str):
 def list_iterations(vid: str, sid: str):
     try:
         get_workspace().get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     iters = get_workspace().list_iterations(vid, sid)
     return jsonify([i.to_dict() for i in iters]), 200
 
@@ -372,8 +377,8 @@ def list_pulls(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_pulls(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -386,8 +391,8 @@ def list_patches(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_patches(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -400,8 +405,8 @@ def list_analyses(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_analyses(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -419,8 +424,8 @@ def analyze_active_iteration(vid: str, sid: str):
     iteration_id = data.get("iteration_id")
     try:
         result = analyze_iteration(vid, sid, iteration_id)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     status_code = 200 if result.success else 400
     return jsonify(result.to_dict()), status_code
 
@@ -433,8 +438,8 @@ def analyze_active_iteration(vid: str, sid: str):
 def analyze_specific_iteration(vid: str, sid: str, iid: str):
     try:
         result = analyze_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     status_code = 200 if result.success else 400
     return jsonify(result.to_dict()), status_code
 
@@ -452,8 +457,8 @@ def upload_to_session(vid: str, sid: str):
 
     try:
         ws.get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
 
     files = request.files.getlist("files")
     if not files:

@@ -38,10 +38,11 @@ References:
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
 # Import environmental corrections
 from dynoai.core.environmental import (
+    CorrectionStandard,
     EnvironmentalConditions,
     EnvironmentalCorrectionResult,
     EnvironmentalCorrector,
@@ -242,7 +243,7 @@ def _calculate_v2_correction(afr_measured: float, afr_target: float) -> float:
 def _clamp_correction(
     correction: float,
     max_correction_pct: float,
-) -> Tuple[float, bool]:
+) -> tuple[float, bool]:
     """
     Apply safety clamping to a VE correction value.
 
@@ -381,14 +382,14 @@ def calculate_ve_correction_batch(
             f"target={len(afr_target_list)}"
         )
 
-    results = []
+    results: list[float | None] = []
     for measured, target in zip(afr_measured_list, afr_target_list):
         try:
             correction = calculate_ve_correction(
                 measured, target, version=version, config=config, clamp=clamp
             )
             results.append(correction)
-        except (AFRValidationError, VEMathError) as e:
+        except (AFRValidationError, VEMathError):
             if skip_invalid:
                 results.append(None)
             else:
@@ -516,7 +517,7 @@ def calculate_ve_correction_with_environment(
     version: Optional[MathVersion] = None,
     config: Optional[MathConfig] = None,
     clamp: bool = True,
-) -> Tuple[float, dict]:
+) -> tuple[float, dict]:
     """
     Calculate VE correction with environmental compensation.
 
@@ -585,7 +586,7 @@ def calculate_ve_correction_with_environment(
             humidity_correction=1.0,
             altitude_correction=1.0,
             ect_correction=1.0,
-            standard_used=None,
+            standard_used=CorrectionStandard.SAE_J1349,
             is_standard_day=True,
             details={},
         )

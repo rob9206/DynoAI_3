@@ -588,7 +588,7 @@ def test_cli_accepts_lambda_columns(tmp_path: Path) -> None:
 def test_cli_rescales_lambda_values_in_afr_columns(tmp_path: Path) -> None:
     """Rescue path: an 'AFR Meas' column whose values are in Lambda range
     (0.5-1.5) should be auto-rescaled to AFR via lambda_to_afr, so the
-    workflow doesn't reject 0.90 with the old 'outside valid range' error.
+    workflow doesn't reject 0.90 against the widened [7.0, 23.0] AFR bounds.
     """
     rows: list[dict[str, float]] = []
     timestamp = 0
