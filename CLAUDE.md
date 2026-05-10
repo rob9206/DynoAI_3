@@ -132,7 +132,7 @@ alembic revision --autogenerate -m "description"
 - **Determinism is a property to preserve**: same input → bit-identical output. The VE math verification suite enforces apply→rollback→original within ±0.001. Never weaken these assertions to make a test pass.
 - **Math-critical files** (require extra care; escalate before structural changes): `ve_operations.py`, `io_contracts.py`, `dynoai/core/ve_math.py`, the kernel modules, and anything under `dynoai_v3/` that influences corrections.
 - **Read-only by default**: `archive/` (historical artifacts), `experiments/` (research kernels), `tables/` (calibration base tables — touch only when running VE operations).
-- **Default clamp**: VE corrections capped at ±7%. Dry-run mode (`--dry-run`) previews changes; rollback metadata is a JSON sidecar next to the output CSV.
+- **Default clamp**: deterministic apply/rollback in `ve_operations.py` caps VE correction factors at ±7% by default. The API analysis path uses its own clamp setting and defaults `DYNOAI_CLAMP` / `default_clamp` to `15.0` unless overridden. Dry-run mode (`--dry-run`) previews apply/rollback changes; rollback metadata is a JSON sidecar next to the output CSV.
 - **CSV/IO**: always use `io_contracts.sanitize_csv_cell` and `io_contracts.safe_path` when writing user-influenced data.
 - **JSON safety**: `api/app.py` installs a `_FiniteJSONProvider` that scrubs non-finite floats (Infinity/NaN → null). Don't reintroduce raw `allow_nan=True` JSON output.
 - **AFR target table** (MAP-based) lives in `dynoai/core/afr_targets.py`; refer there before hardcoding numbers.
