@@ -260,3 +260,115 @@ class TestPeakHpUnitsAreNotConflated:
         # column so it must stay None rather than be impersonated by mph.
         assert body["peak_hp_rpm"] is None or (body["peak_hp_rpm"]
                                                != body["peak_hp_mph"])
+
+
+class TestSessionV3Routes:
+
+    @staticmethod
+    def _bootstrap(client):
+        client.post("/api/workspace/vehicles", json={"name": "CVO Fat Boy", "year": 2006})
+        resp = client.post("/api/workspace/vehicles/cvo_fat_boy/sessions", json={})
+        return resp.get_json()["id"]
+
+    @staticmethod
+    def test_v3_upsert_get_and_blocker_resolution(client):
+        sid = TestSessionV3Routes._bootstrap(client)
+        v3_payload = {
+            "schema_version": "dynoai.session.v3",
+            "session_id": sid,
+            "status": "blocked_pending_verify",
+            "verify_blockers": [
+                {
+                    "field": "build_spec.displacement_ci",
+                    "blocking": True,
+                    "resolved": False,
+                    "owner": "planner",
+                }
+            ],
+            "template": {"dispatch_after": ["dispatch_ready"]},
+            "kernel_sentinel": {"halt_on_breach": True, "lambda_targets": {"wot": 0.88}},
+            "build_spec": {"displacement_ci": 103.0},
+        }
+
+        upsert = client.post(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/v3",
+            json=v3_payload,
+        )
+        assert upsert.status_code == 200
+        upsert_body = upsert.get_json()
+        assert upsert_body["schema_version"] == "dynoai.session.v3"
+        assert "v3" in upsert_body
+
+        fetch = client.get(f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/v3")
+        assert fetch.status_code == 200
+        fetch_body = fetch.get_json()
+        assert fetch_body["session_id"] == sid
+
+        resolve = client.post(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/v3/resolve_blocker",
+            json={"field": "build_spec.displacement_ci", "resolved_by": "qa"},
+        )
+        assert resolve.status_code == 200
+        resolve_body = resolve.get_json()
+        assert resolve_body["v3"]["verify_blockers"][0]["resolved"] is True
+
+    @staticmethod
+    def test_dispatch_readiness_requires_p0(client):
+        sid = TestSessionV3Routes._bootstrap(client)
+        v3_payload = {
+            "schema_version": "dynoai.session.v3",
+            "session_id": sid,
+            "status": "dispatch_ready",
+            "verify_blockers": [],
+            "session_blockers": [],
+            "template": {"dispatch_after": ["dispatch_ready"]},
+            "kernel_sentinel": {"halt_on_breach": True, "lambda_targets": {"wot": 0.88}},
+            "build_spec": {"displacement_ci": 103.0},
+        }
+        client.post(f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/v3", json=v3_payload)
+
+        readiness_before = client.get(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/dispatch_readiness"
+        )
+        assert readiness_before.status_code == 200
+        assert readiness_before.get_json()["gates"]["p0_plausibility_ok"] is False
+
+        p0_resp = client.post(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/p0_plausibility",
+            json={"peak_tq_ftlb": 105.0, "peak_tq_rpm": 3200.0},
+        )
+        assert p0_resp.status_code == 200
+
+        readiness_after = client.get(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/dispatch_readiness"
+        )
+        assert readiness_after.status_code == 200
+        after_body = readiness_after.get_json()
+        assert after_body["gates"]["p0_plausibility_ok"] is True
+
+    @staticmethod
+    def test_phase_progression_routes(client):
+        sid = TestSessionV3Routes._bootstrap(client)
+        v3_payload = {
+            "schema_version": "dynoai.session.v3",
+            "session_id": sid,
+            "status": "active",
+            "adaptive_test_plan": {
+                "phases": [{"id": "P0"}, {"id": "P1"}, {"id": "P2"}]
+            },
+            "execution": {"active_phase": "P0", "completed_phases": []},
+        }
+        client.post(f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/v3", json=v3_payload)
+
+        phase_get = client.get(f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/phases")
+        assert phase_get.status_code == 200
+        assert phase_get.get_json()["active_phase"] == "P0"
+
+        phase_complete = client.post(
+            f"/api/workspace/vehicles/cvo_fat_boy/sessions/{sid}/phases/complete",
+            json={"phase_id": "P0"},
+        )
+        assert phase_complete.status_code == 200
+        complete_body = phase_complete.get_json()
+        assert "P0" in complete_body["completed_phases"]
+        assert complete_body["active_phase"] == "P1"

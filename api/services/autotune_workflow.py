@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -43,15 +43,11 @@ from api.services.yourdyno import parse_yourdyno_run
 # Import TuneLab-inspired filtering and binning modules
 from dynoai.core.signal_filters import (
     CompositeFilter,
-    FilteredSample,
     FilterStatistics,
     LowpassFilter,
-    MinMaxFilter,
     SignalFilter,
     StatisticalOutlierFilter,
     TimeAwareMinMaxFilter,
-    create_tunelab_filter_chain,
-    filter_afr_samples,
     samples_from_arrays,
     samples_to_arrays,
 )
@@ -62,13 +58,11 @@ from dynoai.core.ve_math import (
     calculate_ve_correction,
     correction_to_percentage,
 )
+from dynoai.core.kernel_sentinel import KernelSentinel, KernelSentinelConfig
 from dynoai.core.weighted_binning import (
     LogarithmicWeighting,
-    UniformWeighting,
     WeightedBinAccumulator,
     WeightingStrategy,
-    create_ve_accumulator,
-    generate_sample_table_tunelab_style,
 )
 
 logger = logging.getLogger(__name__)
@@ -231,6 +225,7 @@ class AutoTuneWorkflow:
         max_correction_pct: float = 10.0,
         afr_targets: Optional[dict[int, float]] = None,
         math_version: Optional[MathVersion] = None,
+        kernel_sentinel_config: Optional[dict[str, Any]] = None,
         # TuneLab-inspired filtering options
         enable_filtering: bool = False,
         lowpass_rc_ms: float = 500.0,
@@ -242,6 +237,8 @@ class AutoTuneWorkflow:
         # TuneLab-inspired weighting options
         use_weighted_binning: bool = False,
         weighting_strategy: Optional[WeightingStrategy] = None,
+        use_dual_bank_weighting: bool = False,
+        rear_bank_weight: float = 1.15,
     ) -> None:
         """
         Initialize AutoTuneWorkflow.
@@ -252,6 +249,7 @@ class AutoTuneWorkflow:
             max_correction_pct: Maximum correction percentage (±)
             afr_targets: Custom AFR targets by MAP (kPa -> AFR)
             math_version: VE calculation math version
+            kernel_sentinel_config: Optional per-session safety config
 
             # TuneLab-inspired filtering (NEW)
             enable_filtering: Enable AFR signal filtering before analysis
@@ -265,11 +263,16 @@ class AutoTuneWorkflow:
             # TuneLab-inspired weighting (NEW)
             use_weighted_binning: Use distance-weighted cell accumulation
             weighting_strategy: Custom weighting strategy (default: LogarithmicWeighting)
+            use_dual_bank_weighting: Blend front/rear AFR when both banks exist
+            rear_bank_weight: Relative weight for rear bank (default +15%)
         """
         self.rpm_axis = rpm_axis or self.DEFAULT_RPM_AXIS
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
         self.max_correction_pct = max_correction_pct
         self.math_version = math_version or self.DEFAULT_MATH_VERSION
+        self.kernel_sentinel = KernelSentinel(
+            KernelSentinelConfig.from_dict(kernel_sentinel_config)
+        )
 
         # Allow custom AFR targets (keyed by MAP in kPa)
         if afr_targets:
@@ -289,6 +292,8 @@ class AutoTuneWorkflow:
         # TuneLab-inspired weighting configuration
         self.use_weighted_binning = use_weighted_binning
         self.weighting_strategy = weighting_strategy or LogarithmicWeighting()
+        self.use_dual_bank_weighting = use_dual_bank_weighting
+        self.rear_bank_weight = rear_bank_weight
 
         self.sessions: dict[str, AutoTuneSession] = {}
 
@@ -582,6 +587,21 @@ class AutoTuneWorkflow:
                 session.peak_tq_rpm = float(df.loc[peak_idx, rpm_col])
 
     @staticmethod
+    def _find_dual_bank_afr_columns(columns: list[str]) -> tuple[str | None, str | None]:
+        front_markers = ["afr1", "lc1", "front", "bank1", "left"]
+        rear_markers = ["afr2", "lc2", "rear", "bank2", "right"]
+        normalized = [(c, str(c).lower()) for c in columns if "afr" in str(c).lower()]
+
+        front = None
+        rear = None
+        for original, lower in normalized:
+            if front is None and any(m in lower for m in front_markers):
+                front = original
+            if rear is None and any(m in lower for m in rear_markers):
+                rear = original
+        return front, rear
+
+    @staticmethod
     def import_tune(session: AutoTuneSession, tune_path: str) -> bool:
         """
         Import a PVV tune file as the base tune.
@@ -643,6 +663,24 @@ class AutoTuneWorkflow:
             return None
 
         afr_meas_col = next((c for c in afr_cols if "Meas" in c), afr_cols[0])
+
+        if self.use_dual_bank_weighting:
+            front_col, rear_col = self._find_dual_bank_afr_columns(list(df.columns))
+            if front_col and rear_col:
+                df[front_col] = pd.to_numeric(df[front_col], errors="coerce")
+                df[rear_col] = pd.to_numeric(df[rear_col], errors="coerce")
+                total_weight = 1.0 + self.rear_bank_weight
+                df["AFR Meas Dual"] = (
+                    df[front_col] + (df[rear_col] * self.rear_bank_weight)
+                ) / total_weight
+                afr_meas_col = "AFR Meas Dual"
+                logger.info(
+                    "Using dual-bank AFR weighting (%s + %s*%.2f) / %.2f",
+                    front_col,
+                    rear_col,
+                    self.rear_bank_weight,
+                    total_weight,
+                )
 
         # Convert AFR to numeric
         df[afr_meas_col] = pd.to_numeric(df[afr_meas_col], errors="coerce")
@@ -719,12 +757,16 @@ class AutoTuneWorkflow:
                         mean_afr is not None
                         and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE
                     ):
+                        mean_afr_value = float(mean_afr)
                         target_afr = self.get_target_afr(self.map_axis[j])
-                        afr_error = mean_afr - target_afr
+                        afr_error = mean_afr_value - target_afr
                         afr_error_matrix[i, j] = afr_error
 
                         ve_correction = calculate_ve_correction(
-                            mean_afr, target_afr, version=self.math_version, clamp=False
+                            mean_afr_value,
+                            target_afr,
+                            version=self.math_version,
+                            clamp=False,
                         )
                         ve_delta_pct = correction_to_percentage(ve_correction)
                         ve_delta_matrix[i, j] = ve_delta_pct
@@ -856,8 +898,11 @@ class AutoTuneWorkflow:
         raw_corrections = 1 + ve_delta_matrix / 100
 
         # Apply safety clamps
-        min_mult = 1 - self.max_correction_pct / 100
-        max_mult = 1 + self.max_correction_pct / 100
+        effective_clamp_pct = self.kernel_sentinel.effective_max_correction_pct(
+            self.max_correction_pct
+        )
+        min_mult = 1 - effective_clamp_pct / 100
+        max_mult = 1 + effective_clamp_pct / 100
 
         clamped_corrections = np.clip(raw_corrections, min_mult, max_mult)
         clipped_count = int(
@@ -871,6 +916,17 @@ class AutoTuneWorkflow:
 
         # For zones without enough data, use 1.0 (no change)
         correction_matrix[~valid_mask] = 1.0
+
+        lean_streak_breach = self.kernel_sentinel.evaluate_lean_streak_from_grid(
+            ve_delta_matrix,
+            valid_mask,
+            afr_error_tolerance=self.AFR_ERROR_TOLERANCE,
+        )
+        if lean_streak_breach is not None:
+            session.errors.append(lean_streak_breach.message)
+            if lean_streak_breach.halt:
+                session.status = "halted_on_sentinel"
+                return None
 
         result = VECorrectionResult(
             correction_table=correction_matrix,

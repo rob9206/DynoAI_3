@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from dynoai.core.kernel_sentinel import KernelSentinel, KernelSentinelConfig
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -46,6 +48,8 @@ FROZEN_TPS_THRESHOLD = 20.0  # Only alert if TPS > this (engine running)
 AFR_MIN_PLAUSIBLE = 10.0
 AFR_MAX_PLAUSIBLE = 18.0
 CHANNEL_STALE_THRESHOLD_SEC = 5.0  # Channel not updated for this long = stale
+INJECTOR_DUTY_WARN_PCT = 80.0
+INJECTOR_DUTY_HALT_PCT = 85.0
 
 # Quality weights
 QUALITY_WEIGHT_FRESHNESS = 0.4
@@ -72,6 +76,8 @@ class AlertType(str, Enum):
     MISSING_CHANNEL = "missing_channel"
     STALE_CHANNEL = "stale_channel"
     OUT_OF_RANGE = "out_of_range"
+    INJECTOR_DUTY_HIGH = "injector_duty_high"
+    KERNEL_SENTINEL = "kernel_sentinel"
 
 
 class AlertSeverity(str, Enum):
@@ -297,6 +303,12 @@ class RealtimeAnalysisEngine:
             target_afr: Target AFR for VE delta calculation (default stoich)
         """
         self.target_afr = target_afr
+        self.kernel_sentinel = KernelSentinel(
+            KernelSentinelConfig(
+                lambda_targets=KernelSentinelConfig().lambda_targets,
+                halt_on_breach=True,
+            )
+        )
 
         # Coverage map: (rpm_bin, map_bin) -> CoverageCell
         self.coverage_map: dict[tuple[int, int], CoverageCell] = {}
@@ -314,6 +326,7 @@ class RealtimeAnalysisEngine:
         self._last_rpm: float | None = None
         self._last_rpm_time: float = 0.0
         self._last_tps: float = 0.0
+        self._last_injector_duty_pct: float | None = None
         self._active_cell: tuple[int, int] | None = None
 
         # Thread safety
@@ -321,6 +334,13 @@ class RealtimeAnalysisEngine:
 
         # Start time for relative timestamps
         self._start_time = time.time()
+
+    def set_kernel_sentinel_config(self, payload: dict[str, Any] | None) -> None:
+        """Replace live sentinel config without resetting coverage state."""
+        with self._lock:
+            self.kernel_sentinel = KernelSentinel(
+                KernelSentinelConfig.from_dict(payload)
+            )
 
     def on_aggregated_sample(self, data: dict[str, Any]) -> None:
         """
@@ -340,15 +360,20 @@ class RealtimeAnalysisEngine:
             map_kpa = data.get("map_kpa")
             afr = data.get("afr")
             tps = data.get("tps")
+            injector_duty_pct = self._compute_injector_duty_pct(rpm, data)
+            if injector_duty_pct is not None:
+                self._last_injector_duty_pct = injector_duty_pct
 
             # Update quality metrics for all present channels
-            self._update_quality(data, current_time)
+            self._update_quality(data, current_time, injector_duty_pct=injector_duty_pct)
 
             # Check for missing required channels
             self._check_missing_channels(data)
 
             # Detect alerts
-            self._detect_alerts(data, current_time)
+            self._detect_alerts(
+                data, current_time, injector_duty_pct=injector_duty_pct
+            )
 
             # Update coverage and VE delta if we have required data
             if rpm is not None and rpm > 0:
@@ -421,7 +446,12 @@ class RealtimeAnalysisEngine:
         afr_error = afr - self.target_afr
         self.ve_delta_map[bin_key].update(afr_error)
 
-    def _update_quality(self, data: dict[str, Any], current_time: float) -> None:
+    def _update_quality(
+        self,
+        data: dict[str, Any],
+        current_time: float,
+        injector_duty_pct: float | None = None,
+    ) -> None:
         """Update quality metrics for all present channels. O(n) where n = channels."""
         channel_map = {
             "rpm": data.get("rpm"),
@@ -430,6 +460,7 @@ class RealtimeAnalysisEngine:
             "tps": data.get("tps"),
             "torque": data.get("torque"),
             "horsepower": data.get("horsepower"),
+            "injector_duty_pct": injector_duty_pct,
         }
 
         for channel, value in channel_map.items():
@@ -446,7 +477,12 @@ class RealtimeAnalysisEngine:
 
         self.quality.missing_channels = missing
 
-    def _detect_alerts(self, data: dict[str, Any], current_time: float) -> None:
+    def _detect_alerts(
+        self,
+        data: dict[str, Any],
+        current_time: float,
+        injector_duty_pct: float | None = None,
+    ) -> None:
         """Detect and emit alerts. O(1)."""
         rpm = data.get("rpm")
         afr = data.get("afr")
@@ -518,6 +554,58 @@ class RealtimeAnalysisEngine:
                         timestamp=current_time,
                     )
                 )
+
+        # Injector duty risk flag (HIGH if >85%)
+        if injector_duty_pct is not None:
+            if injector_duty_pct > INJECTOR_DUTY_HALT_PCT:
+                self._add_alert(
+                    Alert(
+                        type=AlertType.INJECTOR_DUTY_HIGH,
+                        severity=AlertSeverity.CRITICAL,
+                        channel="injector_duty_pct",
+                        message=(
+                            f"Injector duty {injector_duty_pct:.1f}% exceeds "
+                            f"halt threshold {INJECTOR_DUTY_HALT_PCT:.1f}%"
+                        ),
+                        timestamp=current_time,
+                        value=injector_duty_pct,
+                    )
+                )
+            elif injector_duty_pct > INJECTOR_DUTY_WARN_PCT:
+                self._add_alert(
+                    Alert(
+                        type=AlertType.INJECTOR_DUTY_HIGH,
+                        severity=AlertSeverity.WARNING,
+                        channel="injector_duty_pct",
+                        message=(
+                            f"Injector duty {injector_duty_pct:.1f}% exceeds "
+                            f"warning threshold {INJECTOR_DUTY_WARN_PCT:.1f}%"
+                        ),
+                        timestamp=current_time,
+                        value=injector_duty_pct,
+                    )
+                )
+
+        afr_error = None
+        if afr is not None and not math.isnan(afr):
+            afr_error = afr - self.target_afr
+
+        for breach in self.kernel_sentinel.evaluate_realtime_sample(
+            data, afr_error=afr_error
+        ):
+            self._add_alert(
+                Alert(
+                    type=AlertType.KERNEL_SENTINEL,
+                    severity=(
+                        AlertSeverity.CRITICAL
+                        if breach.severity.value == "critical"
+                        else AlertSeverity.WARNING
+                    ),
+                    channel="kernel_sentinel",
+                    message=breach.message,
+                    timestamp=current_time,
+                )
+            )
 
     def _add_alert(self, alert: Alert) -> None:
         """Add alert to queue, avoiding duplicates. O(n) where n = MAX_ALERTS."""
@@ -593,6 +681,11 @@ class RealtimeAnalysisEngine:
                 "ve_delta": ve_delta,
                 "quality": quality,
                 "alerts": alerts,
+                "injector_duty_pct": (
+                    round(self._last_injector_duty_pct, 2)
+                    if self._last_injector_duty_pct is not None
+                    else None
+                ),
                 "uptime_sec": round(current_time - self._start_time, 1),
             }
 
@@ -606,8 +699,44 @@ class RealtimeAnalysisEngine:
             self._last_rpm = None
             self._last_rpm_time = 0.0
             self._last_tps = 0.0
+            self._last_injector_duty_pct = None
             self._active_cell = None
             self._start_time = time.time()
+
+    @staticmethod
+    def _compute_injector_duty_pct(
+        rpm: float | None, data: dict[str, Any]
+    ) -> float | None:
+        """
+        Compute injector duty cycle percentage from pulse width and RPM.
+
+        Formula (4-stroke): duty_pct = pulsewidth_ms * rpm / 1200
+        Equivalent to the project formula with percent scaling:
+        pulsewidth_ms * rpm / 60 / 1000 * 2 * 100
+        """
+        if rpm is None:
+            return None
+        try:
+            rpm_f = float(rpm)
+        except (TypeError, ValueError):
+            return None
+        if rpm_f <= 0:
+            return None
+
+        pulse_width = data.get("injector_pulsewidth_ms")
+        if pulse_width is None:
+            pulse_width = data.get("inj_pw_ms")
+        if pulse_width is None:
+            pulse_width = data.get("pw_ms")
+        if pulse_width is None:
+            return None
+        try:
+            pw_ms = float(pulse_width)
+        except (TypeError, ValueError):
+            return None
+        if pw_ms <= 0:
+            return None
+        return (pw_ms * rpm_f) / 1200.0
 
 
 # =============================================================================

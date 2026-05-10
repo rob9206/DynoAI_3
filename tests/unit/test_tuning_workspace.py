@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -127,3 +128,64 @@ def test_find_vehicle_by_ecu_signature(ws: TuningWorkspace):
     ws.update_vehicle(vehicle.id, ecu_signature="deadbeef")
     assert ws.find_vehicle_by_ecu_signature("deadbeef").id == vehicle.id
     assert ws.find_vehicle_by_ecu_signature("nope") is None
+
+
+def test_legacy_session_payload_still_loads(ws: TuningWorkspace):
+    vehicle = ws.create_vehicle(name="Legacy Bike")
+    sid = "legacy_20260510"
+    sdir = ws.session_dir(vehicle.id, sid)
+    sdir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "id": sid,
+        "vehicle_id": vehicle.id,
+        "base_tune_sha256": None,
+        "status": "active",
+        "notes": "",
+        "created_at": "2026-04-21T23:32:19.429Z",
+        "updated_at": "2026-04-21T23:32:19.433Z",
+        "active_iteration_id": "iter_0",
+    }
+    ws.session_json(vehicle.id, sid).write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = ws.get_session(vehicle.id, sid)
+    assert loaded.id == sid
+    assert loaded.schema_version is None
+    assert loaded.v3 is None
+
+
+def test_set_v3_and_resolve_blocker(ws: TuningWorkspace):
+    vehicle = ws.create_vehicle(name="V3 Bike")
+    session = ws.create_session(vehicle.id)
+
+    payload = {
+        "schema_version": "dynoai.session.v3",
+        "session_id": session.id,
+        "status": "blocked_pending_verify",
+        "verify_blockers": [
+            {
+                "field": "build_spec.displacement_ci",
+                "blocking": True,
+                "resolved": False,
+                "owner": "planner",
+            }
+        ],
+        "template": {"dispatch_after": ["dispatch_ready"]},
+        "kernel_sentinel": {"halt_on_breach": True, "lambda_targets": {"wot": 0.88}},
+    }
+
+    updated = ws.set_session_v3(vehicle.id, session.id, payload)
+    assert updated.schema_version == "dynoai.session.v3"
+    assert updated.v3 is not None
+    assert updated.v3["session_id"] == session.id
+
+    resolved = ws.resolve_session_v3_blocker(
+        vehicle.id,
+        session.id,
+        "build_spec.displacement_ci",
+        resolved_by="test",
+        evidence="customer confirmed",
+    )
+    assert resolved.v3 is not None
+    blocker = resolved.v3["verify_blockers"][0]
+    assert blocker["resolved"] is True
+    assert blocker["resolved_by"] == "test"
