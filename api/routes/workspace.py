@@ -58,6 +58,7 @@ def _not_found_error(message: str = "resource not found"):
     """Return sanitized NOT_FOUND payload without leaking internals."""
     return jsonify({"error": {"code": "NOT_FOUND", "message": message}}), 404
 
+
 # =============================================================================
 # Vehicles
 # =============================================================================
