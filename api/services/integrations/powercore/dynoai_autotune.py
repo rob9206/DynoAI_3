@@ -856,8 +856,8 @@ def _export_loaded_log_csv(file_handle, csv_path):
             if tps_samples:
                 tps_value, tps_idx = _value_at_or_before(
                     tps_samples, t_ms, tps_idx)
-                row_values.append(
-                    "" if tps_value is None else "{0:.3f}".format(tps_value))
+                row_values.append("" if tps_value is
+                                  None else "{0:.3f}".format(tps_value))
 
             handle.write(",".join([str(v) for v in row_values]) + "\n")
             row_count += 1
