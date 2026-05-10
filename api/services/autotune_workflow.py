@@ -618,6 +618,7 @@ class AutoTuneWorkflow:
             session.errors.append(f"Tune import failed: {e}")
             return False
 
+    # skipcq: PY-R1000
     def analyze_afr(self, session: AutoTuneSession) -> Optional[AFRAnalysisResult]:
         """
         Analyze AFR error across RPM/MAP zones using 2D grid.

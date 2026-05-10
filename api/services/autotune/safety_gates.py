@@ -99,6 +99,7 @@ def _shape(grid: list[list[float]]) -> tuple[int, int]:
     return (len(grid), len(grid[0]) if grid[0] else 0)
 
 
+# skipcq: PY-R1000
 def check_block_conditions(
     base_ve: DualCylinderGrid | None,
     corrections: DualCylinderGrid,

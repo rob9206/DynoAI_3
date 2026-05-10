@@ -12,7 +12,8 @@
 # (extreme correction / shape mismatch / partial cylinder / invalid base VE)
 # before any PutTable can run.
 # mypy: ignore-errors
-# ruff: noqa: E402,SIM105,UP031,UP034,UP015,B904
+# ruff: noqa: E402,SIM105,UP015,UP030,UP031,UP032,UP034,B904
+# pylint: disable=C0209
 # fmt: off
 # isort: skip_file
 # autopep8: off
@@ -118,7 +119,7 @@ def _safe_run_slug(run_id):
 
     Mirrors tools.autotune.tunelab_entrypoint._safe_run_slug so a single
     run_id sanitizer is applied on both sides of the CLI boundary. Strips
-    `..`, slashes, and any non [A-Za-z0-9._-] characters; collapses runs of
+    `..`, slashes, and any non [A-Za-z0-9_-] characters; collapses runs of
     invalid characters into a single underscore. Returns "run" if the
     result is empty so we never produce a zero-length path segment.
     """
@@ -525,9 +526,7 @@ def _value_at_or_before(samples, target_ms, idx_hint):
     """Step forward through a sorted sample list and return latest <= target."""
     if not samples:
         return None, idx_hint
-    idx = idx_hint
-    if idx < 0:
-        idx = 0
+    idx = max(idx_hint, 0)
     while (idx + 1) < len(samples) and samples[idx + 1][0] <= target_ms:
         idx += 1
     if samples[idx][0] > target_ms:
@@ -540,6 +539,15 @@ def _create_temp_dir():
                             "dynoai_autotune_" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(temp_dir)
     return temp_dir
+
+
+# skipcq: PTC-W6004
+def _validate_csv_write_path(csv_path):
+    """Require generated CSV paths to stay under the process temp directory."""
+    full_path = Path.GetFullPath(csv_path)
+    temp_root = Path.GetFullPath(Path.GetTempPath())
+    if not full_path.lower().startswith(temp_root.lower()):
+        raise RuntimeError("CSV export path must remain under temp root.")
 
 
 def _safe_delete_dir(path_value):
@@ -587,7 +595,7 @@ def _derive_log_stem(file_handle):
 def _build_run_id(file_handle):
     date_part = DateTime.Now.ToString("yyyyMMdd")
     stem = _derive_log_stem(file_handle)
-    return "auto/%s/%s" % (date_part, stem)
+    return "auto/{0}/{1}".format(date_part, stem)
 
 
 def _estimate_map_from_rpm(rpm_value):
@@ -668,7 +676,7 @@ def _resolve_channels(file_handle):
     }
 
 
-def _raise_channel_error(file_handle, missing, found_afr_f, found_afr_r):
+def _raise_channel_error(file_handle, missing):
     """Build the diagnostic error dialog for missing required channels."""
     available = _list_channel_names(file_handle)
     file_desc = _describe_file_handle(file_handle)
@@ -679,7 +687,7 @@ def _raise_channel_error(file_handle, missing, found_afr_f, found_afr_r):
         extra_lines = [
             "",
             "Selected file: " + file_desc,
-            "Detected channels (%d):" % len(available),
+            "Detected channels ({0}):".format(len(available)),
             preview + ("..." if len(available) > 40 else ""),
         ]
     else:
@@ -738,6 +746,7 @@ def _select_best_file_handle(file_handles):
     return best_handle if best_handle is not None else file_handles[-1]
 
 
+# skipcq: PY-R1000
 def _export_loaded_log_csv(file_handle, csv_path):
     """Export loaded channels to a DynoAI-format CSV. Returns (rows, mode).
 
@@ -761,8 +770,7 @@ def _export_loaded_log_csv(file_handle, csv_path):
         missing.append("AFR Front")
         missing.append("AFR Rear")
     if missing:
-        _raise_channel_error(file_handle, missing, afr_f_ch is not None,
-                             afr_r_ch is not None)
+        _raise_channel_error(file_handle, missing)
 
     rpm_samples = _read_samples(rpm_ch)
     map_samples = _read_samples(map_ch)
@@ -786,7 +794,7 @@ def _export_loaded_log_csv(file_handle, csv_path):
             missing.append("AFR Rear")
         else:
             missing.append("AFR Rear (no samples)")
-        _raise_channel_error(file_handle, missing, False, False)
+        _raise_channel_error(file_handle, missing)
 
     if front_has_data and rear_has_data:
         mode = "dual"
@@ -807,6 +815,7 @@ def _export_loaded_log_csv(file_handle, csv_path):
     tps_idx = 0
     row_count = 0
 
+    _validate_csv_write_path(csv_path)
     with open(csv_path, "wb") as handle:
         header = ["timestamp_ms", "Engine RPM", "MAP kPa"]
         if front_has_data:
@@ -828,8 +837,8 @@ def _export_loaded_log_csv(file_handle, csv_path):
 
             row_values = [
                 t_ms,
-                "%.3f" % rpm_value,
-                "%.3f" % map_value,
+                "{0:.3f}".format(rpm_value),
+                "{0:.3f}".format(map_value),
             ]
 
             if front_has_data:
@@ -837,18 +846,18 @@ def _export_loaded_log_csv(file_handle, csv_path):
                     afr_f_samples, t_ms, afr_f_idx)
                 if afr_f_value is None:
                     continue
-                row_values.append("%.3f" % afr_f_value)
+                row_values.append("{0:.3f}".format(afr_f_value))
             if rear_has_data:
                 afr_r_value, afr_r_idx = _value_at_or_before(
                     afr_r_samples, t_ms, afr_r_idx)
                 if afr_r_value is None:
                     continue
-                row_values.append("%.3f" % afr_r_value)
+                row_values.append("{0:.3f}".format(afr_r_value))
             if tps_samples:
                 tps_value, tps_idx = _value_at_or_before(
                     tps_samples, t_ms, tps_idx)
-                row_values.append("" if tps_value is None else ("%.3f" %
-                                                                tps_value))
+                row_values.append(
+                    "" if tps_value is None else "{0:.3f}".format(tps_value))
 
             handle.write(",".join([str(v) for v in row_values]) + "\n")
             row_count += 1
