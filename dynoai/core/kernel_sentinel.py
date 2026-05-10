@@ -142,7 +142,11 @@ class KernelSentinel:
 
         lambda_val = _as_float(sample.get("lambda"))
         tps = _as_float(sample.get("tps")) or 0.0
-        if lambda_val is not None and tps >= 85.0 and lambda_val > cfg.lambda_targets.wot:
+        if (
+            lambda_val is not None
+            and tps >= 85.0
+            and lambda_val > cfg.lambda_targets.wot
+        ):
             breaches.append(
                 SentinelBreach(
                     code="lambda_wot_lean",
@@ -200,7 +204,10 @@ class KernelSentinel:
         for i in range(rows):
             run = 0
             for j in range(cols):
-                if bool(valid_mask[i, j]) and float(ve_delta_matrix[i, j]) > afr_error_tolerance:
+                if (
+                    bool(valid_mask[i, j])
+                    and float(ve_delta_matrix[i, j]) > afr_error_tolerance
+                ):
                     run += 1
                     max_run = max(max_run, run)
                 else:

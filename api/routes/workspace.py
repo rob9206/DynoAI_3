@@ -37,13 +37,13 @@ from werkzeug.utils import secure_filename
 
 from api.errors import ValidationError, with_error_handling
 from api.services.ingest.sniffer import classify_upload
+from api.services.ingest.watcher import get_watcher
 from api.services.sessions.dispatch_readiness import evaluate_dispatch_readiness
 from api.services.sessions.p0_plausibility_checker import evaluate_p0_plausibility
 from api.services.sessions.phased_pull_controller import (
     compute_phase_snapshot,
     mark_phase_complete,
 )
-from api.services.ingest.watcher import get_watcher
 from api.services.tuning_workspace import (
     WorkspaceError,
     get_workspace,
@@ -200,7 +200,9 @@ def upsert_session_v3(vid: str, sid: str):
     return jsonify(session.to_dict()), 200
 
 
-@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/v3/resolve_blocker", methods=["POST"])
+@workspace_bp.route(
+    "/vehicles/<vid>/sessions/<sid>/v3/resolve_blocker", methods=["POST"]
+)
 @with_error_handling
 def resolve_session_v3_blocker(vid: str, sid: str):
     ws = get_workspace()
@@ -221,7 +223,9 @@ def resolve_session_v3_blocker(vid: str, sid: str):
     return jsonify(session.to_dict()), 200
 
 
-@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/dispatch_readiness", methods=["GET"])
+@workspace_bp.route(
+    "/vehicles/<vid>/sessions/<sid>/dispatch_readiness", methods=["GET"]
+)
 @with_error_handling
 def get_dispatch_readiness(vid: str, sid: str):
     ws = get_workspace()
@@ -244,7 +248,9 @@ def get_session_phases(vid: str, sid: str):
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
     if not v3:
         return (
-            jsonify({"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}),
+            jsonify(
+                {"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}
+            ),
             404,
         )
     return jsonify(compute_phase_snapshot(v3).to_dict()), 200
@@ -264,7 +270,9 @@ def complete_session_phase(vid: str, sid: str):
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
     if not v3:
         return (
-            jsonify({"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}),
+            jsonify(
+                {"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}
+            ),
             404,
         )
 
@@ -309,7 +317,10 @@ def run_p0_plausibility(vid: str, sid: str):
     checks = v3.setdefault("checks", {})
     checks["p0_plausibility"] = result.to_dict()
     session = ws.set_session_v3(vid, sid, v3)
-    return jsonify({"p0_plausibility": result.to_dict(), "session": session.to_dict()}), 200
+    return (
+        jsonify({"p0_plausibility": result.to_dict(), "session": session.to_dict()}),
+        200,
+    )
 
 
 @workspace_bp.route("/vehicles/<vid>/sessions/<sid>/status", methods=["GET"])

@@ -10,13 +10,8 @@ import pytest
 
 from api.services.tuning_workspace import TuningWorkspace
 
-
 LEGACY_SESSION_PATH = (
-    Path("vehicles")
-    / "doodledyna"
-    / "sessions"
-    / "20260421_233219"
-    / "session.json"
+    Path("vehicles") / "doodledyna" / "sessions" / "20260421_233219" / "session.json"
 )
 
 

@@ -396,7 +396,9 @@ class TestAlertDetection:
         sample["injector_pulsewidth_ms"] = 22.0
         engine.on_aggregated_sample(sample)
 
-        duty_alerts = [a for a in engine.alerts if a.type == AlertType.INJECTOR_DUTY_HIGH]
+        duty_alerts = [
+            a for a in engine.alerts if a.type == AlertType.INJECTOR_DUTY_HIGH
+        ]
         assert duty_alerts, "Expected injector duty alert"
         assert duty_alerts[0].severity == AlertSeverity.CRITICAL
         assert duty_alerts[0].value is not None
@@ -415,7 +417,9 @@ class TestAlertDetection:
         sample["egt_f"] = 1500.0
         engine.on_aggregated_sample(sample)
 
-        sentinel_alerts = [a for a in engine.alerts if a.type == AlertType.KERNEL_SENTINEL]
+        sentinel_alerts = [
+            a for a in engine.alerts if a.type == AlertType.KERNEL_SENTINEL
+        ]
         assert sentinel_alerts, "Expected kernel sentinel alert"
         assert sentinel_alerts[0].severity == AlertSeverity.CRITICAL
 

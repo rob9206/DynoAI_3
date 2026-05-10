@@ -39,6 +39,7 @@ from api.services.powercore_integration import (
     powervision_log_to_dynoai_format,
 )
 from api.services.yourdyno import parse_yourdyno_run
+from dynoai.core.kernel_sentinel import KernelSentinel, KernelSentinelConfig
 
 # Import TuneLab-inspired filtering and binning modules
 from dynoai.core.signal_filters import (
@@ -58,7 +59,6 @@ from dynoai.core.ve_math import (
     calculate_ve_correction,
     correction_to_percentage,
 )
-from dynoai.core.kernel_sentinel import KernelSentinel, KernelSentinelConfig
 from dynoai.core.weighted_binning import (
     LogarithmicWeighting,
     WeightedBinAccumulator,
@@ -587,7 +587,9 @@ class AutoTuneWorkflow:
                 session.peak_tq_rpm = float(df.loc[peak_idx, rpm_col])
 
     @staticmethod
-    def _find_dual_bank_afr_columns(columns: list[str]) -> tuple[str | None, str | None]:
+    def _find_dual_bank_afr_columns(
+        columns: list[str],
+    ) -> tuple[str | None, str | None]:
         front_markers = ["afr1", "lc1", "front", "bank1", "left"]
         rear_markers = ["afr2", "lc2", "rear", "bank2", "right"]
         normalized = [(c, str(c).lower()) for c in columns if "afr" in str(c).lower()]

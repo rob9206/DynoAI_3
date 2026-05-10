@@ -408,7 +408,9 @@ class TuningWorkspace:
             )
             return session
 
-    def get_session_v3(self, vehicle_id: str, session_id: str) -> Optional[dict[str, Any]]:
+    def get_session_v3(
+        self, vehicle_id: str, session_id: str
+    ) -> Optional[dict[str, Any]]:
         """Return the validated/normalized v3 payload if present."""
         session = self.get_session(vehicle_id, session_id)
         return session.v3
@@ -449,7 +451,9 @@ class TuningWorkspace:
         with self._lock:
             session = self.get_session(vehicle_id, session_id)
             if not session.v3:
-                raise WorkspaceError(f"session has no v3 payload: {vehicle_id}/{session_id}")
+                raise WorkspaceError(
+                    f"session has no v3 payload: {vehicle_id}/{session_id}"
+                )
 
             blockers = session.v3.get("verify_blockers")
             if not isinstance(blockers, list):

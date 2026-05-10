@@ -60,7 +60,9 @@ def evaluate_p0_plausibility(
 
     derived_bmep = None
     if peak_tq_ftlb is not None:
-        derived_bmep = _compute_bmep_psi(float(peak_tq_ftlb), float(known_displacement_ci))
+        derived_bmep = _compute_bmep_psi(
+            float(peak_tq_ftlb), float(known_displacement_ci)
+        )
         checks.append(
             {
                 "id": "bmep_derived",
@@ -104,7 +106,10 @@ def evaluate_p0_plausibility(
             {
                 "id": "bsfc_band",
                 "ok": bsfc_ok,
-                "detail": {"bsfc_lb_hp_hr": bsfc_lb_hp_hr, "expected_band": [0.35, 0.75]},
+                "detail": {
+                    "bsfc_lb_hp_hr": bsfc_lb_hp_hr,
+                    "expected_band": [0.35, 0.75],
+                },
             }
         )
         if not bsfc_ok:

@@ -365,15 +365,15 @@ class RealtimeAnalysisEngine:
                 self._last_injector_duty_pct = injector_duty_pct
 
             # Update quality metrics for all present channels
-            self._update_quality(data, current_time, injector_duty_pct=injector_duty_pct)
+            self._update_quality(
+                data, current_time, injector_duty_pct=injector_duty_pct
+            )
 
             # Check for missing required channels
             self._check_missing_channels(data)
 
             # Detect alerts
-            self._detect_alerts(
-                data, current_time, injector_duty_pct=injector_duty_pct
-            )
+            self._detect_alerts(data, current_time, injector_duty_pct=injector_duty_pct)
 
             # Update coverage and VE delta if we have required data
             if rpm is not None and rpm > 0:

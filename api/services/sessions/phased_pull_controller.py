@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 DEFAULT_PHASE_ORDER = ["P0", "P1", "P2", "P3", "P4"]
 
 
