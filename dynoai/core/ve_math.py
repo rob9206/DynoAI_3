@@ -20,13 +20,13 @@ AFR deviations.
 
 Usage:
     from dynoai.core.ve_math import calculate_ve_correction, MathVersion
-    
+
     # Default v2.0.0 (ratio model)
     correction = calculate_ve_correction(14.0, 13.0)
-    
+
     # Explicit version selection
     correction = calculate_ve_correction(14.0, 13.0, version=MathVersion.V2_0_0)
-    
+
     # Legacy v1.0.0 mode
     correction = calculate_ve_correction(14.0, 13.0, version=MathVersion.V1_0_0)
 
@@ -35,16 +35,17 @@ References:
     - docs/DETERMINISTIC_MATH_SPECIFICATION.md
 """
 
-from enum import Enum
-from dataclasses import dataclass
-from typing import Optional, Tuple
 import logging
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
 
 # Import environmental corrections
 from dynoai.core.environmental import (
-    EnvironmentalCorrector,
+    CorrectionStandard,
     EnvironmentalConditions,
     EnvironmentalCorrectionResult,
+    EnvironmentalCorrector,
 )
 
 __all__ = [
@@ -66,9 +67,12 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-# Valid AFR range for gasoline engines
-AFR_MIN: float = 9.0   # Below this = extreme rich or sensor error
-AFR_MAX: float = 20.0  # Above this = extreme lean or sensor error
+# Valid AFR range for gasoline engines.
+# Widened to [7.0, 23.0] to cover the full Innovate LC-1/LC-2 sensor rails
+# (7.35 - 22.39 AFR by default calibration). Values outside this window still
+# indicate a sensor error or a misrouted (Lambda / voltage) reading.
+AFR_MIN: float = 7.0  # Below this = extreme rich or sensor error
+AFR_MAX: float = 23.0  # Above this = extreme lean or sensor error
 
 # Stoichiometric AFR for gasoline (used for reference, not in calculation)
 STOICH_AFR_GASOLINE: float = 14.7
@@ -76,26 +80,27 @@ STOICH_AFR_GASOLINE: float = 14.7
 # v1.0.0 linear model constant
 V1_VE_PER_AFR_POINT: float = 0.07  # 7% per AFR point
 
-
 # =============================================================================
 # Enums and Configuration
 # =============================================================================
 
+
 class MathVersion(Enum):
     """
     VE calculation math version selector.
-    
+
     V1_0_0: Legacy linear approximation (7% per AFR point)
         Formula: VE_correction = 1 + (AFR_error * 0.07)
         Where: AFR_error = AFR_measured - AFR_target
-        
+
     V2_0_0: Ratio model (physically accurate)
         Formula: VE_correction = AFR_measured / AFR_target
         Derived from fuel mass balance equations
     """
+
     V1_0_0 = "1.0.0"
     V2_0_0 = "2.0.0"
-    
+
     def __str__(self) -> str:
         return self.value
 
@@ -104,20 +109,23 @@ class MathVersion(Enum):
 class MathConfig:
     """
     Immutable configuration for VE math calculations.
-    
+
     Attributes:
         version: Math version to use (default: V2_0_0)
         max_correction_pct: Maximum correction percentage (default: 15.0 for ±15%)
-        afr_min: Minimum valid AFR value (default: 9.0)
-        afr_max: Maximum valid AFR value (default: 20.0)
+        afr_min: Minimum valid AFR value (default: AFR_MIN, currently 7.0,
+            covers the Innovate LC-1/LC-2 lower rail at 0V = 7.35 AFR).
+        afr_max: Maximum valid AFR value (default: AFR_MAX, currently 23.0,
+            covers the Innovate LC-1/LC-2 upper rail at 5V = 22.39 AFR).
         clamp_enabled: Whether to apply safety clamping (default: True)
     """
+
     version: MathVersion = MathVersion.V2_0_0
     max_correction_pct: float = 15.0
     afr_min: float = AFR_MIN
     afr_max: float = AFR_MAX
     clamp_enabled: bool = True
-    
+
     def __post_init__(self) -> None:
         if self.max_correction_pct <= 0:
             raise ValueError("max_correction_pct must be positive")
@@ -146,19 +154,23 @@ def get_legacy_config() -> MathConfig:
 # Exceptions
 # =============================================================================
 
+
 class VEMathError(Exception):
     """Base exception for VE math errors."""
+
     pass
 
 
 class AFRValidationError(VEMathError):
     """Raised when AFR values are outside valid range."""
+
     pass
 
 
 # =============================================================================
 # Core Calculation Functions
 # =============================================================================
+
 
 def _validate_afr(
     afr: float,
@@ -168,13 +180,13 @@ def _validate_afr(
 ) -> None:
     """
     Validate an AFR value is within acceptable range.
-    
+
     Args:
         afr: AFR value to validate
         name: Name for error messages (e.g., "measured", "target")
         afr_min: Minimum valid AFR
         afr_max: Maximum valid AFR
-        
+
     Raises:
         AFRValidationError: If AFR is outside valid range
     """
@@ -193,16 +205,16 @@ def _validate_afr(
 def _calculate_v1_correction(afr_measured: float, afr_target: float) -> float:
     """
     Calculate VE correction using v1.0.0 linear model.
-    
+
     Formula: VE_correction = 1 + (AFR_error * 0.07)
     Where: AFR_error = AFR_measured - AFR_target
-    
+
     This is the legacy "7% per AFR point" approximation.
-    
+
     Args:
         afr_measured: Measured AFR from wideband sensor
         afr_target: Target/commanded AFR
-        
+
     Returns:
         VE correction multiplier
     """
@@ -213,15 +225,15 @@ def _calculate_v1_correction(afr_measured: float, afr_target: float) -> float:
 def _calculate_v2_correction(afr_measured: float, afr_target: float) -> float:
     """
     Calculate VE correction using v2.0.0 ratio model.
-    
+
     Formula: VE_correction = AFR_measured / AFR_target
-    
+
     This is the physically accurate model derived from fuel mass balance.
-    
+
     Args:
         afr_measured: Measured AFR from wideband sensor
         afr_target: Target/commanded AFR
-        
+
     Returns:
         VE correction multiplier
     """
@@ -231,20 +243,20 @@ def _calculate_v2_correction(afr_measured: float, afr_target: float) -> float:
 def _clamp_correction(
     correction: float,
     max_correction_pct: float,
-) -> Tuple[float, bool]:
+) -> tuple[float, bool]:
     """
     Apply safety clamping to a VE correction value.
-    
+
     Args:
         correction: Raw VE correction multiplier
         max_correction_pct: Maximum adjustment percentage (e.g., 15.0 for ±15%)
-        
+
     Returns:
         Tuple of (clamped_correction, was_clamped)
     """
     min_val = 1.0 - (max_correction_pct / 100.0)
     max_val = 1.0 + (max_correction_pct / 100.0)
-    
+
     if correction < min_val:
         return min_val, True
     elif correction > max_val:
@@ -262,54 +274,54 @@ def calculate_ve_correction(
 ) -> float:
     """
     Calculate VE correction factor from AFR measurements.
-    
+
     This is the primary VE calculation function for DynoAI. It supports
     multiple math versions for backwards compatibility.
-    
+
     Math Versions:
         v1.0.0: VE_correction = 1 + (AFR_error * 0.07)  [legacy]
         v2.0.0: VE_correction = AFR_measured / AFR_target  [default]
-    
+
     Interpretation:
         - correction > 1.0: Running lean, need MORE fuel (increase VE)
         - correction < 1.0: Running rich, need LESS fuel (decrease VE)
         - correction = 1.0: On target, no change needed
-    
+
     Args:
         afr_measured: Measured AFR from wideband O2 sensor
         afr_target: Target/commanded AFR from tune
         version: Math version to use (overrides config if provided)
         config: Math configuration (uses default if not provided)
         clamp: Whether to apply safety clamping (default: True)
-        
+
     Returns:
         VE correction multiplier (e.g., 1.077 means +7.7% fuel)
-        
+
     Raises:
         AFRValidationError: If AFR values are invalid
         VEMathError: If calculation fails
-        
+
     Examples:
         >>> calculate_ve_correction(14.0, 13.0)  # Lean
         1.0769230769230769
-        
+
         >>> calculate_ve_correction(12.0, 13.0)  # Rich
         0.9230769230769231
-        
+
         >>> calculate_ve_correction(13.0, 13.0)  # On target
         1.0
     """
     # Resolve configuration
     if config is None:
         config = _DEFAULT_CONFIG
-    
+
     # Version override takes precedence
     math_version = version if version is not None else config.version
-    
+
     # Validate inputs
     _validate_afr(afr_measured, "measured", config.afr_min, config.afr_max)
     _validate_afr(afr_target, "target", config.afr_min, config.afr_max)
-    
+
     # Calculate based on version
     if math_version == MathVersion.V1_0_0:
         correction = _calculate_v1_correction(afr_measured, afr_target)
@@ -317,7 +329,7 @@ def calculate_ve_correction(
         correction = _calculate_v2_correction(afr_measured, afr_target)
     else:
         raise VEMathError(f"Unknown math version: {math_version}")
-    
+
     # Apply clamping if enabled
     if clamp and config.clamp_enabled:
         correction, was_clamped = _clamp_correction(
@@ -331,7 +343,7 @@ def calculate_ve_correction(
                 correction,
                 config.max_correction_pct,
             )
-    
+
     return correction
 
 
@@ -345,10 +357,10 @@ def calculate_ve_correction_batch(
 ) -> list:
     """
     Calculate VE corrections for multiple AFR measurements.
-    
+
     Batch version of calculate_ve_correction() for efficiency when
     processing multiple data points.
-    
+
     Args:
         afr_measured_list: List of measured AFR values
         afr_target_list: List of target AFR values (same length as measured)
@@ -356,10 +368,10 @@ def calculate_ve_correction_batch(
         config: Math configuration
         clamp: Whether to apply safety clamping
         skip_invalid: If True, return None for invalid entries instead of raising
-        
+
     Returns:
         List of VE correction multipliers (or None for invalid entries if skip_invalid)
-        
+
     Raises:
         ValueError: If input lists have different lengths
         AFRValidationError: If any AFR value is invalid (unless skip_invalid=True)
@@ -369,20 +381,20 @@ def calculate_ve_correction_batch(
             f"List length mismatch: measured={len(afr_measured_list)}, "
             f"target={len(afr_target_list)}"
         )
-    
-    results = []
+
+    results: list[float | None] = []
     for measured, target in zip(afr_measured_list, afr_target_list):
         try:
             correction = calculate_ve_correction(
                 measured, target, version=version, config=config, clamp=clamp
             )
             results.append(correction)
-        except (AFRValidationError, VEMathError) as e:
+        except (AFRValidationError, VEMathError):
             if skip_invalid:
                 results.append(None)
             else:
                 raise
-    
+
     return results
 
 
@@ -390,16 +402,17 @@ def calculate_ve_correction_batch(
 # Utility Functions
 # =============================================================================
 
+
 def correction_to_percentage(correction: float) -> float:
     """
     Convert VE correction multiplier to percentage change.
-    
+
     Args:
         correction: VE correction multiplier (e.g., 1.077)
-        
+
     Returns:
         Percentage change (e.g., 7.7 for +7.7%)
-        
+
     Examples:
         >>> correction_to_percentage(1.077)
         7.7
@@ -412,13 +425,13 @@ def correction_to_percentage(correction: float) -> float:
 def percentage_to_correction(percentage: float) -> float:
     """
     Convert percentage change to VE correction multiplier.
-    
+
     Args:
         percentage: Percentage change (e.g., 7.7 for +7.7%)
-        
+
     Returns:
         VE correction multiplier (e.g., 1.077)
-        
+
     Examples:
         >>> percentage_to_correction(7.7)
         1.077
@@ -434,16 +447,16 @@ def compare_versions(
 ) -> dict:
     """
     Compare VE corrections from different math versions.
-    
+
     Useful for analysis and migration validation.
-    
+
     Args:
         afr_measured: Measured AFR
         afr_target: Target AFR
-        
+
     Returns:
         Dictionary with version comparisons
-        
+
     Examples:
         >>> compare_versions(14.0, 13.0)
         {
@@ -459,10 +472,10 @@ def compare_versions(
     v2 = calculate_ve_correction(
         afr_measured, afr_target, version=MathVersion.V2_0_0, clamp=False
     )
-    
+
     diff = abs(v2 - v1)
     diff_pct = (diff / v2) * 100.0 if v2 != 0 else 0.0
-    
+
     return {
         "afr_measured": afr_measured,
         "afr_target": afr_target,
@@ -478,7 +491,7 @@ def compare_versions(
 def get_version_info() -> dict:
     """
     Get information about the current math version configuration.
-    
+
     Returns:
         Dictionary with version information
     """
@@ -496,6 +509,7 @@ def get_version_info() -> dict:
 # Environmental Correction Integration
 # =============================================================================
 
+
 def calculate_ve_correction_with_environment(
     afr_measured: float,
     afr_target: float,
@@ -503,21 +517,21 @@ def calculate_ve_correction_with_environment(
     version: Optional[MathVersion] = None,
     config: Optional[MathConfig] = None,
     clamp: bool = True,
-) -> Tuple[float, dict]:
+) -> tuple[float, dict]:
     """
     Calculate VE correction with environmental compensation.
-    
+
     This extends the standard VE correction to account for atmospheric
     conditions that affect air density and fuel requirements:
     - Barometric pressure / altitude
     - Ambient temperature
     - Humidity
     - Engine coolant temperature (ECT)
-    
+
     The environmental correction is applied as a multiplier to the base
     VE correction:
         final_correction = base_correction * environmental_factor
-    
+
     Args:
         afr_measured: Measured AFR from wideband O2 sensor
         afr_target: Target/commanded AFR from tune
@@ -526,18 +540,18 @@ def calculate_ve_correction_with_environment(
         version: Math version to use (overrides config if provided)
         config: Math configuration (uses default if not provided)
         clamp: Whether to apply safety clamping (default: True)
-        
+
     Returns:
         Tuple of:
         - final_correction: VE correction with environmental adjustment
         - details: Dictionary with breakdown of corrections
-        
+
     Examples:
         Standard conditions (no adjustment):
         >>> corr, details = calculate_ve_correction_with_environment(14.0, 13.0)
         >>> corr
         1.077
-        
+
         High altitude (Denver, ~5000 ft):
         >>> conditions = EnvironmentalConditions(barometric_pressure_inhg=24.89)
         >>> corr, details = calculate_ve_correction_with_environment(
@@ -545,7 +559,7 @@ def calculate_ve_correction_with_environment(
         ... )
         >>> corr
         0.896  # Less fuel needed at altitude
-        
+
     Note:
         The environmental correction affects how much fuel is ultimately
         needed, but the base VE correction is still calculated from the
@@ -561,7 +575,7 @@ def calculate_ve_correction_with_environment(
         config=config,
         clamp=False,  # We'll clamp after environmental adjustment
     )
-    
+
     # Calculate environmental correction
     if environmental_conditions is None:
         # Standard conditions = no adjustment
@@ -572,21 +586,21 @@ def calculate_ve_correction_with_environment(
             humidity_correction=1.0,
             altitude_correction=1.0,
             ect_correction=1.0,
-            standard_used=None,
+            standard_used=CorrectionStandard.SAE_J1349,
             is_standard_day=True,
             details={},
         )
     else:
         corrector = EnvironmentalCorrector()
         env_result = corrector.calculate(environmental_conditions)
-    
+
     # Combine corrections
     # The environmental factor adjusts the fuel requirement based on air density
     # For lean condition: base > 1.0 (need more fuel)
     # Environmental factor < 1.0 at altitude (less dense air needs less fuel)
     # Combined effect: the lean correction is partially offset by altitude
     final_correction = base_correction * env_result.total_correction
-    
+
     # Apply clamping if enabled
     if clamp:
         resolved_config = config if config is not None else _DEFAULT_CONFIG
@@ -594,7 +608,7 @@ def calculate_ve_correction_with_environment(
             final_correction, was_clamped = _clamp_correction(
                 final_correction, resolved_config.max_correction_pct
             )
-    
+
     # Build details dictionary
     details = {
         "base_ve_correction": base_correction,
@@ -611,7 +625,7 @@ def calculate_ve_correction_with_environment(
             "ect": env_result.ect_correction,
         },
     }
-    
+
     if environmental_conditions is not None:
         details["conditions"] = {
             "barometric_inhg": environmental_conditions.barometric_pressure_inhg,
@@ -620,7 +634,7 @@ def calculate_ve_correction_with_environment(
             "humidity_pct": environmental_conditions.humidity_percent,
             "ect_f": environmental_conditions.ect_f,
         }
-    
+
     return final_correction, details
 
 
@@ -630,17 +644,17 @@ def apply_environmental_correction(
 ) -> float:
     """
     Apply environmental correction to an existing VE correction.
-    
+
     Use this when you have already calculated a VE correction and want
     to adjust it for current environmental conditions.
-    
+
     Args:
         ve_correction: Pre-calculated VE correction multiplier
         environmental_conditions: Current atmospheric conditions
-        
+
     Returns:
         Environmentally-adjusted VE correction
-        
+
     Example:
         >>> base_corr = calculate_ve_correction(14.0, 13.0)
         >>> conditions = EnvironmentalConditions(
@@ -652,4 +666,3 @@ def apply_environmental_correction(
     corrector = EnvironmentalCorrector()
     env_result = corrector.calculate(environmental_conditions)
     return ve_correction * env_result.total_correction
-

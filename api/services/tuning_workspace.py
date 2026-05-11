@@ -92,6 +92,8 @@ class TuningSession:
     id: str
     vehicle_id: str
     base_tune_sha256: Optional[str] = None
+    schema_version: Optional[str] = None
+    v3: Optional[dict[str, Any]] = None
     status: str = "active"
     notes: str = ""
     created_at: str = field(default_factory=lambda: _utc_now())
@@ -330,6 +332,15 @@ class TuningWorkspace:
     # Sessions
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _coerce_session_payload(payload: dict[str, Any]) -> TuningSession:
+        """Load a session JSON payload with forward-compatible field filtering."""
+        allowed = set(TuningSession.__dataclass_fields__.keys())
+        filtered = {k: v for k, v in payload.items() if k in allowed}
+        if filtered.get("v3") and not filtered.get("schema_version"):
+            filtered["schema_version"] = "dynoai.session.v3"
+        return TuningSession(**filtered)
+
     def list_sessions(self, vehicle_id: str) -> list[TuningSession]:
         sdir = self.sessions_dir(vehicle_id)
         if not sdir.exists():
@@ -338,7 +349,9 @@ class TuningWorkspace:
         for child in sorted(sdir.iterdir()):
             if child.is_dir() and (child / "session.json").exists():
                 try:
-                    sessions.append(TuningSession(**_read_json(child / "session.json")))
+                    sessions.append(
+                        self._coerce_session_payload(_read_json(child / "session.json"))
+                    )
                 except Exception:
                     continue
         return sessions
@@ -377,7 +390,7 @@ class TuningWorkspace:
         spath = self.session_json(vehicle_id, session_id)
         if not spath.exists():
             raise WorkspaceError(f"session not found: {vehicle_id}/{session_id}")
-        return TuningSession(**_read_json(spath))
+        return self._coerce_session_payload(_read_json(spath))
 
     def update_session(
         self, vehicle_id: str, session_id: str, **fields: Any
@@ -389,6 +402,79 @@ class TuningWorkspace:
                     continue
                 if hasattr(session, key):
                     setattr(session, key, val)
+            session.updated_at = _utc_now()
+            _atomic_write_json(
+                self.session_json(vehicle_id, session_id), session.to_dict()
+            )
+            return session
+
+    def get_session_v3(
+        self, vehicle_id: str, session_id: str
+    ) -> Optional[dict[str, Any]]:
+        """Return the validated/normalized v3 payload if present."""
+        session = self.get_session(vehicle_id, session_id)
+        return session.v3
+
+    def set_session_v3(
+        self, vehicle_id: str, session_id: str, payload: dict[str, Any]
+    ) -> TuningSession:
+        """Validate and persist a `dynoai.session.v3` payload into session.json."""
+        from api.services.sessions.session_v3 import (
+            dump_session_v3_payload,
+            validate_session_v3_payload,
+        )
+
+        with self._lock:
+            session = self.get_session(vehicle_id, session_id)
+            validated = validate_session_v3_payload(payload)
+            session.v3 = dump_session_v3_payload(validated)
+            session.schema_version = validated.schema_version
+            session.updated_at = _utc_now()
+            _atomic_write_json(
+                self.session_json(vehicle_id, session_id), session.to_dict()
+            )
+            return session
+
+    def resolve_session_v3_blocker(
+        self,
+        vehicle_id: str,
+        session_id: str,
+        field_name: str,
+        resolved_by: Optional[str] = None,
+        evidence: Optional[str] = None,
+    ) -> TuningSession:
+        """
+        Mark a matching `verify_blockers[].field` entry as resolved.
+
+        Raises WorkspaceError when no v3 payload is present or blocker field is missing.
+        """
+        with self._lock:
+            session = self.get_session(vehicle_id, session_id)
+            if not session.v3:
+                raise WorkspaceError(
+                    f"session has no v3 payload: {vehicle_id}/{session_id}"
+                )
+
+            blockers = session.v3.get("verify_blockers")
+            if not isinstance(blockers, list):
+                raise WorkspaceError("session v3 verify_blockers missing or invalid")
+
+            matched = False
+            for blocker in blockers:
+                if isinstance(blocker, dict) and blocker.get("field") == field_name:
+                    blocker["resolved"] = True
+                    blocker["resolved_at"] = _utc_now()
+                    if resolved_by:
+                        blocker["resolved_by"] = resolved_by
+                    if evidence:
+                        blocker["evidence"] = evidence
+                    matched = True
+                    break
+
+            if not matched:
+                raise WorkspaceError(f"verify blocker not found: {field_name}")
+
+            session.schema_version = session.schema_version or "dynoai.session.v3"
             session.updated_at = _utc_now()
             _atomic_write_json(
                 self.session_json(vehicle_id, session_id), session.to_dict()

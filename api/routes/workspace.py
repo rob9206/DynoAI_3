@@ -38,6 +38,12 @@ from werkzeug.utils import secure_filename
 from api.errors import ValidationError, with_error_handling
 from api.services.ingest.sniffer import classify_upload
 from api.services.ingest.watcher import get_watcher
+from api.services.sessions.dispatch_readiness import evaluate_dispatch_readiness
+from api.services.sessions.p0_plausibility_checker import evaluate_p0_plausibility
+from api.services.sessions.phased_pull_controller import (
+    compute_phase_snapshot,
+    mark_phase_complete,
+)
 from api.services.tuning_workspace import (
     WorkspaceError,
     get_workspace,
@@ -46,6 +52,12 @@ from api.services.workspace_analyzer import analyze_iteration
 
 logger = logging.getLogger(__name__)
 workspace_bp = Blueprint("workspace", __name__, url_prefix="/api/workspace")
+
+
+def _not_found_error(message: str = "resource not found"):
+    """Return sanitized NOT_FOUND payload without leaking internals."""
+    return jsonify({"error": {"code": "NOT_FOUND", "message": message}}), 404
+
 
 # =============================================================================
 # Vehicles
@@ -87,8 +99,8 @@ def create_vehicle():
 def get_vehicle(vid: str):
     try:
         vehicle = get_workspace().get_vehicle(vid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(vehicle.to_dict()), 200
 
 
@@ -98,8 +110,8 @@ def patch_vehicle(vid: str):
     data = request.get_json(silent=True) or {}
     try:
         vehicle = get_workspace().update_vehicle(vid, **data)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(vehicle.to_dict()), 200
 
 
@@ -113,8 +125,8 @@ def patch_vehicle(vid: str):
 def list_sessions(vid: str):
     try:
         get_workspace().get_vehicle(vid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     sessions = get_workspace().list_sessions(vid)
     return jsonify([s.to_dict() for s in sessions]), 200
 
@@ -139,8 +151,8 @@ def create_session(vid: str):
 def get_session(vid: str, sid: str):
     try:
         session = get_workspace().get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
 
 
@@ -150,9 +162,171 @@ def patch_session(vid: str, sid: str):
     data = request.get_json(silent=True) or {}
     try:
         session = get_workspace().update_session(vid, sid, **data)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     return jsonify(session.to_dict()), 200
+
+
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/v3", methods=["GET"])
+@with_error_handling
+def get_session_v3(vid: str, sid: str):
+    ws = get_workspace()
+    try:
+        session = ws.get_session(vid, sid)
+    except WorkspaceError:
+        return _not_found_error()
+    if not session.v3:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"session has no v3 payload: {vid}/{sid}",
+                    }
+                }
+            ),
+            404,
+        )
+    return jsonify(session.v3), 200
+
+
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/v3", methods=["POST"])
+@with_error_handling
+def upsert_session_v3(vid: str, sid: str):
+    ws = get_workspace()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise ValidationError("v3 payload must be a JSON object")
+    payload.setdefault("schema_version", "dynoai.session.v3")
+    payload.setdefault("session_id", sid)
+    try:
+        session = ws.set_session_v3(vid, sid, payload)
+    except WorkspaceError:
+        return _not_found_error()
+    return jsonify(session.to_dict()), 200
+
+
+@workspace_bp.route(
+    "/vehicles/<vid>/sessions/<sid>/v3/resolve_blocker", methods=["POST"]
+)
+@with_error_handling
+def resolve_session_v3_blocker(vid: str, sid: str):
+    ws = get_workspace()
+    data = request.get_json(silent=True) or {}
+    field_name = (data.get("field") or "").strip()
+    if not field_name:
+        raise ValidationError("field is required")
+    try:
+        session = ws.resolve_session_v3_blocker(
+            vid,
+            sid,
+            field_name=field_name,
+            resolved_by=data.get("resolved_by"),
+            evidence=data.get("evidence"),
+        )
+    except WorkspaceError:
+        return _not_found_error()
+    return jsonify(session.to_dict()), 200
+
+
+@workspace_bp.route(
+    "/vehicles/<vid>/sessions/<sid>/dispatch_readiness", methods=["GET"]
+)
+@with_error_handling
+def get_dispatch_readiness(vid: str, sid: str):
+    ws = get_workspace()
+    try:
+        session = ws.get_session(vid, sid)
+    except WorkspaceError:
+        return _not_found_error()
+    status = ws.compute_status(vid, sid)
+    readiness = evaluate_dispatch_readiness(session, status)
+    return jsonify(readiness), 200
+
+
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/phases", methods=["GET"])
+@with_error_handling
+def get_session_phases(vid: str, sid: str):
+    ws = get_workspace()
+    try:
+        v3 = ws.get_session_v3(vid, sid)
+    except WorkspaceError:
+        return _not_found_error()
+    if not v3:
+        return (
+            jsonify(
+                {"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}
+            ),
+            404,
+        )
+    return jsonify(compute_phase_snapshot(v3).to_dict()), 200
+
+
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/phases/complete", methods=["POST"])
+@with_error_handling
+def complete_session_phase(vid: str, sid: str):
+    ws = get_workspace()
+    data = request.get_json(silent=True) or {}
+    phase_id = (data.get("phase_id") or "").strip()
+    if not phase_id:
+        raise ValidationError("phase_id is required")
+    try:
+        v3 = ws.get_session_v3(vid, sid)
+    except WorkspaceError:
+        return _not_found_error()
+    if not v3:
+        return (
+            jsonify(
+                {"error": {"code": "NOT_FOUND", "message": "session has no v3 payload"}}
+            ),
+            404,
+        )
+
+    try:
+        updated_payload = mark_phase_complete(v3, phase_id)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    ws.set_session_v3(vid, sid, updated_payload)
+    return jsonify(compute_phase_snapshot(updated_payload).to_dict()), 200
+
+
+@workspace_bp.route("/vehicles/<vid>/sessions/<sid>/p0_plausibility", methods=["POST"])
+@with_error_handling
+def run_p0_plausibility(vid: str, sid: str):
+    ws = get_workspace()
+    data = request.get_json(silent=True) or {}
+    try:
+        session = ws.get_session(vid, sid)
+        vehicle = ws.get_vehicle(vid)
+    except WorkspaceError:
+        return _not_found_error()
+
+    v3 = session.v3 or {}
+    build = v3.get("build_spec") if isinstance(v3, dict) else {}
+    known_ci = data.get("known_displacement_ci")
+    if known_ci is None and isinstance(build, dict):
+        known_ci = build.get("displacement_ci")
+    if known_ci is None:
+        known_ci = vehicle.displacement_ci
+    if known_ci is None:
+        raise ValidationError("known_displacement_ci is required")
+
+    result = evaluate_p0_plausibility(
+        known_displacement_ci=float(known_ci),
+        measured_displacement_ci=data.get("measured_displacement_ci"),
+        peak_tq_ftlb=data.get("peak_tq_ftlb"),
+        peak_tq_rpm=data.get("peak_tq_rpm"),
+        bmep_psi=data.get("bmep_psi"),
+        bsfc_lb_hp_hr=data.get("bsfc_lb_hp_hr"),
+    )
+
+    checks = v3.setdefault("checks", {})
+    checks["p0_plausibility"] = result.to_dict()
+    session = ws.set_session_v3(vid, sid, v3)
+    return (
+        jsonify({"p0_plausibility": result.to_dict(), "session": session.to_dict()}),
+        200,
+    )
 
 
 @workspace_bp.route("/vehicles/<vid>/sessions/<sid>/status", methods=["GET"])
@@ -172,8 +346,8 @@ def get_session_status(vid: str, sid: str):
 def list_iterations(vid: str, sid: str):
     try:
         get_workspace().get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     iters = get_workspace().list_iterations(vid, sid)
     return jsonify([i.to_dict() for i in iters]), 200
 
@@ -204,8 +378,8 @@ def list_pulls(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_pulls(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -218,8 +392,8 @@ def list_patches(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_patches(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -232,8 +406,8 @@ def list_analyses(vid: str, sid: str, iid: str):
     ws = get_workspace()
     try:
         ws.get_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     files = ws.list_analyses(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
 
@@ -251,8 +425,8 @@ def analyze_active_iteration(vid: str, sid: str):
     iteration_id = data.get("iteration_id")
     try:
         result = analyze_iteration(vid, sid, iteration_id)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     status_code = 200 if result.success else 400
     return jsonify(result.to_dict()), status_code
 
@@ -265,8 +439,8 @@ def analyze_active_iteration(vid: str, sid: str):
 def analyze_specific_iteration(vid: str, sid: str, iid: str):
     try:
         result = analyze_iteration(vid, sid, iid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
     status_code = 200 if result.success else 400
     return jsonify(result.to_dict()), status_code
 
@@ -284,8 +458,8 @@ def upload_to_session(vid: str, sid: str):
 
     try:
         ws.get_session(vid, sid)
-    except WorkspaceError as exc:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+    except WorkspaceError:
+        return _not_found_error()
 
     files = request.files.getlist("files")
     if not files:

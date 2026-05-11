@@ -137,26 +137,79 @@ def match_wideband_channel(name: str) -> Optional[str]:
     """Detect a DynoWare channel that carries LC-1/LC-2 voltage.
 
     Returns the canonical target slot (e.g. "AFR Front", "AFR Rear", or
-    plain "AFR") when the name matches the documented LC voltage channel
-    naming; returns None otherwise.
+    plain "AFR") when the name matches a known LC voltage channel naming;
+    returns None otherwise.
 
-    Name matching is deliberately conservative: all three tokens
-    ("volts", "petrol", "afr") must appear for a match. This mirrors the
-    prior frontend heuristic but now lives server-side as the single
-    source of truth. Rigs with non-standard channel naming should
-    configure an override via the admin/config surface rather than
-    relying on pattern matching.
+    Recognized forms (case-insensitive, in priority order):
+
+    1. The Innovate-canonical "LC2 Volts Petrol AFR1/2" / "LC1 Volts ...".
+       Identified by all three tokens ("volts", "petrol", "afr").
+    2. "LC1 Volts AFR1" / "LC2 Volts AFR1/2" forms exported by some
+       Power Core / DynoWare configurations that drop "petrol".
+       Identified by "lc" + a digit + "volts" + "afr".
+    3. "WBO2 F Volts" / "Wideband Volts 1/F" / "Innovate Volts F" /
+       "AFR Volts F/1". Identified by "volts" plus a wideband marker
+       ("wbo2", "wideband", "innovate") or "afr volts" / "volts afr"
+       with a cylinder hint.
+
+    Front vs rear is decided by the cylinder/index hint ("1" / "front" /
+    "f" -> front; "2" / "rear" / "r" -> rear). When no hint is present
+    the canonical slot is plain "AFR".
+
+    Rigs with non-standard naming that this still misses should configure
+    an explicit alias mapping rather than relying on pattern matching.
     """
     if not isinstance(name, str) or not name:
         return None
 
     lowered = name.lower()
-    if not ("volts" in lowered and "petrol" in lowered and "afr" in lowered):
+    if "volts" not in lowered:
         return None
 
-    if "1" in lowered or "front" in lowered:
+    is_innovate_canonical = "petrol" in lowered and "afr" in lowered
+    is_lc_short_form = (
+        "lc1" in lowered or "lc2" in lowered or "lc-1" in lowered or "lc-2" in lowered
+    ) and "afr" in lowered
+    is_wb_marker = "wbo2" in lowered or "wideband" in lowered or "innovate" in lowered
+    is_afr_volts_form = (
+        "afr volts " in f"{lowered} " or " volts afr" in f" {lowered}"
+    ) and (
+        "1" in lowered
+        or "2" in lowered
+        or " f " in f" {lowered} "
+        or " r " in f" {lowered} "
+        or "front" in lowered
+        or "rear" in lowered
+        or lowered.endswith(" f")
+        or lowered.endswith(" r")
+    )
+    if not (
+        is_innovate_canonical or is_lc_short_form or is_wb_marker or is_afr_volts_form
+    ):
+        return None
+
+    has_front_hint = (
+        "front" in lowered
+        or "afr1" in lowered
+        or "afr 1" in lowered
+        or " f " in f" {lowered} "
+        or lowered.endswith(" f")
+        or "volts 1" in lowered
+        or " 1 " in f" {lowered} "
+    )
+    has_rear_hint = (
+        "rear" in lowered
+        or "afr2" in lowered
+        or "afr 2" in lowered
+        or " r " in f" {lowered} "
+        or lowered.endswith(" r")
+        or "volts 2" in lowered
+        or " 2 " in f" {lowered} "
+    )
+
+    if has_front_hint and not has_rear_hint:
         return "AFR Front"
-    if "2" in lowered or "rear" in lowered:
+    if has_rear_hint and not has_front_hint:
         return "AFR Rear"
     return "AFR"
 

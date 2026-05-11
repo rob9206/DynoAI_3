@@ -10,28 +10,16 @@ Tests:
 """
 
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
 from api.services.jetdrive.jetdrive_realtime_analysis import (
-    AFR_MAX_PLAUSIBLE,
-    AFR_MIN_PLAUSIBLE,
     FROZEN_RPM_THRESHOLD_SEC,
-    MAP_BIN_SIZE,
-    MAP_MAX,
-    MAP_MIN,
-    RPM_BIN_SIZE,
-    RPM_MAX,
-    RPM_MIN,
+    INJECTOR_DUTY_HALT_PCT,
     TOTAL_CELLS,
-    Alert,
     AlertSeverity,
     AlertType,
-    CoverageCell,
-    QualityMetrics,
     RealtimeAnalysisEngine,
-    VEDeltaCell,
     get_realtime_engine,
     reset_realtime_engine,
 )
@@ -370,7 +358,7 @@ class TestAlertDetection:
         # Wait for stale threshold (use shorter for test)
         # Note: In production this is 5 seconds, but we can check the logic
         # by manually checking freshness
-        state = engine.get_state()
+        engine.get_state()
 
         # Initially no stale alerts (just sent data)
         stale_alerts = [a for a in engine.alerts if a.type == AlertType.STALE_CHANNEL]
@@ -399,6 +387,41 @@ class TestAlertDetection:
         # Should only have one alert (duplicate suppressed)
         afr_alerts = [a for a in engine.alerts if a.type == AlertType.IMPLAUSIBLE_AFR]
         assert len(afr_alerts) == 1
+
+    @staticmethod
+    def test_injector_duty_high_alert(engine):
+        """Injector duty >85% should raise critical alert."""
+        # duty_pct = pw_ms * rpm / 1200 => 90% requires 21.6ms at 5000 rpm
+        sample = make_sample(rpm=5000.0, tps=90.0)
+        sample["injector_pulsewidth_ms"] = 22.0
+        engine.on_aggregated_sample(sample)
+
+        duty_alerts = [
+            a for a in engine.alerts if a.type == AlertType.INJECTOR_DUTY_HIGH
+        ]
+        assert duty_alerts, "Expected injector duty alert"
+        assert duty_alerts[0].severity == AlertSeverity.CRITICAL
+        assert duty_alerts[0].value is not None
+        assert duty_alerts[0].value > INJECTOR_DUTY_HALT_PCT
+
+    @staticmethod
+    def test_kernel_sentinel_alert_from_egt(engine):
+        """Sentinel breach should be surfaced as a kernel_sentinel alert."""
+        engine.set_kernel_sentinel_config(
+            {
+                "egt_redline_f": 1450.0,
+                "halt_on_breach": True,
+            }
+        )
+        sample = make_sample(rpm=4000.0, tps=95.0, afr=13.2)
+        sample["egt_f"] = 1500.0
+        engine.on_aggregated_sample(sample)
+
+        sentinel_alerts = [
+            a for a in engine.alerts if a.type == AlertType.KERNEL_SENTINEL
+        ]
+        assert sentinel_alerts, "Expected kernel sentinel alert"
+        assert sentinel_alerts[0].severity == AlertSeverity.CRITICAL
 
 
 # =============================================================================

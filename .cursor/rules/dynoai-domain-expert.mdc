@@ -1,0 +1,284 @@
+---
+name: dynoai-domain-expert
+description: Provides domain knowledge for the DynoAI dyno-tuning platform — VE math, AFR targets and thresholds, JetDrive / LiveLink / Power Core / TuneLab integration surfaces, channel canonicalization, PVV exchange format, ECU calibration, zone classification, cylinder balance, and architecture ownership. Use when editing any DynoAI source file or when the user mentions: VE tables, AFR, wideband, LC-2, DLG-1, JetDrive, LiveLink, Power Core, TuneLab, PVV, WP8, WinPEP8, DynoWare, ECU calibration, cylinder balance, zone classification, autotune, calibration library, or any path under `api/`, `dynoai/`, `frontend/src/utils/veApply/`, `tools/autotune/`, or `api/services/integrations/powercore/`.
+---
+
+# DynoAI Domain Expert
+
+## Non-negotiables (read these first, every time)
+
+1. **No physics in the frontend.** All tuning-relevant math is computed server-side in Python and exposed via REST. See `.cursor/rules/no-physics-in-frontend.mdc`. Frontend files under `frontend/src/utils/veApply/` render server-computed values — they do not compute them.
+2. **Voltage → AFR conversion lives in exactly one file: `api/services/jetdrive/wideband_rescale.py`.** Every other module consumes already-canonicalized AFR values. If you find yourself writing a `volts * k + b` formula anywhere else, stop — you are about to re-introduce the class of bug the canonicalization merge (PR #148) fixed.
+3. **PVV (XML) is the exchange format across the Power Core boundary.** `generate_pvv_xml` in `api/services/powercore_integration.py` is the single writer. Every "apply" flow emits a reviewable PVV before the human flashes.
+4. **IronPython 2.7 lexicon applies to `api/services/integrations/powercore/*.py`.** These scripts ship inside Power Core's TuneLab. No f-strings, no type hints, no `pathlib`, no `requests`. `urllib2` for HTTP; `%` or `.format()` for strings; `str()` coercion instead of f-strings.
+5. **Server-side VE correction math is deterministic arithmetic.** No ML/AI in the correction path. ML is allowed only for advisory/analysis layers that do not feed directly into a `calculate_corrections` output.
+6. **Dual-cylinder requirement.** Both front and rear AFR data required before apply. Partial data blocks the apply entirely.
+
+## Architecture Overview
+
+| Layer | Stack | Root |
+|-------|-------|------|
+| REST API | Flask 3.0, SQLAlchemy, Flasgger | `api/` |
+| Frontend (UI display) | React 19, TypeScript, Vite, Tailwind, Radix/shadcn | `frontend/` |
+| Core Library | Python, NumPy, Pandas | `dynoai/` |
+| Desktop GUI | PyQt6 | `gui/` |
+| TuneLab scripts (IronPython 2.7) | Embedded in Power Core | `api/services/integrations/powercore/` |
+| Scripts / CLI | Python, PowerShell, Batch | `scripts/`, `tools/` |
+
+Version single source: `dynoai/version.py`.
+
+## Key File Ownership Map
+
+### Server-side (canonical owners of tuning concepts)
+
+| Responsibility | Owner File | Notes |
+|---|---|---|
+| VE correction math | `dynoai/core/ve_math.py` | Pure arithmetic. `VE_correction = AFR_measured / AFR_target`. |
+| Auto-tune pipeline (offline / F1) | `api/services/autotune_workflow.py` | `create_session → import_dataframe → analyze_afr → calculate_corrections → export_corrections_csv`. 11×9 grid. |
+| AFR target curve | `api/services/autotune_workflow.py::analyze_afr` | MAP-indexed curve, lines ~639–645. Referenced as `static_map_curve_v1`. |
+| Zone classification (server) | Inside `autotune_workflow.py` binning | Server is the source of truth; frontend file only displays. |
+| Confidence / clamping | `api/services/autotune_workflow.py::calculate_corrections` | Hit-count → confidence tier → clamp. |
+| Coverage metrics | `api/services/autotune_workflow.py` | Zone-weighted. |
+| VE bounds enforcement | `api/services/autotune_workflow.py` + safety gate on apply | Server enforces; frontend displays preset. |
+| Cylinder balance (real-time) | `api/services/jetdrive/jetdrive_realtime_analysis.py` | **Currently tracks one AFR error across both cylinders. Per-cylinder VE delta does NOT exist server-side yet — it's the Alternative B pre-work.** |
+| Wideband voltage → AFR | `api/services/jetdrive/wideband_rescale.py` | **SINGLE POINT OF CONVERSION. Never duplicate.** |
+| Channel canonicalization | `api/services/jetdrive/hardware.py::_live_capture_loop.on_sample` | Runs BEFORE `queue_mgr.on_sample` (post-PR #148). |
+| JetDrive UDP client (receive) | `api/services/jetdrive/jetdrive_client.py` | Production-ready. |
+| JetDrive UDP publisher (transmit) | `api/services/jetdrive/jetdrive_client.py::publish_run` | ~10% complete. Spec-compliant publisher scoped at 4–6 weeks. |
+| LiveLink (Power Core WCF pipe) | `api/services/livelink/livelink_client.py` + PowerShell sidecar | Current: PowerShell reflection bridge. Planned: compiled .NET sidecar. |
+| PVV read/write | `api/services/powercore_integration.py` | `parse_pvv_tune`, `generate_pvv_xml`, `parse_powervision_log`. |
+| TuneLab bridge (host-side menu) | `api/services/integrations/powercore/dynoai_tunelab_bridge.py` | Proven IronPython patterns — clone, don't reinvent. |
+| TuneLab preflight script | `api/services/integrations/powercore/dynoai_preflight.py` | Reference for `channels.GetFileHandles()` / `GetAllSamples()` patterns. |
+| TuneLab autotune (F1) | `api/services/integrations/powercore/dynoai_autotune.py` + `tools/autotune/tunelab_entrypoint.py` | Incoming. See `.cursor/rules/tunelab-autotune-agent.mdc`. |
+| Apply safety gates (Python mirror) | `api/services/autotune/safety_gates.py` | Mirrors `veApplyValidation.ts` SAFETY + `BlockReason` schema for CLI/backend parity. |
+| WP8 (WinPEP8 binary) parser | `api/services/parsers/wp8_parser.py` | Reverse-engineered protobuf-ish. |
+| Calibration library (reference corpus) | `dynoai_v3/calibration_library.py`, `api/services/calibration_library_service.py`, `api/routes/calibration_library.py` | PVV-derived, used for v3 blend seeding. Distinct from `data/v3_templates/`. |
+| Flask app + blueprint registration | `api/app.py` | 21 blueprints. |
+| Custom exceptions | `api/errors.py` | `@with_error_handling` decorator. |
+| Centralized config | `api/config.py` | |
+| Auth (API key) | `api/auth.py` | |
+| Rate limiting | `api/rate_limit.py` | |
+
+### Frontend (display-only — NOT physics owners)
+
+These files render server-computed values and orchestrate UI state. They must not contain tuning math. If you catch yourself computing a VE delta, AFR error, or cylinder imbalance in any of these files, stop and move the computation server-side.
+
+| File | Role (display only) |
+|---|---|
+| `frontend/src/utils/veApply/veApplyCore.ts` | Apply workflow UI state machine |
+| `frontend/src/utils/veApply/zoneClassification.ts` | Zone label rendering (server is source of truth) |
+| `frontend/src/utils/veApply/cylinderBalance.ts` | Display of server-computed imbalance metrics |
+| `frontend/src/utils/veApply/confidenceCalculator.ts` | Display of confidence tiers returned by server |
+| `frontend/src/utils/veApply/coverageCalculator.ts` | Display of coverage grade returned by server |
+| `frontend/src/utils/veApply/veBounds.ts` | Display of preset bounds; server enforces |
+| `frontend/src/utils/veApply/veApplyValidation.ts` | Client-side pre-submit sanity check; mirrored server-side in `api/services/autotune/safety_gates.py` |
+| `frontend/src/types/veApplyTypes.ts`, `frontend/src/lib/types.ts` | Shared TS types |
+| `frontend/src/lib/api.ts` | Axios client |
+| `frontend/src/App.tsx` | Route definitions |
+
+**Known violation being remediated**: `frontend/src/hooks/useJetDriveLive.ts` previously did voltage-to-AFR rescale client-side. Post-PR #148 that code is removed; do not re-add it.
+
+## Channel canonicalization
+
+JetDrive publishes raw channel names. `canonicalize_wideband_sample` runs BEFORE `queue_mgr.on_sample` and maps raw → canonical:
+
+| Raw (from DynoWare / Power Core) | Canonical (post-`wideband_rescale`) |
+|---|---|
+| `"LC2 Volts Petrol AFR1"` | `"AFR Front"` |
+| `"LC2 Volts Petrol AFR2"` | `"AFR Rear"` |
+| `"DLG-1 AFR F"` | `"AFR Front"` |
+| `"Air/Fuel Ratio 1"` | `"AFR Front"` |
+| `"Air/Fuel Ratio 2"` | `"AFR Rear"` |
+| `"WBO2 F"` | `"AFR Front"` |
+| `"WBO2 R"` | `"AFR Rear"` |
+
+Any code path that receives a `*Volts*` channel name and treats the value as AFR is broken. It means canonicalization was skipped or the value reached you from a surface that bypasses `wideband_rescale.py`. Fix the routing — do not paper over it with a local conversion.
+
+## Grid sizes — which surface uses which
+
+| Surface | Grid | File |
+|---|---|---|
+| `AutoTuneWorkflow` (offline, F1 autotune) | **11 RPM × 9 MAP = 99 cells** | `api/services/autotune_workflow.py` |
+| `RealtimeAnalysisEngine` (live JetDrive) | **20 RPM × 10 MAP = 200 cells** | `api/services/jetdrive/jetdrive_realtime_analysis.py` |
+
+Coverage percentages from one grid do NOT mean the same thing in the other. Always state which grid a metric represents when discussing coverage.
+
+## Core Concepts
+
+### VE (Volumetric Efficiency) Tables
+
+2D grid indexed by RPM (rows) and MAP/kPa (columns). Each cell holds a VE percentage representing how much of the theoretical cylinder volume actually fills with air. The ECU uses VE to calculate fuel injection pulse width.
+
+**Correction math (v2.0.0, current default):**
+```
+VE_correction = AFR_measured / AFR_target
+```
+A correction of 1.077 means +7.7% more fuel needed. Legacy v1.0.0 used `1 + (AFR_error * 0.07)`.
+
+### AFR target curve (`static_map_curve_v1`)
+
+| MAP (kPa) | AFR target |
+|---|---|
+| 20–30 | 14.7 (stoich) |
+| 40 | 14.5 |
+| 50 | 14.0 |
+| 60 | 13.5 |
+| 70 | 13.0 |
+| 80 | 12.8 |
+| 90 | 12.5 |
+| 100+ | 12.2 |
+
+Implemented inside `analyze_afr`. Referenced by name as `"static_map_curve_v1"` in downstream summary JSON. There is **no static 13.2 target** anywhere in the pipeline — if you see `"static_13.2"` in a plan or test, it's a typo for `static_map_curve_v1`. F1.1 adds `"from_tune.AFR_Target"` as a second source when AFR targets are pulled from the loaded PVV.
+
+### Zones
+
+Every VE cell belongs to a zone based on RPM and MAP coordinates:
+
+| Zone | MAP (kPa) | RPM | Weight | Typical riding |
+|------|-----------|-----|--------|----------------|
+| cruise | 31–69 | 1200–5500 | 5 | ~70% of miles |
+| partThrottle | 70–94 | 1200–5500 | 4 | Roll-on accel |
+| wot | 95+ | 1200–5500 | 2 | Full power pulls |
+| decel | ≤30 | 1200–5500 | 1 | Engine braking |
+| edge | any | <1200 or >5500 | 1 | Idle / redline |
+
+Zone determines confidence thresholds and coverage weighting.
+
+### Confidence and clamping
+
+Hit count (samples in a cell) → confidence tier → clamp limit:
+
+| Confidence | Clamp limit | Meaning |
+|---|---|---|
+| high | ±7% | Trustworthy data |
+| medium | ±5% | Some uncertainty |
+| low | ±3% | Uncertain, conservative |
+| skip | null | Below `minHits` — preserve base VE |
+
+Each zone has its own `minHits`, `mediumHits`, `highHits` thresholds (e.g., cruise needs 100 hits for high confidence).
+
+### Cylinder balance (V-twin specific)
+
+Front and rear cylinders analyzed separately:
+- **Systematic bias**: weighted average of `(rear / front - 1) * 100`. Positive = rear needs more fuel.
+- **Localized imbalance**: max absolute difference across cells.
+- Warnings at >2% systematic bias or >5% localized imbalance.
+- Both cylinders must have ≥3 hits per cell for inclusion.
+
+Per-cylinder VE delta tracking in `jetdrive_realtime_analysis.py` does NOT exist yet (pre-work #2 for Alternative B).
+
+### VE Bounds presets
+
+| Preset | Range | Enforcement | Use case |
+|---|---|---|---|
+| na_harley | 15–115% | enforce | Stock / mild cams |
+| stage_1 | 15–120% | enforce | Stage 1 cams |
+| stage_2 | 15–125% | enforce | Stage 2+ cams |
+| boosted | 10–200% | warn only | Turbo / supercharged |
+| custom | 0–999% | warn only | No enforcement |
+
+### Coverage
+
+Zone-weighted metric: `sum(sufficientCells * weight) / sum(totalCells * weight)`. Grades: A (≥90%), B (≥75%), C (≥60%), D (≥40%), F (<40%). Warns if cruise zone < 60%.
+
+## Threshold vocabulary — distinct constants
+
+If you see "the 30% rule" vs "the 25% rule" vs "the 15% rule" in conversation, these refer to different gates. Do not conflate them.
+
+| Constant | Value | Where used | Purpose |
+|---|---|---|---|
+| `MAX_CORRECTION_PCT_PER_SESSION` | ±15% (default) | Auto-tune session clamp | Hard clamp applied per cell per session — `calculate_corrections` enforces |
+| `BLOCK_THRESHOLD_PCT` | ±25% | `api/services/autotune/safety_gates.py` + `frontend/src/utils/veApply/veApplyValidation.ts` | Blocks entire apply when any included cell exceeds threshold |
+| `warn_raw_delta_pct` | 10% | `SAFETY` in `api/services/autotune/safety_gates.py` and `veApplyValidation.ts` | Preview/apply warning threshold; informational unless a block reason is present |
+
+## Safety Constraints (CRITICAL)
+
+1. **Deterministic math only** — no ML/AI in the VE correction path.
+2. **Bounded adjustments** — default max correction ±15% per session. >±25% blocks the apply entirely.
+3. **Dual-cylinder requirement** — both front and rear data required; partial data blocks apply.
+4. **VE bounds enforcement** — physical limits prevent impossible VE values.
+5. **Zero-hit cells untouched** — cells with no data always get correction = 1.0.
+6. **Convergence over perfection** — large errors corrected incrementally across multiple sessions, not in one step.
+7. **No frontend physics** — all tuning math server-side. See `.cursor/rules/no-physics-in-frontend.mdc`.
+8. **Human-review checkpoint** — PVV must be reviewable before any flash. Never auto-flash. This is liability shield AND safety rail.
+
+## Integration surfaces
+
+### Power Core / TuneLab (IronPython 2.7)
+- **Path**: `api/services/integrations/powercore/*.py`
+- **Runtime**: IronPython 2.7 embedded in Power Core
+- **Min Power Core version** for modern TuneLab API + HTTP: `2023.1.0`
+- **Lexicon rules**: no f-strings, no type hints, no `pathlib`, no `requests`. `urllib2` for HTTP; `%` or `.format()` for strings.
+- **Every TuneLab script must**: (a) check `context.PowerCoreVersion` before touching channel API, (b) handle unreachable CLI / DynoAI gracefully (MessageBox, never traceback), (c) guarantee `try/finally` temp-file cleanup, (d) use a per-invocation random temp subdir for re-entrancy safety.
+- **Sub-rule**: `.cursor/rules/tunelab-autotune-agent.mdc`.
+
+### JetDrive (UDP multicast)
+- **Path**: `api/services/jetdrive/*`
+- **Wire protocol**: UDP multicast on port `22344`
+- **Groups**: primary `224.0.2.10`; alternatives `239.255.60.60`, `224.0.0.1`, `239.192.0.1`
+- **Packet size**: up to 4096 bytes
+- **Receive path**: spec-compliant, production-ready
+- **Transmit path**: ~10% complete. Full publisher (Alternative B of Power Core bridge plan) scoped at 4–6 weeks with 3 pre-work items.
+- **Vendor reference**: Apache 2.0 at `vendor/DynojetRDTeam-jetdrive-sharp-*`.
+
+### LiveLink (WCF named pipe)
+- **Path**: `api/services/livelink/livelink_client.py` + PowerShell sidecar
+- **Protocol**: WCF over `net.pipe://localhost/SCT/LiveLinkService`
+- **Current**: PowerShell reflection bridge (fragile; breaks on Power Core updates)
+- **Planned** (Alternative C): compiled .NET sidecar with event-driven push instead of 100 ms polls
+
+### PVV (XML exchange format)
+- **Path**: `api/services/powercore_integration.py`
+- **Readers/writers**: `parse_pvv_tune`, `generate_pvv_xml`, `parse_powervision_log`
+- PVV is the single source of truth across the Power Core boundary. Every apply flow emits a reviewable PVV before flash. Never bypass.
+
+### WP8 (WinPEP8 binary)
+- **Path**: `api/services/parsers/wp8_parser.py`
+- Reverse-engineered format. Comments note "real format may vary." Harden against PTI / Night Train / 250 series variants when encountered.
+
+## Auto-tune pipeline (offline, F1)
+
+1. Import log (Power Vision CSV, JetDrive CSV, or DataFrame via `import_dataframe`)
+2. Filter signals (lowpass RC=500ms, outlier rejection at 2σ)
+3. Bin data into **11 RPM × 9 MAP = 99 cells**
+4. Calculate AFR error per cell vs `static_map_curve_v1`
+5. Convert to VE corrections with clamping (±15% default, ±25% block, confidence-weighted)
+6. Export: PVV XML, TuneLab script, CSV grids, `manifest.json`
+
+## Error Handling Patterns
+
+All Flask routes use `api/errors.py`:
+- `@with_error_handling` decorator catches exceptions
+- Custom classes: `ValidationError` (400), `NotFoundError` (404), `AnalysisError` (500), `JetDriveError` (502), etc.
+- Standardized JSON responses with request ID tracking
+
+## Test locations
+
+| Path | Owns |
+|---|---|
+| `tests/api/` | Flask route tests; auth / rate-limit / security tests |
+| `tests/unit/` | Pure-Python unit tests for `dynoai/core/`, `tools/`, `api/services/` |
+| `tests/jetdrive/` | JetDrive pipeline, canonicalization, wideband rescale |
+| `tests/tunelab/` | TuneLab autotune CLI tests (F1+) |
+
+When adding a test, match the surface. A `tools/autotune/*.py` test goes in `tests/unit/` unless the behavior is TuneLab-specific, in which case `tests/tunelab/`.
+
+Known CI gotcha: `bcrypt`-gated backend tests (`test_jwt_auth.py`, `test_runs.py`, `test_rate_limiting.py`, `test_security.py`, `test_analyze_endpoint.py`, `test_authentication.py`, `test_runs_endpoint.py`) fail locally without `bcrypt` installed. Not in `requirements*.txt` — separate hygiene issue.
+
+## Version floors
+
+| Surface | Min version | Reason |
+|---|---|---|
+| Power Core (for TuneLab) | 2023.1.0 | Modern channel API + HTTP support |
+| Python (API) | 3.11 | Flask 3.0 ecosystem |
+| Node (frontend) | 20 | Vite 5 / React 19 |
+| Flask | 3.0 | |
+| React | 19 | |
+| IronPython (TuneLab) | 2.7 | Pinned by Power Core runtime |
+
+## Cross-references
+
+- `.cursor/rules/no-physics-in-frontend.mdc` — frontend math prohibition
+- `.cursor/rules/tunelab-autotune-agent.mdc` — TuneLab module specifics
+- `architecture-map.md` — full ownership details
+- `docs/specs/ECU_CALIBRATION_MODEL.md` — ECU flashing feasibility / why DynoAI does not ship a flasher

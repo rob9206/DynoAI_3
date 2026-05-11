@@ -353,7 +353,7 @@ class TestInputValidation:
 
     @staticmethod
     def test_afr_too_low_raises():
-        """AFR below minimum should raise AFRValidationError."""
+        """AFR below AFR_MIN should raise AFRValidationError."""
         with pytest.raises(AFRValidationError):
             calculate_ve_correction(5.0, 13.0)  # measured too low
 
@@ -361,19 +361,19 @@ class TestInputValidation:
             calculate_ve_correction(13.0, 5.0)  # target too low
 
         with pytest.raises(AFRValidationError):
-            calculate_ve_correction(8.9, 13.0)  # just below minimum
+            calculate_ve_correction(AFR_MIN - 0.1, 13.0)  # just below minimum
 
     @staticmethod
     def test_afr_too_high_raises():
-        """AFR above maximum should raise AFRValidationError."""
+        """AFR above AFR_MAX should raise AFRValidationError."""
         with pytest.raises(AFRValidationError):
-            calculate_ve_correction(25.0, 13.0)  # measured too high
+            calculate_ve_correction(AFR_MAX + 10.0, 13.0)  # measured too high
 
         with pytest.raises(AFRValidationError):
-            calculate_ve_correction(13.0, 25.0)  # target too high
+            calculate_ve_correction(13.0, AFR_MAX + 10.0)  # target too high
 
         with pytest.raises(AFRValidationError):
-            calculate_ve_correction(20.1, 13.0)  # just above maximum
+            calculate_ve_correction(AFR_MAX + 0.1, 13.0)  # just above maximum
 
     @staticmethod
     def test_afr_zero_raises():
