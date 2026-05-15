@@ -344,6 +344,13 @@ class TestMappingPersistence:
     """Test mapping file persistence."""
 
     @staticmethod
+    def test_default_mapping_dir_is_project_config_dir():
+        """Default mapping storage should not depend on Flask's working directory."""
+        assert MAPPING_DIR.is_absolute()
+        assert MAPPING_DIR.name == "jetdrive_mappings"
+        assert MAPPING_DIR.parent.name == "config"
+
+    @staticmethod
     def test_save_and_load_mapping(mock_provider, temp_mapping_dir):
         """Test saving and loading a mapping file."""
         with patch(

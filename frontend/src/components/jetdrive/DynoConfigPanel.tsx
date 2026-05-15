@@ -42,6 +42,15 @@ interface DynoConfigData {
     drum2: DrumSpec;
 }
 
+interface HardwareStatus {
+    connected: boolean;
+    live?: {
+        capturing?: boolean;
+        channel_count?: number;
+        last_update?: string | null;
+    };
+}
+
 interface DynoConfigPanelProps {
     apiUrl?: string;
     /** Show compact version */
@@ -59,8 +68,7 @@ export function DynoConfigPanel({
     const [connected, setConnected] = useState<boolean | null>(null);
     const [capturing, setCapturing] = useState(false);
     const [liveError, setLiveError] = useState<string | null>(null);
-    const [channels, setChannels] = useState<Record<string, any>>({});
-    const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+    const [hardwareStatus, setHardwareStatus] = useState<HardwareStatus | null>(null);
 
     const buildErrorMessage = async (res: Response, fallback: string) => {
         const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : `${res.status}`;
@@ -121,8 +129,23 @@ export function DynoConfigPanel({
         }
     };
 
+    const fetchStatus = async () => {
+        try {
+            const res = await fetch(`${apiUrl}/hardware/status`);
+            if (!res.ok) return;
+
+            const data = await res.json();
+            setHardwareStatus(data);
+            setConnected(Boolean(data.connected));
+            setCapturing(Boolean(data.live?.capturing));
+        } catch {
+            // Status is advisory; configuration display should still render.
+        }
+    };
+
     useEffect(() => {
         fetchConfig();
+        fetchStatus();
     }, [apiUrl]);
 
     // Connection helpers
@@ -136,6 +159,7 @@ export function DynoConfigPanel({
             }
             const data = await res.json();
             setConnected(Boolean(data.connected));
+            await fetchStatus();
         } catch (e) {
             setConnected(false);
             setLiveError(e instanceof Error ? e.message : 'Connect failed');
@@ -152,6 +176,7 @@ export function DynoConfigPanel({
                 throw new Error(await buildErrorMessage(res, 'Failed to start live capture'));
             }
             setCapturing(true);
+            await fetchStatus();
         } catch (e) {
             setLiveError(e instanceof Error ? e.message : 'Start failed');
         }
@@ -165,6 +190,7 @@ export function DynoConfigPanel({
                 throw new Error(await buildErrorMessage(res, 'Failed to stop live capture'));
             }
             setCapturing(false);
+            await fetchStatus();
         } catch (e) {
             setLiveError(e instanceof Error ? e.message : 'Stop failed');
         }
@@ -251,7 +277,10 @@ export function DynoConfigPanel({
                         <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={fetchConfig}
+                            onClick={() => {
+                                fetchConfig();
+                                fetchStatus();
+                            }}
                         >
                             <RefreshCw className="w-4 h-4" />
                         </Button>
@@ -442,7 +471,7 @@ export function DynoConfigPanel({
                     </div>
                 </motion.div>
 
-                {/* Live Telemetry */}
+                {/* Backend Capture Status */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -452,38 +481,34 @@ export function DynoConfigPanel({
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2 text-zinc-400">
                             <Info className="w-4 h-4" />
-                            <span className="text-xs uppercase tracking-wider">Live Telemetry</span>
+                            <span className="text-xs uppercase tracking-wider">Capture Status</span>
                         </div>
-                        {lastUpdate && (
-                            <span className="text-[10px] text-zinc-500">Last: {lastUpdate}</span>
+                        {hardwareStatus?.live?.last_update && (
+                            <span className="text-[10px] text-zinc-500">
+                                Last: {hardwareStatus.live.last_update}
+                            </span>
                         )}
                     </div>
                     {liveError && (
                         <div className="text-xs text-red-400 mb-2">{liveError}</div>
                     )}
-                    <div className="grid grid-cols-4 gap-3 text-center">
+                    <div className="grid grid-cols-3 gap-3 text-center">
                         <div className="bg-zinc-900/40 rounded-lg p-3">
-                            <p className="text-xs text-zinc-500">RPM</p>
+                            <p className="text-xs text-zinc-500">Provider</p>
                             <p className="text-lg font-semibold text-emerald-400">
-                                {Number(channels?.['Digital RPM 1']?.value ?? channels?.['RPM']?.value ?? 0).toFixed(0)}
+                                {hardwareStatus?.connected ? 'Connected' : 'Not Found'}
                             </p>
                         </div>
                         <div className="bg-zinc-900/40 rounded-lg p-3">
-                            <p className="text-xs text-zinc-500">HP</p>
+                            <p className="text-xs text-zinc-500">Capture</p>
                             <p className="text-lg font-semibold text-cyan-400">
-                                {Number(channels?.['Horsepower']?.value ?? 0).toFixed(1)}
+                                {capturing ? 'Running' : 'Stopped'}
                             </p>
                         </div>
                         <div className="bg-zinc-900/40 rounded-lg p-3">
-                            <p className="text-xs text-zinc-500">Torque</p>
+                            <p className="text-xs text-zinc-500">Channels</p>
                             <p className="text-lg font-semibold text-violet-400">
-                                {Number(channels?.['Torque']?.value ?? 0).toFixed(1)}
-                            </p>
-                        </div>
-                        <div className="bg-zinc-900/40 rounded-lg p-3">
-                            <p className="text-xs text-zinc-500">AFR</p>
-                            <p className="text-lg font-semibold text-pink-400">
-                                {Number(channels?.['Air/Fuel Ratio 1']?.value ?? channels?.['AFR']?.value ?? 0).toFixed(2)}
+                                {hardwareStatus?.live?.channel_count ?? 0}
                             </p>
                         </div>
                     </div>

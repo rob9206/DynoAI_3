@@ -225,6 +225,26 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize Jetstream integration: {e}")
 
+# Register Twilio SMS hooks on the progress broadcaster (opt-in via env vars)
+try:
+    from api.services.progress_broadcaster import get_broadcaster
+    from api.services.sms_notifier import notify_run_complete, notify_run_error
+
+    _bc = get_broadcaster()
+    _bc.add_complete_hook(notify_run_complete)
+    _bc.add_error_hook(
+        lambda run_id, stage, code, message: notify_run_error(run_id, stage, message)
+    )
+    if all(
+        os.environ.get(v)
+        for v in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_ALERT_TO")
+    ):
+        print("[+] Twilio SMS run notifications enabled")
+    else:
+        print("[~] Twilio SMS notifications available but not configured (set TWILIO_* env vars)")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not register Twilio SMS notifier: {e}")
+
 # Configuration - use absolute paths from project root
 PROJECT_ROOT = Path(__file__).parent.parent
 UPLOAD_FOLDER = PROJECT_ROOT / "uploads"
@@ -370,6 +390,15 @@ try:
     print("[+] JWT Auth registered at /api/auth and /api/users")
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not register auth blueprint: {e}")
+
+# Register Notifications blueprint
+try:
+    from api.routes.notifications import notifications_bp
+
+    app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+    print("[+] Notifications registered at /api/notifications")
+except Exception as e:  # pragma: no cover
+    print(f"[!] Warning: Could not initialize Notifications: {e}")
 
 # Register Run History blueprint
 try:

@@ -28,7 +28,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -40,8 +39,9 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-# Mapping file location
-MAPPING_DIR = Path("config/jetdrive_mappings")
+# Mapping file location. Resolve from this module so Flask's current working
+# directory cannot silently change where mappings are loaded or saved.
+MAPPING_DIR = Path(__file__).resolve().parents[3] / "config" / "jetdrive_mappings"
 
 # Canonical channel names (what DynoAI expects)
 CANONICAL_CHANNELS = {

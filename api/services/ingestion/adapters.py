@@ -111,6 +111,8 @@ class JetDriveAdapter(DataAdapter):
         "Acceleration": "acceleration",
         "Air/Fuel Ratio 1": "afr",
         "Air/Fuel Ratio 2": "afr_rear",
+        "AFR Front": "afr_front",
+        "AFR Rear": "afr_rear",
         "AFR Meas F": "afr_front",
         "AFR Meas R": "afr_rear",
         "MAP kPa": "map_kpa",
@@ -152,9 +154,6 @@ class JetDriveAdapter(DataAdapter):
         self._channel_values[channel_name] = value
         self._last_timestamp = max(self._last_timestamp, timestamp)
 
-        # Map to standard name
-        standard_name = self.CHANNEL_MAP.get(channel_name, channel_name.lower())
-
         # Build data point with all collected values
         return DynoDataPointSchema(
             timestamp_ms=self._last_timestamp,
@@ -162,9 +161,13 @@ class JetDriveAdapter(DataAdapter):
             or self._channel_values.get("Digital RPM 1", 0),
             horsepower=self._channel_values.get("Horsepower", 0),
             torque=self._channel_values.get("Torque", 0),
-            afr=self._channel_values.get("Air/Fuel Ratio 1"),
-            afr_front=self._channel_values.get("AFR Meas F"),
-            afr_rear=self._channel_values.get("AFR Meas R"),
+            afr=self._channel_values.get("AFR Front")
+            or self._channel_values.get("Air/Fuel Ratio 1"),
+            afr_front=self._channel_values.get("AFR Front")
+            or self._channel_values.get("AFR Meas F"),
+            afr_rear=self._channel_values.get("AFR Rear")
+            or self._channel_values.get("AFR Meas R")
+            or self._channel_values.get("Air/Fuel Ratio 2"),
             map_kpa=self._channel_values.get("MAP kPa"),
             tps=self._channel_values.get("TPS"),
             iat=self._channel_values.get("IAT F"),

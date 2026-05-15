@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Settings2, Target, Wrench, FlaskConical, X, Zap, Play, Info } from 'lucide-react';
+import { Settings2, Target, Wrench, FlaskConical, X, Zap, Play, Info, MessageSquare } from 'lucide-react';
 import {
     Sheet,
     SheetContent,
@@ -29,6 +29,7 @@ import { StageConfigPanel } from './StageConfigPanel';
 import { TransientFuelPanel } from './TransientFuelPanel';
 import { VirtualECUPanel, type VEScenario } from './VirtualECUPanel';
 import { ClosedLoopTuningPanel } from './ClosedLoopTuningPanel';
+import { TwilioConfigPanel } from './TwilioConfigPanel';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 
@@ -140,7 +141,7 @@ export function SettingsSheet({
                         className="flex-1 flex flex-col min-h-0"
                     >
                         <div className="px-6 pt-4 pb-2 border-b border-zinc-800/40">
-                            <TabsList className="grid w-full grid-cols-3 bg-zinc-900/60 p-1">
+                            <TabsList className="grid w-full grid-cols-4 bg-zinc-900/60 p-1">
                                 <TabsTrigger
                                     value="targets"
                                     className="flex items-center gap-1.5 text-xs data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300"
@@ -161,6 +162,13 @@ export function SettingsSheet({
                                 >
                                     <FlaskConical className="h-3.5 w-3.5" />
                                     Analysis
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="notifications"
+                                    className="flex items-center gap-1.5 text-xs data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300"
+                                >
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    Alerts
                                 </TabsTrigger>
                             </TabsList>
                         </div>
@@ -355,6 +363,11 @@ export function SettingsSheet({
                                         convergenceThreshold={0.3}
                                     />
                                 </div>
+                            </TabsContent>
+
+                            {/* Notifications Tab */}
+                            <TabsContent value="notifications" className="mt-0 p-6 space-y-6">
+                                <TwilioConfigPanel />
                             </TabsContent>
                         </ScrollArea>
                     </Tabs>

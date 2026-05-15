@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { downloadAllFormats } from '@/utils/veExport';
 import { cn } from '../../lib/utils';
@@ -12,8 +11,6 @@ import { VEHeatmapPanel } from './VEHeatmapPanel';
 import { SessionBar } from './SessionBar';
 import { AICoach } from './AICoach';
 import { HardwareSlideOver } from './HardwareSlideOver';
-
-const NAV_TABS = ['Dashboard', 'JetDrive', 'Results', 'History'] as const;
 
 type Cylinder = 'front' | 'rear';
 
@@ -118,64 +115,6 @@ function CommandCenterContent({
 
   return (
     <div className={cn('flex h-full w-full flex-col overflow-hidden bg-zinc-950 text-zinc-50', className)}>
-      {/* ── Top Header Bar ──────────────────────────────────────────── */}
-      <header className="flex h-12 shrink-0 items-center border-b border-zinc-800 bg-zinc-950 px-4 gap-8">
-        {/* Branding */}
-        <div className="flex items-center gap-3">
-          <span className="text-[15px] font-bold tracking-tight text-zinc-50">
-            THUNDERHORSE
-          </span>
-          <span className="text-[13px] font-medium text-zinc-500">
-            DynoAI
-          </span>
-        </div>
-
-        {/* Nav tabs */}
-        <nav className="flex gap-1">
-          {NAV_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={cn(
-                'px-4 py-1.5 text-xs font-medium transition-colors',
-                tab === 'JetDrive'
-                  ? 'bg-zinc-800 text-zinc-50'
-                  : 'text-zinc-400 hover:text-zinc-300',
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
-
-        {/* Status indicators */}
-        <div className="ml-auto flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              'h-2 w-2 rounded-full',
-              live.isConnected ? 'bg-green-500' : 'bg-zinc-600',
-            )} />
-            <span className="text-xs text-zinc-400">
-              {live.isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
-          {captureState === 'recording' && (
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-zinc-400">Recording</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="p-1.5 rounded transition-colors hover:bg-zinc-800"
-            onClick={() => setHardwareOpen(true)}
-            title="Hardware settings"
-          >
-            <Settings className="h-4 w-4 text-zinc-400" />
-          </button>
-        </div>
-      </header>
-
       {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: telemetry + heatmap + session bar */}
@@ -254,6 +193,7 @@ function CommandCenterWithLive({
     autoConnect: true,
     pollInterval: 250,  // 250ms polling fallback; SSE is preferred (~20Hz event-driven)
     useSse: true,
+    enableDrainedSamples: true,
   });
 
   return (

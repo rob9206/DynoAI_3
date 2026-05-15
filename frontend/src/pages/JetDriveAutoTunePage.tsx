@@ -88,6 +88,7 @@ import { SimulatorLoadPanel } from '../components/jetdrive/SimulatorLoadPanel';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
 const YOURDYNO_API_BASE = `${API_BASE_URL}/api/yourdyno`;
+const YOURDYNO_LIVE_ENABLED = false;
 
 const NAV_ITEMS = [
     { label: 'Dashboard', to: '/dashboard' },
@@ -117,24 +118,46 @@ export default function JetDriveAutoTunePage() {
     const [activeView, setActiveView] = useState<ActiveView>('command-center');
     const [tuningSubTab, setTuningSubTab] = useState<TuningSubTab>('base-map');
     const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const effectiveLiveSource = YOURDYNO_LIVE_ENABLED ? activeLiveSource : 'jetdrive';
     
     const jetdriveLive = useJetDriveLive({
         apiUrl: API_BASE,
-        autoConnect: true,
+        autoConnect: effectiveLiveSource === 'jetdrive',
         pollInterval: 800,
         useSse: true,
         isSimulatorActive,
+        enableDrainedSamples: effectiveLiveSource === 'jetdrive',
     });
 
     const yourdynoLive = useYourDynoLive({
         apiUrl: YOURDYNO_API_BASE,
-        autoConnect: true,
+        autoConnect: YOURDYNO_LIVE_ENABLED && activeLiveSource === 'yourdyno',
         pollInterval: 800,
         useSse: true,
         isSimulatorActive: false,
+        enableDrainedSamples: YOURDYNO_LIVE_ENABLED && activeLiveSource === 'yourdyno',
     });
 
-    const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
+    const activeLive = effectiveLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
+    const jetdriveIsCapturing = jetdriveLive.isCapturing;
+    const stopJetdriveCapture = jetdriveLive.stopCapture;
+    const yourdynoIsCapturing = yourdynoLive.isCapturing;
+    const stopYourdynoCapture = yourdynoLive.stopCapture;
+
+    useEffect(() => {
+        if ((!YOURDYNO_LIVE_ENABLED || effectiveLiveSource === 'jetdrive') && yourdynoIsCapturing) {
+            void stopYourdynoCapture().catch(() => undefined);
+        }
+        if (effectiveLiveSource === 'yourdyno' && jetdriveIsCapturing) {
+            void stopJetdriveCapture().catch(() => undefined);
+        }
+    }, [
+        effectiveLiveSource,
+        jetdriveIsCapturing,
+        stopJetdriveCapture,
+        yourdynoIsCapturing,
+        stopYourdynoCapture,
+    ]);
 
     const isActive = (path: string) =>
         location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -157,7 +180,7 @@ export default function JetDriveAutoTunePage() {
     }, [jetdriveLive]);
 
     const handleToggleSimulator = async () => {
-        if (activeLiveSource === 'yourdyno') {
+        if (effectiveLiveSource === 'yourdyno') {
             toast.info('Simulator is only available with JetDrive source.');
             return;
         }
@@ -207,11 +230,11 @@ export default function JetDriveAutoTunePage() {
     };
 
     useEffect(() => {
-        if (activeLiveSource === 'yourdyno' && isSimulatorActive) {
+        if (effectiveLiveSource === 'yourdyno' && isSimulatorActive) {
             void stopSimulator(true);
             toast.info('Simulator controls are only available with JetDrive source.');
         }
-    }, [activeLiveSource, isSimulatorActive, stopSimulator]);
+    }, [effectiveLiveSource, isSimulatorActive, stopSimulator]);
 
     const handleThrottleChange = (value: number) => {
         // Clamp value between 0-100
@@ -350,11 +373,11 @@ export default function JetDriveAutoTunePage() {
                     <div className="flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/70 p-1">
                         <Button
                             type="button"
-                            variant={activeLiveSource === 'jetdrive' ? 'default' : 'ghost'}
+                            variant={effectiveLiveSource === 'jetdrive' ? 'default' : 'ghost'}
                             size="sm"
                             className={cn(
                                 'h-7 px-3 text-[11px] font-semibold',
-                                activeLiveSource === 'jetdrive'
+                                effectiveLiveSource === 'jetdrive'
                                     ? 'bg-blue-600 text-white hover:bg-blue-500'
                                     : 'text-zinc-300 hover:text-white',
                             )}
@@ -364,15 +387,21 @@ export default function JetDriveAutoTunePage() {
                         </Button>
                         <Button
                             type="button"
-                            variant={activeLiveSource === 'yourdyno' ? 'default' : 'ghost'}
+                            variant={effectiveLiveSource === 'yourdyno' ? 'default' : 'ghost'}
                             size="sm"
                             className={cn(
                                 'h-7 px-3 text-[11px] font-semibold',
-                                activeLiveSource === 'yourdyno'
+                                effectiveLiveSource === 'yourdyno'
                                     ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                                    : 'text-zinc-300 hover:text-white',
+                                    : 'text-zinc-500',
                             )}
-                            onClick={() => setActiveLiveSource('yourdyno')}
+                            onClick={() => {
+                                if (YOURDYNO_LIVE_ENABLED) {
+                                    setActiveLiveSource('yourdyno');
+                                }
+                            }}
+                            disabled={!YOURDYNO_LIVE_ENABLED}
+                            title="YourDyno is temporarily disabled"
                         >
                             YourDyno
                         </Button>
@@ -404,10 +433,10 @@ export default function JetDriveAutoTunePage() {
                             isSimulatorActive 
                                 ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/40' 
                                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800',
-                            activeLiveSource === 'yourdyno' && 'opacity-60 cursor-not-allowed',
+                            effectiveLiveSource === 'yourdyno' && 'opacity-60 cursor-not-allowed',
                         )}
                         onClick={handleToggleSimulator}
-                        disabled={isStartingSim || activeLiveSource === 'yourdyno'}
+                        disabled={isStartingSim || effectiveLiveSource === 'yourdyno'}
                     >
                         {isStartingSim ? 'Starting...' : isSimulatorActive ? 'Sim ON' : 'Sim OFF'}
                     </Button>
@@ -1180,6 +1209,7 @@ function JetDriveAutoTunePageOld() {
     const [selectedProfile, setSelectedProfile] = useState<string>('m8_114');
     const [isStartingSimulator, setIsStartingSimulator] = useState(false);
     const [activeLiveSource, setActiveLiveSource] = useState<'jetdrive' | 'yourdyno'>('jetdrive');
+    const effectiveLiveSource = YOURDYNO_LIVE_ENABLED ? activeLiveSource : 'jetdrive';
 
     // JetDrive live hook
     const jetdriveLive = useJetDriveLive({
@@ -1195,8 +1225,8 @@ function JetDriveAutoTunePageOld() {
         isSimulatorActive: false,
     });
 
-    const liveApiBase = activeLiveSource === 'yourdyno' ? YOURDYNO_API_BASE : API_BASE;
-    const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
+    const liveApiBase = effectiveLiveSource === 'yourdyno' ? YOURDYNO_API_BASE : API_BASE;
+    const activeLive = effectiveLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
 
     const {
         isConnected,
@@ -1212,12 +1242,12 @@ function JetDriveAutoTunePageOld() {
 
     useEffect(() => {
         // Simulator transport exists only for JetDrive endpoints.
-        if (activeLiveSource === 'yourdyno' && isSimulatorActive) {
+        if (effectiveLiveSource === 'yourdyno' && isSimulatorActive) {
             setIsSimulatorActive(false);
             setSimState('stopped');
             toast.info('Simulator controls are only available with JetDrive source.');
         }
-    }, [activeLiveSource, isSimulatorActive]);
+    }, [effectiveLiveSource, isSimulatorActive]);
 
     // Explicit mode: simulator vs real vs idle (no combined booleans - prevents cross-contamination)
     const liveMode: 'simulator' | 'real' | 'idle' = isSimulatorActive ? 'simulator' : (isCapturing ? 'real' : 'idle');
@@ -2447,7 +2477,7 @@ function SmartPromptBanner({
                         <span className="text-xs text-zinc-400">Live source:</span>
                         <Button
                             size="sm"
-                            variant={activeLiveSource === 'jetdrive' ? 'default' : 'outline'}
+                            variant={effectiveLiveSource === 'jetdrive' ? 'default' : 'outline'}
                             onClick={() => setActiveLiveSource('jetdrive')}
                             className="h-7"
                         >
@@ -2455,15 +2485,20 @@ function SmartPromptBanner({
                         </Button>
                         <Button
                             size="sm"
-                            variant={activeLiveSource === 'yourdyno' ? 'default' : 'outline'}
-                            onClick={() => setActiveLiveSource('yourdyno')}
+                            variant={effectiveLiveSource === 'yourdyno' ? 'default' : 'outline'}
+                            onClick={() => {
+                                if (YOURDYNO_LIVE_ENABLED) {
+                                    setActiveLiveSource('yourdyno');
+                                }
+                            }}
                             className="h-7"
-                            disabled={isSimulatorActive}
+                            disabled={isSimulatorActive || !YOURDYNO_LIVE_ENABLED}
+                            title="YourDyno is temporarily disabled"
                         >
                             YourDyno
                         </Button>
                         <Badge variant="outline" className="ml-1 text-[10px] uppercase tracking-wide">
-                            {activeLiveSource}
+                            {effectiveLiveSource}
                         </Badge>
                     </div>
                     <TabsList className="grid w-full grid-cols-3 max-w-2xl">

@@ -129,35 +129,40 @@ export function MappingConfidencePanel({
     const buildErrorMessage = async (res: Response, fallback: string) => {
         const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : `${res.status}`;
         const base = `${fallback} (${statusLabel})`;
+        const formatErrorValue = (errorValue: unknown) => {
+            if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
+                return `${base}: ${errorValue}`;
+            }
+
+            if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
+                const message = (errorValue as { message?: unknown }).message;
+                if (typeof message === 'string' && message.trim().length > 0) {
+                    return `${base}: ${message}`;
+                }
+            }
+
+            if (errorValue != null) {
+                return `${base}: ${JSON.stringify(errorValue)}`;
+            }
+
+            return null;
+        };
 
         try {
-            const contentType = res.headers.get('content-type') ?? '';
-            if (contentType.includes('application/json')) {
-                const payload: unknown = await res.json();
+            const text = await res.text();
+            try {
+                const payload: unknown = JSON.parse(text);
                 const errorValue =
                     payload &&
                     typeof payload === 'object' &&
                     'error' in payload
                         ? (payload as { error?: unknown }).error
                         : payload;
-
-                if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
-                    return `${base}: ${errorValue}`;
-                }
-
-                if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
-                    const message = (errorValue as { message?: unknown }).message;
-                    if (typeof message === 'string' && message.trim().length > 0) {
-                        return `${base}: ${message}`;
-                    }
-                }
-
-                if (errorValue != null) {
-                    return `${base}: ${JSON.stringify(errorValue)}`;
-                }
+                const formatted = formatErrorValue(errorValue);
+                if (formatted) return formatted;
+            } catch {
+                // Fall back to raw text below.
             }
-
-            const text = await res.text();
             return text.trim().length > 0 ? `${base}: ${text}` : base;
         } catch {
             return base;
@@ -175,6 +180,7 @@ export function MappingConfidencePanel({
             return res.json();
         },
         refetchInterval: false, // Manual refresh only
+        retry: false,
     });
 
     // Notify parent of readiness changes
@@ -291,6 +297,7 @@ export function MappingConfidencePanel({
                         </Button>
                         <input
                             type="file"
+                            aria-label="Import mapping file"
                             accept=".json"
                             onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                             className="hidden"

@@ -16,6 +16,7 @@ let globalDrainBackoffUntil = 0;
 const STATUS_POLL_TIMEOUT_MS = 4000;
 const LIVE_POLL_TIMEOUT_MS = 4000;
 const DRAIN_POLL_TIMEOUT_MS = 2500;
+const DEFAULT_DRAIN_POLL_INTERVAL_MS = 500;
 const MAX_DRAIN_BUFFER_SAMPLES = 20000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -133,6 +134,10 @@ export interface UseJetDriveLiveOptions {
     useSse?: boolean;
     /** When true, page is in simulator mode - hook will poll live data and keep simulator data separate from hardware */
     isSimulatorActive?: boolean;
+    /** Enable high-volume sample drain polling for VE hit accumulation consumers only. */
+    enableDrainedSamples?: boolean;
+    /** Drain polling interval in ms when enableDrainedSamples is true. */
+    drainPollIntervalMs?: number;
 }
 
 export interface UseJetDriveLiveReturn {
@@ -364,6 +369,8 @@ const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'
     debug: false,
     useSse: true,
     isSimulatorActive: false,
+    enableDrainedSamples: false,
+    drainPollIntervalMs: DEFAULT_DRAIN_POLL_INTERVAL_MS,
 };
 
 export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDriveLiveReturn {
@@ -742,7 +749,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     useEffect(() => {
         // Only poll for status when autoConnect is enabled or we're actively using the feature
         const shouldPollStatus = opts.autoConnect || shouldPollLive;
-        let statusInterval: NodeJS.Timeout | null = null;
+        let statusInterval: ReturnType<typeof setInterval> | null = null;
         
         if (shouldPollStatus) {
             statusInterval = setInterval(checkConnection, 5000);
@@ -774,7 +781,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         if (!shouldPollLive || !opts.useSse) return;
 
         const es = new EventSource(`${opts.apiUrl}/hardware/live/stream`);
-        es.onmessage = (evt) => {
+        es.onmessage = (evt: MessageEvent<string>) => {
             try {
                 const parsed = JSON.parse(evt.data) as unknown;
                 processLivePayload(parsed);
@@ -791,10 +798,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         };
     }, [shouldPollLive, opts.useSse, opts.apiUrl, processLivePayload]);
 
-    // Drain polling: fetch /live/drain every 100ms to accumulate ALL samples
-    // for VE cell hit counting. Runs independently of SSE (which serves gauges).
+    // Drain polling: fetch /live/drain only for VE accumulation consumers.
+    // Runs independently of SSE (which serves gauges).
+    const shouldPollDrain = shouldPollLive && opts.enableDrainedSamples;
     useEffect(() => {
-        if (!shouldPollLive) {
+        if (!shouldPollDrain) {
             // Clear buffer when not capturing
             drainPollAbortRef.current?.abort();
             drainPollAbortRef.current = null;
@@ -897,10 +905,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             }
         };
 
-        // Start polling drain immediately, then every 100ms (aligned with 50ms
-        // aggregation window; 10Hz drain ≈ 2 polls per window = minimal loss)
+        // Start polling drain immediately, then at the configured cadence.
         void pollDrain();
-        drainIntervalRef.current = setInterval(pollDrain, 100);
+        drainIntervalRef.current = setInterval(pollDrain, opts.drainPollIntervalMs);
 
         return () => {
             drainPollAbortRef.current?.abort();
@@ -911,7 +918,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 drainIntervalRef.current = null;
             }
         };
-    }, [shouldPollLive, opts.apiUrl]);
+    }, [shouldPollDrain, opts.apiUrl, opts.debug, opts.drainPollIntervalMs]);
 
     // consumeDrainedSamples: returns all accumulated samples and clears the buffer.
     // Called by VE accumulation consumers (e.g., VEHeatmapPanel) at their own pace.

@@ -6,7 +6,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, List, Optional, Set
+from typing import Any, Callable, Dict, Generator, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,20 @@ class ProgressBroadcaster:
         self._subscribers: Dict[str, List[queue.Queue]] = {}
         self._lock = threading.Lock()
         self._cleanup_interval = 60  # seconds
+        # Optional hooks called after broadcast_complete / broadcast_error.
+        # Each callable receives (run_id, results_summary_or_None) or
+        # (run_id, stage, code, message) respectively. Register via
+        # add_complete_hook / add_error_hook.
+        self._on_complete: list[Callable[..., None]] = []
+        self._on_error: list[Callable[..., None]] = []
+
+    def add_complete_hook(self, fn: Callable[[str, Optional[dict]], None]) -> None:
+        """Register a callback invoked after every broadcast_complete."""
+        self._on_complete.append(fn)
+
+    def add_error_hook(self, fn: Callable[[str, str, str, str], None]) -> None:
+        """Register a callback invoked after every broadcast_error."""
+        self._on_error.append(fn)
 
     def subscribe(self, run_id: str) -> Generator[str, None, None]:
         """
@@ -128,6 +142,13 @@ class ProgressBroadcaster:
         # Signal end of stream for this run
         self._end_stream(run_id)
 
+        # Fire registered completion hooks (e.g. SMS notifier)
+        for hook in self._on_complete:
+            try:
+                hook(run_id, results_summary)
+            except Exception:
+                logger.exception("complete hook %r raised", hook)
+
     def broadcast_error(self, run_id: str, stage: str, code: str, message: str) -> None:
         """
         Broadcast an error event.
@@ -154,6 +175,13 @@ class ProgressBroadcaster:
 
         # Signal end of stream for this run
         self._end_stream(run_id)
+
+        # Fire registered error hooks (e.g. SMS notifier)
+        for hook in self._on_error:
+            try:
+                hook(run_id, stage, code, message)
+            except Exception:
+                logger.exception("error hook %r raised", hook)
 
     def _broadcast(self, run_id: str, event: ProgressEvent) -> None:
         """Broadcast an event to all subscribers for a run."""

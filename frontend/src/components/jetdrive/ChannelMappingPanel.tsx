@@ -9,7 +9,7 @@
  * - Use templates for quick setup
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Check,
   X,
@@ -324,10 +324,16 @@ export function ChannelMappingPanel({
   const [success, setSuccess] = useState<string | null>(null);
 
   const [mapping, setMapping] = useState<ProviderMapping | null>(null);
+  const mappingRef = useRef<ProviderMapping | null>(null);
   const [sourceChannels, setSourceChannels] = useState<SourceChannel[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [transforms, setTransforms] = useState<Transform[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const updateMappingState = useCallback((nextMapping: ProviderMapping | null) => {
+    mappingRef.current = nextMapping;
+    setMapping(nextMapping);
+  }, []);
 
   // Fetch transforms
   useEffect(() => {
@@ -344,6 +350,45 @@ export function ChannelMappingPanel({
       .then((data) => setTemplates(data.templates || []))
       .catch((e) => console.error("Failed to fetch templates:", e));
   }, [apiUrl]);
+
+  // Load saved mappings so the panel reflects persisted backend state on mount.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSavedMappings = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/mapping`);
+        const data = await response.json();
+        const savedMappings = Array.isArray(data.mappings) ? data.mappings : [];
+
+        if (cancelled || mappingRef.current || savedMappings.length === 0) return;
+
+        const latestMapping = savedMappings
+          .slice()
+          .sort((a: ProviderMapping, b: ProviderMapping) => {
+            const aDate = Date.parse(a.updated_at || a.created_at || "");
+            const bDate = Date.parse(b.updated_at || b.created_at || "");
+            return (Number.isNaN(bDate) ? 0 : bDate) - (Number.isNaN(aDate) ? 0 : aDate);
+          })[0];
+
+        updateMappingState(latestMapping);
+        setSourceChannels(
+          Object.values(latestMapping.channels).map((channel) => ({
+            id: channel.source_id,
+            name: channel.source_name,
+          }))
+        );
+      } catch (e) {
+        console.error("Failed to fetch saved mappings:", e);
+      }
+    };
+
+    loadSavedMappings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, updateMappingState]);
 
     // Auto-detect mapping from connected provider
     const autoDetect = useCallback(async () => {
@@ -364,7 +409,7 @@ export function ChannelMappingPanel({
                 throw new Error(data.error || "Auto-detect failed");
             }
 
-            setMapping(data.mapping);
+            updateMappingState(data.mapping);
             setSourceChannels(data.provider_channels || []);
 
             const mappedCount = Object.keys(data.mapping.channels).length;
@@ -380,7 +425,7 @@ export function ChannelMappingPanel({
         } finally {
             setLoading(false);
         }
-    }, [apiUrl]);
+    }, [apiUrl, updateMappingState]);
 
   // Load from template
   const loadTemplate = useCallback(
@@ -402,7 +447,7 @@ export function ChannelMappingPanel({
           throw new Error(data.error || "Failed to load template");
         }
 
-        setMapping(data.mapping);
+        updateMappingState(data.mapping);
         setSourceChannels(data.provider_channels || []);
         setSuccess(`Loaded template: ${templateId}`);
       } catch (e) {
@@ -411,7 +456,7 @@ export function ChannelMappingPanel({
         setLoading(false);
       }
     },
-    [apiUrl]
+    [apiUrl, updateMappingState]
   );
 
   // Save mapping
@@ -438,21 +483,21 @@ export function ChannelMappingPanel({
         throw new Error(data.error || "Failed to save mapping");
       }
 
-      setMapping(data);
+      updateMappingState(data);
       setSuccess("Mapping saved successfully");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save mapping");
     } finally {
       setSaving(false);
     }
-  }, [apiUrl, mapping]);
+  }, [apiUrl, mapping, updateMappingState]);
 
   // Update a channel mapping
   const updateChannelMapping = useCallback(
     (canonicalName: string, field: string, value: string | number | boolean) => {
       if (!mapping) return;
 
-      setMapping({
+      updateMappingState({
         ...mapping,
         channels: {
           ...mapping.channels,
@@ -470,7 +515,7 @@ export function ChannelMappingPanel({
         },
       });
     },
-    [mapping, sourceChannels]
+    [mapping, sourceChannels, updateMappingState]
   );
 
   // Remove a channel mapping
@@ -481,12 +526,12 @@ export function ChannelMappingPanel({
       const newChannels = { ...mapping.channels };
       delete newChannels[canonicalName];
 
-      setMapping({
+      updateMappingState({
         ...mapping,
         channels: newChannels,
       });
     },
-    [mapping]
+    [mapping, updateMappingState]
   );
 
   // Add a new channel mapping
@@ -497,7 +542,7 @@ export function ChannelMappingPanel({
       const sourceName =
         sourceChannels.find((c) => c.id === sourceId)?.name || "";
 
-      setMapping({
+      updateMappingState({
         ...mapping,
         channels: {
           ...mapping.channels,
@@ -510,7 +555,7 @@ export function ChannelMappingPanel({
         },
       });
     },
-    [mapping, sourceChannels]
+    [mapping, sourceChannels, updateMappingState]
   );
 
   // Get mapped source IDs
