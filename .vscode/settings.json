@@ -314,6 +314,5 @@
             "operator": "#8891A7"
         }
     },
-    "snyk.advanced.organization": "a3d46d6d-0cd9-408b-a067-e0d6ac46c415",
-    "snyk.advanced.autoSelectOrganization": true
+    "snyk.advanced.autoSelectOrganization": false
 }

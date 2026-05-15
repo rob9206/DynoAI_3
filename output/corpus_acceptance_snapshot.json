@@ -1,0 +1,37 @@
+{
+  "snapshot_at": "2026-04-09T16:10:28.558124+00:00",
+  "audit": {
+    "dispatch_queue": {
+      "checked": 20,
+      "clean": 20,
+      "suspect": 0
+    },
+    "bigtwin_full_queue": {
+      "checked": 313,
+      "clean": 313,
+      "suspect": 0
+    }
+  },
+  "requeue": {
+    "suspects_found": 0,
+    "requeued": 0
+  },
+  "backfill": {
+    "records_updated": 388,
+    "errors": 0
+  },
+  "dedup": {
+    "original": 388,
+    "kept": 243,
+    "removed": 145
+  },
+  "corpus_health": {
+    "entries": 243,
+    "parse_failures": 0,
+    "missing_rear_ve": 0,
+    "missing_afr_targets": 0,
+    "bad_shape_records": 0,
+    "duplicate_source_identities": 0
+  },
+  "acceptance": "PASS"
+}

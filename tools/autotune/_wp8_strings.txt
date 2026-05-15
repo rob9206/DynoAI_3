@@ -1,0 +1,61 @@
+
+=== RunFile_1.wp8 (745.2 KB) ===
+  Exact probe hits (9):
+    OK  AFR Front
+    OK  AFR Rear
+    OK  WBO2 AFR Front
+    OK  WBO2 AFR Rear
+    OK  Engine RPM
+    OK  RPM
+    OK  Manifold Absolute Pressure
+    OK  Throttle Position
+    OK  Time
+  Probe misses (13):
+    --  AFR 1
+    --  AFR 2
+    --  AFR Meas F
+    --  AFR Meas R
+    --  WBO2 F
+    --  WBO2 R
+    --  WBO2 LAMBDA Front
+    --  WBO2 LAMBDA Rear
+    --  LC2 Volts Petrol AFR1
+    --  LC2 Volts Petrol AFR2
+    --  MAP
+    --  MAP Front
+    --  MAP Rear
+  Channel-like strings (34):
+    * Rear Adaptive Fuel Factor"
+    * VE Front"
+    * Spark Advance Front"
+    * Engine Speed
+    * Manifold Absolute Pressure
+    * Front Adaptive Fuel Factor"
+    * VE New Front"
+    * Desired Lambda
+    * Injector Time Front"
+    * WBO2 AFR Rear
+    * Throttle Position"
+    * Rear Closed Loop Integrator"
+    * Rpm Config Error"
+    * WBO2 AFR Front
+    * VE Rear"
+    * Front Closed Loop Integrator"
+    * Throttle Position Sensor Voltage"
+    * Throttle Position Sensor"
+    * RPM 1(
+    * RPM Source(
+    * AT Lambda 2
+    * Injector Time Rear"
+    * AT Lambda 1
+    * Rear Spark Knock Retard"
+    * VE New Rear"
+    * Injector Time Rear
+    * Front Spark Knock Retard"
+    * Warm-up Fuel AFR (Lambda)
+    * Rpm Gain Config Error"
+    * Engine Temperature
+    * Spark Advance Rear"
+    * Injector Time Front
+    * Warm-up Fuel AFR (Ratio)
+    * Engine RPM

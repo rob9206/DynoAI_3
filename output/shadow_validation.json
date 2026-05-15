@@ -1,0 +1,167 @@
+{
+  "validated_at": "2026-04-09T16:13:18.865059+00:00",
+  "scenarios": [
+    {
+      "label": "calibration_library_seed",
+      "session_id": "46ac1006-27b",
+      "engine_family": "tc_103",
+      "seed_source": "calibration_library",
+      "seed_warning": "",
+      "calibration_seed_used": true,
+      "calibration_seed_match_count": 5,
+      "calibration_seed_matches": [
+        {
+          "calibration_id": "fc1a9c92-52c",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "23882690-b59",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "7952b1b4-78a",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "30ce73ab-f2a",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "4d4760d0-fae",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        }
+      ],
+      "estimated_pulls": 15,
+      "template_match": null
+    },
+    {
+      "label": "calibration_library_stock",
+      "session_id": "7a8c1e0d-c4f",
+      "engine_family": "tc_96",
+      "seed_source": "calibration_library",
+      "seed_warning": "",
+      "calibration_seed_used": true,
+      "calibration_seed_match_count": 5,
+      "calibration_seed_matches": [
+        {
+          "calibration_id": "42e381f1-97d",
+          "similarity_score": 1.0,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "888cc1fb-394",
+          "similarity_score": 1.0,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "a76ba267-17f",
+          "similarity_score": 1.0,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "9317cd62-34c",
+          "similarity_score": 1.0,
+          "source_file_name": "",
+          "source_identity": ""
+        },
+        {
+          "calibration_id": "74990340-6ff",
+          "similarity_score": 0.85,
+          "source_file_name": "",
+          "source_identity": ""
+        }
+      ],
+      "estimated_pulls": 15,
+      "template_match": null
+    },
+    {
+      "label": "default_or_template_seed",
+      "session_id": "31521f3f-c3e",
+      "engine_family": "tc_103",
+      "seed_source": "default",
+      "seed_warning": "",
+      "calibration_seed_used": false,
+      "calibration_seed_match_count": 0,
+      "calibration_seed_matches": [],
+      "estimated_pulls": 15,
+      "template_match": null
+    },
+    {
+      "label": "high_threshold_fallback",
+      "session_id": "3022ab0f-909",
+      "engine_family": "tc_103",
+      "seed_source": "default",
+      "seed_warning": "",
+      "calibration_seed_used": false,
+      "calibration_seed_match_count": 0,
+      "calibration_seed_matches": [],
+      "estimated_pulls": 15,
+      "template_match": null
+    }
+  ],
+  "checks": [
+    {
+      "check": "s1_seed_source_is_calibration_library",
+      "passed": true,
+      "detail": "actual=calibration_library"
+    },
+    {
+      "check": "s1_has_calibration_matches",
+      "passed": true,
+      "detail": "matches=5"
+    },
+    {
+      "check": "s1_calibration_seed_used",
+      "passed": true,
+      "detail": "used=True"
+    },
+    {
+      "check": "s1_no_seed_warning",
+      "passed": true,
+      "detail": "warning=''"
+    },
+    {
+      "check": "s2_seed_source_is_calibration_library",
+      "passed": true,
+      "detail": "actual=calibration_library"
+    },
+    {
+      "check": "s2_has_calibration_matches",
+      "passed": true,
+      "detail": "matches=5"
+    },
+    {
+      "check": "s3_seed_source_not_calibration",
+      "passed": true,
+      "detail": "actual=default"
+    },
+    {
+      "check": "s3_no_calibration_matches",
+      "passed": true,
+      "detail": "matches=0"
+    },
+    {
+      "check": "s4_seed_source_not_calibration",
+      "passed": true,
+      "detail": "actual=default"
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "total": 9,
+    "all_passed": true
+  }
+}
