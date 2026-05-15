@@ -1,0 +1,12 @@
+{
+  "id": "20260421_233219",
+  "vehicle_id": "doodledyna",
+  "base_tune_sha256": "2613e2e3f0660e24c7153e286b6a2472ecab01fc812c84a685084da188cbd313",
+  "schema_version": null,
+  "v3": null,
+  "status": "active",
+  "notes": "",
+  "created_at": "2026-04-21T23:32:19.429Z",
+  "updated_at": "2026-05-15T06:22:18.838Z",
+  "active_iteration_id": "iter_8"
+}

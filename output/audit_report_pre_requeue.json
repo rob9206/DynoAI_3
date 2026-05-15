@@ -1,0 +1,344 @@
+{
+  "generated_at": "2026-04-09T13:41:31.164307+00:00",
+  "queue_path": "data\\mastertune_catalog\\dispatch_queue_bigtwin_full.json",
+  "total_items": 313,
+  "ingested_checked": 168,
+  "clean": 147,
+  "suspect_count": 21,
+  "skipped_non_ingested": 145,
+  "suspects": [
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\AHO127-05-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "ve_front",
+          "reason": "ve_front_contains_afr_values",
+          "min": 11.0,
+          "max": 14.5
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_afr_values",
+          "min": 11.0,
+          "max": 14.5
+        },
+        {
+          "table": "all",
+          "reason": "all_tables_identical_sample",
+          "sample": [
+            13.6,
+            13.6,
+            13.6,
+            13.8,
+            13.8,
+            13.8
+          ]
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\BEV105-05-A1.MT8",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "ve_front",
+          "reason": "ve_front_contains_afr_values",
+          "min": 12.1,
+          "max": 14.2
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_afr_values",
+          "min": 12.1,
+          "max": 14.2
+        },
+        {
+          "table": "all",
+          "reason": "all_tables_identical_sample",
+          "sample": [
+            13.9,
+            13.9,
+            13.8,
+            13.8,
+            13.8,
+            13.8
+          ]
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\CTB242-02-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 70.0,
+          "max": 114.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\CYC205-04-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 52.5,
+          "max": 106.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAA009-01-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 71.0,
+          "max": 91.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAA044-01-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 71.0,
+          "max": 91.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAA358-03-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 76.5,
+          "max": 99.5
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAA600-01-A0.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 51.5,
+          "max": 105.5
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAA617-04-A1.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_lambda_values",
+          "min": 0.873,
+          "max": 0.989
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAB358-03-A1.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 72.0,
+          "max": 102.5
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAB600-01-A0.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 49.5,
+          "max": 107.0
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_lambda_values",
+          "min": 0.876,
+          "max": 0.984
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAB617-05-A2.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 49.5,
+          "max": 120.5
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_lambda_values",
+          "min": 0.876,
+          "max": 0.984
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAD358-03-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "ve_front",
+          "reason": "ve_front_contains_lambda_values",
+          "min": 0.837,
+          "max": 0.974
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAE009-01-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 72.0,
+          "max": 126.5
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_afr_values",
+          "min": 13.0,
+          "max": 14.6
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAF176-04-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 77.5,
+          "max": 109.5
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAF205-04-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 52.0,
+          "max": 125.0
+        },
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_afr_values",
+          "min": 12.5,
+          "max": 14.6
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAG617-04-A1.MT9",
+      "status": "ingested",
+      "retries": 1,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 43.5,
+          "max": 108.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAN600-01-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 43.5,
+          "max": 106.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAQ617-04-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "ve_rear",
+          "reason": "ve_rear_contains_lambda_values",
+          "min": 0.885,
+          "max": 0.993
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAR600-01-A0.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 42.0,
+          "max": 109.0
+        }
+      ]
+    },
+    {
+      "mt_file": "C:\\Users\\dawso\\OneDrive\\Documents\\TTS\\HD\\Calibrations\\BigTwin\\DAR617-04-A1.MT9",
+      "status": "ingested",
+      "retries": 0,
+      "issues": [
+        {
+          "table": "lambda",
+          "reason": "lambda_contains_ve_values",
+          "min": 42.0,
+          "max": 109.0
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,10 @@ import { playUiSound } from '@/lib/ui-sounds';
 let globalDrainEndpointUnavailable = false;
 let globalDrainBackoffMs = 0;
 let globalDrainBackoffUntil = 0;
+const STATUS_POLL_TIMEOUT_MS = 4000;
+const LIVE_POLL_TIMEOUT_MS = 4000;
+const DRAIN_POLL_TIMEOUT_MS = 2500;
+const MAX_DRAIN_BUFFER_SAMPLES = 20000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -400,6 +404,12 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const drainEndpointUnavailableRef = useRef(false);
     const drainBackoffMsRef = useRef(0);
     const drainBackoffUntilRef = useRef(0);
+    const statusPollInFlightRef = useRef(false);
+    const livePollInFlightRef = useRef(false);
+    const drainPollInFlightRef = useRef(false);
+    const statusPollAbortRef = useRef<AbortController | null>(null);
+    const livePollAbortRef = useRef<AbortController | null>(null);
+    const drainPollAbortRef = useRef<AbortController | null>(null);
 
     // UI sound state (debounced to avoid flapping/poll noise)
     const prevConnectedRef = useRef<boolean | null>(null);
@@ -412,9 +422,16 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         if (Date.now() < backoffUntilRef.current) {
             return;
         }
+        if (statusPollInFlightRef.current) {
+            return;
+        }
+        statusPollInFlightRef.current = true;
+        const controller = new AbortController();
+        statusPollAbortRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort(), STATUS_POLL_TIMEOUT_MS);
         
         try {
-            const res = await fetch(`${opts.apiUrl}/hardware/monitor/status`);
+            const res = await fetch(`${opts.apiUrl}/hardware/monitor/status`, { signal: controller.signal });
             
             // Handle rate limiting
             if (res.status === 429) {
@@ -443,6 +460,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
             setConnectionError(null);
         } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                return;
+            }
             setMonitorConnected(false);
             // More user-friendly error messages
             const errMsg = err instanceof Error ? err.message : 'Connection failed';
@@ -450,6 +470,12 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 setConnectionError('Cannot reach JetDrive API. Check if the backend is running.');
             } else {
                 setConnectionError(errMsg);
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            statusPollInFlightRef.current = false;
+            if (statusPollAbortRef.current === controller) {
+                statusPollAbortRef.current = null;
             }
         }
     }, [opts.apiUrl]);
@@ -601,9 +627,16 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         if (Date.now() < backoffUntilRef.current) {
             return;
         }
+        if (livePollInFlightRef.current) {
+            return;
+        }
+        livePollInFlightRef.current = true;
+        const controller = new AbortController();
+        livePollAbortRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort(), LIVE_POLL_TIMEOUT_MS);
         
         try {
-            const res = await fetch(`${opts.apiUrl}/hardware/live/data`);
+            const res = await fetch(`${opts.apiUrl}/hardware/live/data`, { signal: controller.signal });
             
             // Handle rate limiting with exponential backoff
             if (res.status === 429) {
@@ -623,8 +656,17 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
 
             const raw: unknown = await res.json();
             processLivePayload(raw);
-        } catch {
+        } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                return;
+            }
             // Silent fail for polling
+        } finally {
+            clearTimeout(timeoutId);
+            livePollInFlightRef.current = false;
+            if (livePollAbortRef.current === controller) {
+                livePollAbortRef.current = null;
+            }
         }
     }, [opts.apiUrl, opts.debug, processLivePayload]);
 
@@ -712,6 +754,12 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         }
 
         return () => {
+            statusPollAbortRef.current?.abort();
+            livePollAbortRef.current?.abort();
+            statusPollAbortRef.current = null;
+            livePollAbortRef.current = null;
+            statusPollInFlightRef.current = false;
+            livePollInFlightRef.current = false;
             if (statusInterval) {
                 clearInterval(statusInterval);
             }
@@ -748,6 +796,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     useEffect(() => {
         if (!shouldPollLive) {
             // Clear buffer when not capturing
+            drainPollAbortRef.current?.abort();
+            drainPollAbortRef.current = null;
+            drainPollInFlightRef.current = false;
             drainBufferRef.current = [];
             drainEndpointUnavailableRef.current = false;
             drainBackoffMsRef.current = 0;
@@ -758,8 +809,13 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         const pollDrain = async () => {
             if (drainEndpointUnavailableRef.current || globalDrainEndpointUnavailable) return;
             if (Date.now() < drainBackoffUntilRef.current || Date.now() < globalDrainBackoffUntil) return;
+            if (drainPollInFlightRef.current) return;
+            drainPollInFlightRef.current = true;
+            const controller = new AbortController();
+            drainPollAbortRef.current = controller;
+            const timeoutId = setTimeout(() => controller.abort(), DRAIN_POLL_TIMEOUT_MS);
             try {
-                const res = await fetch(`${opts.apiUrl}/hardware/live/drain`);
+                const res = await fetch(`${opts.apiUrl}/hardware/live/drain`, { signal: controller.signal });
                 if (!res.ok) {
                     // Some backends don't expose /live/drain. Disable polling to avoid console spam.
                     if (res.status === 404) {
@@ -801,6 +857,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 if (!Array.isArray(samples) || samples.length === 0) return;
 
                 // Append parsed samples to buffer
+                let appendedCount = 0;
                 for (const s of samples) {
                     if (!isRecord(s)) continue;
                     const name = getString(s.name);
@@ -815,9 +872,28 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                         category: getString(s.category) ?? undefined,
                         units: getString(s.units) ?? undefined,
                     });
+                    appendedCount += 1;
                 }
-            } catch {
+                if (appendedCount > 0 && drainBufferRef.current.length > MAX_DRAIN_BUFFER_SAMPLES) {
+                    const overflow = drainBufferRef.current.length - MAX_DRAIN_BUFFER_SAMPLES;
+                    drainBufferRef.current.splice(0, overflow);
+                    if (opts.debug) {
+                        console.warn(
+                            `[useJetDriveLive] Dropped ${overflow} stale drain samples to cap memory usage.`
+                        );
+                    }
+                }
+            } catch (err) {
+                if (err instanceof Error && err.name === 'AbortError') {
+                    return;
+                }
                 // Silent fail -- drain is best-effort
+            } finally {
+                clearTimeout(timeoutId);
+                drainPollInFlightRef.current = false;
+                if (drainPollAbortRef.current === controller) {
+                    drainPollAbortRef.current = null;
+                }
             }
         };
 
@@ -827,6 +903,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         drainIntervalRef.current = setInterval(pollDrain, 100);
 
         return () => {
+            drainPollAbortRef.current?.abort();
+            drainPollAbortRef.current = null;
+            drainPollInFlightRef.current = false;
             if (drainIntervalRef.current) {
                 clearInterval(drainIntervalRef.current);
                 drainIntervalRef.current = null;

@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-04-09T13:45:17.127002+00:00",
+  "queue_path": "data\\mastertune_catalog\\dispatch_queue_bigtwin_full.json",
+  "total_items": 313,
+  "ingested_checked": 154,
+  "clean": 154,
+  "suspect_count": 0,
+  "skipped_non_ingested": 159,
+  "suspects": []
+}
