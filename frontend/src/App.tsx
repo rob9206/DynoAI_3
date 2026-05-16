@@ -31,6 +31,7 @@ const JetDriveAutoTunePage = lazy(() => import('./pages/JetDriveAutoTunePage'));
 const OperatorTrainingPage = lazy(() => import('./pages/OperatorTrainingPage'));
 const AutoTuneDemo = lazy(() => import('./pages/AutoTuneDemo'));
 const EngineAnalyzerPage = lazy(() => import('./pages/EngineAnalyzerPage'));
+const HardStartAnalyzerPage = lazy(() => import('./pages/HardStartAnalyzerPage'));
 const TechViewPage = lazy(() => import('./pages/TechView'));
 const AdminViewPage = lazy(() => import('./pages/AdminView'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
@@ -507,6 +508,7 @@ function App() {
                 <Route path="/history" element={<History />} />
                 <Route path="/wizards" element={<TuningWizardsPage />} />
                 <Route path="/training" element={<OperatorTrainingPage />} />
+                <Route path="/hard-start-analyzer" element={<HardStartAnalyzerPage />} />
                 <Route path="/engine-analyzer" element={<EngineAnalyzerPage />} />
                 <Route path="/ve-heatmap-demo" element={<VEHeatmapDemo />} />
                 <Route path="/autotune-demo" element={<AutoTuneDemo />} />
