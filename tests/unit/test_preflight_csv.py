@@ -16,12 +16,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import preflight_csv
+
 # Add project root and tools/utils to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "tools" / "utils"))
-
-import preflight_csv
 
 # Project root for creating temp directories within the safe_path boundary
 
@@ -151,7 +151,8 @@ class TestPreflightCLI(unittest.TestCase):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
-            check=True)
+                check=True,
+            )
 
             # Should output valid JSON
             if result.stdout:
@@ -181,7 +182,8 @@ class TestPreflightCLI(unittest.TestCase):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
-            check=True)
+                check=True,
+            )
 
             # Should create output file
             self.assertTrue(temp_output.exists())
