@@ -10,6 +10,12 @@ from api.services.parsers.dynojet_txt_parser import (
     parse_dynojet_txt,
     parse_dynojet_txt_path,
 )
+from api.services.parsers.dynoware_txt_parser import (
+    DynowareTxtReport,
+    looks_like_dynoware_txt,
+    parse_dynoware_txt,
+    parse_dynoware_txt_path,
+)
 from api.services.parsers.pti_parser import (
     SUPPORTED_EXTENSIONS,
     PTIParseResult,
@@ -25,5 +31,9 @@ __all__ = [
     "parse_dynojet_txt",
     "parse_dynojet_txt_path",
     "looks_like_dynojet_txt",
+    "DynowareTxtReport",
+    "parse_dynoware_txt",
+    "parse_dynoware_txt_path",
+    "looks_like_dynoware_txt",
     "compute_pvv_signature",
 ]

@@ -122,6 +122,23 @@ def test_status_progression(ws: TuningWorkspace):
     assert s.ready_to_analyze is True
 
 
+def test_status_requires_afr_data_for_ready(ws: TuningWorkspace):
+    """WP8-only upload must NOT flip ready_to_analyze — AFR channel is required."""
+    vehicle = ws.create_vehicle(name="AFR gate test bike")
+    session = ws.create_session(vehicle_id=vehicle.id)
+
+    ws.set_base_tune(vehicle.id, session.id, b'<?xml version="1.0"?><PVV/>')
+    ws.add_pull(vehicle.id, session.id, "iter_0", "dyno_run.wp8", b"\x00dyno")
+    s = ws.compute_status(vehicle.id, session.id)
+
+    assert s.pull_count == 1
+    assert s.has_afr_data is False
+    assert s.ready_to_analyze is False, (
+        "ready_to_analyze must stay False when no TXT/CSV AFR file is present — "
+        "the Analyze button should not enable on a WP8-only upload"
+    )
+
+
 def test_find_vehicle_by_ecu_signature(ws: TuningWorkspace):
     vehicle = ws.create_vehicle(name="Racile 2006 Dyna")
     ws.update_vehicle(vehicle.id, ecu_signature="deadbeef")

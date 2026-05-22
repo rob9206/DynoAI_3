@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "pulls": [
+    {
+      "name": "watcher_smoke_20260518T093553Z.txt",
+      "sha256": "4e3f7f40f05dd51cc4abebbd8ba670ef47fa894eff721b0b357ff6e8b01f2976",
+      "bytes": 89,
+      "mtime": "2026-05-18T05:35:54"
+    }
+  ]
+}

@@ -660,7 +660,7 @@ class TuningWorkspace:
             pulls = self.list_pulls(vehicle_id, session_id, iteration.id)
             has_afr = any(p.suffix.lower() in self.AFR_EXTENSIONS for p in pulls)
 
-        ready = has_vehicle and has_base and len(pulls) > 0
+        ready = has_vehicle and has_base and len(pulls) > 0 and has_afr
 
         checklist = [
             {

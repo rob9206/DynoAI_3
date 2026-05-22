@@ -1,0 +1,426 @@
+{
+  "iteration_id": "iter_11",
+  "tune_state": "iter_11_patched.pvv",
+  "tune_sha256": "7041f5c40453b187d3b0572f0835bef950dc3a40b8a219aecc006dd726ed80ec",
+  "flashed_at": null,
+  "afr_source": "dyno_tailpipe_wideband_only",
+  "wideband_channel": "LC2 (Innovate venturi in collector)",
+  "lc1_status": "not_hooked_up_ignore",
+  "test_mode": "loaded_4th_gear_wot_plus_cruise",
+  "pulls": [
+    {
+      "name": "PV_Logfile_5.csv_18.wp8",
+      "sha256": "20197ff2acec3a08c307592dd38f9a7d6d12066425103e817167bc4b28aaa25f",
+      "bytes": 166461,
+      "mtime": "2026-05-11T18:46:38"
+    },
+    {
+      "name": "PV_Logfile_5.csv_19.wp8",
+      "sha256": "a3daa1a07849cc56dda39aca31a3be55e5802b36f8d081fba283cabcd28e90bd",
+      "bytes": 388591,
+      "mtime": "2026-05-11T18:47:27"
+    },
+    {
+      "name": "6th gear load then wot.wp8",
+      "sha256": "5cea63413e2b98e7a399df39f46da436128c234dfe3a308f97cc3b2b061776fb",
+      "bytes": 126956,
+      "mtime": "2026-05-11T18:49:02"
+    },
+    {
+      "name": "PV_Logfile_5.csv_18.txt",
+      "sha256": "31b6988b39aedc3f8dd0d0af2ad3d7ce7724fd9a980064eb49f9d3cc7ca428f7",
+      "bytes": 265995,
+      "mtime": "2026-05-11T18:52:07"
+    },
+    {
+      "name": "PV_Logfile_5.csv_19.txt",
+      "sha256": "2c9c0d5d7dd76fce0b4702152ff79ca784cc5516bf07eca02751942cb3c2bd9b",
+      "bytes": 493950,
+      "mtime": "2026-05-11T18:52:14"
+    },
+    {
+      "name": "6th gear load then wot.txt",
+      "sha256": "3e1796fababdf4a25d9befb79e2285982e18f54cdc27aa904a043e867008dbd5",
+      "bytes": 163873,
+      "mtime": "2026-05-11T18:52:20"
+    },
+    {
+      "name": "6th gear load then wot_0.wp8",
+      "sha256": "0512e3212e256e9b398eb376724688474dc8fb2feca2cbc31f842f59c2c2c699",
+      "bytes": 79889,
+      "mtime": "2026-05-11T19:29:29"
+    },
+    {
+      "name": "6th gear load then wot_1.wp8",
+      "sha256": "d1964a7db4a426a2ecd2ac028f7da53f7f04c832d50d6a962ff31ba06f54d7a4",
+      "bytes": 69012,
+      "mtime": "2026-05-11T19:30:10"
+    },
+    {
+      "name": "6th gear load then wot_2.wp8",
+      "sha256": "675ef286aaf46593d44c304ff05af59cd8e04ee7957d1faa7efb87da174c8a19",
+      "bytes": 42680,
+      "mtime": "2026-05-11T19:30:26"
+    },
+    {
+      "name": "6th gear load then wot_3.wp8",
+      "sha256": "8e67aea038e9c833f22a24a12cbc0ada8b0fe377df98d239d62be2fab5d597e9",
+      "bytes": 79284,
+      "mtime": "2026-05-11T19:30:43"
+    },
+    {
+      "name": "6th gear load then wot_0.txt",
+      "sha256": "8ff6ce2bc3cf5de9f9b610a2aec43061a831b4cb9634750debc299dab952cdb4",
+      "bytes": 89254,
+      "mtime": "2026-05-11T19:33:02"
+    },
+    {
+      "name": "6th gear load then wot_1.txt",
+      "sha256": "0c54400d89b180da85026b412b0d816ab19d6e3ce4e27459964970923a1fabdb",
+      "bytes": 77001,
+      "mtime": "2026-05-11T19:33:17"
+    },
+    {
+      "name": "6th gear load then wot_2.txt",
+      "sha256": "57d10645a658fea84952b083427a38f058b0de58f49dbf42c69b34dc23db7990",
+      "bytes": 30361,
+      "mtime": "2026-05-11T19:33:43"
+    },
+    {
+      "name": "6th gear load then wot_3.txt",
+      "sha256": "a0564d97f5170561ea1ef431224d4cc532ed5ea968af689aa766bcd2b8738c3a",
+      "bytes": 97854,
+      "mtime": "2026-05-11T19:33:50"
+    },
+    {
+      "name": "6th gear load then wot_4.wp8",
+      "sha256": "4ec372a742eae352bc7772fb4eb046e7ea6eee7a4c2e7e5e36b599778fbed9eb",
+      "bytes": 72445,
+      "mtime": "2026-05-11T20:02:32"
+    },
+    {
+      "name": "6th gear load then wot_5.wp8",
+      "sha256": "dee4082b38d93b7eb7031235640a4ad18e05e39447d89d053e52b3701fc1049d",
+      "bytes": 60161,
+      "mtime": "2026-05-11T20:02:58"
+    },
+    {
+      "name": "6th gear load then wot_6.wp8",
+      "sha256": "7ca6c3484c4e2d8116745e293a0954d6f19395e0a4d29ef4332a17a49353ef4a",
+      "bytes": 69177,
+      "mtime": "2026-05-11T20:03:29"
+    },
+    {
+      "name": "6th gear load then wot_7.wp8",
+      "sha256": "eb257d8edab88b7591e8fae413a5018413da24fdce7fbb06e1e31fb8aca6b004",
+      "bytes": 70951,
+      "mtime": "2026-05-11T20:03:54"
+    },
+    {
+      "name": "6th gear load then wot_8.wp8",
+      "sha256": "f2db34873efff818e7058335cf762b9a2a54cc22d32b0443baebc417d3f2a4f2",
+      "bytes": 80244,
+      "mtime": "2026-05-11T20:04:21"
+    },
+    {
+      "name": "6th gear load then wot_9.wp8",
+      "sha256": "412aae1cde1044dcdb11d9ed62172bd88becf811443572874b407a4bb2f16fb9",
+      "bytes": 80423,
+      "mtime": "2026-05-11T20:04:43"
+    },
+    {
+      "name": "6th gear load then wot_9.txt",
+      "sha256": "98de77f0aa42f72b1149d9242784de231f413819fba4a600f6f15099f6653169",
+      "bytes": 85904,
+      "mtime": "2026-05-11T20:07:15"
+    },
+    {
+      "name": "6th gear load then wot_7.txt",
+      "sha256": "c91e966bf5edf9048d7f5922c95a75e393cace155a032a2f00f6238623df8948",
+      "bytes": 78044,
+      "mtime": "2026-05-11T20:07:22"
+    },
+    {
+      "name": "6th gear load then wot_6.txt",
+      "sha256": "fe0fd5f1a702d84518e5e4c23b029db3f6e7d4aac5579729d119a74b2ad5accb",
+      "bytes": 73069,
+      "mtime": "2026-05-11T20:07:28"
+    },
+    {
+      "name": "6th gear load then wot_5.txt",
+      "sha256": "c9a1515144cfe3f952bdc7e5b145b1d94c508093c19a897c5b2858fd52785c42",
+      "bytes": 64252,
+      "mtime": "2026-05-11T20:07:38"
+    },
+    {
+      "name": "6th gear load then wot_4.txt",
+      "sha256": "aa9d1c4bb5ea5679d80a2abe023798a5772580a202d33c8303f6b09d7ef6e0c3",
+      "bytes": 82293,
+      "mtime": "2026-05-11T20:07:44"
+    },
+    {
+      "name": "6th gear load then wot_10.wp8",
+      "sha256": "24ed78e23a3d0a6dd5dcaf4daaa437784ae814743b88c5d8827e21df81aad059",
+      "bytes": 48489,
+      "mtime": "2026-05-11T20:46:41"
+    },
+    {
+      "name": "6th gear load then wot_11.wp8",
+      "sha256": "8ea247b2d8fd0b641ad7bb662edf2de5d5b7767a57ee706cb5a3603bed9bb446",
+      "bytes": 56208,
+      "mtime": "2026-05-11T20:47:04"
+    },
+    {
+      "name": "6th gear load then wot_12.wp8",
+      "sha256": "2b665a6a9fd1f109039d1fb3acf04105440951f8d9945bf3c2004135cdc9211b",
+      "bytes": 49730,
+      "mtime": "2026-05-11T20:47:14"
+    },
+    {
+      "name": "6th gear load then wot_13.wp8",
+      "sha256": "202532c81c1ec7a1bbdb238913986d24b7ad8f39c344e62cc3e30788241a93c2",
+      "bytes": 57457,
+      "mtime": "2026-05-11T20:47:28"
+    },
+    {
+      "name": "6th gear load then wot_14.wp8",
+      "sha256": "ebaad5efeb176721f268ece4353509e08941ce259233486058f67b72e1953bd3",
+      "bytes": 53284,
+      "mtime": "2026-05-11T20:47:40"
+    },
+    {
+      "name": "6th gear load then wot_15.wp8",
+      "sha256": "38855f698b6adfdaaa4bf1687f1115bab02e08f27b068208b193d5ff7e64dcfa",
+      "bytes": 105554,
+      "mtime": "2026-05-11T20:48:34"
+    },
+    {
+      "name": "6th gear load then wot_16.wp8",
+      "sha256": "a86664aa812ae929dcbbb1e8715a02b950f6ec86dddcd404aaa2c5218037ac1a",
+      "bytes": 78050,
+      "mtime": "2026-05-11T20:48:59"
+    },
+    {
+      "name": "6th gear load then wot_16.txt",
+      "sha256": "0866b784ce1a209c85304691666f9180c76ab4b3e40dc1888a16ab80722c98ed",
+      "bytes": 105748,
+      "mtime": "2026-05-11T21:00:29"
+    },
+    {
+      "name": "6th gear load then wot_15.txt",
+      "sha256": "335033f4b30a45933e4412df9783fae7c225cdf79773af4526d6fefbac9fdb7e",
+      "bytes": 147262,
+      "mtime": "2026-05-11T21:00:38"
+    },
+    {
+      "name": "6th gear load then wot_14.txt",
+      "sha256": "c34fa5848282a7728ff6b70c786748e74d89081c98edf00172662dbc24fe9e0c",
+      "bytes": 72015,
+      "mtime": "2026-05-11T21:00:47"
+    },
+    {
+      "name": "6th gear load then wot_13.txt",
+      "sha256": "d773d2af46c3155daf47f4170e23a5f290ddfa300af6af2e99f558b5f246627e",
+      "bytes": 77995,
+      "mtime": "2026-05-11T21:00:54"
+    },
+    {
+      "name": "6th gear load then wot_12.txt",
+      "sha256": "f2aefb085b000cbe3318a0fd95f4f5e6d53ede65981014f9838ad2ad5452c8d1",
+      "bytes": 64065,
+      "mtime": "2026-05-11T21:01:01"
+    },
+    {
+      "name": "6th gear load then wot_11.txt",
+      "sha256": "8230efa5c1b833dc1ab180af7084c72cad3ba24e92cd33406c7db500f3318152",
+      "bytes": 74758,
+      "mtime": "2026-05-11T21:01:07"
+    },
+    {
+      "name": "6th gear load then wot_10.txt",
+      "sha256": "8f80824012db919d15a14121d5b02626342aaeed658c63f96f419813ea2dad00",
+      "bytes": 64621,
+      "mtime": "2026-05-11T21:01:14"
+    },
+    {
+      "name": "PV_Logfile_5.csv_20.txt",
+      "sha256": "03fbb87ba3aef7472fc417538755cc430bbe0b04b15c4f3e95bea701ac344ffc",
+      "bytes": 78786,
+      "mtime": "2026-05-12T17:43:42"
+    },
+    {
+      "name": "PV_Logfile_5.csv_21.txt",
+      "sha256": "eaf625e74d03fe59aa6bc5f9c6658f67954d5b5d4b7cbb9628cda0c5fef2f63b",
+      "bytes": 77974,
+      "mtime": "2026-05-12T17:43:55"
+    },
+    {
+      "name": "PV_Logfile_5.csv_22.txt",
+      "sha256": "d2a89f82fbecbffbac0d83a0da86a31ffeb45c46f9145e1f24c62c19ae05dd91",
+      "bytes": 89405,
+      "mtime": "2026-05-12T17:44:05"
+    },
+    {
+      "name": "PV_Logfile_5.csv_23.txt",
+      "sha256": "11cffd4623b6474ebc0576e07cc03f28a93f68cf0ff0897e6d9297a0f527ff52",
+      "bytes": 406197,
+      "mtime": "2026-05-12T17:44:15"
+    },
+    {
+      "name": "PV_Logfile_5.csv_24.txt",
+      "sha256": "1483d306e6b999ec84f00e85ec3ff2d3e20548cbedf2fedeec22c857e2b82b52",
+      "bytes": 76961,
+      "mtime": "2026-05-12T17:44:25"
+    },
+    {
+      "name": "PV_Logfile_5.csv_28.txt",
+      "sha256": "e8b67a8365ec5f3b1657fd1c45e966af963c731d4bf3bdc4fda7b887e8ae566c",
+      "bytes": 76194,
+      "mtime": "2026-05-12T18:20:00"
+    },
+    {
+      "name": "PV_Logfile_5.csv_27.txt",
+      "sha256": "822a420b570b489810a18c2be3662b116fcf6d44d2d4e7a3531746eaf23db3a1",
+      "bytes": 87324,
+      "mtime": "2026-05-12T18:20:14"
+    },
+    {
+      "name": "PV_Logfile_5.csv_26.txt",
+      "sha256": "e1038a5be850cb33effb04a1b66df43bdb7a161f4aaf68bc06730ade8d50f54a",
+      "bytes": 92897,
+      "mtime": "2026-05-12T18:20:25"
+    },
+    {
+      "name": "PV_Logfile_5.csv_25.txt",
+      "sha256": "4b62a9a7fb00875f318644db8634ab8c3c0d3bdd993ecf70016fb49f4635d23d",
+      "bytes": 67722,
+      "mtime": "2026-05-12T18:20:40"
+    },
+    {
+      "name": "PV_Logfile_5.csv_31.txt",
+      "sha256": "5137bd879597854a3986aa30858b534a77eeae16f3650761e6fc571a506aadd6",
+      "bytes": 60645,
+      "mtime": "2026-05-12T18:43:25"
+    },
+    {
+      "name": "PV_Logfile_5.csv_32.txt",
+      "sha256": "28109eb5acc69c28c04483739e7d1fd210f83a77c554a69c060e15cae1cb534b",
+      "bytes": 58759,
+      "mtime": "2026-05-12T18:43:36"
+    },
+    {
+      "name": "PV_Logfile_5.csv_33.txt",
+      "sha256": "5377f1aa92ad34331079c313a9c1a7a413db0ec54eea2ac709610d8d40e04e89",
+      "bytes": 46310,
+      "mtime": "2026-05-12T18:43:46"
+    },
+    {
+      "name": "PV_Logfile_5.csv_35.txt",
+      "sha256": "cdc040148fdc31228ded5f659a4fa7c55c2442089482443b8c3e17c316755bc4",
+      "bytes": 66475,
+      "mtime": "2026-05-12T19:05:15"
+    },
+    {
+      "name": "PV_Logfile_5.csv_36.txt",
+      "sha256": "61a453b24c8cd337f0a222b6f3caabc4294983cab910f8633ada7059b4c85c59",
+      "bytes": 71505,
+      "mtime": "2026-05-12T19:07:13"
+    },
+    {
+      "name": "PV_Logfile_5.csv_37.txt",
+      "sha256": "8aeb9e62c241571a17007695fa37503254d81ec7ae3056203932ca4a4dd2d722",
+      "bytes": 54291,
+      "mtime": "2026-05-12T19:07:21"
+    },
+    {
+      "name": "PV_Logfile_5.csv_38.txt",
+      "sha256": "be2fa37ca8b45e4c8e6ac80e35c22ead643498e0aef8edcbcddde23569303855",
+      "bytes": 72068,
+      "mtime": "2026-05-12T19:24:07"
+    },
+    {
+      "name": "PV_Logfile_5.csv_39.txt",
+      "sha256": "e36af4fe7be408d263aaaba33c334cb5b35154fd02005a5360d77f067688baaf",
+      "bytes": 52462,
+      "mtime": "2026-05-12T19:24:17"
+    },
+    {
+      "name": "PV_Logfile_5.csv_40.txt",
+      "sha256": "f2e11f922342016fc3536fa3a710f7568a9f078eeb3a86f3550ec26da44e3241",
+      "bytes": 52793,
+      "mtime": "2026-05-12T19:24:27"
+    },
+    {
+      "name": "PV_Logfile_5.csv_41.txt",
+      "sha256": "e13ec455a9b5f446089499e92e1a457d12a0a575ab55d205bf95fd5618def7c1",
+      "bytes": 457593,
+      "mtime": "2026-05-12T19:37:12"
+    },
+    {
+      "name": "PV_Logfile_5.csv_42.txt",
+      "sha256": "113c7f09cc2ac98c75f8bfc4bed899addd5e7f3ae780df1ae282e21b1b0fb089",
+      "bytes": 461432,
+      "mtime": "2026-05-12T19:37:22"
+    },
+    {
+      "name": "PV_Logfile_5.csv_43.txt",
+      "sha256": "5f3c539fcb037132b0c8fba4e1d1a038481610445e3c835d303b2d3494373665",
+      "bytes": 750223,
+      "mtime": "2026-05-12T19:37:30"
+    },
+    {
+      "name": "PV_Logfile_5.csv_44.txt",
+      "sha256": "bf72cf8ea9259dd398285001ef4d2dd3f184ac130964a3fc0eeb21be2f98b0ff",
+      "bytes": 565782,
+      "mtime": "2026-05-12T19:37:39"
+    },
+    {
+      "name": "PV_Logfile_5.csv_46.txt",
+      "sha256": "7dd2d7ad6abfbfe72bddc5cef5c8c5c602ad7e15639369523bb2ca7641f8b003",
+      "bytes": 430331,
+      "mtime": "2026-05-12T19:59:46"
+    },
+    {
+      "name": "PV_Logfile_5.csv_47.txt",
+      "sha256": "80df508dfbe9e6dd0d046a1f03093d178fb1404effc36ee0f424be2ad10b7083",
+      "bytes": 337748,
+      "mtime": "2026-05-12T19:59:55"
+    },
+    {
+      "name": "PV_Logfile_5.csv_48.txt",
+      "sha256": "89e04131ba076a5b5d4ace9ca189f5426893220ce4c12eba690f536c43bda0fb",
+      "bytes": 543339,
+      "mtime": "2026-05-12T20:00:06"
+    },
+    {
+      "name": "PV_Logfile_5.csv_49.txt",
+      "sha256": "a75c1bbf52221a6ea2a420f7eca55d69a3d086b714afb22a9a4607c667b8cc36",
+      "bytes": 71885,
+      "mtime": "2026-05-12T20:21:56"
+    },
+    {
+      "name": "PV_Logfile_5.csv_50.txt",
+      "sha256": "a23eceb9979394d426bb937b42eebcc94216f87c6f4634edcc7e540e6ab58ab0",
+      "bytes": 74074,
+      "mtime": "2026-05-12T20:22:05"
+    },
+    {
+      "name": "PV_Logfile_5.csv_51.txt",
+      "sha256": "c56c340c0cec3958c0264b49a4aca6cd3aa0971444376b800a223b2a927c5a0a",
+      "bytes": 97164,
+      "mtime": "2026-05-12T20:22:15"
+    },
+    {
+      "name": "5TH GEAR.txt",
+      "sha256": "33050fdeabff1172e6805abc4d16a18cf167eec279eda8b3bf39060238736a50",
+      "bytes": 95973,
+      "mtime": "2026-05-12T20:22:26"
+    },
+    {
+      "name": "5TH GEAR_0.txt",
+      "sha256": "b23d512d9912912246a6e2040a6900d59b1e0db73ea64fc0a44f2ce94f9fc1f0",
+      "bytes": 75858,
+      "mtime": "2026-05-12T20:22:36"
+    }
+  ]
+}

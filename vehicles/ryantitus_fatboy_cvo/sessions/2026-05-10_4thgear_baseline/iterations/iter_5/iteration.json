@@ -1,0 +1,14 @@
+{
+  "id": "iter_5",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 5,
+  "patch_filename": "iter_5_patched.pvv",
+  "patch_base": "iter_3_patched.pvv",
+  "supersedes": "iter_4",
+  "evidence_findings": "iter3_dwrt_findings.json",
+  "evidence_tip_in_dir": "iterations/iter_3/pulls/tip_in_3rd_gear",
+  "status": "ready_to_flash",
+  "flashed_at": null,
+  "notes": "iter_5 = combined VE trim (rich WOT cells, +/-5%) + AE table revision (mid-decay boost, remove 0.91 tail enleanment). iter_4 (VE only) superseded -- never flashed. All other tables byte-identical to iter_3.",
+  "created_at": "2026-05-12T01:09:58.703Z"
+}

@@ -1,0 +1,11 @@
+{
+  "iteration_id": "iter_7",
+  "tune_state": "iter_7_patched.pvv",
+  "tune_sha256": "8f9c3eb6b0cf7f2fe82e189e165d80d35fd3743a6cfab8703c99c8fd7b7372ea",
+  "flashed_at": null,
+  "afr_source": "dyno_tailpipe_wideband_only",
+  "wideband_channel": "LC2 (Innovate venturi in collector)",
+  "lc1_status": "not_hooked_up_ignore",
+  "test_mode": "loaded_4th_gear_wot",
+  "pulls": []
+}

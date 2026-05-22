@@ -239,8 +239,7 @@ def get_live_data():
     return jsonify(_build_live_payload())
 
 
-@live_bp.route("/live/drain", methods=["GET"])
-def drain_live_samples():
+def _drain_live_samples_response():
     with _live_data_lock:
         raw_samples = list(_sample_ring)
         _sample_ring.clear()
@@ -263,6 +262,11 @@ def drain_live_samples():
             "last_update_ts": last_update_ts,
         }
     )
+
+
+@live_bp.route("/live/drain", methods=["GET"])
+def drain_live_samples():
+    return _drain_live_samples_response()
 
 
 @live_bp.route("/live/stream", methods=["GET"])
@@ -375,7 +379,7 @@ def live_data_alias():
 
 @live_bp.route("/hardware/live/drain", methods=["GET"])
 def live_drain_alias():
-    return drain_live_samples()
+    return _drain_live_samples_response()
 
 
 @live_bp.route("/hardware/live/stream", methods=["GET"])

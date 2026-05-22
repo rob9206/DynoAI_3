@@ -13,6 +13,7 @@ import { playUiSound } from '@/lib/ui-sounds';
 let globalDrainEndpointUnavailable = false;
 let globalDrainBackoffMs = 0;
 let globalDrainBackoffUntil = 0;
+const DRAIN_POLL_INTERVAL_MS = 1500;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -129,6 +130,8 @@ export interface UseJetDriveLiveOptions {
     useSse?: boolean;
     /** When true, page is in simulator mode - hook will poll live data and keep simulator data separate from hardware */
     isSimulatorActive?: boolean;
+    /** Poll /hardware/live/drain for high-resolution VE hit accumulation. */
+    enableDrain?: boolean;
 }
 
 export interface UseJetDriveLiveReturn {
@@ -360,6 +363,7 @@ const DEFAULT_OPTIONS: Required<Omit<UseJetDriveLiveOptions, 'isSimulatorActive'
     debug: false,
     useSse: true,
     isSimulatorActive: false,
+    enableDrain: false,
 };
 
 export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDriveLiveReturn {
@@ -743,10 +747,10 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         };
     }, [shouldPollLive, opts.useSse, opts.apiUrl, processLivePayload]);
 
-    // Drain polling: fetch /live/drain every 100ms to accumulate ALL samples
-    // for VE cell hit counting. Runs independently of SSE (which serves gauges).
+    // Drain polling is opt-in because the JetDrive page can mount multiple live
+    // hooks. Only the active VE accumulation source should drain samples.
     useEffect(() => {
-        if (!shouldPollLive) {
+        if (!shouldPollLive || !opts.enableDrain) {
             // Clear buffer when not capturing
             drainBufferRef.current = [];
             drainEndpointUnavailableRef.current = false;
@@ -821,10 +825,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             }
         };
 
-        // Start polling drain immediately, then every 100ms (aligned with 50ms
-        // aggregation window; 10Hz drain ≈ 2 polls per window = minimal loss)
+        // Start polling drain immediately, then at a rate that stays under the
+        // local 100/min default limiter while remaining inside the 1-2s backend
+        // sample ring retention window.
         void pollDrain();
-        drainIntervalRef.current = setInterval(pollDrain, 100);
+        drainIntervalRef.current = setInterval(pollDrain, DRAIN_POLL_INTERVAL_MS);
 
         return () => {
             if (drainIntervalRef.current) {
@@ -832,7 +837,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 drainIntervalRef.current = null;
             }
         };
-    }, [shouldPollLive, opts.apiUrl]);
+    }, [shouldPollLive, opts.apiUrl, opts.enableDrain]);
 
     // consumeDrainedSamples: returns all accumulated samples and clears the buffer.
     // Called by VE accumulation consumers (e.g., VEHeatmapPanel) at their own pace.

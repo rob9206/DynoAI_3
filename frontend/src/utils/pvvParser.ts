@@ -508,26 +508,26 @@ export function parsePVV(xmlContent: string): ParsedPVV {
                     // Identify key tables by name patterns
                     const nameLower = table.name.toLowerCase();
                     
-                    // Front VE table - prefer MAP-based over TPS-based
+                    // Front VE table - prefer MAP-based, but keep TPS-based as
+                    // a valid fallback for Power Vision tunes that only expose
+                    // throttle-based VE tables.
                     if (nameLower.includes('ve') && nameLower.includes('front')) {
                         // Prefer MAP-based tables (check both name and column units)
                         const isMapBased = nameLower.includes('map') || 
                                           table.columnUnits.toLowerCase().includes('kilopascal');
-                        const isTpsBased = nameLower.includes('tps') || 
-                                          table.columnUnits === '%';
                         
-                        if (isMapBased || (!isTpsBased && !result.veFront)) {
+                        if (isMapBased || !result.veFront) {
                             result.veFront = table;
                         }
                     }
-                    // Rear VE table - prefer MAP-based over TPS-based
+                    // Rear VE table - prefer MAP-based, but keep TPS-based as
+                    // a valid fallback for Power Vision tunes that only expose
+                    // throttle-based VE tables.
                     else if (nameLower.includes('ve') && nameLower.includes('rear')) {
                         const isMapBased = nameLower.includes('map') || 
                                           table.columnUnits.toLowerCase().includes('kilopascal');
-                        const isTpsBased = nameLower.includes('tps') || 
-                                          table.columnUnits === '%';
                         
-                        if (isMapBased || (!isTpsBased && !result.veRear)) {
+                        if (isMapBased || !result.veRear) {
                             result.veRear = table;
                         }
                     }

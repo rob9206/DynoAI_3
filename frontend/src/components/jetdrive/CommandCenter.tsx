@@ -254,6 +254,7 @@ function CommandCenterWithLive({
     autoConnect: true,
     pollInterval: 250,  // 250ms polling fallback; SSE is preferred (~20Hz event-driven)
     useSse: true,
+    enableDrain: true,
   });
 
   return (

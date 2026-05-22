@@ -1,0 +1,21 @@
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937
+Assertion Failed!
+  Text: offset_extra_seed == VIN_LOCK_EXTRA_SEED_OFFSET_v0101
+  File: DashDAQ.cpp - Line 1937

@@ -1,0 +1,10 @@
+{
+  "id": "dai_2026_0518_pcv_bake_verify",
+  "vehicle_id": "seanbike",
+  "base_tune_sha256": "994f314708dee1d1f7616b8196058e330efbd6ef7e538963d7f328bf6d7b9310",
+  "status": "active",
+  "notes": "First post-flash verification session. Base = newnenww_baked.pvv (SHA 994f3147...). PCV removed before flash. Goal: 1-2 light-load shakedown pulls, then 4th-gear loaded pull with wideband to verify AFR before full WOT runs. Sanity-gate override used during bake; watch for AFR error consistent with declared-vs-actual injector size or displacement mismatch.",
+  "created_at": "2026-05-18T09:30:08.961Z",
+  "updated_at": "2026-05-18T09:31:21.000Z",
+  "active_iteration_id": "iter_0"
+}

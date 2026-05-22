@@ -1,0 +1,12 @@
+{
+  "source": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v1.pvv",
+  "base_reference": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_baked.pvv",
+  "output": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v2_compatible.pvv",
+  "ve_cap_used": 130.35,
+  "cells_total": 918,
+  "cells_clamped": 418,
+  "cells_clamped_by_table": {
+    "tbl_ve_tps_based_front_cyl": 209,
+    "tbl_ve_tps_based_rear_cyl": 209
+  }
+}

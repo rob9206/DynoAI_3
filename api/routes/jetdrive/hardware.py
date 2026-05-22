@@ -22,7 +22,14 @@ import time
 from datetime import datetime
 from typing import Any
 
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask import (
+    Blueprint,
+    Response,
+    jsonify,
+    render_template_string,
+    request,
+    stream_with_context,
+)
 
 from ._shared import (
     JETDRIVE_IFACE,
@@ -913,7 +920,8 @@ def stop_live_capture():
 @hardware_bp.route("/hardware/live/data", methods=["GET"])
 def get_live_data():
     """Get current live channel data (polling-friendly JSON)."""
-    return jsonify(_build_live_data_payload())
+    include_all = _is_truthy_query_param(request.args.get("include_all"))
+    return jsonify(_build_live_data_payload(include_all=include_all))
 
 
 @hardware_bp.route("/hardware/live/drain", methods=["GET"])
@@ -949,13 +957,129 @@ def drain_live_samples():
     )
 
 
-def _build_live_data_payload() -> dict[str, Any]:
+def _matches_requested_live_channel(name: str, category: str = "", units: str = "") -> bool:
+    """Pass-through allowlist for the temporary VE/RPM/AFR/HP live display."""
+    raw = str(name or "").strip().lower()
+    normalized = (
+        raw.replace("_", " ")
+        .replace("-", " ")
+        .replace("/", " ")
+        .replace("(", " ")
+        .replace(")", " ")
+    )
+    padded = f" {normalized} "
+    category = str(category or "").strip().lower()
+    units = str(units or "").strip().lower()
+
+    # VE is only shown if the hardware/source actually publishes it. Do not
+    # derive VE from AFR/RPM/MAP in live channel plumbing.
+    if (
+        raw == "ve"
+        or " volumetric efficiency " in padded
+        or " volume efficiency " in padded
+        or " vol eff " in padded
+        or " ve " in padded
+    ):
+        return True
+
+    if " rpm " in padded or " engine speed " in padded:
+        return True
+
+    if (
+        category == "afr"
+        and units not in {"v", "volt", "volts"}
+    ) or any(
+        token in raw
+        for token in ("afr", "air/fuel", "air fuel", "a/f", "wideband", "wbo2")
+    ):
+        return True
+
+    if " lambda " in padded or raw.startswith("lambda"):
+        return True
+
+    if (
+        units in {"hp", "bhp"}
+        or " horsepower " in padded
+        or " hp " in padded
+        or " bhp " in padded
+        or (category == "dyno" and " power " in padded)
+    ):
+        return True
+
+    return False
+
+
+def _filter_live_display_channels(channels: dict[str, Any]) -> dict[str, Any]:
+    """Restrict public live payloads to VE, RPM, AFR/Lambda, and HP/Power."""
+    filtered: dict[str, Any] = {}
+    seen_names: set[str] = set()
+
+    for key, ch_data in channels.items():
+        if isinstance(key, str) and key.startswith("chan_"):
+            continue
+
+        if isinstance(ch_data, dict):
+            name = str(ch_data.get("name") or key)
+            category = str(ch_data.get("category") or "")
+            units = str(ch_data.get("units") or "")
+        else:
+            name = str(key)
+            category = ""
+            units = ""
+
+        if not _matches_requested_live_channel(name, category, units):
+            continue
+
+        # Keep one public entry per display name; provider-scoped/raw aliases
+        # remain in _live_data and discovery/debug endpoints for diagnostics.
+        dedupe_key = name.strip().lower()
+        if dedupe_key in seen_names:
+            continue
+        seen_names.add(dedupe_key)
+        filtered[key] = ch_data
+
+    return filtered
+
+
+def _is_truthy_query_param(value: str | None) -> bool:
+    """Parse common truthy query-param values."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _computed_live_channel_entry(
+    name: str,
+    value: float,
+    units: str,
+    last_update_ts: float | None,
+) -> dict[str, Any]:
+    try:
+        timestamp_ts = float(last_update_ts) if last_update_ts else time.time()
+    except Exception:
+        timestamp_ts = time.time()
+
+    return {
+        "key": f"computed:{name}",
+        "provider_id": None,
+        "id": None,
+        "name": name,
+        "value": float(value),
+        "timestamp": int(timestamp_ts * 1000),
+        "updated_at_ts": time.time(),
+        "category": "dyno",
+        "units": units,
+        "computed": True,
+    }
+
+
+def _build_live_data_payload(include_all: bool = False) -> dict[str, Any]:
     """Shared payload builder for polling + SSE."""
     if _is_simulator_active():
         from api.services.simulation.dyno_simulator import get_simulator
 
         sim = get_simulator()
         channels = sim.get_channels()
+        if not include_all:
+            channels = _filter_live_display_channels(channels)
         state = sim.get_state().value
         return {
             "capturing": True,
@@ -1013,8 +1137,14 @@ def _build_live_data_payload() -> dict[str, Any]:
             force_mag = abs(float(force))
             hp = cfg.calculate_hp_from_force(force_mag, rpm)
             tq = cfg.calculate_torque_from_force(force_mag)
-            channels.setdefault("Horsepower", {"value": hp})
-            channels.setdefault("Torque", {"value": tq})
+            channels.setdefault(
+                "Horsepower",
+                _computed_live_channel_entry("Horsepower", hp, "HP", last_update_ts),
+            )
+            channels.setdefault(
+                "Torque",
+                _computed_live_channel_entry("Torque", tq, "ft-lb", last_update_ts),
+            )
     except Exception:
         pass
 
@@ -1030,6 +1160,9 @@ def _build_live_data_payload() -> dict[str, Any]:
             last_update_iso = datetime.fromtimestamp(float(last_update_ts)).isoformat()
         except Exception:
             last_update_iso = None
+
+    if not include_all:
+        channels = _filter_live_display_channels(channels)
 
     response: dict[str, Any] = {
         "capturing": capturing,
@@ -1065,6 +1198,8 @@ def stream_live_data():
       VE hit accumulation and other consumers that need every sample.
     """
 
+    include_all = _is_truthy_query_param(request.args.get("include_all"))
+
     def _event_stream():
         last_sent_key: tuple[Any, ...] | None = None
         last_keepalive = time.time()
@@ -1075,7 +1210,7 @@ def stream_live_data():
             _live_data_event.wait(timeout=0.05)
             _live_data_event.clear()
 
-            payload = _build_live_data_payload()
+            payload = _build_live_data_payload(include_all=include_all)
             key = (
                 payload.get("simulated", False),
                 payload.get("capturing", False),
@@ -1101,6 +1236,502 @@ def stream_live_data():
         stream_with_context(_event_stream()),
         mimetype="text/event-stream",
         headers=headers,
+    )
+
+
+@hardware_bp.route("/hardware/diag", methods=["GET"])
+def live_diag_page():
+    """Minimal browser-based diagnostic page for live JetDrive channels."""
+    return render_template_string(
+        """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JetDrive Live Diagnostic</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-border: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --bad: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .header-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .btn {
+      border: 1px solid #374151;
+      background: #1f2937;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .btn:hover { background: #293548; }
+    .status-chip {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.8rem;
+      border: 1px solid #374151;
+    }
+    .status-ok { color: #4ade80; border-color: #166534; }
+    .status-warn { color: #facc15; border-color: #a16207; }
+    .status-bad { color: #f87171; border-color: #991b1b; }
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .tile {
+      border: 1px solid #374151;
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 88px;
+    }
+    .tile-name {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 4px;
+    }
+    .tile-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .tile-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .fresh-ok { border-color: #166534; }
+    .fresh-warn { border-color: #a16207; }
+    .fresh-bad { border-color: #991b1b; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td {
+      border-bottom: 1px solid #1f2937;
+      padding: 7px 6px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: rgba(31, 41, 55, 0.35);
+    }
+    tr.fresh-ok { background: rgba(22, 163, 74, 0.08); }
+    tr.fresh-warn { background: rgba(217, 119, 6, 0.1); }
+    tr.fresh-bad { background: rgba(220, 38, 38, 0.1); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <div class="header-row">
+        <div>
+          <h2 style="margin: 0 0 6px 0;">JetDrive Live Diagnostic</h2>
+          <div class="meta" id="meta"></div>
+        </div>
+        <div>
+          <button class="btn" id="startBtn" style="display:none;">Start Capture</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin: 0 0 10px 0;">Canonical Signals</h3>
+      <div class="tiles" id="tiles"></div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin: 0 0 10px 0;">All Channels</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Category</th>
+            <th>Units</th>
+            <th>Value</th>
+            <th>Age (s)</th>
+          </tr>
+        </thead>
+        <tbody id="allRows"></tbody>
+      </table>
+    </div>
+
+    <div class="footer-note mono">
+      Reading: SSE /api/jetdrive/hardware/live/stream?include_all=1 | Snapshot: /api/jetdrive/hardware/channels/discover
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "/api/jetdrive";
+    const LIVE_URL = API_BASE + "/hardware/live/data?include_all=1";
+    const STREAM_URL = API_BASE + "/hardware/live/stream?include_all=1";
+    const DISCOVER_URL = API_BASE + "/hardware/channels/discover";
+    const START_URL = API_BASE + "/hardware/live/start";
+    const MAPPING_URL = API_BASE + "/mapping";
+
+    const CANONICAL_SPECS = [
+      { key: "rpm", label: "RPM", hints: ["engine rpm", "rpm", "engine speed"] },
+      { key: "afr_front", label: "AFR Front", hints: ["afr front", "wbo2 afr front", "front afr"] },
+      { key: "afr_rear", label: "AFR Rear", hints: ["afr rear", "wbo2 afr rear", "rear afr"] },
+      { key: "afr_combined", label: "AFR Combined", hints: ["afr combined", "air/fuel", "air fuel", "a/f"] },
+      { key: "map_kpa", label: "MAP", hints: ["map", "manifold absolute pressure", "manifold"] },
+      { key: "tps", label: "TPS", hints: ["throttle position", "tps", "throttle"] },
+      { key: "torque", label: "Torque", hints: ["torque"] },
+      { key: "power", label: "Power (HP)", hints: ["power", "horsepower", " hp "] },
+      { key: "ect", label: "ECT", hints: ["ect", "coolant"] },
+      { key: "iat", label: "IAT", hints: ["iat", "intake air"] }
+    ];
+
+    let activeMapping = {};
+    let mappingLoaded = false;
+    let currentPayload = null;
+    let sse = null;
+
+    const metaEl = document.getElementById("meta");
+    const tilesEl = document.getElementById("tiles");
+    const allRowsEl = document.getElementById("allRows");
+    const startBtn = document.getElementById("startBtn");
+
+    function asNumber(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function channelAgeSeconds(channel, payloadTs) {
+      const now = Date.now() / 1000;
+      const ts = asNumber(channel?.updated_at_ts) ?? asNumber(payloadTs);
+      if (ts === null) return null;
+      return Math.max(0, now - ts);
+    }
+
+    function freshnessClass(age) {
+      if (age === null) return "fresh-bad";
+      if (age > 2.0) return "fresh-bad";
+      if (age > 0.5) return "fresh-warn";
+      return "fresh-ok";
+    }
+
+    function formatValue(key, value) {
+      const n = asNumber(value);
+      if (n === null) return "n/a";
+      if (key === "rpm") return String(Math.round(n));
+      if (key.startsWith("afr")) return n.toFixed(2);
+      if (key === "map_kpa" || key === "tps") return n.toFixed(1);
+      if (key === "power" || key === "torque") return n.toFixed(1);
+      if (key === "ect" || key === "iat") return n.toFixed(1);
+      return n.toFixed(3);
+    }
+
+    function formatAge(age) {
+      if (age === null) return "n/a";
+      return age.toFixed(2);
+    }
+
+    function normalizeChannels(channelsObj) {
+      const entries = Object.entries(channelsObj || {});
+      return entries.map(([key, value]) => {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          return {
+            key,
+            id: value.id ?? null,
+            name: String(value.name ?? key),
+            value: value.value,
+            category: value.category ?? "",
+            units: value.units ?? "",
+            updated_at_ts: value.updated_at_ts ?? null
+          };
+        }
+        return {
+          key,
+          id: null,
+          name: String(key),
+          value,
+          category: "",
+          units: "",
+          updated_at_ts: null
+        };
+      });
+    }
+
+    function nameMatches(channelName, needle) {
+      const hay = " " + String(channelName || "").toLowerCase().replace(/[_\\-()/]/g, " ") + " ";
+      const lit = String(needle || "").toLowerCase();
+      return hay.includes(" " + lit + " ") || hay.includes(lit);
+    }
+
+    function selectByHints(spec, channels, payloadTs) {
+      const candidates = channels.filter((ch) => {
+        const lower = String(ch.name || "").toLowerCase();
+        if (spec.key === "afr_combined") {
+          return lower.includes("afr") && !lower.includes("front") && !lower.includes("rear");
+        }
+        if (spec.key === "power") {
+          return lower.includes("power") || lower.includes("horsepower") || lower.includes(" hp ");
+        }
+        return spec.hints.some((hint) => nameMatches(ch.name, hint));
+      });
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => {
+        const ageA = channelAgeSeconds(a, payloadTs);
+        const ageB = channelAgeSeconds(b, payloadTs);
+        if (ageA === null && ageB === null) return 0;
+        if (ageA === null) return 1;
+        if (ageB === null) return -1;
+        return ageA - ageB;
+      });
+      return candidates[0];
+    }
+
+    function resolveCanonical(spec, channels, payloadTs) {
+      const mappedName = activeMapping[spec.key];
+      if (mappedName) {
+        const mapped = channels.find((ch) => String(ch.name || "").toLowerCase() === String(mappedName).toLowerCase());
+        if (mapped) return mapped;
+      }
+      return selectByHints(spec, channels, payloadTs);
+    }
+
+    function renderMeta(payload) {
+      const age = channelAgeSeconds({ updated_at_ts: payload.last_update_ts }, payload.last_update_ts);
+      const freshness = freshnessClass(age);
+      const freshnessLabel = freshness === "fresh-ok" ? "Fresh" : (freshness === "fresh-warn" ? "Aging" : "Stale");
+      const captureLabel = payload.capturing ? "capturing" : "stopped";
+      const captureClass = payload.capturing ? "status-ok" : "status-bad";
+      const freshClass = freshness === "fresh-ok" ? "status-ok" : (freshness === "fresh-warn" ? "status-warn" : "status-bad");
+      const provider = payload.provider_name || "Unknown provider";
+      const host = payload.provider_host || "n/a";
+      metaEl.innerHTML = ""
+        + "<span><strong>Provider:</strong> " + provider + "</span>"
+        + "<span><strong>Host:</strong> " + host + "</span>"
+        + "<span><strong>Channels:</strong> " + (payload.channel_count ?? 0) + "</span>"
+        + "<span class='status-chip " + captureClass + "'>" + captureLabel + "</span>"
+        + "<span class='status-chip " + freshClass + "'>" + freshnessLabel + " (" + formatAge(age) + "s)</span>";
+      startBtn.style.display = payload.capturing ? "none" : "inline-block";
+    }
+
+    function renderCanonicalTiles(payload, channels) {
+      const cards = [];
+      for (const spec of CANONICAL_SPECS) {
+        const ch = resolveCanonical(spec, channels, payload.last_update_ts);
+        const age = ch ? channelAgeSeconds(ch, payload.last_update_ts) : null;
+        const freshness = freshnessClass(age);
+        const value = ch ? formatValue(spec.key, ch.value) : "n/a";
+        const units = ch?.units ? String(ch.units) : "";
+        const source = ch ? String(ch.name || "unknown") : "unmapped";
+        cards.push(
+          "<div class='tile " + freshness + "'>"
+            + "<div class='tile-name'>" + spec.label + "</div>"
+            + "<div class='tile-value mono'>" + value + (units ? " " + units : "") + "</div>"
+            + "<div class='tile-meta'>source: " + source + "</div>"
+            + "<div class='tile-meta'>age: " + formatAge(age) + "s</div>"
+          + "</div>"
+        );
+      }
+      tilesEl.innerHTML = cards.join("");
+    }
+
+    function renderAllRows(payload, channels) {
+      const rows = [...channels];
+      rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" }));
+      const html = rows.map((ch) => {
+        const age = channelAgeSeconds(ch, payload.last_update_ts);
+        const rowClass = freshnessClass(age);
+        const rawValue = ch.value;
+        const value = Number.isFinite(Number(rawValue))
+          ? Number(rawValue).toFixed(4)
+          : String(rawValue ?? "n/a");
+        return "<tr class='" + rowClass + "'>"
+          + "<td>" + String(ch.name || "") + "</td>"
+          + "<td class='mono'>" + String(ch.id ?? "n/a") + "</td>"
+          + "<td>" + String(ch.category ?? "") + "</td>"
+          + "<td>" + String(ch.units ?? "") + "</td>"
+          + "<td class='mono'>" + value + "</td>"
+          + "<td class='mono'>" + formatAge(age) + "</td>"
+          + "</tr>";
+      }).join("");
+      allRowsEl.innerHTML = html || "<tr><td colspan='6'>No channels available.</td></tr>";
+    }
+
+    async function refreshMappingIfNeeded(payload) {
+      if (mappingLoaded) return;
+      const providerId = Number(payload?.provider_id);
+      const providerHost = String(payload?.provider_host || "");
+      if (!Number.isFinite(providerId) || !providerHost) {
+        return;
+      }
+      try {
+        const res = await fetch(MAPPING_URL, { cache: "no-store" });
+        if (!res.ok) {
+          mappingLoaded = true;
+          return;
+        }
+        const body = await res.json();
+        const mappings = Array.isArray(body.mappings) ? body.mappings : [];
+        const matched = mappings.find((m) => {
+          const pidMatch = Number(m.provider_id) === providerId;
+          const hostMatch = String(m.host || "") === providerHost;
+          return pidMatch && hostMatch;
+        });
+        if (matched?.channels && typeof matched.channels === "object") {
+          const next = {};
+          for (const [canonical, entry] of Object.entries(matched.channels)) {
+            if (entry && entry.enabled && entry.source_name) {
+              next[canonical] = String(entry.source_name);
+            }
+          }
+          activeMapping = next;
+        }
+      } catch (_err) {
+        activeMapping = {};
+      } finally {
+        mappingLoaded = true;
+      }
+    }
+
+    function updateFromPayload(payload) {
+      currentPayload = payload;
+      const channels = normalizeChannels(payload.channels);
+      renderMeta(payload);
+      renderCanonicalTiles(payload, channels);
+      renderAllRows(payload, channels);
+    }
+
+    async function loadSnapshotFromDiscover() {
+      try {
+        const res = await fetch(DISCOVER_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body.success || !Array.isArray(body.channels)) return;
+        const fallbackPayload = {
+          capturing: false,
+          provider_id: null,
+          provider_name: null,
+          provider_host: null,
+          channel_count: body.channel_count || body.channels.length || 0,
+          last_update_ts: null,
+          channels: Object.fromEntries(
+            body.channels.map((ch) => [
+              String(ch.name || "unknown"),
+              {
+                id: ch.id ?? null,
+                name: ch.name ?? "unknown",
+                value: ch.value,
+                category: "",
+                units: ch.suggested_config?.units ?? "",
+                updated_at_ts: null
+              }
+            ])
+          )
+        };
+        updateFromPayload(fallbackPayload);
+      } catch (_err) {
+        // no-op fallback
+      }
+    }
+
+    async function loadInitialData() {
+      await loadSnapshotFromDiscover();
+      try {
+        const res = await fetch(LIVE_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = await res.json();
+        await refreshMappingIfNeeded(payload);
+        updateFromPayload(payload);
+      } catch (_err) {
+        // no-op
+      }
+    }
+
+    function connectStream() {
+      if (sse) {
+        sse.close();
+      }
+      sse = new EventSource(STREAM_URL);
+      sse.onmessage = async (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (!mappingLoaded) {
+            await refreshMappingIfNeeded(payload);
+          }
+          updateFromPayload(payload);
+        } catch (_err) {
+          // malformed event ignored
+        }
+      };
+      sse.onerror = () => {
+        if (sse && sse.readyState === EventSource.CLOSED) {
+          setTimeout(connectStream, 1500);
+        }
+      };
+    }
+
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      try {
+        await fetch(START_URL, { method: "POST" });
+      } catch (_err) {
+        // no-op
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
+
+    loadInitialData().then(connectStream);
+  </script>
+</body>
+</html>
+        """
     )
 
 

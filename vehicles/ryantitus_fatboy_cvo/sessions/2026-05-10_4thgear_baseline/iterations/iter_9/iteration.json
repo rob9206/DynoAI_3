@@ -1,0 +1,13 @@
+{
+  "id": "iter_9",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 9,
+  "patch_filename": "iter_9_patched.pvv",
+  "patch_base": "iter_8_patched.pvv",
+  "supersedes": null,
+  "evidence_dir": "iterations/iter_8/pulls",
+  "status": "ready_to_flash",
+  "flashed_at": null,
+  "notes": "iter_9 = iter_8 base + decel rich-fix. Decel Enleanment 0.92 at operating-temp CHT (90-320 F), 1.0 cold (3-61 F). VE Front/Rear trimmed -7% at low-TPS decel cells (TPS 0/2/5/7/10, RPM 1500-5000). WOT VE/spark untouched. Targets cruise data finding that decel/MAP30-40 ran 1.5-2.5 AFR rich while real cruise (MAP 50-70) was on target.",
+  "created_at": "2026-05-12T23:45:41.294Z"
+}

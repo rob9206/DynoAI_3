@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "provider_signature": "15292_192.168.1.86_b93974dfbe13",
+  "provider_id": 15292,
+  "provider_name": "Dynojet Power Core",
+  "host": "192.168.1.86",
+  "created_at": "2026-05-12T20:37:35.715588",
+  "updated_at": "2026-05-12T20:40:16.590055",
+  "channels": {
+    "afr_front": {
+      "source_id": 67,
+      "source_name": "WBO2 AFR Rear",
+      "transform": "identity",
+      "enabled": true
+    },
+    "afr_rear": {
+      "source_id": 16,
+      "source_name": "Air/Fuel Ratio 2",
+      "transform": "identity",
+      "enabled": true
+    },
+    "power": {
+      "source_id": 7,
+      "source_name": "Power (uncorrected)",
+      "transform": "identity",
+      "enabled": true
+    },
+    "rpm": {
+      "source_id": 9,
+      "source_name": "Engine RPM",
+      "transform": "identity",
+      "enabled": true
+    },
+    "torque": {
+      "source_id": 10,
+      "source_name": "Torque (uncorrected)",
+      "transform": "identity",
+      "enabled": true
+    }
+  }
+}

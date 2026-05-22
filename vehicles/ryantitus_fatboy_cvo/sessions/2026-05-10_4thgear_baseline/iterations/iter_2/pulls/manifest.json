@@ -1,0 +1,148 @@
+{
+  "sources": [
+    {
+      "name": "PV_Logfile_5.csv_18.txt",
+      "sha256": "31b6988b39aedc3f8dd0d0af2ad3d7ce7724fd9a980064eb49f9d3cc7ca428f7",
+      "bytes": 265995
+    },
+    {
+      "name": "PV_Logfile_5.csv_18.wp8",
+      "sha256": "20197ff2acec3a08c307592dd38f9a7d6d12066425103e817167bc4b28aaa25f",
+      "bytes": 166461
+    },
+    {
+      "name": "PV_Logfile_5.csv_19.txt",
+      "sha256": "2c9c0d5d7dd76fce0b4702152ff79ca784cc5516bf07eca02751942cb3c2bd9b",
+      "bytes": 493950
+    },
+    {
+      "name": "PV_Logfile_5.csv_19.wp8",
+      "sha256": "a3daa1a07849cc56dda39aca31a3be55e5802b36f8d081fba283cabcd28e90bd",
+      "bytes": 388591
+    },
+    {
+      "name": "6th gear load then wot.txt",
+      "sha256": "3e1796fababdf4a25d9befb79e2285982e18f54cdc27aa904a043e867008dbd5",
+      "bytes": 163873
+    },
+    {
+      "name": "6th gear load then wot.wp8",
+      "sha256": "5cea63413e2b98e7a399df39f46da436128c234dfe3a308f97cc3b2b061776fb",
+      "bytes": 126956
+    },
+    {
+      "name": "6th gear load then wot_0.wp8",
+      "sha256": "0512e3212e256e9b398eb376724688474dc8fb2feca2cbc31f842f59c2c2c699",
+      "bytes": 79889,
+      "mtime": "2026-05-11T19:29:29"
+    },
+    {
+      "name": "6th gear load then wot_1.wp8",
+      "sha256": "d1964a7db4a426a2ecd2ac028f7da53f7f04c832d50d6a962ff31ba06f54d7a4",
+      "bytes": 69012,
+      "mtime": "2026-05-11T19:30:10"
+    },
+    {
+      "name": "6th gear load then wot_2.wp8",
+      "sha256": "675ef286aaf46593d44c304ff05af59cd8e04ee7957d1faa7efb87da174c8a19",
+      "bytes": 42680,
+      "mtime": "2026-05-11T19:30:26"
+    },
+    {
+      "name": "6th gear load then wot_3.wp8",
+      "sha256": "8e67aea038e9c833f22a24a12cbc0ada8b0fe377df98d239d62be2fab5d597e9",
+      "bytes": 79284,
+      "mtime": "2026-05-11T19:30:43"
+    },
+    {
+      "name": "6th gear load then wot_0.txt",
+      "sha256": "8ff6ce2bc3cf5de9f9b610a2aec43061a831b4cb9634750debc299dab952cdb4",
+      "bytes": 89254,
+      "mtime": "2026-05-11T19:33:02"
+    },
+    {
+      "name": "6th gear load then wot_1.txt",
+      "sha256": "0c54400d89b180da85026b412b0d816ab19d6e3ce4e27459964970923a1fabdb",
+      "bytes": 77001,
+      "mtime": "2026-05-11T19:33:17"
+    },
+    {
+      "name": "6th gear load then wot_2.txt",
+      "sha256": "57d10645a658fea84952b083427a38f058b0de58f49dbf42c69b34dc23db7990",
+      "bytes": 30361,
+      "mtime": "2026-05-11T19:33:43"
+    },
+    {
+      "name": "6th gear load then wot_3.txt",
+      "sha256": "a0564d97f5170561ea1ef431224d4cc532ed5ea968af689aa766bcd2b8738c3a",
+      "bytes": 97854,
+      "mtime": "2026-05-11T19:33:50"
+    },
+    {
+      "name": "6th gear load then wot_4.wp8",
+      "sha256": "4ec372a742eae352bc7772fb4eb046e7ea6eee7a4c2e7e5e36b599778fbed9eb",
+      "bytes": 72445,
+      "mtime": "2026-05-11T20:02:32"
+    },
+    {
+      "name": "6th gear load then wot_5.wp8",
+      "sha256": "dee4082b38d93b7eb7031235640a4ad18e05e39447d89d053e52b3701fc1049d",
+      "bytes": 60161,
+      "mtime": "2026-05-11T20:02:58"
+    },
+    {
+      "name": "6th gear load then wot_6.wp8",
+      "sha256": "7ca6c3484c4e2d8116745e293a0954d6f19395e0a4d29ef4332a17a49353ef4a",
+      "bytes": 69177,
+      "mtime": "2026-05-11T20:03:29"
+    },
+    {
+      "name": "6th gear load then wot_7.wp8",
+      "sha256": "eb257d8edab88b7591e8fae413a5018413da24fdce7fbb06e1e31fb8aca6b004",
+      "bytes": 70951,
+      "mtime": "2026-05-11T20:03:54"
+    },
+    {
+      "name": "6th gear load then wot_8.wp8",
+      "sha256": "f2db34873efff818e7058335cf762b9a2a54cc22d32b0443baebc417d3f2a4f2",
+      "bytes": 80244,
+      "mtime": "2026-05-11T20:04:21"
+    },
+    {
+      "name": "6th gear load then wot_9.wp8",
+      "sha256": "412aae1cde1044dcdb11d9ed62172bd88becf811443572874b407a4bb2f16fb9",
+      "bytes": 80423,
+      "mtime": "2026-05-11T20:04:43"
+    },
+    {
+      "name": "6th gear load then wot_9.txt",
+      "sha256": "98de77f0aa42f72b1149d9242784de231f413819fba4a600f6f15099f6653169",
+      "bytes": 85904,
+      "mtime": "2026-05-11T20:07:15"
+    },
+    {
+      "name": "6th gear load then wot_7.txt",
+      "sha256": "c91e966bf5edf9048d7f5922c95a75e393cace155a032a2f00f6238623df8948",
+      "bytes": 78044,
+      "mtime": "2026-05-11T20:07:22"
+    },
+    {
+      "name": "6th gear load then wot_6.txt",
+      "sha256": "fe0fd5f1a702d84518e5e4c23b029db3f6e7d4aac5579729d119a74b2ad5accb",
+      "bytes": 73069,
+      "mtime": "2026-05-11T20:07:28"
+    },
+    {
+      "name": "6th gear load then wot_5.txt",
+      "sha256": "c9a1515144cfe3f952bdc7e5b145b1d94c508093c19a897c5b2858fd52785c42",
+      "bytes": 64252,
+      "mtime": "2026-05-11T20:07:38"
+    },
+    {
+      "name": "6th gear load then wot_4.txt",
+      "sha256": "aa9d1c4bb5ea5679d80a2abe023798a5772580a202d33c8303f6b09d7ef6e0c3",
+      "bytes": 82293,
+      "mtime": "2026-05-11T20:07:44"
+    }
+  ]
+}

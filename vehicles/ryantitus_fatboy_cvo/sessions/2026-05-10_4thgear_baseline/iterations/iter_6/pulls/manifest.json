@@ -1,0 +1,68 @@
+{
+  "iteration_id": "iter_6",
+  "tune_state": "iter_6_patched.pvv",
+  "tune_sha256": "fd5ba039839ef3cc2c1608d963f388927c0172c7d843aa38bd04e2ec0bd1a5ff",
+  "afr_source": "dyno_tailpipe_wideband_only",
+  "wideband_channel": "LC2 (Innovate venturi in collector)",
+  "lc1_status": "not_hooked_up_ignore",
+  "test_mode": "loaded_4th_gear_wot",
+  "notes": [
+    "Pulls _25..28 captured with a DRAGGING REAR BRAKE; treat as load-test data, NOT free-accel WOT.",
+    "Pulls _31..33 captured AFTER brake fix; these are the valid iter_6 post-flash WOT pulls."
+  ],
+  "pulls": [
+    {
+      "name": "PV_Logfile_5.csv_25.txt",
+      "sha256": "4b62a9a7fb00875f318644db8634ab8c3c0d3bdd993ecf70016fb49f4635d23d",
+      "bytes": 67722,
+      "mtime": "2026-05-12T18:20:40",
+      "valid": false,
+      "invalid_reason": "rear_brake_dragging_loaded_pull"
+    },
+    {
+      "name": "PV_Logfile_5.csv_26.txt",
+      "sha256": "e1038a5be850cb33effb04a1b66df43bdb7a161f4aaf68bc06730ade8d50f54a",
+      "bytes": 92897,
+      "mtime": "2026-05-12T18:20:25",
+      "valid": false,
+      "invalid_reason": "rear_brake_dragging_loaded_pull"
+    },
+    {
+      "name": "PV_Logfile_5.csv_27.txt",
+      "sha256": "822a420b570b489810a18c2be3662b116fcf6d44d2d4e7a3531746eaf23db3a1",
+      "bytes": 87324,
+      "mtime": "2026-05-12T18:20:14",
+      "valid": false,
+      "invalid_reason": "rear_brake_dragging_loaded_pull"
+    },
+    {
+      "name": "PV_Logfile_5.csv_28.txt",
+      "sha256": "e8b67a8365ec5f3b1657fd1c45e966af963c731d4bf3bdc4fda7b887e8ae566c",
+      "bytes": 76194,
+      "mtime": "2026-05-12T18:20:00",
+      "valid": false,
+      "invalid_reason": "rear_brake_dragging_loaded_pull"
+    },
+    {
+      "name": "PV_Logfile_5.csv_31.txt",
+      "sha256": "5137bd879597854a3986aa30858b534a77eeae16f3650761e6fc571a506aadd6",
+      "bytes": 60645,
+      "mtime": "2026-05-12T18:43:25",
+      "valid": true
+    },
+    {
+      "name": "PV_Logfile_5.csv_32.txt",
+      "sha256": "28109eb5acc69c28c04483739e7d1fd210f83a77c554a69c060e15cae1cb534b",
+      "bytes": 58759,
+      "mtime": "2026-05-12T18:43:36",
+      "valid": true
+    },
+    {
+      "name": "PV_Logfile_5.csv_33.txt",
+      "sha256": "5377f1aa92ad34331079c313a9c1a7a413db0ec54eea2ac709610d8d40e04e89",
+      "bytes": 46310,
+      "mtime": "2026-05-12T18:43:46",
+      "valid": true
+    }
+  ]
+}

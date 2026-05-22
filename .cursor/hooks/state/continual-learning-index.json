@@ -1,0 +1,53 @@
+﻿{
+    "parent_transcripts":  [
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\0bed74b6-9206-4d7e-8ca1-2a7e6d06db01\\0bed74b6-9206-4d7e-8ca1-2a7e6d06db01.jsonl",
+                                   "mtime_utc":  "2026-05-11T23:15:52.4987900Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\1217f75d-1ee7-4684-bcf6-a88c9887220a\\1217f75d-1ee7-4684-bcf6-a88c9887220a.jsonl",
+                                   "mtime_utc":  "2026-05-12T00:11:30.6110640Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\25a22f4e-4bfd-46e8-8326-7ff8b7c0318d\\25a22f4e-4bfd-46e8-8326-7ff8b7c0318d.jsonl",
+                                   "mtime_utc":  "2026-04-17T18:18:33.9994692Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\2e513117-af9d-4d73-83d0-54cc9718d698\\2e513117-af9d-4d73-83d0-54cc9718d698.jsonl",
+                                   "mtime_utc":  "2026-04-30T03:55:24.1130005Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\3a5b3b05-3847-44b1-879d-cbdff6da7a23\\3a5b3b05-3847-44b1-879d-cbdff6da7a23.jsonl",
+                                   "mtime_utc":  "2026-04-17T19:47:07.4817296Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\7121ff75-a30a-4eea-bc37-35ca151f26af\\7121ff75-a30a-4eea-bc37-35ca151f26af.jsonl",
+                                   "mtime_utc":  "2026-04-27T13:14:32.5919066Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\84619b02-6873-4b6e-8f71-6486ca4f671b\\84619b02-6873-4b6e-8f71-6486ca4f671b.jsonl",
+                                   "mtime_utc":  "2026-04-27T15:58:16.5000123Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\87b18adf-d4c2-43e4-a22a-d00b92af5ee9\\87b18adf-d4c2-43e4-a22a-d00b92af5ee9.jsonl",
+                                   "mtime_utc":  "2026-04-17T18:09:17.7219066Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\a2e2c81f-436f-4ba2-94dc-170e7080cffb\\a2e2c81f-436f-4ba2-94dc-170e7080cffb.jsonl",
+                                   "mtime_utc":  "2026-05-01T10:50:58.0648271Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\a6e7099f-f5b3-46d8-9508-88e2a8cceb13\\a6e7099f-f5b3-46d8-9508-88e2a8cceb13.jsonl",
+                                   "mtime_utc":  "2026-04-20T00:45:44.6805375Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\ad4c29c3-0e51-42ec-8d8a-0b1efaf5279c\\ad4c29c3-0e51-42ec-8d8a-0b1efaf5279c.jsonl",
+                                   "mtime_utc":  "2026-04-27T13:48:32.1935856Z"
+                               },
+                               {
+                                   "path":  "C:\\Users\\dawso\\.cursor\\projects\\c-Dev-DynoAI-3\\agent-transcripts\\ad5ce9cc-d494-496e-99e4-08ff57ae37ef\\ad5ce9cc-d494-496e-99e4-08ff57ae37ef.jsonl",
+                                   "mtime_utc":  "2026-04-17T17:18:45.3660239Z"
+                               }
+                           ],
+    "updated_at_utc":  "2026-05-12T00:14:03.7466580Z"
+}

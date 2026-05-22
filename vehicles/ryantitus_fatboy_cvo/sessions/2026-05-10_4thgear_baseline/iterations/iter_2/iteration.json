@@ -1,0 +1,10 @@
+{
+  "id": "iter_2",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 2,
+  "patch_filename": "iter_2_patched.pvv",
+  "patch_base": "dynojet_stage.pvv",
+  "flashed_at": null,
+  "notes": "iter_2 v3 patch. Starts from Dynojet stage tune (88.48 CID, currently on the bike). Fixes Engine Displacement 88.48 -> 103 (~16.4% more fuel command everywhere). Adds +1 deg cam advance in 2-4k RPM x 60-95 kPa. Notches WOT spark -2/-1 deg at the 5300 RPM knock cell on both cylinders. Decel enleanment set to 1.0 (no overrun fuel cut). Max Knock Retard capped at 4 deg. RPM Limit restored to 6.2 (OEM). AFR target, VE, Calibration ID, Speedo, Accel Enrichment, and Spark Adjust by ECT are byte-identical to the Dynojet stage. No O2 sensors on bike -- AFR validation in iter_3 requires dyno tailpipe wideband only.",
+  "created_at": "2026-05-11T23:17:04.273Z"
+}

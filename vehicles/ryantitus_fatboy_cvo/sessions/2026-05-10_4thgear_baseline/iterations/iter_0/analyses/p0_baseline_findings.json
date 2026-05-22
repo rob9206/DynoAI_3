@@ -1,0 +1,198 @@
+{
+  "kind": "p0_baseline_findings",
+  "created_at": "2026-05-10T21:09:00-04:00",
+  "gear": "4th",
+  "source_pulls": [
+    "4thgear_baseline_pull_10.csv",
+    "4thgear_baseline_pull_11.csv",
+    "4thgear_baseline_pull_12.csv",
+    "4thgear_baseline_pull_13.csv"
+  ],
+  "afr_status": {
+    "usable": false,
+    "reason": "Innovate LC-2 wideband channels stuck at rail-saturation across all 4 pulls (Front=Rear=5.10V / 22.4 AFR equivalent). No usable AFR data. Disregard fueling analysis until wideband is fixed and pulls are retaken.",
+    "channels_checked": [
+      "(Harley - ECU Type 14 SW Level 141) WBO2 AFR Front",
+      "(Harley - ECU Type 14 SW Level 141) WBO2 AFR Rear",
+      "(PV) WBO2 AFR Front",
+      "(PV) WBO2 AFR Rear"
+    ]
+  },
+  "pulls": {
+    "4thgear_baseline_pull_10.csv": {
+      "classification": "WOT_baseline",
+      "samples": 124,
+      "rpm_min": 2385,
+      "rpm_max": 5949,
+      "tps_max_pct": 100,
+      "map_min_kpa": 17.4,
+      "map_max_kpa": 102.6,
+      "peak_hp": 88.0,
+      "peak_hp_at_rpm": 5192,
+      "peak_tq_ftlb": 117.1,
+      "peak_tq_at_rpm": 3582,
+      "inj_duty_front_max_pct": 92.6,
+      "inj_duty_front_at_rpm": 5926,
+      "inj_duty_rear_max_pct": 102.3,
+      "inj_duty_rear_at_rpm": 5926,
+      "ve_front_range": [
+        99.6,
+        115.5
+      ],
+      "ve_rear_range": [
+        109.5,
+        126.9
+      ],
+      "ve_rear_minus_front_median": 10.5,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_range_f": [
+        165,
+        167
+      ],
+      "iat_range_f": [
+        90,
+        104
+      ],
+      "speed_mph_max": 117.3
+    },
+    "4thgear_baseline_pull_11.csv": {
+      "classification": "NOT_WOT_partial_or_warmup",
+      "samples": 32,
+      "rpm_min": 2621,
+      "rpm_max": 2772,
+      "tps_max_pct": 8,
+      "map_min_kpa": 36.1,
+      "map_max_kpa": 36.8,
+      "peak_hp": 7.7,
+      "peak_tq_ftlb": 15.1,
+      "note": "TPS never exceeded 8% and RPM range 2620-2770 with high gear ratio. This is a cruise/warmup snippet, not a 4th-gear WOT baseline. Exclude from baseline averaging."
+    },
+    "4thgear_baseline_pull_12.csv": {
+      "classification": "WOT_baseline",
+      "samples": 129,
+      "rpm_min": 2401,
+      "rpm_max": 5931,
+      "tps_max_pct": 100,
+      "map_min_kpa": 38.5,
+      "map_max_kpa": 102.4,
+      "peak_hp": 90.0,
+      "peak_hp_at_rpm": 5206,
+      "peak_tq_ftlb": 107.5,
+      "peak_tq_at_rpm": 4103,
+      "inj_duty_front_max_pct": 90.7,
+      "inj_duty_front_at_rpm": 5931,
+      "inj_duty_rear_max_pct": 100.6,
+      "inj_duty_rear_at_rpm": 5931,
+      "ve_front_range": [
+        96.8,
+        115.0
+      ],
+      "ve_rear_range": [
+        103.4,
+        127.5
+      ],
+      "ve_rear_minus_front_median": 10.4,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_range_f": [
+        180,
+        181
+      ],
+      "iat_range_f": [
+        95,
+        111
+      ],
+      "speed_mph_max": 117.6
+    },
+    "4thgear_baseline_pull_13.csv": {
+      "classification": "WOT_baseline",
+      "samples": 127,
+      "rpm_min": 2687,
+      "rpm_max": 6128,
+      "tps_max_pct": 100,
+      "map_min_kpa": 12.5,
+      "map_max_kpa": 101.8,
+      "peak_hp": 90.7,
+      "peak_hp_at_rpm": 5305,
+      "peak_tq_ftlb": 115.8,
+      "peak_tq_at_rpm": 3155,
+      "inj_duty_front_max_pct": 86.0,
+      "inj_duty_front_at_rpm": 5616,
+      "inj_duty_rear_max_pct": 100.9,
+      "inj_duty_rear_at_rpm": 6106,
+      "ve_front_range": [
+        99.5,
+        117.4
+      ],
+      "ve_rear_range": [
+        107.6,
+        127.5
+      ],
+      "ve_rear_minus_front_median": 10.4,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_range_f": [
+        190,
+        192
+      ],
+      "iat_range_f": [
+        95,
+        113
+      ],
+      "speed_mph_max": 117.8
+    }
+  },
+  "aggregate_wot_baseline": {
+    "pulls_used": [
+      "10",
+      "12",
+      "13"
+    ],
+    "peak_hp_avg": 89.6,
+    "peak_tq_ftlb_avg": 113.5,
+    "peak_hp_rpm_band": [
+      5192,
+      5305
+    ],
+    "peak_tq_rpm_band": [
+      3155,
+      4103
+    ],
+    "ve_rear_minus_front_median": 10.4
+  },
+  "safety_findings": [
+    {
+      "level": "HIGH",
+      "id": "rear_injector_saturation",
+      "description": "Rear injector hits 100-102% duty cycle at 5900-6100 RPM on every full WOT pull. Stock 31.07 lb/hr injectors are physically maxed on the rear cylinder above ~5500 RPM. Trying to add fuel via VE/lambda above this RPM will produce no actual fueling change because the injector is already at full open. Front cylinder is also high (86-93%) but has some headroom.",
+      "matches_blueprint_risk": "injector_runout (HIGH)",
+      "recommended_action": "Quote injector upgrade (e.g. SE 4.9 g/s / ~38 lb/hr) before any tuning above 5500 RPM. Until then, cap WOT tuning RPM at 5400-5500."
+    },
+    {
+      "level": "INFO",
+      "id": "low_peak_hp_for_103_cvo",
+      "description": "Peak HP averaging 89.6 across the three WOT pulls. Stock 103 CVO + Pro Pipes book figure is 100-110 rwhp; this build (with cams) should be in 110-120 range. The shortfall is consistent with high-RPM injector saturation cutting fueling above 5000 RPM. Not a mechanical concern in itself."
+    },
+    {
+      "level": "INFO",
+      "id": "ve_rear_high_vs_front",
+      "description": "VE Rear consistently 10.4 points higher (median) than VE Front across all WOT pulls. Matches expected rear-cylinder heat bias for true-dual exhaust on a counterbalanced TC88B. Confirms dual_bank_weighting is the correct correction strategy when AFR comes back online."
+    },
+    {
+      "level": "INFO",
+      "id": "no_knock_retard",
+      "description": "Front and Rear Spark Knock Retard at 0.0 across all pulls. Stock CVO ignition map is healthy at current build state. No knock-event evidence to factor into timing work."
+    },
+    {
+      "level": "INFO",
+      "id": "cht_climbing_across_pulls",
+      "description": "CHT progression across the four pulls: 165 -> 174 -> 180 -> 192 F. Cooling has time to recover between pulls but the rear is loading. Not at oil_temp_rollback_f (280) or anything close, but worth tracking."
+    }
+  ],
+  "next_actions": [
+    "Fix wideband: verify Innovate LC-2 power, sensor warmup, bung seal, channel mapping front/rear, and that PV3 input voltage range matches LC-2 output. Retake at least 2 4th-gear WOT pulls before any fueling work.",
+    "Quote rear injector upgrade to customer (SE part or equivalent ~38 lb/hr). Tuning above 5500 RPM is meaningless until this is resolved.",
+    "Once AFR is back, P0 plausibility checks (BSFC closure on 103 ci, BMEP in 120-160 psi band, peak-torque RPM in 3800-4400) can run. Path-1 BSFC will be the cleanest sensor-fault detector."
+  ]
+}

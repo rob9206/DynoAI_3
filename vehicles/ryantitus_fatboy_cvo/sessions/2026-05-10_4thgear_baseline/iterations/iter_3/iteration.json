@@ -1,0 +1,16 @@
+{
+  "id": "iter_3",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 3,
+  "patch_filename": "iter_3_patched.pvv",
+  "patch_base": "dynojet_stage.pvv",
+  "supersedes": "iter_2",
+  "evidence_findings": "iter2_dwrt_findings.json",
+  "status": "flashed",
+  "flashed_at": "2026-05-12T00:17:00.000Z",
+  "flashed_sha256": "2be2e8520c73f66e47eb611aeeddc1a5e0139a597c938a855c77b3ed485370dd",
+  "pre_flash_base_sha256": "9bd9801281b87933f530a8bdcd0a4c7551e29eb60b7caa1c894fc57e20e53dad",
+  "post_flash_pulls_dir": "iterations/iter_3/pulls",
+  "notes": "iter_3 = iter_2 v3 (never flashed) plus VE corrections from DynoWare RT logs analyzed in iter_2/analyses/iter2_dwrt_findings.json. Single flash from dynojet_stage.pvv. AFR target tables unchanged. LC2 = Innovate venturi. FLASHED 2026-05-12 with SHA 2be2e85...85370dd; all 4th-gear logs in iter_2/pulls/ remain baseline (Dynojet stage tune) evidence. Post-flash pulls go into iter_3/pulls/.",
+  "created_at": "2026-05-12T00:08:42.211Z"
+}

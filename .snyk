@@ -1,0 +1,18 @@
+# Snyk Policy File
+# Excludes non-source tune/calibration files from Snyk Code scanning.
+# These are binary or proprietary dyno tune files (PVV, WP8, DynoWare logs, etc.)
+# and should never be treated as application source code.
+
+version: v1.25.0
+
+exclude:
+  code:
+    - "vehicles/**"
+    - "runs/**"
+    - "logs/**"
+    - "**/*.pvv"
+    - "**/*.wp8"
+    - "**/*.djt"
+    - "**/pulls/*.txt"
+    - "**/PV_Logfile_*.csv"
+    - "config/jetdrive_mappings/*.json"

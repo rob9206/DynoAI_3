@@ -1,0 +1,4 @@
+Time (s)	Speed (mph)	Power (hp)	LC1 AFR
+0.5	20	15	13.5
+1.0	30	25	13.2
+1.5	40	35	13.0

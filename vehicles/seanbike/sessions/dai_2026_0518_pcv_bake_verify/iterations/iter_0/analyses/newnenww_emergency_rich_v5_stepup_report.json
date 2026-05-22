@@ -1,0 +1,17 @@
+{
+  "base": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v4_stepup.pvv",
+  "output": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v5_stepup.pvv",
+  "changed_cells": 272,
+  "capped_cells": 272,
+  "max_requested_pct": 32.0,
+  "ve_cap": 155.0,
+  "ve_mins": {
+    "tbl_ve_tps_based_front_cyl": 74.745,
+    "tbl_ve_tps_based_rear_cyl": 72.0
+  },
+  "ve_maxs": {
+    "tbl_ve_tps_based_front_cyl": 155.0,
+    "tbl_ve_tps_based_rear_cyl": 155.0
+  },
+  "note": "Emergency step-up v5 after runnning_11/12/13 remained lean."
+}

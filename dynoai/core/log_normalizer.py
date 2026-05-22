@@ -63,6 +63,10 @@ WARNING_CODES = {
     "missing_channel:knock": "No knock data found - knock-based reasoning disabled",
     "missing_channel:knock_f": "Front cylinder knock not found",
     "missing_channel:knock_r": "Rear cylinder knock not found",
+    "missing_channel:iac": "Idle air control channel (iac) not found",
+    "missing_channel:inj_pw_f": "Front injector pulse width channel not found",
+    "missing_channel:inj_pw_r": "Rear injector pulse width channel not found",
+    "missing_channel:warm_up_afr": "Warm-up AFR channel not found",
     
     # Degraded mode warnings
     "degraded:per_cylinder_afr": "Using global AFR for both cylinders (no per-cylinder data)",
@@ -94,6 +98,7 @@ GLOBAL_FALLBACK_COLUMNS = [
 OPTIONAL_COLUMNS = [
     "tps", "iat", "ect", "vbatt", "torque",
     "knock", "knock_f", "knock_r",
+    "iac", "inj_pw_f", "inj_pw_r", "warm_up_afr",
     "time_ms", "timestamp",
 ]
 
@@ -153,6 +158,10 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
     # AFR commanded - global
     "afr_cmd": ["afr_cmd", "afr cmd", "afr_target", "afr target", "lambda_target",
                 "commanded_afr", "target_afr"],
+
+    # Warm-up AFR target
+    "warm_up_afr": ["warm_up_afr", "warm-up afr", "warmup_afr",
+                    "warm-up fuel afr (ratio)", "warmup_fuel_afr"],
     
     # Spark timing - front cylinder
     "spark_f": ["spark_f", "spark f", "advance_f", "advance f", "timing_f",
@@ -178,7 +187,19 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
     
     # Battery voltage
     "vbatt": ["vbatt", "battery", "battery_voltage", "batt_v", "voltage"],
-    
+
+    # Idle air control position
+    "iac": ["iac", "idle_air_control", "idle air control",
+            "idle air control motor position", "iac_steps", "iac_pos"],
+
+    # Injector pulse width (front cylinder)
+    "inj_pw_f": ["inj_pw_f", "inj pw f", "injector_time_f",
+                 "injector time front", "injector_pulse_width_f"],
+
+    # Injector pulse width (rear cylinder)
+    "inj_pw_r": ["inj_pw_r", "inj pw r", "injector_time_r",
+                 "injector time rear", "injector_pulse_width_r"],
+
     # Torque
     "torque": ["torque", "tq", "engine_torque", "wheel_torque", "ft_lb", "nm"],
     

@@ -1,0 +1,17 @@
+{
+  "base": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v3_conservative.pvv",
+  "output": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v4_stepup.pvv",
+  "changed_cells": 272,
+  "capped_cells": 224,
+  "max_requested_pct": 35.0,
+  "ve_cap": 145.0,
+  "ve_mins": {
+    "tbl_ve_tps_based_front_cyl": 74.745,
+    "tbl_ve_tps_based_rear_cyl": 72.0
+  },
+  "ve_maxs": {
+    "tbl_ve_tps_based_front_cyl": 145.0,
+    "tbl_ve_tps_based_rear_cyl": 145.0
+  },
+  "note": "Emergency step-up from flashed v3 after lean pulls runnning_10/11."
+}

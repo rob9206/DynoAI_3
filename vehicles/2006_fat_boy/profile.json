@@ -1,0 +1,13 @@
+{
+  "id": "2006_fat_boy",
+  "name": "2006 fat boy",
+  "year": 2006,
+  "make": "harley",
+  "model": "fatboy",
+  "displacement_ci": 103,
+  "ecu_signature": null,
+  "watch_folder": null,
+  "notes": "",
+  "created_at": "2026-05-12T00:28:04.914Z",
+  "updated_at": "2026-05-12T00:28:04.914Z"
+}

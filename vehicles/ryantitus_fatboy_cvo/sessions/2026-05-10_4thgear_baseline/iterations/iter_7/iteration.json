@@ -1,0 +1,13 @@
+{
+  "id": "iter_7",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 7,
+  "patch_filename": "iter_7_patched.pvv",
+  "patch_base": "iter_6_patched.pvv",
+  "supersedes": null,
+  "evidence_dir": "iterations/iter_6/pulls",
+  "status": "ready_to_flash",
+  "flashed_at": null,
+  "notes": "iter_7 = +1 deg WOT spark sweep at MAP=100 kPa, RPM 4.5/5.0/5.5, both cylinders. iter_6 brake-fixed pulls _31..33 showed 0 deg knock retard at 94.5-95.2 hp peak, leaving headroom. Knock cap unchanged at 4 deg. Knock notch at 5500/95 kPa preserved. All tables byte-identical to iter_6 except Spark Advance (Front Cyl) and Spark Advance (Rear Cyl).",
+  "created_at": "2026-05-12T22:54:26.771Z"
+}

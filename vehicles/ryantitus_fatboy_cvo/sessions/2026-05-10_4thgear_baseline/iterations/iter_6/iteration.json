@@ -1,0 +1,60 @@
+{
+  "id": "iter_6",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 6,
+  "patch_filename": "iter_6_patched.pvv",
+  "patch_base": "iter_3_patched.pvv",
+  "supersedes": "iter_5",
+  "evidence_dir": "iterations/iter_6/pulls",
+  "status": "flashed_validated",
+  "flashed_at": "2026-05-12T18:00:00-04:00",
+  "flashed_sha256": "fd5ba039839ef3cc2c1608d963f388927c0172c7d843aa38bd04e2ec0bd1a5ff",
+  "ecu_export_after_flash": {
+    "filename": "exporte6.pvv",
+    "sha256": "63d5edfbd1b891b1f09ca80e58b9a4f7b8694afe9d15ae7ebc33ecf3f0c3b9a3",
+    "displacement_cid": 103,
+    "ae_matches_iter_6": true,
+    "ve_matches_iter_6": "yes_within_xml_float_rounding (max delta <0.3% on WOT cells)",
+    "verdict": "Tune on the ECU is iter_6. Earlier hypothesis of bad flash was incorrect."
+  },
+  "valid_pulls": ["PV_Logfile_5.csv_31.txt", "PV_Logfile_5.csv_32.txt", "PV_Logfile_5.csv_33.txt"],
+  "invalid_pulls": [
+    {
+      "files": [
+        "PV_Logfile_5.csv_25.txt",
+        "PV_Logfile_5.csv_26.txt",
+        "PV_Logfile_5.csv_27.txt",
+        "PV_Logfile_5.csv_28.txt"
+      ],
+      "reason": "rear_brake_dragging",
+      "evidence": "RPM rate 530-540 rpm/s vs 760-820 rpm/s on healthy iter_3 and iter_6 _31-33; same MAP/TPS/displacement/AFF=unity ruled out tune/sensor/adaptive causes; user identified dragging rear brake."
+    }
+  ],
+  "post_flash_summary": {
+    "peak_hp": [94.48, 95.09, 95.16],
+    "peak_hp_rpm": [5273, 5404, 5348],
+    "lc2_at_peak": [11.97, 12.60, 12.76],
+    "wot_lc2_3000_5500_avg": [12.32, 12.80, 12.80],
+    "knock_max_deg": 0.0,
+    "cht_max_F": 153,
+    "iat_max_F": 108,
+    "rpm_rate_median": [760, 820, 760],
+    "injector_duty_rear_max_pct": [93.5, 88.6, 86.1],
+    "wot_pegged_pct": 0.0
+  },
+  "vs_iter_3_baseline": {
+    "iter_3_peak_hp": [91.69, 92.39],
+    "iter_6_peak_hp_avg": 94.91,
+    "delta_hp": "+2.5 to +3.5",
+    "afr_iter_3_avg_3k_5_5k": 11.66,
+    "afr_iter_6_avg_3k_5_5k": 12.64,
+    "interpretation": "iter_6 makes +3 hp over iter_3 with leaner combustion target -- AE fix improved transient AFR control without losing peak power. Tune is HEALTHIER than iter_3."
+  },
+  "concerns": [
+    "Rear injector duty hits 93.5% at 5500-6000 RPM (pull _31). Approaching saturation ceiling. Any further VE increase or RPM extension risks running out of injector.",
+    "AFR is now slightly lean of where this bike made best power on iter_3 (12.6-12.8 vs 11.5-11.7). Tune is safe on knock (0 retard) but power gain is modest. Could try an iter_7 spark sweep or accept this as the WOT target for the street tune."
+  ],
+  "notes": "iter_6 = AE table fix only (mid-decay boost, remove 0.91 tail enleanment). WOT VE trim from iter_5 has been REVERTED. POST-FLASH VALIDATION (2026-05-12 brake-fixed run): three independent pulls show 94.5/95.1/95.2 hp, 0 knock, AFR 11.97-12.76, well-controlled. Tune VALIDATED. Pulls _25-28 are loaded-data pulls due to dragging rear brake; do not use for free-accel HP claims.",
+  "created_at": "2026-05-12T22:09:57.544Z",
+  "validated_at": "2026-05-12T18:43:46-04:00"
+}

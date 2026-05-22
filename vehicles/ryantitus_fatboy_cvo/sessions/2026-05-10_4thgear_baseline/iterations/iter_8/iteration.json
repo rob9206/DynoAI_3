@@ -1,0 +1,40 @@
+{
+  "id": "iter_8",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 8,
+  "patch_filename": "iter_8_patched.pvv",
+  "patch_base": "iter_6_patched.pvv",
+  "supersedes": "iter_7",
+  "evidence_dir": "iterations/iter_8/pulls",
+  "status": "flashed_tested_safe_no_clear_wot_gain",
+  "flashed_at": "2026-05-12T19:20:00-04:00",
+  "flashed_sha256": "bdcd004fd9d333e6d3d90e39d37c574e4b294a5a02aa9bb1855ebfcc8c50dd21",
+  "valid_pulls": [
+    "PV_Logfile_5.csv_38.txt",
+    "PV_Logfile_5.csv_39.txt",
+    "PV_Logfile_5.csv_40.txt"
+  ],
+  "post_flash_summary": {
+    "peak_hp": [93.96, 94.28, 94.47],
+    "peak_hp_avg": 94.24,
+    "peak_hp_rpm": [5442, 5317, 5514],
+    "lc2_at_peak": [12.55, 12.73, 12.92],
+    "wot_lc2_3000_5500_avg": [12.68, 12.76, 13.04],
+    "knock_max_deg": 0.0,
+    "cht_max_F": 158,
+    "iat_max_F": 109,
+    "rpm_rate_median": [800, 660, 800],
+    "injector_duty_rear_max_pct": [90.9, 86.3, 85.0],
+    "wot_pegged_pct": 0.0
+  },
+  "vs_iter_6_baseline": {
+    "iter_6_peak_hp": [94.48, 95.09, 95.16],
+    "iter_6_peak_hp_avg": 94.91,
+    "iter_8_peak_hp_avg": 94.24,
+    "delta_hp_avg": -0.67,
+    "interpretation": "iter_8 is safe and repeats near iter_6, but the +2 deg WOT spark did not produce a clear power gain. VE smoothing may still improve street part-throttle feel because WOT VE was untouched."
+  },
+  "notes": "iter_8 = iter_6 base + cruise/part-throttle VE smoothing (RPM 1500-5000, TPS 0-60, WOT VE untouched) + aggressive +2 deg WOT spark at MAP=100 kPa for RPM 4500/5000/5500. Post-flash pulls _38..40 show 0 knock and healthy temps, but average WOT power is slightly below iter_6. Treat iter_8 as safe/street-smoothing candidate, not a WOT power winner.",
+  "created_at": "2026-05-12T23:13:01.893Z",
+  "validated_at": "2026-05-12T19:24:00-04:00"
+}

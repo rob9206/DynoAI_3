@@ -1,0 +1,13 @@
+{
+  "id": "iter_4",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 4,
+  "patch_filename": "iter_4_patched.pvv",
+  "patch_base": "iter_3_patched.pvv",
+  "supersedes": "iter_3",
+  "evidence_findings": "iter3_dwrt_findings.json",
+  "status": "ready_to_flash",
+  "flashed_at": null,
+  "notes": "iter_4 = small lean trim on top of iter_3. Only negative VE corrections (rich cells) applied, clamped to +/-5% per cell. AFR targets / spark / displacement / decel / knock cap / RPM limit byte-identical to iter_3. Source: iter_3 post-flash 4th-gear pulls.",
+  "created_at": "2026-05-12T00:31:42.144Z"
+}

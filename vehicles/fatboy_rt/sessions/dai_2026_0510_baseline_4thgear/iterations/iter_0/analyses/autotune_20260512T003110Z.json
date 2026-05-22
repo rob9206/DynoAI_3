@@ -1,0 +1,21 @@
+{
+  "vehicle_id": "fatboy_rt",
+  "session_id": "dai_2026_0510_baseline_4thgear",
+  "iteration_id": "iter_0",
+  "success": true,
+  "pulls_considered": 43,
+  "pulls_used": 1,
+  "primary_pull": "Table-VE_Front_Cyl.txt",
+  "data_source": "dynojet_txt",
+  "afr_mean_error_pct": null,
+  "zones_adjusted": null,
+  "peak_hp": null,
+  "peak_hp_rpm": null,
+  "peak_hp_mph": null,
+  "peak_tq": null,
+  "peak_tq_rpm": null,
+  "correction_pvv_path": null,
+  "analysis_json_path": "C:\\Dev\\DynoAI_3\\vehicles\\fatboy_rt\\sessions\\dai_2026_0510_baseline_4thgear\\iterations\\iter_0\\analyses\\autotune_20260512T003110Z.json",
+  "errors": [],
+  "generated_at": "2026-05-12T00:31:09.999Z"
+}

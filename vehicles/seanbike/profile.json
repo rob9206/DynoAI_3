@@ -1,0 +1,13 @@
+{
+  "id": "seanbike",
+  "name": "Sean Softail (2015 FXSB/FLS Softail family)",
+  "year": 2015,
+  "make": "Harley-Davidson",
+  "model": "Softail (model code GXM)",
+  "displacement_ci": 95.5,
+  "ecu_signature": null,
+  "watch_folder": "C:\\CommmandCenter\\Customer_Files\\seanbike\\dyno_inbox",
+  "notes": "VIN 1HD1GXM12FC325637. 88+100ci stroker (tune declares 95.5), SE-255 cams (unconfirmed), Thunder Header, Big Sucker intake, stock injectors. No O2 sensors assumed. Base tune = newnenww_baked.pvv (PCV trims baked into newnenww.pvv, sanity gates overridden because tune declared 31.07 lb/hr injectors and 95.5 CID). PCV physically removed from harness.",
+  "created_at": "2026-05-18T09:29:27.534Z",
+  "updated_at": "2026-05-18T09:29:27.534Z"
+}

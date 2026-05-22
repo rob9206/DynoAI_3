@@ -1,0 +1,15 @@
+{
+  "base": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_baked.pvv",
+  "output": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v3_conservative.pvv",
+  "changed_cells": 272,
+  "max_requested_pct": 24.0,
+  "ve_mins": {
+    "tbl_ve_tps_based_front_cyl": 74.745,
+    "tbl_ve_tps_based_rear_cyl": 72.0
+  },
+  "ve_maxs": {
+    "tbl_ve_tps_based_front_cyl": 126.5,
+    "tbl_ve_tps_based_rear_cyl": 130.35
+  },
+  "note": "Conservative compatibility patch from known flashable base; loaded cells only."
+}

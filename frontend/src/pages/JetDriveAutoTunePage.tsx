@@ -124,6 +124,7 @@ export default function JetDriveAutoTunePage() {
         pollInterval: 800,
         useSse: true,
         isSimulatorActive,
+        enableDrain: activeLiveSource === 'jetdrive',
     });
 
     const yourdynoLive = useYourDynoLive({
@@ -132,6 +133,7 @@ export default function JetDriveAutoTunePage() {
         pollInterval: 800,
         useSse: true,
         isSimulatorActive: false,
+        enableDrain: activeLiveSource === 'yourdyno',
     });
 
     const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
@@ -1186,6 +1188,7 @@ function JetDriveAutoTunePageOld() {
         apiUrl: API_BASE,
         pollInterval: 100,  // 100ms (10Hz) - fast updates for live tuning
         isSimulatorActive,
+        enableDrain: activeLiveSource === 'jetdrive',
     });
 
     // YourDyno live hook (uses compatible /hardware/* aliases on backend)
@@ -1193,6 +1196,7 @@ function JetDriveAutoTunePageOld() {
         apiUrl: YOURDYNO_API_BASE,
         pollInterval: 100,
         isSimulatorActive: false,
+        enableDrain: activeLiveSource === 'yourdyno',
     });
 
     const liveApiBase = activeLiveSource === 'yourdyno' ? YOURDYNO_API_BASE : API_BASE;

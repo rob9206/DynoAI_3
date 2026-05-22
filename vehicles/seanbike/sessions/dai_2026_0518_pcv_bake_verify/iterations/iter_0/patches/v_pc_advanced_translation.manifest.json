@@ -1,0 +1,46 @@
+{
+  "kind": "pc_advanced_translation",
+  "strategy": "fix_scalars_compensate_ve",
+  "inputs": {
+    "stock_ve_pvv": "C:\\Users\\dawso\\Downloads\\stock ve.pvv",
+    "base_pvv": "C:\\CommmandCenter\\Customer_Files\\seanbike\\exportedreadfrompv4.pvv",
+    "trim_csv": "C:\\Dev\\DynoAI_3\\tools\\seanbike\\pcv_advanced_trims.csv",
+    "sha256": {
+      "stock_ve_pvv": "37299b52a2aed018615e8fb790a3e1d592ce66d1849fdbd8f537d011e7669a75",
+      "base_pvv": "0580d07150cc9eea1854cbe6a7b55aaa223647519c9690c0e41261326823d29f",
+      "trim_csv": "d20e21998ab571ca8b929fbd44710f7a791789cb6d1445b5c480aa0f1b9e0709"
+    }
+  },
+  "mapping": {
+    "cyl1_table1": "rear",
+    "cyl2_table2": "front"
+  },
+  "scalars": {
+    "injector_size_old": 31.07,
+    "injector_size_new": 31.07,
+    "displacement_old": 95.5,
+    "displacement_new": 103.0,
+    "source_displacement_for_compensation": 95.5
+  },
+  "compensation_factor": 0.9271844660194175,
+  "ve_summary": {
+    "front_min": 70.92961165048544,
+    "front_max": 140.65388349514564,
+    "rear_min": 66.75728155339806,
+    "rear_max": 142.29500000000002,
+    "global_min": 66.75728155339806,
+    "global_max": 142.29500000000002,
+    "max_front_rear_delta": 18.682766990291242,
+    "max_front_rear_delta_rpm": 1500,
+    "max_front_rear_delta_tps": 20.0
+  },
+  "output": {
+    "pvv": "C:\\Dev\\DynoAI_3\\vehicles\\seanbike\\sessions\\dai_2026_0518_pcv_bake_verify\\iterations\\iter_0\\patches\\v_pc_advanced_translation.pvv",
+    "sha256": "bbeec7f4d22aa49aa1daed0a193d2c12e2c020f0088fff85c393a41153362fae",
+    "changed_ids": [
+      "tbl_engine_displacement",
+      "tbl_ve_tps_based_front_cyl",
+      "tbl_ve_tps_based_rear_cyl"
+    ]
+  }
+}

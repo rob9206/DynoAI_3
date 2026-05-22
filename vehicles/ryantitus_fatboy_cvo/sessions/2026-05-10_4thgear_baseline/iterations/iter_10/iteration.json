@@ -1,0 +1,13 @@
+{
+  "id": "iter_10",
+  "session_id": "2026-05-10_4thgear_baseline",
+  "index": 10,
+  "patch_filename": "iter_10_patched.pvv",
+  "patch_base": "iter_9_patched.pvv",
+  "supersedes": null,
+  "evidence_dir": "iterations/iter_9/pulls",
+  "status": "ready_to_flash",
+  "flashed_at": null,
+  "notes": "iter_10 = iter_9 base with spark mirror: Rear spark table set equal to Front spark table cell-for-cell to mirror proposed timing changes.",
+  "created_at": "2026-05-12T23:49:46.002Z"
+}

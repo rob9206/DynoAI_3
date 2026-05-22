@@ -1,0 +1,207 @@
+{
+  "kind": "iter1_postreflash_comparison",
+  "created_at": "2026-05-10T21:47:00-04:00",
+  "iteration": "iter_1",
+  "context": "First reflash applied. Same bike, 4th gear pulls 14/15/16/17 + 5th gear pull. Comparing against iter_0 baseline.",
+  "afr_status": {
+    "usable": false,
+    "reason": "Wideband channels now report 0.00 (was 5.10/rail-saturated pre-reflash). Different failure mode - channel disconnected vs sensor pegged. LC-2 likely unplugged during reflash and not reconnected. AFR feedback still cannot be used to validate this tune.",
+    "commanded_afr_visible": true,
+    "commanded_afr_range": [
+      12.31,
+      14.5
+    ]
+  },
+  "pulls": {
+    "postreflash_pull_14.csv": {
+      "classification": "WOT_4th",
+      "peak_hp": 92.8,
+      "peak_hp_rpm": 5307,
+      "peak_tq_ftlb": 104.0,
+      "peak_tq_rpm": 4149,
+      "inj_duty_front_max": 74.1,
+      "inj_duty_rear_max": 75.3,
+      "ve_front_range": [
+        88.6,
+        112.4
+      ],
+      "ve_rear_range": [
+        90.4,
+        118.6
+      ],
+      "ve_rear_minus_front_median": 1.42,
+      "knock_retard_front_max": 4.0,
+      "knock_retard_rear_max": 2.0,
+      "cht_max_f": 189,
+      "note": "Brief knock retard on front cyl (4 deg) cleared by next pull."
+    },
+    "postreflash_pull_15.csv": {
+      "classification": "WOT_4th",
+      "peak_hp": 93.5,
+      "peak_hp_rpm": 5206,
+      "peak_tq_ftlb": 104.4,
+      "peak_tq_rpm": 4124,
+      "inj_duty_front_max": 70.2,
+      "inj_duty_rear_max": 73.9,
+      "ve_front_range": [
+        88.6,
+        106.5
+      ],
+      "ve_rear_range": [
+        89.6,
+        106.5
+      ],
+      "ve_rear_minus_front_median": 1.0,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_max_f": 189
+    },
+    "postreflash_pull_16.csv": {
+      "classification": "WOT_4th",
+      "peak_hp": 93.7,
+      "peak_hp_rpm": 5129,
+      "peak_tq_ftlb": 103.7,
+      "peak_tq_rpm": 4171,
+      "inj_duty_front_max": 70.5,
+      "inj_duty_rear_max": 71.1,
+      "ve_front_range": [
+        90.0,
+        106.0
+      ],
+      "ve_rear_range": [
+        93.5,
+        110.6
+      ],
+      "ve_rear_minus_front_median": 1.06,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_max_f": 192
+    },
+    "postreflash_pull_17.csv": {
+      "classification": "WOT_4th",
+      "peak_hp": 94.4,
+      "peak_hp_rpm": 4897,
+      "peak_tq_ftlb": 105.0,
+      "peak_tq_rpm": 4153,
+      "inj_duty_front_max": 66.5,
+      "inj_duty_rear_max": 67.0,
+      "ve_front_range": [
+        88.5,
+        105.0
+      ],
+      "ve_rear_range": [
+        90.1,
+        112.7
+      ],
+      "ve_rear_minus_front_median": 1.0,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_max_f": 203
+    },
+    "postreflash_5thgear.csv": {
+      "classification": "WOT_5th",
+      "peak_hp": 97.1,
+      "peak_hp_rpm": 5286,
+      "peak_tq_ftlb": 106.2,
+      "peak_tq_rpm": 3708,
+      "inj_duty_front_max": 73.1,
+      "inj_duty_rear_max": 73.6,
+      "ve_front_range": [
+        88.6,
+        106.5
+      ],
+      "ve_rear_range": [
+        90.0,
+        115.0
+      ],
+      "ve_rear_minus_front_median": 1.3,
+      "knock_retard_front_max": 0.0,
+      "knock_retard_rear_max": 0.0,
+      "cht_max_f": 208,
+      "speed_mph_max": 130.7
+    }
+  },
+  "comparison_vs_iter0": {
+    "peak_hp_avg": {
+      "iter_0": 89.6,
+      "iter_1_4th": 93.6,
+      "iter_1_5th": 97.1,
+      "delta_4th": "+4.0 hp",
+      "delta_5th": "+7.5 hp"
+    },
+    "peak_tq_ftlb_avg": {
+      "iter_0": 113.5,
+      "iter_1_4th": 104.3,
+      "delta": "-9.2 ftlb (curve flattened, peak moved up RPM)"
+    },
+    "peak_tq_rpm_band": {
+      "iter_0": [
+        3155,
+        4103
+      ],
+      "iter_1": [
+        4124,
+        4171
+      ],
+      "note": "Peak TQ RPM moved up roughly 500 rpm and got tighter"
+    },
+    "inj_duty_rear_max": {
+      "iter_0": "~101% saturated",
+      "iter_1": "~71% with margin",
+      "delta": "CRITICAL FIX: rear injector no longer maxed"
+    },
+    "inj_duty_front_max": {
+      "iter_0": "~90%",
+      "iter_1": "~71%",
+      "delta": "-19 pts"
+    },
+    "ve_rear_minus_front_median": {
+      "iter_0": "+10.4",
+      "iter_1": "+1.0 to +1.4",
+      "note": "Front and rear VE tables now nearly equal. Rear-bias correction in old tune was reversed."
+    },
+    "knock_retard": {
+      "iter_0": "0/0 across all WOT",
+      "iter_1": "one event 4 deg front + 2 deg rear on pull 14, then 0",
+      "note": "Watch on subsequent pulls"
+    },
+    "cht_progression": {
+      "iter_0": "165-192 across 3 pulls",
+      "iter_1": "189-208 across 5 pulls (5th gear hottest at 208)",
+      "note": "Bike running hotter in this session - heat soak from sequential pulls"
+    }
+  },
+  "safety_findings": [
+    {
+      "level": "INFO",
+      "id": "injector_saturation_resolved",
+      "description": "Rear injector duty dropped from 100-102% (saturated) to 67-76% across all post-reflash pulls. Tuning above 5500 RPM is now physically possible. Previous HIGH risk flag (injector_runout) is mitigated by the new tune for current RPM range; if pushing to redline 6200, monitor on next pulls."
+    },
+    {
+      "level": "INFO",
+      "id": "ve_rebalance",
+      "description": "VE Rear minus VE Front median collapsed from +10.4 to +1.0-1.4. The new tune has nearly identical front and rear VE tables. This either: (a) reflects the customer/dealer flattening rear-bias correction that the OEM tune embedded, or (b) the autotune did this. Without AFR feedback we cannot tell whether the new flat-VE tune fits the engine."
+    },
+    {
+      "level": "WATCH",
+      "id": "one_knock_event",
+      "description": "Pull 14 had 4 deg front + 2 deg rear knock retard for a brief moment near peak HP. Cleared on subsequent pulls. Could be a hot cycle, fuel quality, or genuine borderline timing. Repeat in next session and see if it returns at the same RPM/load cell."
+    },
+    {
+      "level": "WATCH",
+      "id": "cht_climbing",
+      "description": "CHT progression 189 -> 207 -> 208 across the session, peaking on the 5th-gear pull. Not yet at any halt threshold but the rear is taking heat. Add cool-down between pulls."
+    },
+    {
+      "level": "BLOCKER",
+      "id": "no_afr_feedback",
+      "description": "Wideband still not producing usable AFR data (now 0.00 instead of 5.10 - different mode but same blocker). Cannot validate that the new tune is putting actual fuel where commanded. Cannot do closed-loop tuning until LC-2 is reconnected and verified."
+    }
+  ],
+  "next_actions": [
+    "Reconnect Innovate LC-2, verify warmup/power, retake 2-3 4th-gear WOT pulls so AFR can validate the new tune.",
+    "If knock event on pull 14 reappears, pull a few degrees of timing in the cell where it happened (around peak HP RPM).",
+    "Cool-down 60s between WOT pulls to keep CHT below 200 F.",
+    "Once AFR is back, decide: keep the flat VE Front=Rear approach, or restore some rear-cyl bias if AFR shows rear running leaner."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "fatboy_rt",
+  "name": "Ryan Titus 2006 FLSTFSE2 Fat Boy CVO",
+  "year": 2006,
+  "make": "Harley-Davidson",
+  "model": "FLSTFSE2",
+  "displacement_ci": 103.0,
+  "ecu_signature": null,
+  "watch_folder": null,
+  "notes": "2006 Screamin Eagle Fat Boy CVO. VIN 1HD1PNF156Y953325. Stroker kit recorded but bike is 103ci stock per shop attestation. PV3 token to this VIN.",
+  "created_at": "2026-05-11T01:12:35.238Z",
+  "updated_at": "2026-05-11T01:12:35.238Z"
+}

@@ -1,0 +1,30 @@
+{
+  "base_tune": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_baked.pvv",
+  "run_file": "C:\\CommmandCenter\\Customer_Files\\seanbike\\runnning_9.txt",
+  "output_tune": "C:\\CommmandCenter\\Customer_Files\\seanbike\\newnenww_emergency_rich_v1.pvv",
+  "afr_medians_by_tps_band": {
+    "20_40": 16.741,
+    "40_60": 16.8205,
+    "60_80": 17.288,
+    "80_100": 18.099
+  },
+  "corrections_pct_by_tps_band": {
+    "20_40": 29.82575757575758,
+    "40_60": 32.38846153846153,
+    "60_80": 38.0625,
+    "80_100": 44.398437499999986
+  },
+  "table_stats": {
+    "tbl_ve_tps_based_front_cyl": {
+      "changed_cells": 209,
+      "avg_pct": 41.589,
+      "max_pct": 50.398
+    },
+    "tbl_ve_tps_based_rear_cyl": {
+      "changed_cells": 209,
+      "avg_pct": 41.589,
+      "max_pct": 50.398
+    }
+  },
+  "note": "Single collector AFR source; identical enrichment strategy applied to front and rear VE tables."
+}

@@ -1,0 +1,24 @@
+{
+  "id": "ryantitus_fatboy_cvo",
+  "name": "Ryan Titus 2006 Fat Boy CVO",
+  "year": 2006,
+  "make": "Harley-Davidson",
+  "model": "FLSTFSE2 Screamin Eagle Fat Boy CVO",
+  "displacement_ci": 103.0,
+  "ecu_signature": null,
+  "watch_folder": "C:\\Users\\dawso\\OneDrive\\Desktop\\fat boy\\fatboy cvo\\2006\\ryan titus",
+  "notes": "VIN 1HD1PNF156Y953325 | TC88B | counterbalanced | PV3 ANNI2000AA135349 fw 2.9.2-1715 | OEM CalID 141NY103-001 | stock 31.07 lb/hr injectors | Pro Pipes V&H true dual",
+  "created_at": "2026-05-11T01:17:59.923Z",
+  "updated_at": "2026-05-11T23:00:00.000Z",
+  "tuning_guardrails": {
+    "version": 2,
+    "set_by": "iter_2 v3 patch generator",
+    "abort_if_cht_above_f": 220.0,
+    "min_cool_down_s_between_wot_pulls": 60,
+    "wot_rpm_ceiling_for_analysis": 5500,
+    "max_knock_retard_deg": 4.0,
+    "no_o2_sensors_on_bike": true,
+    "afr_source": "dyno_tailpipe_wideband_only",
+    "rationale": "Bike has NO O2 or wideband sensors anywhere -- not in the head pipes, not in the collector, not after the muffler. AFR validation for any iteration must come from the dyno's tailpipe wideband sniffer (DynoWare RT). Closed-loop fuel-trim tables are not exported in either base.pvv or dynojet_stage.pvv so closed loop is inactive at the export level. CHT progression 189-208 F across iter_1 with one brief knock event at 5307 RPM motivates the 220 F abort threshold and 60 s cool-down. Analysis ceiling 5500 RPM is informational beyond peak HP; rev limit is at 6200 RPM (OEM, restored in iter_2). Knock retard cap of 4 deg surfaces real timing issues without masking them."
+  }
+}

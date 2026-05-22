@@ -1,0 +1,10 @@
+{
+  "id": "dai_2026_0510_baseline_4thgear",
+  "vehicle_id": "fatboy_rt",
+  "base_tune_sha256": "2613e2e3f0660e24c7153e286b6a2472ecab01fc812c84a685084da188cbd313",
+  "status": "active",
+  "notes": "4th-gear baseline pulls captured 2026-05-10 evening. AFR sensor inop (stuck 22.4 / 5.1V rail) - disregard fuel data, mechanical/power data only. Three usable pulls (10/12/13) plus one warmup/abort (11).",
+  "created_at": "2026-05-11T01:12:35.242Z",
+  "updated_at": "2026-05-12T00:31:51.164Z",
+  "active_iteration_id": "iter_1"
+}
