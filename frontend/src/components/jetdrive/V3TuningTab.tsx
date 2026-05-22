@@ -67,7 +67,7 @@ const AIR_CLEANER_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Types for sub-components (for use by UnifiedTuningTab)
+// Types for exported V3 sub-components
 // ---------------------------------------------------------------------------
 export type V3SessionHook = ReturnType<typeof useV3Session>;
 
@@ -95,7 +95,7 @@ export interface V3ActiveSessionProps {
 }
 
 // ---------------------------------------------------------------------------
-// Exported sub-components for UnifiedTuningTab
+// Exported sub-components
 // ---------------------------------------------------------------------------
 
 export function V3SetupSection({

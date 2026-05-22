@@ -1,13 +1,10 @@
 export { JetDriveLiveDashboard } from './JetDriveLiveDashboard';
 export { QuickTunePanel } from './QuickTunePanel';
-export { StageConfigPanel } from './StageConfigPanel';
 export { InnovateAFRPanel } from './InnovateAFRPanel';
 export { DynoConfigPanel } from './DynoConfigPanel';
 export { IngestionHealthPanel } from './IngestionHealthPanel';
 export { IngestionStatusBadge } from './IngestionStatusBadge';
-export { HardwareTab } from './HardwareTab';
 export { AudioEngineControls } from './AudioEngineControls';
-export { SettingsSheet } from './SettingsSheet';
 export { CollapsibleSection } from './CollapsibleSection';
 export { CommandCenter } from './CommandCenter';
 export { TelemetryStrip } from './TelemetryStrip';

@@ -30,7 +30,7 @@ export interface HardwareConfig {
   fuel_type?: string;
   altitude_ft?: number;
   tune_platform?: string;
-  /** Grid override from PVV import or wizard */
+  /** Grid override from PVV import */
   rpm_bins?: number[];
   map_bins?: number[];
 }

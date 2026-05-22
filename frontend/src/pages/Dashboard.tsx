@@ -149,8 +149,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* VE Demo Banner */}
-      <Link to="/autotune-demo" className="block group">
+      {/* JetDrive quick access */}
+      <Link to="/jetdrive" className="block group">
         <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent hover:border-amber-500/50 hover:from-amber-500/15 transition-all duration-300 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -159,16 +159,16 @@ export default function Dashboard() {
               </div>
               <div>
                 <h3 className="font-semibold text-lg flex items-center gap-2">
-                  Interactive VE Table Demo
+                  JetDrive Command Center
                   <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">NEW</span>
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  See how DynoAI smooths VE tables in real-time with 3D visualization
+                  Open live tuning, hardware controls, and accelerated session tools
                 </p>
               </div>
             </div>
             <Button variant="outline" className="border-amber-500/50 text-amber-500 hover:bg-amber-500/10 group-hover:border-amber-400 group-hover:text-amber-400">
-              View Demo
+              Open JetDrive
               <Play className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
