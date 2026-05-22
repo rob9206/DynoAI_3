@@ -526,6 +526,9 @@ def _live_capture_loop(requested_provider_id: int | None = None):
 
         channel_values: dict[str, dict[str, Any]] = {}
         canonical_sources: dict[str, tuple[int, int]] = {}
+        AFR_CANONICAL_NAMES = {"AFR Front", "AFR Rear", "AFR"}
+        _knock_front: float | None = None
+        _knock_rear: float | None = None
 
         def _unit_score_for_canonical(canonical: str, unit: int) -> int:
             try:
@@ -580,16 +583,19 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         )
 
         def on_sample(s: JetDriveSample):
+            nonlocal _knock_front, _knock_rear
             validator.record_sample(s)
 
             prov = providers_by_id.get(s.provider_id)
             meta = (prov.channels or {}).get(s.channel_id) if prov else None
             raw_unit = int(getattr(meta, "unit", -1)) if meta else -1
+            raw_name_lower = str(s.channel_name or "").strip().lower()
 
             canonical_name = s.channel_name
             canonical_category = getattr(s, "category", "misc")
             canonical_units = getattr(s, "units", "")
             canonical_value = float(s.value)
+            is_lc_canonical_afr = False
 
             queue_sample = s
             wideband = canonicalize_wideband_sample(canonical_name, canonical_value)
@@ -598,6 +604,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 canonical_value = wideband.afr
                 canonical_units = wideband.units
                 canonical_category = wideband.category
+                is_lc_canonical_afr = canonical_name in AFR_CANONICAL_NAMES
                 queue_sample = JetDriveSample(
                     provider_id=s.provider_id,
                     channel_id=s.channel_id,
@@ -612,25 +619,45 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             # 50 ms aggregation path and live CSV never ingest raw LC-2 volts.
             queue_mgr.on_sample(queue_sample)
 
-            if raw_unit == 7 and canonical_name.strip().lower() == "pressure":
-                has_atmo = any(
-                    k in channel_values
-                    for k in ("Humidity", "Temperature 1", "Temperature 2")
-                )
-                if not has_atmo:
+            if raw_unit == 7:
+                if "manifold" in raw_name_lower:
                     canonical_name = "MAP kPa"
                     canonical_category = "engine"
                     canonical_units = "kPa"
-                else:
-                    canonical_units = "kPa"
-                    canonical_category = "atmospheric"
+                elif canonical_name.strip().lower() == "pressure":
+                    has_atmo = any(
+                        k in channel_values
+                        for k in ("Humidity", "Temperature 1", "Temperature 2")
+                    )
+                    if not has_atmo:
+                        canonical_name = "MAP kPa"
+                        canonical_category = "engine"
+                        canonical_units = "kPa"
+                    else:
+                        canonical_units = "kPa"
+                        canonical_category = "atmospheric"
 
-            if raw_unit == 6 and (
-                canonical_name.startswith("Internal Temp")
-                or canonical_name.startswith("Temperature ")
-            ):
-                canonical_value = _c_to_f(canonical_value)
-                canonical_units = "°F"
+            if "throttle position" in raw_name_lower and "sensor" not in raw_name_lower:
+                canonical_name = "TPS"
+                canonical_category = "engine"
+                canonical_units = "%"
+
+            if raw_unit == 6:
+                if "intake air temperature" in raw_name_lower:
+                    canonical_name = "IAT"
+                    canonical_category = "engine"
+                    canonical_value = _c_to_f(canonical_value)
+                    canonical_units = "°F"
+                elif "engine temperature" in raw_name_lower:
+                    canonical_name = "ECT"
+                    canonical_category = "engine"
+                    canonical_value = _c_to_f(canonical_value)
+                    canonical_units = "°F"
+                elif canonical_name.startswith("Internal Temp") or canonical_name.startswith(
+                    "Temperature "
+                ):
+                    canonical_value = _c_to_f(canonical_value)
+                    canonical_units = "°F"
 
             canonical_value = _apply_deadband(canonical_name, raw_unit, canonical_value)
 
@@ -641,12 +668,44 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 "provider_id": s.provider_id,
                 "id": s.channel_id,
                 "name": canonical_name,
+                "source_name": s.channel_name,
                 "value": canonical_value,
                 "timestamp": s.timestamp_ms,
                 "updated_at_ts": time.time(),
                 "category": canonical_category,
                 "units": canonical_units,
             }
+
+            allow_canonical_slot = not (
+                canonical_name in AFR_CANONICAL_NAMES and not is_lc_canonical_afr
+            )
+
+            knock_entry: dict[str, Any] | None = None
+            if "front spark knock retard" in raw_name_lower:
+                _knock_front = canonical_value
+            elif "rear spark knock retard" in raw_name_lower:
+                _knock_rear = canonical_value
+            if "spark knock retard" in raw_name_lower:
+                knock_values = [v for v in (_knock_front, _knock_rear) if v is not None]
+                if knock_values:
+                    knock_sources: list[str] = []
+                    if _knock_front is not None:
+                        knock_sources.append("Front Spark Knock Retard")
+                    if _knock_rear is not None:
+                        knock_sources.append("Rear Spark Knock Retard")
+                    knock_entry = {
+                        "key": f"computed:Knock:{s.provider_id}",
+                        "provider_id": s.provider_id,
+                        "id": None,
+                        "name": "Knock",
+                        "source_name": ", ".join(knock_sources),
+                        "value": float(max(knock_values)),
+                        "timestamp": s.timestamp_ms,
+                        "updated_at_ts": time.time(),
+                        "category": "engine",
+                        "units": "deg",
+                        "computed": True,
+                    }
 
             ATMO_PROBE_CHANNELS = {35, 36, 37, 38}
             ATMO_CANONICAL_NAMES = {
@@ -656,12 +715,12 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 "Humidity",
             }
 
-            current = canonical_sources.get(canonical_name)
+            current = canonical_sources.get(canonical_name) if allow_canonical_slot else None
             candidate = (s.provider_id, s.channel_id)
 
-            if current is None:
+            if allow_canonical_slot and current is None:
                 canonical_sources[canonical_name] = candidate
-            elif candidate != current:
+            elif allow_canonical_slot and candidate != current:
                 cur_provider_id, cur_chan_id = current
 
                 if canonical_name in ATMO_CANONICAL_NAMES:
@@ -680,7 +739,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     ) > _unit_score_for_canonical(canonical_name, cur_unit):
                         canonical_sources[canonical_name] = candidate
 
-            if canonical_sources.get(canonical_name) == candidate:
+            if allow_canonical_slot and canonical_sources.get(canonical_name) == candidate:
                 channel_values[canonical_name] = entry
 
             chan_alias = f"chan_{s.channel_id}"
@@ -692,14 +751,20 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 if not isinstance(live_channels, dict):
                     live_channels = {}
                     _live_data["channels"] = live_channels
-                live_channels[canonical_name] = entry
+                if allow_canonical_slot:
+                    live_channels[canonical_name] = entry
                 if chan_alias not in live_channels:
                     live_channels[chan_alias] = entry
+                if knock_entry is not None:
+                    channel_values["Knock"] = knock_entry
+                    live_channels["Knock"] = knock_entry
                 _live_data["last_update_ts"] = now_ts
                 if "error" in _live_data:
                     del _live_data["error"]
                 # Append to ring buffer for drain endpoint (per-channel granularity)
                 _sample_ring.append(entry)
+                if knock_entry is not None:
+                    _sample_ring.append(knock_entry)
             # Wake SSE listeners immediately instead of waiting for their sleep cycle
             _live_data_event.set()
 
@@ -958,7 +1023,7 @@ def drain_live_samples():
 
 
 def _matches_requested_live_channel(name: str, category: str = "", units: str = "") -> bool:
-    """Pass-through allowlist for the temporary VE/RPM/AFR/HP live display."""
+    """Pass-through allowlist for the Command Center live display."""
     raw = str(name or "").strip().lower()
     normalized = (
         raw.replace("_", " ")
@@ -1006,11 +1071,26 @@ def _matches_requested_live_channel(name: str, category: str = "", units: str = 
     ):
         return True
 
+    if " map " in padded or " manifold absolute pressure " in padded:
+        return True
+
+    if " tps " in padded or " throttle position " in padded:
+        return True
+
+    if " iat " in padded or " intake air temperature " in padded:
+        return True
+
+    if " ect " in padded or " engine temperature " in padded:
+        return True
+
+    if " knock " in padded:
+        return True
+
     return False
 
 
 def _filter_live_display_channels(channels: dict[str, Any]) -> dict[str, Any]:
-    """Restrict public live payloads to VE, RPM, AFR/Lambda, and HP/Power."""
+    """Restrict public live payloads to key tuning channels only."""
     filtered: dict[str, Any] = {}
     seen_names: set[str] = set()
 

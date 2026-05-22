@@ -537,3 +537,154 @@ class TestWidebandCanonicalizationOrdering:
         # Ensure original sample remains raw and unchanged.
         assert raw_sample.channel_name == "LC2 Volts Petrol AFR1"
         assert raw_sample.value == pytest.approx(2.5)
+
+    def test_lc_is_canonical_afr_source_of_truth(self, monkeypatch):
+        from api.routes.jetdrive import hardware
+        from api.routes.jetdrive._shared import (
+            _live_data,
+            _live_data_lock,
+            _sample_ring,
+        )
+
+        class FakeQueueManager:
+            def on_sample(self, _sample):
+                pass
+
+            def start_processing(self):
+                pass
+
+            def force_flush(self):
+                pass
+
+            def stop_processing(self):
+                pass
+
+        class FakeValidator:
+            def set_active_provider(self, _provider_id):
+                pass
+
+            def reset(self, _provider_id):
+                pass
+
+            def record_sample(self, _sample):
+                pass
+
+            def record_frame_stats(self, _provider_id, total=1):
+                pass
+
+        provider_id = 0x4321
+        lc_chan_id = 10
+        ecu_chan_id = 11
+        wbo2_chan_id = 12
+
+        lc_sample = jc.JetDriveSample(
+            provider_id=provider_id,
+            channel_id=lc_chan_id,
+            channel_name="LC1 Volts Petrol AFR",
+            timestamp_ms=1000,
+            value=13.2,
+            category="misc",
+            units="",
+        )
+        ecu_sample_same_name = jc.JetDriveSample(
+            provider_id=provider_id,
+            channel_id=ecu_chan_id,
+            channel_name="AFR Front",
+            timestamp_ms=1010,
+            value=0.2,
+            category="afr",
+            units="AFR",
+        )
+        ecu_sample_wbo2 = jc.JetDriveSample(
+            provider_id=provider_id,
+            channel_id=wbo2_chan_id,
+            channel_name="WBO2 AFR Front",
+            timestamp_ms=1020,
+            value=0.1,
+            category="afr",
+            units="AFR",
+        )
+
+        provider = jc.JetDriveProviderInfo(
+            provider_id=provider_id,
+            name="Fake Provider",
+            host="127.0.0.1",
+            port=22344,
+            channels={
+                lc_chan_id: jc.ChannelInfo(
+                    chan_id=lc_chan_id,
+                    name=lc_sample.channel_name,
+                    unit=int(jc.JDUnit.NoUnit),
+                ),
+                ecu_chan_id: jc.ChannelInfo(
+                    chan_id=ecu_chan_id,
+                    name=ecu_sample_same_name.channel_name,
+                    unit=int(jc.JDUnit.AFR),
+                ),
+                wbo2_chan_id: jc.ChannelInfo(
+                    chan_id=wbo2_chan_id,
+                    name=ecu_sample_wbo2.channel_name,
+                    unit=int(jc.JDUnit.AFR),
+                ),
+            },
+        )
+
+        async def fake_discover(_config, timeout=10.0):
+            return [provider]
+
+        async def fake_subscribe(
+            _provider,
+            _channel_names,
+            on_sample,
+            *,
+            config=None,
+            stop_event=None,
+            recv_timeout=2.0,
+            debug=True,
+            return_stats=True,
+        ):
+            on_sample(lc_sample)
+            on_sample(ecu_sample_same_name)
+            on_sample(ecu_sample_wbo2)
+            if stop_event is not None:
+                stop_event.set()
+            return {"total_frames": 3, "dropped_frames": 0, "non_provider_frames": 0}
+
+        fake_queue_mgr = FakeQueueManager()
+        fake_validator = FakeValidator()
+
+        import api.services.jetdrive.jetdrive_client as client_mod
+        import api.services.jetdrive.jetdrive_live_queue as queue_mod
+        import api.services.jetdrive.jetdrive_validation as validation_mod
+
+        monkeypatch.setattr(client_mod, "discover_providers", fake_discover)
+        monkeypatch.setattr(client_mod, "subscribe", fake_subscribe)
+        monkeypatch.setattr(queue_mod, "reset_live_queue_manager", lambda: None)
+        monkeypatch.setattr(queue_mod, "get_live_queue_manager", lambda: fake_queue_mgr)
+        monkeypatch.setattr(validation_mod, "get_validator", lambda: fake_validator)
+
+        with _live_data_lock:
+            _live_data["capturing"] = True
+            _live_data["channels"] = {}
+            _live_data["last_update_ts"] = None
+            _live_data.pop("error", None)
+            _sample_ring.clear()
+
+        try:
+            hardware._live_capture_loop(requested_provider_id=provider_id)
+        except asyncio.CancelledError:
+            pass
+
+        with _live_data_lock:
+            channels = dict(_live_data.get("channels", {}))
+
+        afr_front = channels.get("AFR Front")
+        assert isinstance(afr_front, dict)
+        assert float(afr_front["value"]) == pytest.approx(13.2)
+        assert str(afr_front.get("source_name")) == "LC1 Volts Petrol AFR"
+
+        # Raw ECU AFR channels are still available for diagnostics, but do not
+        # override canonical AFR Front.
+        wbo2 = channels.get("WBO2 AFR Front")
+        assert isinstance(wbo2, dict)
+        assert float(wbo2["value"]) == pytest.approx(0.1)

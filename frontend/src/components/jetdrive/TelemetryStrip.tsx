@@ -16,15 +16,6 @@ import type { KnockEvent } from '../../hooks/useAudioCapture';
 
 const MISSING_VALUE = '—';
 
-const RPM_CANDIDATES = ['RPM', 'Engine RPM', 'Digital RPM 1', 'Digital RPM 2'];
-const AFR_FRONT_CANDIDATES = ['AFR Front', 'Air/Fuel Ratio 1', 'User Analog 1', 'AFR 1', 'AFR'];
-const AFR_REAR_CANDIDATES = ['AFR Rear', 'Air/Fuel Ratio 2', 'User Analog 2', 'AFR 2'];
-const MAP_CANDIDATES = ['MAP', 'MAP kPa'];
-const TPS_CANDIDATES = ['TPS'];
-const IAT_CANDIDATES = ['IAT', 'IAT F'];
-const ECT_CANDIDATES = ['ECT', 'Engine Temp', 'Coolant Temp', 'Cylinder Head Temp', 'CHT', 'Head Temp'];
-const KNOCK_CANDIDATES = ['Knock', 'Knock Retard', 'Knock Level', 'Knock Count'];
-
 interface TelemetryStripProps {
   apiUrl?: string;
   live?: UseJetDriveLiveReturn;
@@ -36,29 +27,18 @@ interface ChannelMatch {
   name: string;
   value: number;
   units?: string;
+  source_name?: string;
 }
 
-function findChannel(
-  channels: Record<string, JetDriveChannel>,
-  candidates: string[],
-  fallbackIncludes: string[] = [],
-): ChannelMatch | null {
-  for (const candidate of candidates) {
-    const channel = channels[candidate];
-    if (channel && Number.isFinite(channel.value)) {
-      return { name: candidate, value: channel.value, units: channel.units };
-    }
-  }
-
-  const matchers = [...candidates, ...fallbackIncludes].map((entry) => entry.toLowerCase());
-  for (const [name, channel] of Object.entries(channels)) {
-    const lowerName = name.toLowerCase();
-    if (matchers.some((entry) => lowerName.includes(entry))) {
-      return { name, value: channel.value, units: channel.units };
-    }
-  }
-
-  return null;
+function getChannel(channels: Record<string, JetDriveChannel>, name: string): ChannelMatch | null {
+  const channel = channels[name];
+  if (!channel || !Number.isFinite(channel.value)) return null;
+  return {
+    name,
+    value: channel.value,
+    units: channel.units,
+    source_name: channel.source_name,
+  };
 }
 
 function formatNumber(value: number | null, decimals: number): string {
@@ -69,14 +49,6 @@ function formatNumber(value: number | null, decimals: number): string {
 function formatRpm(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return MISSING_VALUE;
   return new Intl.NumberFormat('en-US').format(Math.round(value));
-}
-
-function normalizeTemp(value: number | null, units?: string): number | null {
-  if (value === null || !Number.isFinite(value)) return null;
-  if (units?.toLowerCase().includes('c')) {
-    return (value * 9) / 5 + 32;
-  }
-  return value;
 }
 
 function getAfrTarget(mapKpa: number | null, targets: Record<number, number>): number | null {
@@ -207,35 +179,35 @@ function TelemetryStripContent({
   const [lastKnockAt, setLastKnockAt] = useState<number | null>(null);
 
   const rpmChannel = useMemo(
-    () => findChannel(live.channels, RPM_CANDIDATES, ['rpm']),
+    () => getChannel(live.channels, 'Engine RPM') ?? getChannel(live.channels, 'RPM'),
     [live.channels],
   );
   const afrFrontChannel = useMemo(
-    () => findChannel(live.channels, AFR_FRONT_CANDIDATES, ['afr front', 'afr 1']),
+    () => getChannel(live.channels, 'AFR Front'),
     [live.channels],
   );
   const afrRearChannel = useMemo(
-    () => findChannel(live.channels, AFR_REAR_CANDIDATES, ['afr rear', 'afr 2']),
+    () => getChannel(live.channels, 'AFR Rear'),
     [live.channels],
   );
   const mapChannel = useMemo(
-    () => findChannel(live.channels, MAP_CANDIDATES, ['map']),
+    () => getChannel(live.channels, 'MAP kPa'),
     [live.channels],
   );
   const tpsChannel = useMemo(
-    () => findChannel(live.channels, TPS_CANDIDATES, ['tps', 'throttle']),
+    () => getChannel(live.channels, 'TPS'),
     [live.channels],
   );
   const iatChannel = useMemo(
-    () => findChannel(live.channels, IAT_CANDIDATES, ['iat', 'intake']),
+    () => getChannel(live.channels, 'IAT'),
     [live.channels],
   );
   const ectChannel = useMemo(
-    () => findChannel(live.channels, ECT_CANDIDATES, ['ect', 'coolant', 'head temp']),
+    () => getChannel(live.channels, 'ECT'),
     [live.channels],
   );
   const knockChannel = useMemo(
-    () => findChannel(live.channels, KNOCK_CANDIDATES, ['knock']),
+    () => getChannel(live.channels, 'Knock'),
     [live.channels],
   );
 
@@ -246,8 +218,8 @@ function TelemetryStripContent({
       afrRear: afrRearChannel?.value ?? null,
       map: mapChannel?.value ?? null,
       tps: tpsChannel?.value ?? null,
-      iat: normalizeTemp(iatChannel?.value ?? null, iatChannel?.units),
-      ect: normalizeTemp(ectChannel?.value ?? null, ectChannel?.units),
+      iat: iatChannel?.value ?? null,
+      ect: ectChannel?.value ?? null,
       knock: knockChannel?.value ?? null,
     }),
     [
@@ -272,6 +244,14 @@ function TelemetryStripContent({
   const afrTarget = getAfrTarget(mapValue, afrTargets);
   const afrFrontState = getAfrState(afrValues.afrFront, afrTarget);
   const afrRearState = getAfrState(afrValues.afrRear, afrTarget);
+  const afrFrontSource = afrFrontChannel?.source_name ?? null;
+  const afrRearSource = afrRearChannel?.source_name ?? null;
+  const afrFrontStatusLeft = afrFrontSource
+    ? `${afrFrontState.label} · src: ${afrFrontSource}`
+    : afrFrontState.label;
+  const afrRearStatusLeft = afrRearSource
+    ? `${afrRearState.label} · src: ${afrRearSource}`
+    : afrRearState.label;
 
   const rpmHistory = rpmChannel?.name ? live.history[rpmChannel.name] : null;
   const afrFrontHistory = afrFrontChannel?.name ? live.history[afrFrontChannel.name] : null;
@@ -342,7 +322,7 @@ function TelemetryStripContent({
             value={formatNumber(afrValues.afrFront, 1)}
             valueClass={afrFrontState.valueClass}
             dot={afrValues.afrFront !== null ? 'live' : 'off'}
-            statusLeft={afrFrontState.label}
+            statusLeft={afrFrontStatusLeft}
             statusRight={afrTarget !== null ? `tgt: ${afrTarget.toFixed(1)}` : 'tgt: \u2014'}
             sparkline={
               afrFrontSparkData.length >= 2
@@ -359,7 +339,7 @@ function TelemetryStripContent({
             value={formatNumber(afrValues.afrRear, 1)}
             valueClass={afrRearState.valueClass}
             dot={afrValues.afrRear !== null ? 'live' : 'off'}
-            statusLeft={afrRearState.label}
+            statusLeft={afrRearStatusLeft}
             statusRight={afrTarget !== null ? `tgt: ${afrTarget.toFixed(1)}` : 'tgt: \u2014'}
             sparkline={
               afrRearSparkData.length >= 2

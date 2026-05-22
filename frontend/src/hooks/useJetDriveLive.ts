@@ -64,6 +64,8 @@ export interface JetDriveChannel {
     providerId?: number;
     /** Channel ID within provider */
     id?: number;
+    /** Original provider channel name backing this canonical slot */
+    source_name?: string;
     category?: ChannelCategory;
 }
 
@@ -537,6 +539,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 newChannels[displayName] = {
                     key: channelKey,
                     name: displayName,
+                    source_name: getString(chRaw.source_name) ?? undefined,
                     value,
                     units: config?.units ?? getString(chRaw.units) ?? '',
                     timestamp,

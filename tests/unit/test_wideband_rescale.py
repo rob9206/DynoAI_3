@@ -66,6 +66,8 @@ class TestChannelMatching:
         [
             ("LC2 Volts Petrol AFR1", "AFR Front"),
             ("LC2 Volts Petrol AFR2", "AFR Rear"),
+            ("LC1 Volts Petrol AFR", "AFR Front"),
+            ("LC2 Volts Petrol AFR", "AFR Rear"),
             ("lc2 volts petrol afr1", "AFR Front"),
             ("Volts Petrol AFR Front", "AFR Front"),
             ("Volts Petrol AFR Rear", "AFR Rear"),
@@ -119,10 +121,15 @@ class TestCanonicalization:
         assert canonicalize_wideband_sample("Engine RPM", 2500.0) is None
         assert canonicalize_wideband_sample("Torque", 42.0) is None
 
-    def test_out_of_range_voltage_returns_none(self):
-        # Values well outside the 0-5V rail (plus 10% pad) are rejected
-        # so an already-AFR reading cannot be mistakenly rescaled again.
-        assert canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 14.7) is None
+    @pytest.mark.parametrize("afr", [7.38, 14.7, 22.39])
+    def test_already_afr_values_pass_through_without_rescale(self, afr: float):
+        result = canonicalize_wideband_sample("LC2 Volts Petrol AFR1", afr)
+        assert result is not None
+        assert result.canonical_name == "AFR Front"
+        assert math.isclose(result.afr, afr, abs_tol=1e-6)
+
+    def test_values_outside_voltage_and_afr_ranges_return_none(self):
+        assert canonicalize_wideband_sample("LC2 Volts Petrol AFR1", 30.0) is None
         assert canonicalize_wideband_sample("LC2 Volts Petrol AFR1", -1.0) is None
 
     def test_voltage_just_outside_rail_is_allowed(self):

@@ -153,8 +153,9 @@ def match_wideband_channel(name: str) -> Optional[str]:
        with a cylinder hint.
 
     Front vs rear is decided by the cylinder/index hint ("1" / "front" /
-    "f" -> front; "2" / "rear" / "r" -> rear). When no hint is present
-    the canonical slot is plain "AFR".
+    "f" -> front; "2" / "rear" / "r" -> rear). If no explicit hint is
+    present, fall back to the LC device prefix where available
+    (``LC1`` => front, ``LC2`` => rear).
 
     Rigs with non-standard naming that this still misses should configure
     an explicit alias mapping rather than relying on pattern matching.
@@ -210,6 +211,13 @@ def match_wideband_channel(name: str) -> Optional[str]:
         or "volts 2" in lowered
         or " 2 " in f" {lowered} "
     )
+    has_lc1_hint = "lc1" in lowered or "lc-1" in lowered
+    has_lc2_hint = "lc2" in lowered or "lc-2" in lowered
+
+    if not has_front_hint and not has_rear_hint:
+        # Some exports omit AFR1/AFR2 suffixes. LC index still signals bank.
+        has_front_hint = has_lc1_hint
+        has_rear_hint = has_lc2_hint
 
     if has_front_hint and not has_rear_hint:
         return "AFR Front"
@@ -229,6 +237,11 @@ def _is_voltage_plausible(volts: float, cal: WidebandCalibration) -> bool:
     span = cal.v_max - cal.v_min
     pad = span * 0.1
     return (cal.v_min - pad) <= volts <= (cal.v_max + pad)
+
+
+def _is_afr_plausible(afr: float, cal: WidebandCalibration) -> bool:
+    """Return True when a sample already looks like AFR points."""
+    return (cal.afr_min - 0.5) <= afr <= (cal.afr_max + 0.5)
 
 
 def canonicalize_wideband_sample(
@@ -258,11 +271,13 @@ def canonicalize_wideband_sample(
         return None
 
     cal = calibration or _CURRENT_CALIBRATION
-    if not _is_voltage_plausible(volts, cal):
-        return None
-
-    afr = cal.volts_to_afr(volts)
-    return CanonicalizedSample(canonical_name=canonical, afr=afr)
+    if _is_voltage_plausible(volts, cal):
+        afr = cal.volts_to_afr(volts)
+        return CanonicalizedSample(canonical_name=canonical, afr=afr)
+    if _is_afr_plausible(volts, cal):
+        # DynoWare sometimes labels LC channels as "Volts" but sends AFR directly.
+        return CanonicalizedSample(canonical_name=canonical, afr=volts)
+    return None
 
 
 __all__ = [

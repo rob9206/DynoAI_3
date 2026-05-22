@@ -43,6 +43,7 @@ def test_live_payload_filter_keeps_only_requested_channel_groups():
         "Lambda 1",
         "Horsepower",
         "Wheel Power",
+        "MAP kPa",
         "VE Front",
         "Volumetric Efficiency",
     }
