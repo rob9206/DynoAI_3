@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, lazy } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { toast } from '@/lib/toast';
 import { useJetDriveLive } from '@/hooks/useJetDriveLive';
 import { useYourDynoLive } from '@/hooks/useYourDynoLive';
@@ -18,9 +18,24 @@ const NAV_ITEMS = [
   { label: 'History', to: '/history' },
 ];
 
-const LazyV3TuningTab = lazy(() =>
-  import('@/components/jetdrive/V3TuningTab').then((m) => ({ default: m.V3TuningTab })),
+const WorkspaceAutoTuneCard = () => (
+  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-6 text-zinc-100">
+    <h3 className="text-lg font-semibold text-zinc-100">AutoTune moved to Workspace</h3>
+    <p className="mt-2 text-sm text-zinc-300">
+      Generate flashable AutoTune patches from each vehicle session in Workspace. This JetDrive tab stays
+      available for live views, but patch generation now lives in the session workflow.
+    </p>
+    <div className="mt-4">
+      <Link
+        to="/workspace"
+        className="inline-flex items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+      >
+        Open workspace
+      </Link>
+    </div>
+  </div>
 );
+
 const LazyBaseMapGenerator = lazy(() =>
   import('@/components/jetdrive/BaseMapGenerator').then((m) => ({ default: m.BaseMapGenerator })),
 );
@@ -246,7 +261,7 @@ export default function JetDriveAutoTunePage() {
         tuningSubTab={tuningSubTab}
         onTuningSubTabChange={setTuningSubTab}
         BaseMapComponent={LazyBaseMapGenerator}
-        SessionComponent={LazyV3TuningTab}
+        SessionComponent={WorkspaceAutoTuneCard}
       />
     </div>
   );

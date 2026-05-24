@@ -281,6 +281,10 @@ export interface AnalysisResult {
   peak_tq?: number | null;
   peak_tq_rpm?: number | null;
   correction_pvv_path?: string | null;
+  correction_pvv_filename?: string | null;
+  correction_pvv_sha256?: string | null;
+  correction_pvv_n_changed_cells?: number | null;
+  correction_manifest_path?: string | null;
   analysis_json_path?: string | null;
   errors: string[];
   generated_at: string;

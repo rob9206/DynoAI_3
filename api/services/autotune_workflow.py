@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -37,6 +37,10 @@ from api.services.powercore_integration import (
     parse_powervision_log,
     parse_pvv_tune,
     powervision_log_to_dynoai_format,
+)
+from api.services.integrations.powercore.surgical_pvv_writer import (
+    load_ve_table_axes,
+    write_ve_correction_patch,
 )
 from api.services.yourdyno import parse_yourdyno_run
 
@@ -242,6 +246,11 @@ class AutoTuneWorkflow:
         # TuneLab-inspired weighting options
         use_weighted_binning: bool = False,
         weighting_strategy: Optional[WeightingStrategy] = None,
+        # Surgical PVV patch options
+        base_pvv_path: Optional[Union[str, Path]] = None,
+        target_ve_table_ids: Optional[list[str]] = None,
+        ve_cap: Optional[float] = None,
+        ve_floor: Optional[float] = None,
     ) -> None:
         """
         Initialize AutoTuneWorkflow.
@@ -265,11 +274,23 @@ class AutoTuneWorkflow:
             # TuneLab-inspired weighting (NEW)
             use_weighted_binning: Use distance-weighted cell accumulation
             weighting_strategy: Custom weighting strategy (default: LogarithmicWeighting)
+
+            # Surgical PVV patching (NEW)
+            base_pvv_path: Base PVV used as surgical patch template
+            target_ve_table_ids: VE table Item ids to mutate in base PVV
+            ve_cap: Optional absolute upper VE value clamp
+            ve_floor: Optional absolute lower VE value clamp
         """
         self.rpm_axis = rpm_axis or self.DEFAULT_RPM_AXIS
         self.map_axis = map_axis or self.DEFAULT_MAP_AXIS
+        self.load_axis = list(self.map_axis)
+        self.load_channel: Literal["MAP", "TPS"] = "MAP"
         self.max_correction_pct = max_correction_pct
         self.math_version = math_version or self.DEFAULT_MATH_VERSION
+        self.base_pvv_path: Optional[Path] = None
+        self.target_ve_table_ids: list[str] = []
+        self.ve_cap = ve_cap
+        self.ve_floor = ve_floor
 
         # Allow custom AFR targets (keyed by MAP in kPa)
         if afr_targets:
@@ -296,6 +317,74 @@ class AutoTuneWorkflow:
         self._filter_chain: Optional[CompositeFilter] = None
         if self.enable_filtering:
             self._build_filter_chain()
+
+        if base_pvv_path and target_ve_table_ids:
+            self.configure_from_base_pvv(
+                base_pvv_path=base_pvv_path,
+                target_ve_table_ids=target_ve_table_ids,
+            )
+
+    def configure_from_base_pvv(
+        self,
+        base_pvv_path: Union[str, Path],
+        target_ve_table_ids: list[str],
+    ) -> None:
+        """
+        Configure workflow axes from VE tables in an existing base PVV.
+
+        All target table ids must share the same row/column axes.
+        """
+        if not target_ve_table_ids:
+            raise ValueError("target_ve_table_ids must contain at least one table id")
+
+        resolved_path = Path(base_pvv_path).expanduser().resolve()
+        axes_by_id = load_ve_table_axes(resolved_path, target_ve_table_ids)
+
+        first_id = target_ve_table_ids[0]
+        if first_id not in axes_by_id:
+            raise ValueError(f"Could not load primary VE table id: {first_id}")
+        reference = axes_by_id[first_id]
+
+        for table_id in target_ve_table_ids[1:]:
+            axes = axes_by_id[table_id]
+            if axes.shape != reference.shape:
+                raise ValueError(
+                    f"VE table shape mismatch: {table_id}={axes.shape}, "
+                    f"{first_id}={reference.shape}"
+                )
+            if not np.allclose(axes.row_axis, reference.row_axis):
+                raise ValueError(
+                    f"VE table RPM axis mismatch between {table_id} and {first_id}"
+                )
+            if not np.allclose(axes.col_axis, reference.col_axis):
+                raise ValueError(
+                    f"VE table load axis mismatch between {table_id} and {first_id}"
+                )
+
+        col_units = (reference.col_units or "").strip().lower()
+        inferred_load_channel: Literal["MAP", "TPS"] = "MAP"
+        if "%" in col_units or "tps" in col_units:
+            inferred_load_channel = "TPS"
+        elif "kpa" in col_units or "kilopascal" in col_units:
+            inferred_load_channel = "MAP"
+        elif any("tps" in table_id.lower() for table_id in target_ve_table_ids):
+            inferred_load_channel = "TPS"
+
+        self.base_pvv_path = resolved_path
+        self.target_ve_table_ids = list(target_ve_table_ids)
+        self.rpm_axis = [float(v) for v in reference.row_axis.tolist()]
+        self.map_axis = [float(v) for v in reference.col_axis.tolist()]
+        self.load_axis = list(self.map_axis)
+        self.load_channel = inferred_load_channel
+
+        logger.info(
+            "Configured workflow from base PVV %s: load_channel=%s, shape=%sx%s, tables=%s",
+            resolved_path,
+            self.load_channel,
+            len(self.rpm_axis),
+            len(self.load_axis),
+            ",".join(self.target_ve_table_ids),
+        )
 
     def _build_filter_chain(self) -> None:
         """Build the AFR filter chain based on configuration."""
@@ -627,14 +716,30 @@ class AutoTuneWorkflow:
             session.errors.append("No RPM column found in data")
             return None
 
-        # Find MAP column
-        map_col = next(
-            (c for c in df.columns if c in ["MAP kPa", "MAP_kPa", "MAP"]), None
-        )
-        if map_col is None:
-            # Estimate from RPM
-            df["MAP kPa"] = df[rpm_col].apply(self._estimate_map_from_rpm)
-            map_col = "MAP kPa"
+        # Find load column based on configured channel mode.
+        if self.load_channel == "MAP":
+            load_col = next(
+                (
+                    c
+                    for c in df.columns
+                    if c in ["MAP kPa", "MAP_kPa", "MAP", "Manifold Absolute Pressure"]
+                ),
+                None,
+            )
+        else:
+            load_col = next(
+                (
+                    c
+                    for c in df.columns
+                    if c in ["TPS", "Throttle Position", "Throttle Pct"]
+                ),
+                None,
+            )
+        if load_col is None:
+            session.errors.append(
+                f"No {self.load_channel} column found; refusing to fabricate load data"
+            )
+            return None
 
         # Find AFR column
         afr_cols = [c for c in df.columns if "AFR" in c]
@@ -683,7 +788,7 @@ class AutoTuneWorkflow:
 
         # Initialize 2D matrices
         n_rpm = len(self.rpm_axis)
-        n_map = len(self.map_axis)
+        n_map = len(self.load_axis)
         afr_error_matrix = np.full((n_rpm, n_map), np.nan)  # AFR points
         ve_delta_matrix = np.full((n_rpm, n_map), np.nan)  # VE %
         hit_matrix = np.zeros((n_rpm, n_map), dtype=int)
@@ -693,7 +798,7 @@ class AutoTuneWorkflow:
             # TuneLab-style weighted accumulation
             accumulator = WeightedBinAccumulator(
                 x_axis=self.rpm_axis,
-                y_axis=self.map_axis,
+                y_axis=self.load_axis,
                 weighting=self.weighting_strategy,
                 min_hits=self.MIN_HITS_PER_ZONE,
             )
@@ -702,10 +807,10 @@ class AutoTuneWorkflow:
             for _, row in df.iterrows():
                 rpm = row[rpm_col]
                 afr = row[afr_meas_col]
-                map_kpa = row[map_col]
+                load_value = row[load_col]
 
-                if not (pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa)):
-                    accumulator.add_sample(rpm, map_kpa, afr)
+                if not (pd.isna(rpm) or pd.isna(afr) or pd.isna(load_value)):
+                    accumulator.add_sample(rpm, load_value, afr)
 
             # Get weighted results
             afr_table = accumulator.get_table()
@@ -719,7 +824,7 @@ class AutoTuneWorkflow:
                         mean_afr is not None
                         and hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE
                     ):
-                        target_afr = self.get_target_afr(self.map_axis[j])
+                        target_afr = self.get_target_afr(self.load_axis[j])
                         afr_error = mean_afr - target_afr
                         afr_error_matrix[i, j] = afr_error
 
@@ -742,13 +847,13 @@ class AutoTuneWorkflow:
             for _, row in df.iterrows():
                 rpm = row[rpm_col]
                 afr = row[afr_meas_col]
-                map_kpa = row[map_col]
+                load_value = row[load_col]
 
-                if pd.isna(rpm) or pd.isna(afr) or pd.isna(map_kpa):
+                if pd.isna(rpm) or pd.isna(afr) or pd.isna(load_value):
                     continue
 
                 rpm_idx = nearest_bin(rpm, self.rpm_axis)
-                map_idx = nearest_bin(map_kpa, self.map_axis)
+                map_idx = nearest_bin(load_value, self.load_axis)
 
                 hit_matrix[rpm_idx, map_idx] += 1
                 afr_sum[rpm_idx, map_idx] += afr
@@ -758,7 +863,7 @@ class AutoTuneWorkflow:
                 for j in range(n_map):
                     if hit_matrix[i, j] >= self.MIN_HITS_PER_ZONE:
                         mean_afr = afr_sum[i, j] / hit_matrix[i, j]
-                        target_afr = self.get_target_afr(self.map_axis[j])
+                        target_afr = self.get_target_afr(self.load_axis[j])
 
                         # AFR error in points (positive = lean, negative = rich)
                         afr_error = mean_afr - target_afr
@@ -779,17 +884,23 @@ class AutoTuneWorkflow:
         error_df = pd.DataFrame(
             afr_error_matrix,
             index=pd.Index(self.rpm_axis, name="RPM"),
-            columns=pd.Index(self.map_axis, name="MAP"),
+            columns=pd.Index(
+                self.load_axis, name=("MAP" if self.load_channel == "MAP" else "TPS")
+            ),
         )
         ve_delta_df = pd.DataFrame(
             ve_delta_matrix,
             index=pd.Index(self.rpm_axis, name="RPM"),
-            columns=pd.Index(self.map_axis, name="MAP"),
+            columns=pd.Index(
+                self.load_axis, name=("MAP" if self.load_channel == "MAP" else "TPS")
+            ),
         )
         hit_df = pd.DataFrame(
             hit_matrix,
             index=pd.Index(self.rpm_axis, name="RPM"),
-            columns=pd.Index(self.map_axis, name="MAP"),
+            columns=pd.Index(
+                self.load_axis, name=("MAP" if self.load_channel == "MAP" else "TPS")
+            ),
         )
 
         # Count zones by status (based on AFR error, not VE delta)
@@ -927,8 +1038,8 @@ class AutoTuneWorkflow:
         session.output_tunelab_script = str(script_path)
         return str(script_path)
 
-    @staticmethod
     def export_pvv_corrections(
+        self,
         session: AutoTuneSession,
         output_dir: str,
         table_name: str = "VE Correction",
@@ -943,6 +1054,48 @@ class AutoTuneWorkflow:
             return None
 
         corr = session.ve_corrections
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        pvv_path = output_path / f"dynoai_ve_correction_{session.id}.pvv"
+
+        if self.base_pvv_path is not None and self.target_ve_table_ids:
+            correction_tables = {
+                table_id: corr.correction_table for table_id in self.target_ve_table_ids
+            }
+            result = write_ve_correction_patch(
+                base_pvv_path=self.base_pvv_path,
+                output_pvv_path=pvv_path,
+                corrections=correction_tables,
+                ve_cap=self.ve_cap,
+                ve_floor=self.ve_floor,
+                manifest_extra={
+                    "session_id": session.id,
+                    "data_source": (
+                        session.data_source.value
+                        if isinstance(session.data_source, DataSource)
+                        else str(session.data_source)
+                    ),
+                    "mean_afr_error": (
+                        session.afr_analysis.mean_afr_error
+                        if session.afr_analysis is not None
+                        else None
+                    ),
+                    "mean_ve_delta_pct": (
+                        session.afr_analysis.mean_error_pct
+                        if session.afr_analysis is not None
+                        else None
+                    ),
+                },
+            )
+            session.output_pvv_file = str(result.output_path)
+            session.status = "exported"
+            return str(result.output_path)
+
+        logger.warning(
+            "export_pvv_corrections: no base_pvv_path/target_ve_table_ids configured; "
+            "producing analysis-only non-flashable XML"
+        )
 
         # Create a TuneFile with the correction table
         tune = TuneFile()
@@ -960,11 +1113,6 @@ class AutoTuneWorkflow:
         tune.scalars["Max Correction %"] = corr.max_correction_pct
         tune.scalars["Min Correction %"] = corr.min_correction_pct
         tune.scalars["Zones Adjusted"] = float(corr.zones_adjusted)
-
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        pvv_path = output_path / f"dynoai_ve_correction_{session.id}.pvv"
 
         pvv_xml = generate_pvv_xml(tune)
         with open(pvv_path, "w", encoding="utf-8") as f:
@@ -1069,7 +1217,17 @@ class AutoTuneWorkflow:
 
         # Optionally import base tune
         if tune_path:
-            self.import_tune(session, tune_path)
+            if not self.import_tune(session, tune_path):
+                return session
+            if self.target_ve_table_ids:
+                try:
+                    self.configure_from_base_pvv(
+                        base_pvv_path=tune_path,
+                        target_ve_table_ids=self.target_ve_table_ids,
+                    )
+                except Exception as e:
+                    session.errors.append(f"Base PVV axis configuration failed: {e}")
+                    return session
 
         # Analyze AFR
         if self.analyze_afr(session) is None:

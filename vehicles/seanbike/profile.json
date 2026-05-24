@@ -7,6 +7,17 @@
   "displacement_ci": 95.5,
   "ecu_signature": null,
   "watch_folder": "C:\\CommmandCenter\\Customer_Files\\seanbike\\dyno_inbox",
+  "tuning_guardrails": {
+    "ve_table_ids": [
+      "tbl_ve_tps_based_front_cyl",
+      "tbl_ve_tps_based_rear_cyl"
+    ],
+    "ve_cap_pct": 155.0,
+    "ve_floor_pct": 70.0,
+    "max_correction_pct_per_cell": 10.0,
+    "afr_source": "dyno_tailpipe_wideband_only",
+    "no_o2_sensors_on_bike": true
+  },
   "notes": "VIN 1HD1GXM12FC325637. 88+100ci stroker (tune declares 95.5), SE-255 cams (unconfirmed), Thunder Header, Big Sucker intake, stock injectors. No O2 sensors assumed. Base tune = newnenww_baked.pvv (PCV trims baked into newnenww.pvv, sanity gates overridden because tune declared 31.07 lb/hr injectors and 95.5 CID). PCV physically removed from harness.",
   "created_at": "2026-05-18T09:29:27.534Z",
   "updated_at": "2026-05-18T09:29:27.534Z"

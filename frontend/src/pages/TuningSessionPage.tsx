@@ -70,6 +70,26 @@ export default function TuningSessionPage() {
   const [lastResult, setLastResult] = useState<PerUploadResult | null>(null);
   const [lastAnalysis, setLastAnalysis] = useState<AnalysisResult | null>(null);
 
+  const uploadInputId = "session-dropzone";
+
+  const openUploadDialog = useCallback(() => {
+    const input = document.getElementById(uploadInputId) as HTMLInputElement | null;
+    input?.click();
+  }, [uploadInputId]);
+
+  const baseTuneMissing = useMemo(
+    () => !!lastAnalysis?.errors?.some((e) => e === "no base tune uploaded"),
+    [lastAnalysis]
+  );
+
+  const guardrailsMissing = useMemo(
+    () =>
+      !!lastAnalysis?.errors?.some((e) =>
+        e.includes("profile.json missing tuning_guardrails block")
+      ),
+    [lastAnalysis]
+  );
+
   const handleFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
@@ -209,7 +229,7 @@ export default function TuningSessionPage() {
                       ) : (
                         <FlaskConical className="h-4 w-4 mr-1" />
                       )}
-                      Analyze
+                      Generate AutoTune patch
                     </Button>
                     <Button variant="outline" onClick={startNextIteration} disabled={createIter.isPending}>
                       <Plus className="h-4 w-4 mr-1" />
@@ -245,7 +265,7 @@ export default function TuningSessionPage() {
             }}
           >
             <CardContent className="py-12">
-              <label htmlFor="session-dropzone" className="flex flex-col items-center cursor-pointer">
+              <label htmlFor={uploadInputId} className="flex flex-col items-center cursor-pointer">
                 <div className="p-4 rounded-full bg-muted mb-4">
                   {upload.isPending ? (
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -263,7 +283,7 @@ export default function TuningSessionPage() {
                   PVV → base tune or patch &middot; WP8 / TXT / CSV → pulls on the active iteration
                 </p>
                 <input
-                  id="session-dropzone"
+                  id={uploadInputId}
                   type="file"
                   className="hidden"
                   multiple
@@ -333,9 +353,47 @@ export default function TuningSessionPage() {
                   <Stat label="Primary pull" valueText={lastAnalysis.primary_pull ?? '—'} />
                 </div>
                 {lastAnalysis.correction_pvv_path && (
-                  <p className="text-xs text-muted-foreground">
-                    Correction PVV saved to the patches folder.
-                  </p>
+                  <div className="space-y-1 rounded border border-border/70 bg-muted/30 p-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Patch:</span>
+                      <Badge variant="outline" className="font-mono">
+                        {lastAnalysis.correction_pvv_filename ?? lastAnalysis.correction_pvv_path.split(/[\\/]/).pop() ?? 'patch.pvv'}
+                      </Badge>
+                    </div>
+                    {lastAnalysis.correction_pvv_sha256 && (
+                      <p className="font-mono text-muted-foreground">
+                        SHA-256: {lastAnalysis.correction_pvv_sha256.slice(0, 12)}
+                      </p>
+                    )}
+                    {typeof lastAnalysis.correction_pvv_n_changed_cells === 'number' && (
+                      <p className="text-muted-foreground">
+                        Cells changed: {lastAnalysis.correction_pvv_n_changed_cells}
+                      </p>
+                    )}
+                    {lastAnalysis.correction_manifest_path && (
+                      <p className="font-mono text-muted-foreground">
+                        Manifest: {lastAnalysis.correction_manifest_path.split(/[\\/]/).pop()}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {(baseTuneMissing || guardrailsMissing) && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>AutoTune blocked</AlertTitle>
+                    <AlertDescription>
+                      {baseTuneMissing
+                        ? 'Upload a base tune PVV before generating an AutoTune patch.'
+                        : 'Vehicle profile is missing tuning_guardrails in profile.json.'}
+                    </AlertDescription>
+                    {baseTuneMissing ? (
+                      <div className="mt-2">
+                        <Button type="button" size="sm" variant="outline" onClick={openUploadDialog}>
+                          Upload base tune
+                        </Button>
+                      </div>
+                    ) : null}
+                  </Alert>
                 )}
                 {lastAnalysis.errors?.length ? (
                   <ul className="text-xs text-destructive list-disc ml-4">

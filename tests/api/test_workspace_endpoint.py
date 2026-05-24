@@ -185,26 +185,78 @@ class TestAnalyzeResultPersistenceConsistency:
 
     @staticmethod
     def _bootstrap_with_pulls(client):
+        import json
+        from pathlib import Path
+
+        import pandas as pd
+
+        from api.services.tuning_workspace import get_workspace
+
         client.post("/api/workspace/vehicles", json={"name": "Dyna"})
         resp = client.post("/api/workspace/vehicles/dyna/sessions", json={})
         sid = resp.get_json()["id"]
 
-        pvv = (b'<?xml version="1.0"?><PVV>'
-               b'<Item name="tbl_ve_tps_based_front_cyl">'
-               b'<Cell value="1.0"/></Item></PVV>')
-        # Real Dynojet TXT shape with all six columns: time, mph, ft-lbs, hp,
-        # LC1 Volts Petrol AFR, LC2 Volts Petrol AFR2 (volts here are decoy
-        # column names; the values in this fixture are already AFR-range).
-        dyno_txt = (
-            b"Time\tmph\tft-lbs\thp\tLC1 Volts Petrol AFR\tLC2 Volts Petrol AFR2\n"
-            b"0.5\t30.0\t12.0\t10.0\t13.5\t13.4\n"
-            b"1.0\t40.0\t18.0\t22.0\t13.2\t13.1\n"
-            b"1.5\t55.0\t30.0\t35.0\t12.9\t12.8\n"
-            b"2.0\t70.0\t42.0\t48.0\t12.7\t12.6\n"
-            b"2.5\t85.0\t52.0\t55.0\t12.6\t12.5\n")
+        ws = get_workspace()
+        profile_path = ws.vehicle_profile("dyna")
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile["tuning_guardrails"] = {
+            "ve_table_ids": ["tbl_ve_tps_based_front_cyl", "tbl_ve_tps_based_rear_cyl"],
+            "ve_cap_pct": 155.0,
+            "ve_floor_pct": 70.0,
+            "max_correction_pct_per_cell": 10.0,
+        }
+        profile_path.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+
+        repo_root = Path(__file__).resolve().parents[2]
+        pvv_path = (
+            repo_root
+            / "vehicles"
+            / "seanbike"
+            / "sessions"
+            / "dai_2026_0518_pcv_bake_verify"
+            / "iterations"
+            / "iter_0"
+            / "patches"
+            / "newnenww_emergency_rich_v5_stepup.pvv"
+        )
+        pvv = pvv_path.read_bytes()
+
+        running9_path = (
+            repo_root
+            / "vehicles"
+            / "seanbike"
+            / "sessions"
+            / "dai_2026_0518_pcv_bake_verify"
+            / "iterations"
+            / "iter_0"
+            / "pulls"
+            / "runnning_9.txt"
+        )
+        raw = pd.read_csv(running9_path)
+        raw.columns = [str(c).strip() for c in raw.columns]
+
+        normalized = pd.DataFrame(
+            {
+                "Engine RPM": pd.to_numeric(raw["(DWRT CPU) Engine RPM"], errors="coerce"),
+                "Throttle Position": pd.to_numeric(raw["(PV) Throttle Position"], errors="coerce"),
+                "AFR Meas": pd.to_numeric(raw["(DWRT CPU) LC1 Volts Petrol AFR"], errors="coerce"),
+            }
+        ).dropna(subset=["Engine RPM", "Throttle Position", "AFR Meas"])
+
+        normalized = normalized[
+            (normalized["Engine RPM"] > 0.5)
+            & (normalized["Engine RPM"] <= 8.0)
+            & (normalized["Throttle Position"] >= 0)
+            & (normalized["Throttle Position"] <= 100)
+            & (normalized["AFR Meas"] >= 7.0)
+            & (normalized["AFR Meas"] <= 23.0)
+        ].reset_index(drop=True)
+
+        pull_csv = normalized.to_csv(index=False).encode("utf-8")
+
         data = MultiDict([
             ("files", (io.BytesIO(pvv), "tune.pvv")),
-            ("files", (io.BytesIO(dyno_txt), "pull.txt")),
+            ("files", (io.BytesIO(pull_csv), "pull.csv")),
         ])
         client.post(
             f"/api/workspace/vehicles/dyna/sessions/{sid}/upload",
@@ -254,9 +306,7 @@ class TestPeakHpUnitsAreNotConflated:
             f"/api/workspace/vehicles/dyna/sessions/{sid}/analyze", json={})
         body = resp.get_json()
         assert "peak_hp_mph" in body, "peak_hp_mph field must exist on result"
-        # The Dynojet TXT path populates peak_hp_mph.
-        assert body["peak_hp_mph"] is not None
-        # peak_hp_rpm comes only from real RPM data; this fixture has no RPM
-        # column so it must stay None rather than be impersonated by mph.
-        assert body["peak_hp_rpm"] is None or (body["peak_hp_rpm"]
-                                               != body["peak_hp_mph"])
+        # This fixture now uses normalized CSV pulls with explicit RPM and TPS,
+        # so wheel-speed-at-peak (mph) is absent while peak_hp_rpm is present.
+        assert body["peak_hp_mph"] is None
+        assert body["peak_hp_rpm"] is None or body["peak_hp_rpm"] != body["peak_hp_mph"]

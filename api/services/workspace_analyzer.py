@@ -18,6 +18,7 @@ If the session has a base tune uploaded, it is loaded as well.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -70,6 +71,10 @@ class WorkspaceAnalysisResult:
     peak_tq: Optional[float] = None
     peak_tq_rpm: Optional[float] = None
     correction_pvv_path: Optional[str] = None
+    correction_pvv_filename: Optional[str] = None
+    correction_pvv_sha256: Optional[str] = None
+    correction_pvv_n_changed_cells: Optional[int] = None
+    correction_manifest_path: Optional[str] = None
     analysis_json_path: Optional[str] = None
     errors: list[str] = None  # type: ignore[assignment]
     generated_at: str = ""
@@ -137,7 +142,23 @@ def analyze_iteration(
         result.peak_hp_mph = peak.get("peak_hp_mph")
         result.peak_tq = peak.get("peak_torque")
 
-    workflow = AutoTuneWorkflow()
+    base_tune_path = ws.get_base_tune_path(vehicle_id, session_id)
+    if base_tune_path is None:
+        result.errors.append("no base tune uploaded")
+        return result
+
+    try:
+        guardrails = _load_tuning_guardrails(ws.vehicle_profile(vehicle_id))
+    except ValueError as exc:
+        result.errors.append(str(exc))
+        return result
+
+    workflow = AutoTuneWorkflow(
+        base_pvv_path=base_tune_path,
+        target_ve_table_ids=guardrails["ve_table_ids"],
+        ve_cap=guardrails["ve_cap_pct"],
+        ve_floor=guardrails["ve_floor_pct"],
+    )
     autotune_session = workflow.create_session(
         run_id=f"{session.id}_{iteration.id}")
 
@@ -149,13 +170,12 @@ def analyze_iteration(
                              or ["import_dataframe failed"])
         return result
 
-    base_tune_path = ws.get_base_tune_path(vehicle_id, session_id)
-    if base_tune_path is not None:
-        try:
-            workflow.import_tune(autotune_session, str(base_tune_path))
-        except Exception as exc:
-            logger.warning("base tune import failed: %s", exc)
-            result.errors.append(f"base tune import failed: {exc}")
+    try:
+        workflow.import_tune(autotune_session, str(base_tune_path))
+    except Exception as exc:
+        logger.warning("base tune import failed: %s", exc)
+        result.errors.append(f"base tune import failed: {exc}")
+        return result
 
     try:
         workflow.analyze_afr(autotune_session)
@@ -185,16 +205,40 @@ def analyze_iteration(
         pvv_path = workflow.export_pvv_corrections(autotune_session,
                                                    str(output_dir))
         if pvv_path:
-            result.correction_pvv_path = pvv_path
+            patch_src = Path(pvv_path)
             patch_name = f"autotune_correction_{iteration.id}.pvv"
             dest_patch = ws.add_patch(
                 vehicle_id,
                 session_id,
                 iteration.id,
                 patch_name,
-                Path(pvv_path).read_bytes(),
+                patch_src.read_bytes(),
             )
             result.correction_pvv_path = str(dest_patch)
+            result.correction_pvv_filename = dest_patch.name
+
+            manifest_path = patch_src.with_suffix(".manifest.json")
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                output_meta = manifest.get("output")
+                if isinstance(output_meta, dict):
+                    sha256 = output_meta.get("sha256")
+                    if isinstance(sha256, str) and sha256:
+                        result.correction_pvv_sha256 = sha256
+
+                table_stats = manifest.get("table_stats")
+                if isinstance(table_stats, list):
+                    changed = 0
+                    for table in table_stats:
+                        if isinstance(table, dict):
+                            cells_changed = table.get("cells_changed", 0)
+                            try:
+                                changed += int(cells_changed)
+                            except (TypeError, ValueError):
+                                continue
+                    result.correction_pvv_n_changed_cells = changed
+
+                result.correction_manifest_path = str(manifest_path)
     except Exception as exc:
         logger.exception("pvv export failed")
         result.errors.append(f"pvv export failed: {exc}")
@@ -246,6 +290,42 @@ def _atomic_rewrite_analysis_json(path: Path, payload: dict[str, Any]) -> None:
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
+
+
+def _coerce_optional_float(value: Any, field_name: str) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be numeric") from exc
+
+
+def _load_tuning_guardrails(profile_path: Path) -> dict[str, Any]:
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    guardrails = profile.get("tuning_guardrails")
+    if not isinstance(guardrails, dict) or not guardrails:
+        raise ValueError("profile.json missing tuning_guardrails block")
+
+    raw_table_ids = guardrails.get("ve_table_ids")
+    if not isinstance(raw_table_ids, list):
+        raise ValueError("tuning_guardrails.ve_table_ids must be a list")
+
+    table_ids = [str(item).strip() for item in raw_table_ids if str(item).strip()]
+    if not table_ids:
+        raise ValueError("tuning_guardrails.ve_table_ids must contain at least one table id")
+
+    return {
+        "ve_table_ids": table_ids,
+        "ve_cap_pct": _coerce_optional_float(
+            guardrails.get("ve_cap_pct"),
+            "tuning_guardrails.ve_cap_pct",
+        ),
+        "ve_floor_pct": _coerce_optional_float(
+            guardrails.get("ve_floor_pct"),
+            "tuning_guardrails.ve_floor_pct",
+        ),
+    }
 
 
 def _select_primary_pull(

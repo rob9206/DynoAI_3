@@ -77,6 +77,7 @@ class Vehicle:
     displacement_ci: Optional[float] = None
     ecu_signature: Optional[str] = None
     watch_folder: Optional[str] = None
+    tuning_guardrails: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
     created_at: str = field(default_factory=lambda: _utc_now())
     updated_at: str = field(default_factory=lambda: _utc_now())
@@ -268,6 +269,7 @@ class TuningWorkspace:
         displacement_ci: Optional[float] = None,
         vehicle_id: Optional[str] = None,
         watch_folder: Optional[str] = None,
+        tuning_guardrails: Optional[dict[str, Any]] = None,
         notes: str = "",
     ) -> Vehicle:
         with self._lock:
@@ -287,6 +289,7 @@ class TuningWorkspace:
                 model=model,
                 displacement_ci=displacement_ci,
                 watch_folder=watch_folder,
+                tuning_guardrails=tuning_guardrails or {},
                 notes=notes,
             )
             vpath.mkdir(parents=True, exist_ok=False)

@@ -186,6 +186,7 @@ export function useAnalyzeIteration(
       analyzeIteration(vehicleId!, sessionId!, iterationId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['workspace', 'patches'] });
+      void qc.invalidateQueries({ queryKey: ['workspace', 'iterations'] });
       void qc.invalidateQueries({ queryKey: ['workspace', 'analyses'] });
       void qc.invalidateQueries({
         queryKey: ['workspace', 'status', vehicleId, sessionId],
