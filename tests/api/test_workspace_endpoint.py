@@ -40,6 +40,10 @@ class TestVehicleLifecycle:
         body = resp.get_json()
         assert body["id"] == "racile_2006_dyna_88ci"
         assert body["year"] == 2006
+        assert body["tuning_guardrails"]["ve_table_ids"] == [
+            "tbl_ve_tps_based_front_cyl",
+            "tbl_ve_tps_based_rear_cyl",
+        ]
 
     @staticmethod
     def test_duplicate_vehicle_rejected(client):

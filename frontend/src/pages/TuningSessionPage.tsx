@@ -9,6 +9,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -141,7 +142,7 @@ export default function TuningSessionPage() {
 
   const runAnalysis = useCallback(async () => {
     try {
-      const res = await analyze.mutateAsync({});
+      const res = await analyze.mutateAsync({ iterationId: activeIterationId });
       setLastAnalysis(res);
       if (res.success) {
         toast.success(
@@ -153,9 +154,15 @@ export default function TuningSessionPage() {
         toast.error(res.errors?.[0] ?? 'analysis failed');
       }
     } catch (err) {
+      if (isAxiosError<AnalysisResult>(err) && err.response?.data) {
+        const failed = err.response.data;
+        setLastAnalysis(failed);
+        toast.error(failed.errors?.[0] ?? 'analysis failed');
+        return;
+      }
       toast.error(err instanceof Error ? err.message : 'analysis failed');
     }
-  }, [analyze]);
+  }, [activeIterationId, analyze]);
 
   const loading = vehicle.isLoading || session.isLoading;
   const notFound = vehicle.isError || session.isError;

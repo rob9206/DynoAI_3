@@ -42,6 +42,30 @@ def test_create_and_get_vehicle(ws: TuningWorkspace):
 
     fetched = ws.get_vehicle(vehicle.id)
     assert fetched.name == vehicle.name
+    assert fetched.tuning_guardrails["ve_table_ids"] == [
+        "tbl_ve_tps_based_front_cyl",
+        "tbl_ve_tps_based_rear_cyl",
+    ]
+    assert fetched.tuning_guardrails["ve_cap_pct"] == 155.0
+    assert fetched.tuning_guardrails["ve_floor_pct"] == 70.0
+
+
+def test_create_vehicle_allows_explicit_guardrail_override(ws: TuningWorkspace):
+    vehicle = ws.create_vehicle(
+        name="Custom guardrail bike",
+        tuning_guardrails={
+            "ve_table_ids": ["tbl_ve_front_cyl_2", "tbl_ve_rear_cyl_2"],
+            "ve_cap_pct": 150.0,
+            "ve_floor_pct": 75.0,
+        },
+    )
+
+    assert vehicle.tuning_guardrails["ve_table_ids"] == [
+        "tbl_ve_front_cyl_2",
+        "tbl_ve_rear_cyl_2",
+    ]
+    assert vehicle.tuning_guardrails["ve_cap_pct"] == 150.0
+    assert vehicle.tuning_guardrails["ve_floor_pct"] == 75.0
 
 
 def test_duplicate_vehicle_rejected(ws: TuningWorkspace):

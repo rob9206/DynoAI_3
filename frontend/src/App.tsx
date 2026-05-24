@@ -89,6 +89,10 @@ function App() {
                   path="/workspace/:vehicleId/sessions/:sessionId"
                   element={<TuningSessionPage />}
                 />
+                <Route
+                  path="/workspace/vehicles/:vehicleId/sessions/:sessionId"
+                  element={<TuningSessionPage />}
+                />
                 <Route path="/results/:runId" element={<Results />} />
                 <Route path="/time-machine/:runId" element={<TimeMachinePage />} />
                 <Route path="/history" element={<History />} />

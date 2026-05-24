@@ -75,6 +75,7 @@ def create_vehicle():
             displacement_ci=data.get("displacement_ci"),
             vehicle_id=data.get("id"),
             watch_folder=data.get("watch_folder"),
+            tuning_guardrails=data.get("tuning_guardrails"),
             notes=data.get("notes", ""),
         )
     except WorkspaceError as exc:

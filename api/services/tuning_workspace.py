@@ -36,6 +36,7 @@ import json
 import re
 import shutil
 import threading
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -141,6 +142,15 @@ class SessionStatus:
 # =============================================================================
 
 _SLUG_RE = re.compile(r"[^a-z0-9_-]+")
+_DEFAULT_TUNING_GUARDRAILS: dict[str, Any] = {
+    "ve_table_ids": [
+        "tbl_ve_tps_based_front_cyl",
+        "tbl_ve_tps_based_rear_cyl",
+    ],
+    "ve_cap_pct": 155.0,
+    "ve_floor_pct": 70.0,
+    "max_correction_pct_per_cell": 10.0,
+}
 
 
 def _utc_now() -> str:
@@ -185,6 +195,16 @@ def _sha256_file(path: Path, bufsize: int = 65536) -> str:
         while chunk := f.read(bufsize):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _default_tuning_guardrails() -> dict[str, Any]:
+    """Default guardrails for newly created vehicles.
+
+    We default to the common Harley TPS-based VE tables and conservative
+    correction limits. Callers can override by passing an explicit
+    ``tuning_guardrails`` payload to ``create_vehicle``.
+    """
+    return deepcopy(_DEFAULT_TUNING_GUARDRAILS)
 
 
 # =============================================================================
@@ -289,7 +309,11 @@ class TuningWorkspace:
                 model=model,
                 displacement_ci=displacement_ci,
                 watch_folder=watch_folder,
-                tuning_guardrails=tuning_guardrails or {},
+                tuning_guardrails=(
+                    _default_tuning_guardrails()
+                    if tuning_guardrails is None
+                    else tuning_guardrails
+                ),
                 notes=notes,
             )
             vpath.mkdir(parents=True, exist_ok=False)

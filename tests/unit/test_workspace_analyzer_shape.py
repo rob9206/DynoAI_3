@@ -125,3 +125,22 @@ class TestExistingAfrMeasWinsOverCanonicalized:
         )
         shaped = _shape_for_autotune(df)
         assert list(shaped["AFR Meas"]) == [14.0]
+
+
+class TestDynoWareColumnAliases:
+    def test_dyno_ware_prefixed_columns_are_mapped(self):
+        df = pd.DataFrame(
+            {
+                "(DWRT CPU) Engine RPM": [2200, 2800],
+                "(Harley) Manifold Absolute Pressure": [42.0, 55.0],
+                "(PV) Desired Air/Fuel": [13.0, 13.2],
+                "(DWRT CPU) LC2 Volts Petrol AFR2": [14.4, 13.9],
+            }
+        )
+
+        shaped = _shape_for_autotune(df)
+
+        assert "Engine RPM" in shaped.columns
+        assert "MAP kPa" in shaped.columns
+        assert "AFR Meas" in shaped.columns
+        assert list(shaped["AFR Meas"]) == [14.4, 13.9]

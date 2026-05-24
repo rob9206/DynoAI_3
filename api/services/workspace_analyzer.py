@@ -342,10 +342,13 @@ def _select_primary_pull(
                 df, report = parse_dynojet_txt_path(path)
                 if not df.empty:
                     return path, df, "dynojet_txt", _peak_from_report(report)
+                fallback_df = _read_delimited_pull(path)
+                if fallback_df is not None and not fallback_df.empty:
+                    return path, fallback_df, "txt_csv", None
             elif ext == ".csv":
-                df = pd.read_csv(path)
-                if not df.empty:
-                    return path, df, "csv", None
+                fallback_df = _read_delimited_pull(path)
+                if fallback_df is not None and not fallback_df.empty:
+                    return path, fallback_df, "csv", None
             elif ext == ".wp8":
                 try:
                     from api.services.parsers.wp8_parser import parse_wp8_file
@@ -392,19 +395,27 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
     """
     renamed = df.copy()
     rename: dict[str, str] = {}
-    lower = {c.lower(): c for c in renamed.columns}
+    lower = {str(c).lower(): c for c in renamed.columns}
 
-    def pick(*candidates: str) -> Optional[str]:
+    def pick(*candidates: str, exclude: tuple[str, ...] = ()) -> Optional[str]:
         for cand in candidates:
             if cand in lower:
                 return lower[cand]
+        for cand in candidates:
+            cand_l = cand.lower()
+            for key, col in lower.items():
+                if cand_l not in key:
+                    continue
+                if any(block in key for block in exclude):
+                    continue
+                return col
         return None
 
-    rpm_col = pick("engine rpm", "rpm")
-    map_col = pick("map kpa", "map_kpa", "map")
-    afr_col = pick("afr meas", "afr_meas", "afr", "lc1_afr")
-    hp_col = pick("horsepower", "hp")
-    tq_col = pick("torque", "torque_ftlb", "tq")
+    rpm_col = pick("engine rpm", "rpm", "engine speed")
+    map_col = pick("map kpa", "manifold absolute pressure", "map")
+    afr_col = pick("afr meas", "afr_meas", "lc2_afr", "lc1_afr")
+    hp_col = pick("horsepower", " hp", "power", exclude=("uncorrected",))
+    tq_col = pick("torque", "tq", exclude=("uncorrected",))
 
     if rpm_col and rpm_col != "Engine RPM":
         rename[rpm_col] = "Engine RPM"
@@ -420,8 +431,8 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
         renamed = renamed.rename(columns=rename)
 
     if "AFR Meas" not in renamed.columns:
-        front_col = _find_column_ci(renamed, "AFR Front")
-        rear_col = _find_column_ci(renamed, "AFR Rear")
+        front_col = _find_column_any_ci(renamed, ["AFR Front", "WBO2 AFR Front"])
+        rear_col = _find_column_any_ci(renamed, ["AFR Rear", "WBO2 AFR Rear"])
         if front_col and rear_col:
             front = pd.to_numeric(renamed[front_col], errors="coerce")
             rear = pd.to_numeric(renamed[rear_col], errors="coerce")
@@ -433,6 +444,25 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
         elif rear_col:
             renamed["AFR Meas"] = pd.to_numeric(renamed[rear_col],
                                                 errors="coerce")
+        else:
+            # DynoWare often labels AFR channels as "*Volts*AFR*" even when the
+            # values are already AFR. Prefer LC2, then LC1, without any rescale.
+            lc2_col = _find_column_any_ci(renamed, ["LC2 Volts Petrol AFR2", "LC2 AFR"])
+            lc1_col = _find_column_any_ci(renamed, ["LC1 Volts Petrol AFR", "LC1 AFR"])
+            generic_afr = _find_column_any_ci(
+                renamed,
+                ["AFR"],
+                excludes=["desired", "warm-up", "target", "lambda"],
+            )
+            if lc2_col:
+                renamed["AFR Meas"] = pd.to_numeric(renamed[lc2_col],
+                                                    errors="coerce")
+            elif lc1_col:
+                renamed["AFR Meas"] = pd.to_numeric(renamed[lc1_col],
+                                                    errors="coerce")
+            elif generic_afr:
+                renamed["AFR Meas"] = pd.to_numeric(renamed[generic_afr],
+                                                    errors="coerce")
 
     if "Engine RPM" not in renamed.columns and "mph" in renamed.columns:
         renamed["Engine RPM"] = renamed["mph"] * 60.0
@@ -442,8 +472,45 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
 def _find_column_ci(df: pd.DataFrame, target: str) -> Optional[str]:
     target_l = target.lower()
     for col in df.columns:
-        if col.lower() == target_l:
+        col_s = str(col)
+        if col_s.lower() == target_l:
             return col
+    return None
+
+
+def _find_column_any_ci(
+    df: pd.DataFrame,
+    includes: list[str],
+    excludes: Optional[list[str]] = None,
+) -> Optional[str]:
+    include_l = [x.lower() for x in includes]
+    exclude_l = [x.lower() for x in (excludes or [])]
+    for col in df.columns:
+        col_s = str(col)
+        col_l = col_s.lower()
+        if any(block in col_l for block in exclude_l):
+            continue
+        if any(needle in col_l for needle in include_l):
+            return col
+    return None
+
+
+def _read_delimited_pull(path: Path) -> Optional[pd.DataFrame]:
+    """Best-effort read for delimited pull files with unknown separators."""
+    attempts = (
+        {"sep": None, "engine": "python"},
+        {"sep": ",", "engine": "python"},
+        {"sep": "\t", "engine": "python"},
+    )
+    for kwargs in attempts:
+        try:
+            df = pd.read_csv(path, **kwargs)
+        except Exception:
+            continue
+        df = df.loc[:, [c for c in df.columns if not str(c).startswith("Unnamed:")]]
+        df.columns = [str(c).strip() for c in df.columns]
+        if not df.empty:
+            return df
     return None
 
 
