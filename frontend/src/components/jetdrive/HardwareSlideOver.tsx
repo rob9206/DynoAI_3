@@ -1,8 +1,8 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
+import { ChannelHealthBoard } from './ChannelHealthBoard';
 import { ChannelMappingPanel } from './ChannelMappingPanel';
 import { DynoConfigPanel } from './DynoConfigPanel';
 import { IngestionHealthPanel } from './IngestionHealthPanel';
-import { InnovateAFRPanel } from './InnovateAFRPanel';
 import { MappingConfidencePanel } from './MappingConfidencePanel';
 import { PreflightCheckPanel } from './PreflightCheckPanel';
 import { CollapsibleSection } from './CollapsibleSection';
@@ -29,7 +29,11 @@ export function HardwareSlideOver({
         </SheetHeader>
 
         <div className="mt-4 space-y-4 overflow-y-auto pb-6">
-          <CollapsibleSection title="Preflight Check" defaultOpen>
+          <CollapsibleSection title="Channel Health" defaultOpen>
+            <ChannelHealthBoard />
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Preflight Check" defaultOpen={false}>
             <PreflightCheckPanel apiUrl={apiUrl} />
           </CollapsibleSection>
 
@@ -47,10 +51,6 @@ export function HardwareSlideOver({
 
           <CollapsibleSection title="Ingestion Health" defaultOpen={false}>
             <IngestionHealthPanel />
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Innovate AFR" defaultOpen={false}>
-            <InnovateAFRPanel apiUrl={apiUrl} />
           </CollapsibleSection>
         </div>
       </SheetContent>

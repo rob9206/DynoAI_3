@@ -262,15 +262,6 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[!] Warning: Could not initialize JetDrive Auto-Tune: {e}")
 
-# Register YourDyno bridge blueprint
-try:
-    from api.routes.yourdyno import yourdyno_bp
-
-    app.register_blueprint(yourdyno_bp)
-    print("[+] YourDyno integration registered at /api/yourdyno")
-except Exception as e:  # pragma: no cover
-    print(f"[!] Warning: Could not initialize YourDyno integration: {e}")
-
 # Register Transient Fuel Compensation blueprint
 try:
     from api.routes.transient import transient_bp

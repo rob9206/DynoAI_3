@@ -292,12 +292,6 @@ _sim_lock = threading.Lock()
 
 def _is_simulator_active() -> bool:
     """Thread-safe check for simulator activity."""
-    try:
-        env_override = os.getenv("DYNOAI_SIMULATOR_FALLBACK", "").strip().lower()
-        if env_override in {"1", "true", "yes", "on"}:
-            return True
-    except Exception:
-        pass
     with _sim_lock:
         return _sim_active
 

@@ -1,6 +1,5 @@
 export { JetDriveLiveDashboard } from './JetDriveLiveDashboard';
 export { QuickTunePanel } from './QuickTunePanel';
-export { InnovateAFRPanel } from './InnovateAFRPanel';
 export { DynoConfigPanel } from './DynoConfigPanel';
 export { IngestionHealthPanel } from './IngestionHealthPanel';
 export { IngestionStatusBadge } from './IngestionStatusBadge';

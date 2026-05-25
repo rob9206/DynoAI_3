@@ -1,23 +1,13 @@
 """
-YourDyno service layer.
+YourDyno parser utilities.
 
-Phase 1a/2b provides:
+Retained only for offline run parsing compatibility in legacy import paths.
+Live bridge, queue, and simulator integrations were removed.
+
+Provides:
 - CSV run parser + DynoAI normalization
-- TCP JSON-lines client for the DynoAIBridge plugin
-- Live capture queue manager with 50ms aggregation windows
 """
 
-from .yourdyno_client import (
-    YourDynoClient,
-    YourDynoClientConfig,
-    YourDynoClientStats,
-    YourDynoSample,
-)
-from .yourdyno_live_queue import (
-    YourDynoLiveQueueManager,
-    get_yourdyno_live_queue_manager,
-    reset_yourdyno_live_queue_manager,
-)
 from .yourdyno_parser import (
     YourDynoRun,
     find_yourdyno_run_files,
@@ -27,16 +17,9 @@ from .yourdyno_parser import (
 )
 
 __all__ = [
-    "YourDynoClient",
-    "YourDynoClientConfig",
-    "YourDynoClientStats",
-    "YourDynoSample",
     "YourDynoRun",
     "find_yourdyno_run_files",
     "parse_yourdyno_csv",
     "parse_yourdyno_run",
     "yourdyno_to_dynoai_format",
-    "YourDynoLiveQueueManager",
-    "get_yourdyno_live_queue_manager",
-    "reset_yourdyno_live_queue_manager",
 ]

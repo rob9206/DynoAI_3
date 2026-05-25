@@ -97,3 +97,38 @@ def test_live_payload_computed_horsepower_has_display_metadata():
     assert hp["category"] == "dyno"
     assert hp["timestamp"] == 1_700_000_000_000
     assert hp["computed"] is True
+
+
+def test_prefer_canonical_source_breaks_ties_deterministically():
+    from api.routes.jetdrive.hardware import _prefer_canonical_source
+
+    # Same canonical and same unit score -> lower provider/channel wins.
+    current = (0x1002, 40, 8)
+    candidate = (0x1001, 40, 8)
+    assert _prefer_canonical_source("Digital RPM 1", current, candidate) is True
+    assert _prefer_canonical_source("Digital RPM 1", candidate, current) is False
+
+
+def test_live_payload_status_reports_no_provider_condition():
+    from api.routes.jetdrive._shared import _live_data, _live_data_lock, _set_simulator_active
+    from api.routes.jetdrive.hardware import _build_live_data_payload
+
+    _set_simulator_active(False)
+    with _live_data_lock:
+        previous = dict(_live_data)
+        _live_data["capturing"] = False
+        _live_data["channels"] = {}
+        _live_data["last_update_ts"] = 1_700_000_000.0
+        _live_data["error"] = "No JetDrive providers found."
+        _live_data["error_code"] = "no_providers"
+
+    try:
+        payload = _build_live_data_payload()
+    finally:
+        with _live_data_lock:
+            _live_data.clear()
+            _live_data.update(previous)
+
+    assert payload["status"]["state"] == "no_providers"
+    assert payload["status"]["retryable"] is True
+    assert payload["error_code"] == "no_providers"

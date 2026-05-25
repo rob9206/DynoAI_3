@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { downloadAllFormats } from '@/utils/veExport';
 import { cn } from '../../lib/utils';
@@ -13,9 +12,8 @@ import { SessionBar } from './SessionBar';
 import { AICoach } from './AICoach';
 import { HardwareSlideOver } from './HardwareSlideOver';
 
-const NAV_TABS = ['Dashboard', 'JetDrive', 'Results', 'History'] as const;
-
 type Cylinder = 'front' | 'rear';
+const AI_COACH_ENABLED = false;
 
 interface CommandCenterProps {
   apiUrl?: string;
@@ -56,15 +54,7 @@ function CommandCenterContent({
       hasAutoOpenedHardware.current = true;
       setHardwareOpen(true);
     }
-  }, [hardwareOpen, live.isConnected]);
-
-  useEffect(() => {
-    if (live.isCapturing) {
-      setCaptureState('recording');
-    } else if (captureState === 'recording') {
-      setCaptureState('idle');
-    }
-  }, [captureState, live.isCapturing]);
+  }, [hardwareOpen, live.isConnected, setHardwareOpen]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -118,64 +108,6 @@ function CommandCenterContent({
 
   return (
     <div className={cn('flex h-full w-full flex-col overflow-hidden bg-zinc-950 text-zinc-50', className)}>
-      {/* ── Top Header Bar ──────────────────────────────────────────── */}
-      <header className="flex h-12 shrink-0 items-center border-b border-zinc-800 bg-zinc-950 px-4 gap-8">
-        {/* Branding */}
-        <div className="flex items-center gap-3">
-          <span className="text-[15px] font-bold tracking-tight text-zinc-50">
-            THUNDERHORSE
-          </span>
-          <span className="text-[13px] font-medium text-zinc-500">
-            DynoAI
-          </span>
-        </div>
-
-        {/* Nav tabs */}
-        <nav className="flex gap-1">
-          {NAV_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={cn(
-                'px-4 py-1.5 text-xs font-medium transition-colors',
-                tab === 'JetDrive'
-                  ? 'bg-zinc-800 text-zinc-50'
-                  : 'text-zinc-400 hover:text-zinc-300',
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
-
-        {/* Status indicators */}
-        <div className="ml-auto flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              'h-2 w-2 rounded-full',
-              live.isConnected ? 'bg-green-500' : 'bg-zinc-600',
-            )} />
-            <span className="text-xs text-zinc-400">
-              {live.isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
-          {captureState === 'recording' && (
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-zinc-400">Recording</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="p-1.5 rounded transition-colors hover:bg-zinc-800"
-            onClick={() => setHardwareOpen(true)}
-            title="Hardware settings"
-          >
-            <Settings className="h-4 w-4 text-zinc-400" />
-          </button>
-        </div>
-      </header>
-
       {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: telemetry + heatmap + session bar */}
@@ -207,24 +139,36 @@ function CommandCenterContent({
 
         {/* Right: AI Coach sidebar */}
         <div className="w-[330px] shrink-0">
-          <AICoach
-            activeCylinder={activeCylinder}
-            onCylinderChange={setActiveCylinder}
-            afrTargets={afrTargets}
-            onAfrTargetsChange={setAfrTargets}
-            hitData={hitData}
-            runId={currentRunId}
-            onRunIdChange={setCurrentRunId}
-            onTargetChange={setTargetMarker}
-            onExport={() => {
-              if (!liveExportData || liveExportData.totalHits <= 0) {
-                toast.info('No VE correction data to export yet.');
-                return;
-              }
-              downloadAllFormats(liveExportData, 'JetDrive_VE_Corrections');
-              toast.success('Exported VE corrections (CSV, JSON, PVV).');
-            }}
-          />
+          {AI_COACH_ENABLED ? (
+            <AICoach
+              activeCylinder={activeCylinder}
+              onCylinderChange={setActiveCylinder}
+              afrTargets={afrTargets}
+              onAfrTargetsChange={setAfrTargets}
+              hitData={hitData}
+              runId={currentRunId}
+              onRunIdChange={setCurrentRunId}
+              onTargetChange={setTargetMarker}
+              onExport={() => {
+                if (!liveExportData || liveExportData.totalHits <= 0) {
+                  toast.info('No VE correction data to export yet.');
+                  return;
+                }
+                downloadAllFormats(liveExportData, 'JetDrive_VE_Corrections');
+                toast.success('Exported VE corrections (CSV, JSON, PVV).');
+              }}
+            />
+          ) : (
+            <div className="m-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+              <h3 className="text-sm font-semibold text-zinc-100">AI Coach paused</h3>
+              <p className="mt-2 text-xs text-zinc-400">
+                Temporarily frozen for reliability while live capture/session flow is stabilized.
+              </p>
+              <p className="mt-3 text-[11px] text-zinc-500">
+                Re-enable by setting <code>AI_COACH_ENABLED</code> to true in <code>CommandCenter.tsx</code>.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -69,6 +69,7 @@ export function AudioCapturePanel({
 
     // Safety timeout ref
     const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoStartInFlightRef = useRef(false);
 
     const {
         state,
@@ -113,16 +114,31 @@ export function AudioCapturePanel({
 
         const shouldRecord = isDynoCapturing || currentRpm > rpmThreshold;
 
-        if (shouldRecord && !state.isRecording) {
-            // Auto-start recording
+        if (!shouldRecord || state.isRecording || autoStartInFlightRef.current) return;
+
+        let cancelled = false;
+        autoStartInFlightRef.current = true;
+
+        const startAutoRecording = async () => {
             setWasAutoStarted(true);
-            void startRecording();
+            const started = await startRecording();
+            if (cancelled) {
+                return;
+            }
+            if (!started) {
+                setWasAutoStarted(false);
+                return;
+            }
+
             onRecordingStart?.();
             toast.success('Auto-recording started', {
                 description: isDynoCapturing ? 'Dyno capture detected' : `RPM > ${rpmThreshold}`
             });
 
             // Set safety timeout to auto-stop after 5 minutes (only for auto-started recordings)
+            if (safetyTimeoutRef.current) {
+                clearTimeout(safetyTimeoutRef.current);
+            }
             safetyTimeoutRef.current = setTimeout(() => {
                 void stopRecording().then(recording => {
                     onRecordingStop?.(recording);
@@ -132,10 +148,15 @@ export function AudioCapturePanel({
                     });
                 });
             }, 5 * 60 * 1000); // 5 minutes
-        }
+        };
+
+        void startAutoRecording().finally(() => {
+            autoStartInFlightRef.current = false;
+        });
 
         // Cleanup timeout on unmount
         return () => {
+            cancelled = true;
             if (safetyTimeoutRef.current) {
                 clearTimeout(safetyTimeoutRef.current);
             }
@@ -195,9 +216,15 @@ export function AudioCapturePanel({
         } else {
             // Mark as manually started (NOT auto-started)
             setWasAutoStarted(false);
-            await startRecording();
-            onRecordingStart?.();
-            toast.success('Recording started (manual)');
+            const started = await startRecording();
+            if (started) {
+                onRecordingStart?.();
+                toast.success('Recording started (manual)');
+            } else {
+                toast.error('Failed to start recording', {
+                    description: state.error ?? 'Check microphone permissions and input device.',
+                });
+            }
         }
     };
 

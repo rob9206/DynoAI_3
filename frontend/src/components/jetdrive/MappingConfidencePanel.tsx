@@ -27,6 +27,7 @@ import {
     TooltipTrigger,
 } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
+import { useHardwareStatusContext } from '../../hooks/HardwareStatusContext';
 
 // =============================================================================
 // Types
@@ -125,6 +126,15 @@ export function MappingConfidencePanel({
 }: MappingConfidencePanelProps) {
     const queryClient = useQueryClient();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+    // Top-line connectivity comes from the shared hardware-status context
+    // so this panel never shows confusing "Confidence Check Failed" errors
+    // when the actual root cause is "no JetDrive providers found", and we
+    // don't open a second SSE/polling loop alongside other consumers.
+    const { status: unifiedStatus } = useHardwareStatusContext();
+    const noProviders =
+        unifiedStatus !== null && !unifiedStatus.provider.connected;
+    const transientProposal = unifiedStatus?.mapping?.transient_proposal ?? null;
 
     const buildErrorMessage = async (res: Response, fallback: string) => {
         const statusLabel = res.statusText ? `${res.status} ${res.statusText}` : `${res.status}`;
@@ -243,6 +253,28 @@ export function MappingConfidencePanel({
     }
 
     if (error || !report?.success) {
+        if (noProviders) {
+            return (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Info className="h-5 w-5 text-amber-400" />
+                            No JetDrive providers connected
+                        </CardTitle>
+                        <CardDescription>
+                            Start the dyno (DynoWare / Power Core) and confirm
+                            multicast access, then refresh.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => refetch()} variant="outline">
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Re-check
+                        </Button>
+                    </CardContent>
+                </Card>
+            );
+        }
         return (
             <Card>
                 <CardHeader>
@@ -316,6 +348,24 @@ export function MappingConfidencePanel({
             </CardHeader>
 
             <CardContent className="space-y-4">
+                {/* Unsaved auto-detect proposal banner. The transient
+                    cache lives server-side; the renderer just relays it. */}
+                {transientProposal && (
+                    <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>
+                            <div className="font-medium">
+                                Unsaved auto-detected mapping
+                            </div>
+                            <div className="text-sm">
+                                Detected from {transientProposal.provider_name}{' '}
+                                ({transientProposal.provider_id}). Click Save in
+                                Channel Mapping to persist.
+                            </div>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Import file preview */}
                 {selectedFile && (
                     <Alert>

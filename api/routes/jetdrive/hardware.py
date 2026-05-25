@@ -13,6 +13,7 @@ Sub-blueprint for:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import math
 import socket
@@ -35,7 +36,6 @@ from ._shared import (
     JETDRIVE_IFACE,
     JETDRIVE_MCAST_GROUP,
     JETDRIVE_PORT,
-    _is_simulator_active,
     _live_data,
     _live_data_event,
     _live_data_lock,
@@ -50,6 +50,21 @@ from ._shared import (
 )
 
 hardware_bp = Blueprint("jetdrive_hardware", __name__)
+
+# Mount the operator-facing Channel Health Board on the hardware blueprint so
+# it shares the same URL prefix and live-data lock. Implementation lives in
+# ``channel_health`` to keep this file focused on capture lifecycle.
+from .channel_health import (  # noqa: E402
+    build_channels_health_payload,
+    register_channel_health_routes,
+)
+from .unified_status import (  # noqa: E402
+    build_unified_status_payload,
+    register_unified_status_routes,
+)
+
+register_channel_health_routes(hardware_bp)
+register_unified_status_routes(hardware_bp)
 
 # ---------------------------------------------------------------------------
 # Hardware Diagnostics
@@ -331,6 +346,46 @@ def discover_providers_multi():
 # ---------------------------------------------------------------------------
 
 
+def _providers_summary(providers: list[Any]) -> list[dict[str, Any]]:
+    """Convert provider objects to JSON-serializable summaries."""
+    return [
+        {
+            "provider_id": int(p.provider_id),
+            "name": str(p.name),
+            "host": str(p.host),
+            "channel_count": len(getattr(p, "channels", {}) or {}),
+        }
+        for p in providers
+    ]
+
+
+def _discover_providers_snapshot(
+    timeout: float = 2.0,
+) -> tuple[list[Any], str | None]:
+    """
+    Run a one-shot provider discovery and return (providers, error_message).
+
+    This is used for preflight checks and snapshot health endpoints when the
+    background monitor is not running.
+    """
+    from api.services.jetdrive.jetdrive_client import JetDriveConfig
+    from api.services.jetdrive.jetdrive_client import discover_providers as async_discover
+
+    cfg = JetDriveConfig.from_env()
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        providers = loop.run_until_complete(async_discover(cfg, timeout=timeout))
+        return providers, None
+    except Exception as exc:
+        return [], str(exc)
+    finally:
+        with contextlib.suppress(Exception):
+            asyncio.set_event_loop(None)
+        with contextlib.suppress(Exception):
+            loop.close()
+
+
 def _monitor_loop():
     """Background thread for connection monitoring."""
     project_root = get_project_root()
@@ -357,16 +412,7 @@ def _monitor_loop():
         try:
             providers = asyncio.run(async_discover(config, timeout=2.0))
 
-            provider_list: list[dict[str, Any]] = []
-            for p in providers:
-                provider_list.append(
-                    {
-                        "provider_id": p.provider_id,
-                        "name": p.name,
-                        "host": p.host,
-                        "channel_count": len(p.channels),
-                    }
-                )
+            provider_list = _providers_summary(providers)
 
             with _monitor_lock:
                 _monitor_state["last_check"] = datetime.now().isoformat()
@@ -422,22 +468,128 @@ def stop_monitor():
 
 @hardware_bp.route("/hardware/monitor/status", methods=["GET"])
 def get_monitor_status():
-    """Get current monitor status."""
+    """
+    Get current monitor status.
+
+    When the background monitor isn't running, perform an on-demand snapshot
+    discovery so clients still receive accurate provider connectivity.
+    """
     with _monitor_lock:
-        return jsonify(
-            {
-                "running": _monitor_state["running"],
-                "last_check": _monitor_state["last_check"],
-                "providers": _monitor_state["providers"],
-                "connected": len(_monitor_state["providers"]) > 0,
-                "history": _monitor_state["history"][-20:],
+        running = bool(_monitor_state["running"])
+        last_check = _monitor_state["last_check"]
+        providers = list(_monitor_state["providers"])
+        history = list(_monitor_state["history"])
+
+    if not running:
+        should_refresh = True
+        if isinstance(last_check, str):
+            try:
+                age = (datetime.now() - datetime.fromisoformat(last_check)).total_seconds()
+                should_refresh = age > 2.0
+            except Exception:
+                should_refresh = True
+
+        if should_refresh:
+            discovered, discovery_error = _discover_providers_snapshot(timeout=1.25)
+            snapshot_time = datetime.now().isoformat()
+            providers = _providers_summary(discovered)
+            history_entry: dict[str, Any] = {
+                "timestamp": snapshot_time,
+                "connected": len(providers) > 0,
+                "provider_count": len(providers),
+                "source": "snapshot",
             }
-        )
+            if discovery_error:
+                history_entry["error"] = True
+                history_entry["error_message"] = discovery_error
+
+            with _monitor_lock:
+                _monitor_state["last_check"] = snapshot_time
+                _monitor_state["providers"] = providers
+                _monitor_state["history"].append(history_entry)
+                if len(_monitor_state["history"]) > 60:
+                    _monitor_state["history"] = _monitor_state["history"][-60:]
+                history = list(_monitor_state["history"])
+                last_check = _monitor_state["last_check"]
+
+    return jsonify(
+        {
+            "running": running,
+            "last_check": last_check,
+            "providers": providers,
+            "connected": len(providers) > 0,
+            "history": history[-20:],
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Live Data Streaming
 # ---------------------------------------------------------------------------
+
+ATMO_PROBE_CHANNELS = {35, 36, 37, 38}
+ATMO_CANONICAL_NAMES = {
+    "Pressure",
+    "Temperature 1",
+    "Temperature 2",
+    "Humidity",
+}
+
+
+def _unit_score_for_canonical(canonical: str, unit: int) -> int:
+    """Rank how strongly a wire unit matches a canonical channel."""
+    try:
+        u = int(unit)
+    except Exception:
+        u = -1
+
+    if canonical in ("Digital RPM 1", "Digital RPM 2", "Engine RPM", "RPM"):
+        return 100 if u == 8 else 0
+    if canonical in ("Speed", "Speed 1"):
+        return 100 if u == 2 else 0
+    if canonical.startswith("Force"):
+        return 100 if u == 3 else 0
+    if canonical.startswith("Power") or canonical == "Horsepower":
+        return 100 if u == 4 else 0
+    if canonical.startswith("Torque"):
+        return 100 if u == 5 else 0
+    if canonical.startswith("Air/Fuel") or canonical in ("AFR", "AFR 1"):
+        return 100 if u == 11 else 0
+    if canonical.startswith("Lambda"):
+        return 100 if u == 13 else 0
+    if canonical in ("MAP kPa", "Pressure"):
+        return 60 if u == 7 else 0
+    return 0
+
+
+def _canonical_source_rank(
+    canonical_name: str, provider_id: int, channel_id: int, unit: int
+) -> tuple[int, int, int, int]:
+    """
+    Stable ranking for choosing one canonical source across providers.
+
+    Higher tuple wins. Ties are broken deterministically by provider/channel id
+    (lower ids preferred) so selection is stable across runs.
+    """
+    atmo_probe_bonus = (
+        1
+        if canonical_name in ATMO_CANONICAL_NAMES
+        and int(channel_id) in ATMO_PROBE_CHANNELS
+        else 0
+    )
+    unit_score = _unit_score_for_canonical(canonical_name, unit)
+    return (atmo_probe_bonus, unit_score, -int(provider_id), -int(channel_id))
+
+
+def _prefer_canonical_source(
+    canonical_name: str,
+    current: tuple[int, int, int],
+    candidate: tuple[int, int, int],
+) -> bool:
+    """Return True when candidate should replace current canonical source."""
+    return _canonical_source_rank(canonical_name, *candidate) > _canonical_source_rank(
+        canonical_name, *current
+    )
 
 
 def _live_capture_loop(requested_provider_id: int | None = None):
@@ -464,6 +616,13 @@ def _live_capture_loop(requested_provider_id: int | None = None):
     validator = get_validator()
 
     reset_live_queue_manager()
+    # Clear rolling validity counters so the new session starts from zero.
+    # This is the precise stopped→starting boundary inside the capture
+    # thread; the route handler also calls this for early exits.
+    from .channel_health import reset_flag_history
+
+    reset_flag_history()
+
     queue_mgr = get_live_queue_manager()
 
     loop = asyncio.new_event_loop()
@@ -480,6 +639,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                 _live_data["channels"] = {}
                 _live_data["last_update_ts"] = time.time()
                 _live_data["error"] = "No providers found"
+                _live_data["error_code"] = "no_providers"
                 _live_data["provider_id"] = None
                 _live_data["provider_name"] = None
                 _live_data["provider_host"] = None
@@ -501,6 +661,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                     _live_data["error"] = (
                         f"Provider 0x{requested_provider_id:04X} not found"
                     )
+                    _live_data["error_code"] = "provider_not_found"
                 return
         else:
             provider = merge_all_providers(providers)
@@ -525,34 +686,11 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         queue_mgr.start_processing()
 
         channel_values: dict[str, dict[str, Any]] = {}
-        canonical_sources: dict[str, tuple[int, int]] = {}
+        canonical_sources: dict[str, tuple[int, int, int]] = {}
+        legacy_alias_owner: dict[int, int] = {}
         AFR_CANONICAL_NAMES = {"AFR Front", "AFR Rear", "AFR"}
         _knock_front: float | None = None
         _knock_rear: float | None = None
-
-        def _unit_score_for_canonical(canonical: str, unit: int) -> int:
-            try:
-                u = int(unit)
-            except Exception:
-                u = -1
-
-            if canonical in ("Digital RPM 1", "Digital RPM 2", "Engine RPM", "RPM"):
-                return 100 if u == 8 else 0
-            if canonical in ("Speed", "Speed 1"):
-                return 100 if u == 2 else 0
-            if canonical.startswith("Force"):
-                return 100 if u == 3 else 0
-            if canonical.startswith("Power") or canonical == "Horsepower":
-                return 100 if u == 4 else 0
-            if canonical.startswith("Torque"):
-                return 100 if u == 5 else 0
-            if canonical.startswith("Air/Fuel") or canonical in ("AFR", "AFR 1"):
-                return 100 if u == 11 else 0
-            if canonical.startswith("Lambda"):
-                return 100 if u == 13 else 0
-            if canonical in ("MAP kPa", "Pressure"):
-                return 60 if u == 7 else 0
-            return 0
 
         def _apply_deadband(name: str, unit: int, value: float) -> float:
             try:
@@ -578,9 +716,12 @@ def _live_capture_loop(requested_provider_id: int | None = None):
         def _c_to_f(c: float) -> float:
             return (float(c) * 9.0 / 5.0) + 32.0
 
+        from api.services.jetdrive.derived_channels import AfrDerivationState
         from api.services.jetdrive.wideband_rescale import (
             canonicalize_wideband_sample,
         )
+
+        afr_derivation = AfrDerivationState()
 
         def on_sample(s: JetDriveSample):
             nonlocal _knock_front, _knock_rear
@@ -707,64 +848,69 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                         "computed": True,
                     }
 
-            ATMO_PROBE_CHANNELS = {35, 36, 37, 38}
-            ATMO_CANONICAL_NAMES = {
-                "Pressure",
-                "Temperature 1",
-                "Temperature 2",
-                "Humidity",
-            }
-
             current = canonical_sources.get(canonical_name) if allow_canonical_slot else None
-            candidate = (s.provider_id, s.channel_id)
+            candidate = (s.provider_id, s.channel_id, raw_unit)
 
             if allow_canonical_slot and current is None:
                 canonical_sources[canonical_name] = candidate
-            elif allow_canonical_slot and candidate != current:
-                cur_provider_id, cur_chan_id = current
+            elif allow_canonical_slot and candidate != current and current is not None:
+                if _prefer_canonical_source(canonical_name, current, candidate):
+                    canonical_sources[canonical_name] = candidate
 
-                if canonical_name in ATMO_CANONICAL_NAMES:
-                    candidate_is_probe = s.channel_id in ATMO_PROBE_CHANNELS
-                    current_is_probe = cur_chan_id in ATMO_PROBE_CHANNELS
-                    if candidate_is_probe and not current_is_probe:
-                        canonical_sources[canonical_name] = candidate
-                else:
-                    cur_prov = providers_by_id.get(cur_provider_id)
-                    cur_meta = (
-                        (cur_prov.channels or {}).get(cur_chan_id) if cur_prov else None
-                    )
-                    cur_unit = int(getattr(cur_meta, "unit", -1)) if cur_meta else -1
-                    if _unit_score_for_canonical(
-                        canonical_name, raw_unit
-                    ) > _unit_score_for_canonical(canonical_name, cur_unit):
-                        canonical_sources[canonical_name] = candidate
-
-            if allow_canonical_slot and canonical_sources.get(canonical_name) == candidate:
+            active_source = canonical_sources.get(canonical_name)
+            if allow_canonical_slot and active_source == candidate:
                 channel_values[canonical_name] = entry
 
             chan_alias = f"chan_{s.channel_id}"
-            channel_values.setdefault(chan_alias, entry)
+            provider_chan_alias = f"chan_{s.provider_id}_{s.channel_id}"
+            alias_owner = legacy_alias_owner.get(s.channel_id)
+            if alias_owner is None or s.provider_id < alias_owner:
+                legacy_alias_owner[s.channel_id] = s.provider_id
+                alias_owner = s.provider_id
+            if alias_owner == s.provider_id:
+                channel_values[chan_alias] = entry
+            channel_values[provider_chan_alias] = entry
 
             now_ts = time.time()
+            # Feed the AFR derivation state with canonical AFR samples so we
+            # can emit AFR Mean / AFR Delta in lock-step with raw samples.
+            derived_entries = []
+            if is_lc_canonical_afr and canonical_name in ("AFR Front", "AFR Rear"):
+                derived_results = afr_derivation.record(
+                    canonical_name, canonical_value, s.timestamp_ms
+                )
+                for derived in derived_results:
+                    derived_entries.append(
+                        derived.to_live_entry(updated_at_ts=now_ts)
+                    )
+
             with _live_data_lock:
                 live_channels = _live_data.get("channels")
                 if not isinstance(live_channels, dict):
                     live_channels = {}
                     _live_data["channels"] = live_channels
-                if allow_canonical_slot:
+                if allow_canonical_slot and active_source == candidate:
                     live_channels[canonical_name] = entry
-                if chan_alias not in live_channels:
+                if alias_owner == s.provider_id:
                     live_channels[chan_alias] = entry
+                live_channels[provider_chan_alias] = entry
                 if knock_entry is not None:
                     channel_values["Knock"] = knock_entry
                     live_channels["Knock"] = knock_entry
+                for derived_entry in derived_entries:
+                    channel_values[derived_entry["name"]] = derived_entry
+                    live_channels[derived_entry["name"]] = derived_entry
                 _live_data["last_update_ts"] = now_ts
                 if "error" in _live_data:
                     del _live_data["error"]
+                if "error_code" in _live_data:
+                    del _live_data["error_code"]
                 # Append to ring buffer for drain endpoint (per-channel granularity)
                 _sample_ring.append(entry)
                 if knock_entry is not None:
                     _sample_ring.append(knock_entry)
+                for derived_entry in derived_entries:
+                    _sample_ring.append(derived_entry)
             # Wake SSE listeners immediately instead of waiting for their sleep cycle
             _live_data_event.set()
 
@@ -842,6 +988,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                         _live_data["error"] = (
                             "No data frames received. Check dyno connection and JetDrive settings."
                         )
+                        _live_data["error_code"] = "no_frames"
             elif stats_dict.get("non_provider_frames", 0) > 0:
                 logger.warning(
                     f"Received {stats_dict['non_provider_frames']} frames from other providers"
@@ -856,6 +1003,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
                         _live_data["error"] = (
                             f"Received frames but no samples. Provider ID: 0x{provider.provider_id:04X}"
                         )
+                        _live_data["error_code"] = "frames_without_samples"
             elif sample_count[0] > 0:
                 logger.info(
                     f"Successfully received {sample_count[0]} samples from provider"
@@ -865,6 +1013,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             logger.error(f"Error during data capture: {e}", exc_info=True)
             with _live_data_lock:
                 _live_data["error"] = f"Capture error: {str(e)}"
+                _live_data["error_code"] = "capture_error"
         finally:
             queue_mgr.force_flush()
             queue_mgr.stop_processing()
@@ -880,6 +1029,7 @@ def _live_capture_loop(requested_provider_id: int | None = None):
             _live_data["channels"] = {}
             _live_data["last_update_ts"] = time.time()
             _live_data["error"] = str(e)
+            _live_data["error_code"] = "live_loop_error"
     finally:
         try:
             pending = asyncio.all_tasks(loop)
@@ -946,14 +1096,84 @@ def start_live_capture():
                     "provider_name": _live_data.get("provider_name"),
                 }
             )
+
+    # Preflight discovery before spawning a capture thread. This avoids noisy
+    # start/stop loops when no providers are available.
+    providers, discovery_error = _discover_providers_snapshot(timeout=1.25)
+    provider_ids = {int(p.provider_id) for p in providers}
+
+    if not providers:
+        message = (
+            "No JetDrive providers found. Check DynoWare/Power Core and network multicast settings."
+        )
+        with _live_data_lock:
+            _live_data["capturing"] = False
+            _live_data["channels"] = {}
+            _live_data["last_update_ts"] = time.time()
+            _live_data["provider_id"] = None
+            _live_data["provider_name"] = None
+            _live_data["provider_host"] = None
+            _live_data["error"] = message
+            _live_data["error_code"] = "no_providers"
+            _sample_ring.clear()
+        response: dict[str, Any] = {
+            "status": "no_providers",
+            "error": message,
+            "retry_after_ms": 5000,
+        }
+        if discovery_error:
+            response["discovery_error"] = discovery_error
+        return jsonify(response), 503
+
+    if requested_provider_id is not None and requested_provider_id not in provider_ids:
+        message = f"Requested provider 0x{requested_provider_id:04X} not found."
+        with _live_data_lock:
+            _live_data["capturing"] = False
+            _live_data["last_update_ts"] = time.time()
+            _live_data["provider_id"] = None
+            _live_data["provider_name"] = None
+            _live_data["provider_host"] = None
+            _live_data["error"] = message
+            _live_data["error_code"] = "provider_not_found"
+        return (
+            jsonify(
+                {
+                    "status": "provider_not_found",
+                    "error": message,
+                    "available_provider_ids": [f"0x{pid:04X}" for pid in sorted(provider_ids)],
+                }
+            ),
+            404,
+        )
+
+    with _live_data_lock:
+        # Re-check after preflight to avoid races with concurrent starts.
+        if _live_data["capturing"]:
+            return jsonify(
+                {
+                    "status": "already_capturing",
+                    "provider_id": _live_data.get("provider_id"),
+                    "provider_name": _live_data.get("provider_name"),
+                }
+            )
         _live_data["capturing"] = True
         _live_data["channels"] = {}
         _live_data["last_update_ts"] = None
         _live_data["provider_id"] = None
         _live_data["provider_name"] = None
         _live_data["provider_host"] = None
+        _live_data.pop("error", None)
+        _live_data.pop("error_code", None)
         # Clear sample ring to prevent stale samples from previous session
         _sample_ring.clear()
+
+    # Reset rolling counters (e.g. lc2_peg_count_60s) so an operator who
+    # quickly stop/starts capture doesn't see ghost peg counts from the
+    # previous session. Belt-and-suspenders: ``_live_capture_loop`` also
+    # invokes the reset right before subscribing.
+    from .channel_health import reset_flag_history
+
+    reset_flag_history()
 
     thread = threading.Thread(
         target=_live_capture_loop, args=(requested_provider_id,), daemon=True
@@ -1153,24 +1373,6 @@ def _computed_live_channel_entry(
 
 def _build_live_data_payload(include_all: bool = False) -> dict[str, Any]:
     """Shared payload builder for polling + SSE."""
-    if _is_simulator_active():
-        from api.services.simulation.dyno_simulator import get_simulator
-
-        sim = get_simulator()
-        channels = sim.get_channels()
-        if not include_all:
-            channels = _filter_live_display_channels(channels)
-        state = sim.get_state().value
-        return {
-            "capturing": True,
-            "simulated": True,
-            "sim_state": state,
-            "last_update_ts": time.time(),
-            "last_update": datetime.now().isoformat(),
-            "channels": channels,
-            "channel_count": len(channels),
-        }
-
     def _get_value(channels_dict: dict[str, Any], keys: list[str]) -> float | None:
         for k in keys:
             v = channels_dict.get(k)
@@ -1185,19 +1387,23 @@ def _build_live_data_payload(include_all: bool = False) -> dict[str, Any]:
         channels: dict[str, Any] = dict(_live_data.get("channels", {}) or {})
         capturing = _live_data.get("capturing", False)
         error = _live_data.get("error")
+        error_code = _live_data.get("error_code")
         last_update_ts = _live_data.get("last_update_ts")
         provider_id = _live_data.get("provider_id")
         provider_name = _live_data.get("provider_name")
         provider_host = _live_data.get("provider_host")
 
     is_stale = False
+    data_age_seconds: float | None = None
     if last_update_ts:
         try:
             age_seconds = float(time.time() - float(last_update_ts))
+            data_age_seconds = age_seconds
             if age_seconds > 10:
                 is_stale = True
                 if not error:
                     error = f"Data is stale (last update {age_seconds:.1f}s ago)"
+                    error_code = "stale_data"
         except Exception:
             pass
 
@@ -1241,8 +1447,33 @@ def _build_live_data_payload(include_all: bool = False) -> dict[str, Any]:
         except Exception:
             last_update_iso = None
 
+    raw_channel_count = len(channels)
     if not include_all:
         channels = _filter_live_display_channels(channels)
+
+    channel_count = len(channels)
+    status_state = "idle"
+    status_message = "Capture is stopped."
+    status_retryable = False
+    if capturing:
+        if raw_channel_count > 0 and not is_stale:
+            status_state = "capturing"
+            status_message = "Receiving live channel data."
+        elif raw_channel_count > 0 and is_stale:
+            status_state = "degraded"
+            status_message = error or "Live data stream is stale."
+            status_retryable = True
+        else:
+            status_state = "starting" if not error else "degraded"
+            status_message = error or "Capture started, waiting for first samples."
+            status_retryable = True
+    elif error:
+        if error_code == "no_providers":
+            status_state = "no_providers"
+        else:
+            status_state = "idle_error"
+        status_message = str(error)
+        status_retryable = True
 
     response: dict[str, Any] = {
         "capturing": capturing,
@@ -1250,15 +1481,24 @@ def _build_live_data_payload(include_all: bool = False) -> dict[str, Any]:
         "last_update_ts": last_update_ts,
         "last_update": last_update_iso,
         "channels": channels,
-        "channel_count": len(channels),
+        "channel_count": channel_count,
+        "raw_channel_count": raw_channel_count,
         "is_stale": is_stale,
+        "data_age_seconds": data_age_seconds,
         "provider_id": provider_id,
         "provider_name": provider_name,
         "provider_host": provider_host,
+        "status": {
+            "state": status_state,
+            "message": status_message,
+            "retryable": status_retryable,
+        },
     }
 
     if error:
         response["error"] = error
+    if error_code:
+        response["error_code"] = error_code
 
     return response
 
@@ -1272,17 +1512,23 @@ def stream_live_data():
     SSE latency from ~250 ms (4 Hz) to near-instant (~20 Hz, matching
     the 50 ms aggregation window).
 
-    The stream pushes two event types:
-    - ``data`` (default): The latest channel snapshot for gauge displays.
-    - ``samples``: Batch of all accumulated samples since last push, for
-      VE hit accumulation and other consumers that need every sample.
+    Event types pushed on this stream:
+    - default ``message`` (no ``event:`` prefix): the latest channel
+      snapshot for gauge displays. Backwards-compatible with existing
+      EventSource consumers that listen to ``onmessage``.
+    - ``health``: emitted at ~2 Hz. Same payload shape as
+      ``GET /hardware/channels/health`` and ``GET /hardware/status`` so
+      ``useHardwareStatus`` can prefer SSE without changing schema.
     """
 
     include_all = _is_truthy_query_param(request.args.get("include_all"))
 
+    HEALTH_EMIT_INTERVAL_SEC = 0.5  # 2 Hz
+
     def _event_stream():
         last_sent_key: tuple[Any, ...] | None = None
         last_keepalive = time.time()
+        last_health_emit_at = 0.0
         while True:
             # Block until new data arrives or 50 ms elapses (whichever first).
             # The event is set() by on_sample in _live_capture_loop whenever
@@ -1290,6 +1536,7 @@ def stream_live_data():
             _live_data_event.wait(timeout=0.05)
             _live_data_event.clear()
 
+            now = time.time()
             payload = _build_live_data_payload(include_all=include_all)
             key = (
                 payload.get("simulated", False),
@@ -1300,12 +1547,25 @@ def stream_live_data():
             if key != last_sent_key:
                 last_sent_key = key
                 yield f"data: {json.dumps(payload)}\n\n"
-                last_keepalive = time.time()
+                last_keepalive = now
             else:
-                now = time.time()
                 if now - last_keepalive > 10.0:
                     yield ": keepalive\n\n"
                     last_keepalive = now
+
+            # Emit a health event at most every HEALTH_EMIT_INTERVAL_SEC.
+            # The build is small (no I/O, dict reads + bound counters) so it
+            # cannot meaningfully block data emission. Emit even when the
+            # data key didn't change so the operator UI sees fresh "STALE"
+            # transitions while the upstream stream is silent.
+            if now - last_health_emit_at >= HEALTH_EMIT_INTERVAL_SEC:
+                try:
+                    health_payload = build_unified_status_payload(now_ts=now)
+                    yield f"event: health\ndata: {json.dumps(health_payload)}\n\n"
+                except Exception:
+                    # Never let a health-build failure break the data stream.
+                    pass
+                last_health_emit_at = now
 
     headers = {
         "Cache-Control": "no-cache",
@@ -2280,14 +2540,8 @@ def hardware_status():
 def discover_channels():
     """Discover all available channels with their current values."""
     try:
-        if _is_simulator_active():
-            from api.services.simulation.dyno_simulator import get_simulator
-
-            sim = get_simulator()
-            channels_data = sim.get_channels()
-        else:
-            with _live_data_lock:
-                channels_data = _live_data.get("channels", {})
+        with _live_data_lock:
+            channels_data = _live_data.get("channels", {})
 
         if not channels_data:
             return (
@@ -2561,23 +2815,6 @@ def check_hardware_health():
     """Check hardware connection health and latency."""
     try:
         start_time = time.time()
-
-        if _is_simulator_active():
-            from api.services.simulation.dyno_simulator import get_simulator
-
-            sim = get_simulator()
-            channels = sim.get_channels()
-            latency_ms = (time.time() - start_time) * 1000
-
-            return jsonify(
-                {
-                    "healthy": True,
-                    "connected": True,
-                    "simulated": True,
-                    "latency_ms": latency_ms,
-                    "channel_count": len(channels),
-                }
-            )
 
         with _live_data_lock:
             capturing = _live_data["capturing"]

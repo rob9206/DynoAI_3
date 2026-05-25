@@ -1,258 +1,64 @@
-import { useState, useEffect, useCallback, useRef, lazy } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { toast } from '@/lib/toast';
+import { useState, lazy } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useJetDriveLive } from '@/hooks/useJetDriveLive';
-import { useYourDynoLive } from '@/hooks/useYourDynoLive';
+import {
+  HardwareStatusProvider,
+  useHardwareStatusContext,
+} from '@/hooks/HardwareStatusContext';
 import { JetDriveTopBar } from '@/components/jetdrive/page-sections/JetDriveTopBar';
 import { CommandCenterPane } from '@/components/jetdrive/page-sections/CommandCenterPane';
-import { TuningPane } from '@/components/jetdrive/page-sections/TuningPane';
+import { TuningPane, type TuningSubTab } from '@/components/jetdrive/page-sections/TuningPane';
+import { WorkspaceBrowser } from '@/components/workspace/WorkspaceBrowser';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:5001';
 const API_BASE = `${API_BASE_URL}/api/jetdrive`;
-const YOURDYNO_API_BASE = `${API_BASE_URL}/api/yourdyno`;
 
-const NAV_ITEMS = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'JetDrive', to: '/jetdrive' },
-  { label: 'Results', to: '/results/last' },
-  { label: 'History', to: '/history' },
-];
-
-const WorkspaceAutoTuneCard = () => (
-  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-6 text-zinc-100">
-    <h3 className="text-lg font-semibold text-zinc-100">AutoTune moved to Workspace</h3>
-    <p className="mt-2 text-sm text-zinc-300">
-      Generate flashable AutoTune patches from each vehicle session in Workspace. This JetDrive tab stays
-      available for live views, but patch generation now lives in the session workflow.
-    </p>
-    <div className="mt-4">
-      <Link
-        to="/workspace"
-        className="inline-flex items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
-      >
-        Open workspace
-      </Link>
-    </div>
-  </div>
-);
+const EmbeddedWorkspace = () => <WorkspaceBrowser showHeader={false} />;
 
 const LazyBaseMapGenerator = lazy(() =>
   import('@/components/jetdrive/BaseMapGenerator').then((m) => ({ default: m.BaseMapGenerator })),
 );
 
 type ActiveView = 'command-center' | 'tuning';
-type TuningSubTab = 'base-map' | 'session';
 
-export default function JetDriveAutoTunePage() {
-  const location = useLocation();
+function JetDriveAutoTunePageInner() {
+  const [searchParams] = useSearchParams();
+  const initialView: ActiveView = searchParams.get('view') === 'tuning' ? 'tuning' : 'command-center';
   const [hardwareOpen, setHardwareOpen] = useState(false);
-  const [isSimulatorActive, setIsSimulatorActive] = useState(false);
-  const [isStartingSim, setIsStartingSim] = useState(false);
-  const [isTriggeringPull, setIsTriggeringPull] = useState(false);
-  const [simThrottle, setSimThrottle] = useState(0);
-  const [activeLiveSource, setActiveLiveSource] = useState<'jetdrive' | 'yourdyno'>('jetdrive');
-  const [activeView, setActiveView] = useState<ActiveView>('command-center');
-  const [tuningSubTab, setTuningSubTab] = useState<TuningSubTab>('base-map');
-  const simThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeView, setActiveView] = useState<ActiveView>(initialView);
+  const [tuningSubTab, setTuningSubTab] = useState<TuningSubTab>('workspace');
 
   const jetdriveLive = useJetDriveLive({
     apiUrl: API_BASE,
     autoConnect: true,
     pollInterval: 800,
     useSse: true,
-    isSimulatorActive,
-    enableDrain: activeLiveSource === 'jetdrive',
+    enableDrain: true,
   });
 
-  const yourdynoLive = useYourDynoLive({
-    apiUrl: YOURDYNO_API_BASE,
-    autoConnect: true,
-    pollInterval: 800,
-    useSse: true,
-    isSimulatorActive: false,
-    enableDrain: activeLiveSource === 'yourdyno',
-  });
-
-  const activeLive = activeLiveSource === 'yourdyno' ? yourdynoLive : jetdriveLive;
-
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`);
-
-  const stopSimulator = useCallback(
-    async (silent?: boolean) => {
-      try {
-        await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' });
-        await jetdriveLive.clearChannels();
-        setIsSimulatorActive(false);
-        setSimThrottle(0);
-        if (!silent) {
-          toast.info('Simulator stopped');
-        }
-      } catch (error) {
-        if (!silent) {
-          toast.error('Failed to stop simulator');
-        }
-        console.error('Simulator stop error:', error);
-      }
-    },
-    [jetdriveLive],
-  );
-
-  const handleToggleSimulator = async () => {
-    if (activeLiveSource === 'yourdyno') {
-      toast.info('Simulator is only available with JetDrive source.');
-      return;
-    }
-    if (isSimulatorActive) {
-      await stopSimulator();
-      return;
-    }
-
-    setIsStartingSim(true);
-    try {
-      const res = await fetch(`${API_BASE}/simulator/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profile: 'm8_114',
-          virtual_ecu: { enabled: false },
-          auto_pull: false,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(errorData.error || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setIsSimulatorActive(true);
-        toast.success(`Simulator started: ${data.profile?.name || 'M8 114'}`, {
-          description: `${data.profile?.max_hp || 114} HP @ ${data.profile?.redline_rpm || 6200} RPM`,
-        });
-      } else {
-        toast.error('Failed to start simulator', {
-          description: data.error || 'Unknown error',
-        });
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to start simulator';
-      toast.error('Failed to start simulator', {
-        description: errorMessage,
-      });
-      console.error('Simulator start error:', error);
-    } finally {
-      setIsStartingSim(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeLiveSource === 'yourdyno' && isSimulatorActive) {
-      void stopSimulator(true);
-      toast.info('Simulator controls are only available with JetDrive source.');
-    }
-  }, [activeLiveSource, isSimulatorActive, stopSimulator]);
-
-  const handleThrottleChange = (value: number) => {
-    const clampedValue = Math.max(0, Math.min(100, value));
-    setSimThrottle(clampedValue);
-
-    if (simThrottleTimerRef.current) {
-      clearTimeout(simThrottleTimerRef.current);
-    }
-
-    simThrottleTimerRef.current = setTimeout(async () => {
-      simThrottleTimerRef.current = null;
-      try {
-        await fetch(`${API_BASE}/simulator/throttle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tps: clampedValue }),
-        });
-      } catch (error) {
-        console.error('Failed to set throttle:', error);
-      }
-    }, 100);
-  };
-
-  const handleTriggerPull = async () => {
-    if (!isSimulatorActive) return;
-    if (jetdriveLive.simState && jetdriveLive.simState !== 'idle') {
-      toast.warning(`Cannot trigger pull while simulator is ${jetdriveLive.simState}`);
-      return;
-    }
-
-    setIsTriggeringPull(true);
-    try {
-      const throttlePct = Math.round(simThrottle);
-
-      await fetch(`${API_BASE}/simulator/throttle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tps: throttlePct }),
-      });
-
-      const res = await fetch(`${API_BASE}/simulator/pull`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ throttle: throttlePct, tps: throttlePct }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) {
-        toast.error(data.error || 'Cannot start pull');
-        return;
-      }
-
-      setTimeout(() => {
-        fetch(`${API_BASE}/simulator/throttle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tps: throttlePct }),
-        }).catch(() => undefined);
-      }, 80);
-
-      window.dispatchEvent(
-        new CustomEvent('dynoai:simulator-pull', {
-          detail: { throttle: throttlePct },
-        }),
-      );
-      toast.success(`Pull started at ${throttlePct}% throttle`);
-    } catch (error) {
-      toast.error('Failed to trigger pull');
-      console.error('Trigger pull error:', error);
-    } finally {
-      setIsTriggeringPull(false);
-    }
-  };
+  // Top-line connection state comes from the shared hardware-status
+  // context so the JetDrive header reflects the same truth as the Channel
+  // Health Board and the Mapping Confidence panel. ``useJetDriveLive``
+  // still owns the live channel/sample stream that the Command Center
+  // renders.
+  const { status: unifiedStatus } = useHardwareStatusContext();
+  const isConnected =
+    unifiedStatus !== null
+      ? unifiedStatus.provider.connected || unifiedStatus.capture.capturing
+      : jetdriveLive.isConnected;
 
   return (
     <div className="flex h-full flex-col">
       <JetDriveTopBar
         activeView={activeView}
         onViewChange={setActiveView}
-        navItems={NAV_ITEMS}
-        isRouteActive={isActive}
-        activeLiveSource={activeLiveSource}
-        onLiveSourceChange={setActiveLiveSource}
-        isConnected={activeLive.isConnected}
-        isCapturing={activeLive.isCapturing}
-        isSimulatorActive={isSimulatorActive}
-        isStartingSim={isStartingSim}
-        onToggleSimulator={handleToggleSimulator}
+        isConnected={isConnected}
         onOpenHardware={() => setHardwareOpen(true)}
       />
 
       <CommandCenterPane
         activeView={activeView}
-        isSimulatorActive={isSimulatorActive}
-        simThrottle={simThrottle}
-        onThrottleChange={handleThrottleChange}
-        simulatorState={jetdriveLive.simState}
-        isTriggeringPull={isTriggeringPull}
-        onTriggerPull={handleTriggerPull}
-        live={activeLive}
+        live={jetdriveLive}
         hardwareOpen={hardwareOpen}
         onHardwareOpenChange={setHardwareOpen}
       />
@@ -261,8 +67,16 @@ export default function JetDriveAutoTunePage() {
         tuningSubTab={tuningSubTab}
         onTuningSubTabChange={setTuningSubTab}
         BaseMapComponent={LazyBaseMapGenerator}
-        SessionComponent={WorkspaceAutoTuneCard}
+        WorkspaceComponent={EmbeddedWorkspace}
       />
     </div>
+  );
+}
+
+export default function JetDriveAutoTunePage() {
+  return (
+    <HardwareStatusProvider apiUrl={API_BASE}>
+      <JetDriveAutoTunePageInner />
+    </HardwareStatusProvider>
   );
 }

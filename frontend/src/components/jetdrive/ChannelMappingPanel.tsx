@@ -345,7 +345,13 @@ export function ChannelMappingPanel({
       .catch((e) => console.error("Failed to fetch templates:", e));
   }, [apiUrl]);
 
-    // Auto-detect mapping from connected provider
+    // Auto-detect mapping from connected provider.
+    //
+    // Backend contract on missing providers:
+    //   503 with { status: "no_providers", error_code, message, retryable,
+    //              retry_after_ms } — same shape used by /hardware/live/start.
+    // The frontend renders the backend-provided message verbatim so the
+    // operator sees an actionable explanation instead of a raw HTTP error.
     const autoDetect = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -358,22 +364,54 @@ export function ChannelMappingPanel({
                 body: JSON.stringify({}),
             });
 
-            const data = await response.json();
+            const data = (await response.json()) as {
+                status?: string;
+                error?: string;
+                message?: string;
+                mapping?: ProviderMapping;
+                provider_channels?: SourceChannel[];
+                missing_required?: string[];
+            };
 
             if (!response.ok) {
-                throw new Error(data.error || "Auto-detect failed");
+                if (response.status === 503 && data?.status === "no_providers") {
+                    setError(
+                        data.message ??
+                            "No JetDrive providers found — start the dyno and try again."
+                    );
+                    return;
+                }
+                if (
+                    response.status === 404 &&
+                    data?.status === "provider_not_found"
+                ) {
+                    setError(
+                        data.message ??
+                            "Requested provider not found on the network."
+                    );
+                    return;
+                }
+                throw new Error(
+                    data.error ?? data.message ?? "Auto-detect failed"
+                );
             }
 
-            setMapping(data.mapping);
-            setSourceChannels(data.provider_channels || []);
+            const mapping = data.mapping;
+            if (!mapping) {
+                throw new Error("Auto-detect response missing mapping");
+            }
+            setMapping(mapping);
+            setSourceChannels(data.provider_channels ?? []);
 
-            const mappedCount = Object.keys(data.mapping.channels).length;
-            const missingRequired = data.missing_required || [];
+            const mappedCount = Object.keys(mapping.channels).length;
+            const missingRequired = data.missing_required ?? [];
 
             if (missingRequired.length > 0) {
                 setError(`Missing required channels: ${missingRequired.join(", ")}`);
             } else {
-                setSuccess(`Auto-detected ${mappedCount} channel mappings with confidence scoring`);
+                setSuccess(
+                    `Auto-detected ${mappedCount} channel mappings with confidence scoring`
+                );
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Auto-detect failed");

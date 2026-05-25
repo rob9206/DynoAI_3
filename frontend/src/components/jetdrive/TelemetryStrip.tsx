@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -154,7 +154,7 @@ function InstrumentCell({
       </div>
 
       {/* Status footer */}
-      {(statusLeft || statusRight) && (
+      {(statusLeft != null || statusRight != null) && (
         <div className="mt-0.5 flex items-center justify-between text-xs text-zinc-500">
           <span>{statusLeft ?? ''}</span>
           <span>{statusRight ?? ''}</span>
@@ -229,9 +229,7 @@ function TelemetryStripContent({
       mapChannel?.value,
       tpsChannel?.value,
       iatChannel?.value,
-      iatChannel?.units,
       ectChannel?.value,
-      ectChannel?.units,
       knockChannel?.value,
     ],
   );
@@ -286,6 +284,16 @@ function TelemetryStripContent({
   const knockValue =
     knockChannel?.value ?? (showKnock ? lastKnock?.intensity ?? null : audioRecording ? 0 : null);
   const knockWarning = knockValue !== null && knockValue > 0.5;
+  const handleAudioRecordingStart = useCallback(() => {
+    setAudioRecording(true);
+  }, []);
+  const handleAudioRecordingStop = useCallback(() => {
+    setAudioRecording(false);
+  }, []);
+  const handleAudioKnockDetected = useCallback((event: KnockEvent) => {
+    setLastKnock(event);
+    setLastKnockAt(Date.now());
+  }, []);
 
   return (
     <div className={cn('w-full bg-zinc-900 border-b border-zinc-800 gpu-accelerated', className)}>
@@ -438,12 +446,9 @@ function TelemetryStripContent({
               <AudioCapturePanel
                 isDynoCapturing={live.isCapturing}
                 currentRpm={rpmValue ?? 0}
-                onRecordingStart={() => setAudioRecording(true)}
-                onRecordingStop={() => setAudioRecording(false)}
-                onKnockDetected={(event) => {
-                  setLastKnock(event);
-                  setLastKnockAt(Date.now());
-                }}
+                onRecordingStart={handleAudioRecordingStart}
+                onRecordingStop={handleAudioRecordingStop}
+                onKnockDetected={handleAudioKnockDetected}
               />
             </div>
           </motion.div>

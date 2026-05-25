@@ -148,9 +148,15 @@ export function DynoConfigPanel({
         setLiveError(null);
         try {
             const res = await fetch(`${apiUrl}/hardware/start`, { method: 'POST' });
+            // 503 with status:"no_providers" / 404 with status:"provider_not_found"
+            // are structured responses from the backend preflight. Surface them
+            // as actionable errors but do NOT flip the local capturing state —
+            // the new Channel Health Board reflects backend truth.
             if (!res.ok) {
-                throw new Error(await buildErrorMessage(res, 'Failed to start live capture'));
+                const reason = await buildErrorMessage(res, 'Failed to start live capture');
+                throw new Error(reason);
             }
+            // "already_capturing" is success; we are now in capture state.
             setCapturing(true);
         } catch (e) {
             setLiveError(e instanceof Error ? e.message : 'Start failed');

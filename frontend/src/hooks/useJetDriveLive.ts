@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { playUiSound } from '@/lib/ui-sounds';
+import { subscribeSse } from '@/lib/sseManager';
 
 // Shared capability flag across all hook instances on the page.
 let globalDrainEndpointUnavailable = false;
@@ -445,6 +446,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
                 const p0 = providersRaw[0];
                 setProviderName(getString(p0.name));
                 setChannelCount(getNumber(p0.channel_count) ?? 0);
+            } else {
+                setProviderName(null);
+                setChannelCount(0);
             }
 
             setConnectionError(null);
@@ -468,6 +472,9 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         const simulated = getBoolean(data.simulated) ?? false;
         const simStateValue = getString(data.sim_state);
         const lastUpdateTs = getNumber(data.last_update_ts);
+        const backendError = getString(data.error);
+        const statusObj = isRecord(data.status) ? data.status : null;
+        const statusMessage = statusObj ? getString(statusObj.message) : null;
 
         setIsCapturing(capturing);
         setIsSimulated(simulated);
@@ -506,7 +513,11 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         const channelsRaw = isRecord(data.channels) ? data.channels : null;
         if (channelsRaw && Object.keys(channelsRaw).length > 0) {
             setLiveConnected(true);
-            setConnectionError(null);
+            if (backendError) {
+                setConnectionError(backendError);
+            } else {
+                setConnectionError(null);
+            }
             // Convert to LiveLink-compatible format
             const newChannels: Record<string, JetDriveChannel> = {};
             const newSnapshot: JetDriveSnapshot = {
@@ -593,10 +604,8 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             }
         } else {
             setDataSource('none');
-            // If capturing but no channels, surface backend diagnostics (if provided).
-            const statusObj = isRecord(data.status) ? data.status : null;
-            const message = statusObj ? getString(statusObj.message) : null;
-            if (capturing && message) {
+            const message = backendError ?? statusMessage;
+            if (message) {
                 setConnectionError(message);
             }
         }
@@ -639,7 +648,20 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
     const startCapture = useCallback(async () => {
         try {
             const res = await fetch(`${opts.apiUrl}/hardware/live/start`, { method: 'POST' });
-            if (!res.ok) throw new Error('Failed to start capture');
+            if (!res.ok) {
+                let reason = 'Failed to start capture';
+                try {
+                    const raw: unknown = await res.json();
+                    if (isRecord(raw)) {
+                        const bodyError = getString(raw.error);
+                        const bodyStatus = getString(raw.status);
+                        reason = bodyError ?? bodyStatus ?? reason;
+                    }
+                } catch {
+                    // Keep generic reason
+                }
+                throw new Error(reason);
+            }
             setIsCapturing(true);
         } catch (err) {
             setConnectionError(err instanceof Error ? err.message : 'Start failed');
@@ -728,26 +750,26 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         };
     }, [shouldPollLive, checkConnection, pollLiveData, opts.pollInterval, opts.autoConnect, opts.useSse]);
 
-    // SSE effect (optional): prefer server push over polling
+    // SSE effect (optional): prefer server push over polling. Subscribes
+    // through the shared SSE manager so we never open a second
+    // EventSource when ``useHardwareStatus`` is also mounted.
     useEffect(() => {
         if (!shouldPollLive || !opts.useSse) return;
 
-        const es = new EventSource(`${opts.apiUrl}/hardware/live/stream`);
-        es.onmessage = (evt) => {
-            try {
-                const parsed = JSON.parse(evt.data) as unknown;
-                processLivePayload(parsed);
-            } catch {
-                // ignore malformed events
-            }
-        };
-        es.onerror = () => {
-            // EventSource auto-reconnects; keep this non-fatal
-        };
+        const url = `${opts.apiUrl}/hardware/live/stream`;
+        const unsubscribe = subscribeSse(url, {
+            onEvent: (eventName, data) => {
+                if (eventName !== 'data') return;
+                try {
+                    const parsed = JSON.parse(data) as unknown;
+                    processLivePayload(parsed);
+                } catch {
+                    // ignore malformed events
+                }
+            },
+        });
 
-        return () => {
-            es.close();
-        };
+        return unsubscribe;
     }, [shouldPollLive, opts.useSse, opts.apiUrl, processLivePayload]);
 
     // Drain polling is opt-in because the JetDrive page can mount multiple live
@@ -851,20 +873,18 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
         return samples;
     }, []);
 
-    // Auto-connect: when autoConnect is enabled, aggressively keep capture
-    // running so live data (and the VE heatmap that consumes it) stays
-    // populated whenever the user is on the Command Center — not only while
-    // a pull is actively recording. The backend handles "no providers" by
-    // exiting the capture thread and clearing `capturing`, so this effect
-    // will retry on the next tick once `isCapturing` flips back to false.
+    // Auto-connect: keep capture running while the command center is active.
+    // Only attempt start when the monitor reports at least one provider;
+    // this avoids a noisy start/stop loop when no hardware is currently
+    // discoverable on the network.
     useEffect(() => {
-        if (!opts.autoConnect || isCapturing) return;
+        if (!opts.autoConnect || isCapturing || !monitorConnected) return;
 
         // Fire immediately on mount / whenever capture stops, then retry
         // periodically so transient discovery failures self-heal.
         let cancelled = false;
         const attemptStart = () => {
-            if (cancelled || isCapturing) return;
+            if (cancelled || isCapturing || !monitorConnected) return;
             void startCapture().catch(() => undefined);
         };
         attemptStart();
@@ -874,7 +894,7 @@ export function useJetDriveLive(options: UseJetDriveLiveOptions = {}): UseJetDri
             cancelled = true;
             clearInterval(retry);
         };
-    }, [opts.autoConnect, isCapturing, startCapture]);
+    }, [opts.autoConnect, isCapturing, monitorConnected, startCapture]);
 
     // Status sounds on connect/disconnect transitions
     useEffect(() => {

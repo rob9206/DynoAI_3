@@ -188,8 +188,16 @@ def get_channel_mapping(signature: str):
 
 @mapping_bp.route("/mapping/<signature>", methods=["PUT"])
 def save_channel_mapping(signature: str):
-    """Save or update a channel mapping for a provider."""
+    """Save or update a channel mapping for a provider.
+
+    Saving clears any in-memory transient proposal for the same signature
+    so the unified status endpoint stops surfacing the "unsaved
+    auto-detected mapping" banner once the operator persists.
+    """
     from api.services.jetdrive.jetdrive_mapping import ProviderMapping, save_mapping
+    from api.services.jetdrive.mapping_transient_cache import (
+        clear_transient_mapping,
+    )
 
     try:
         data = request.get_json()
@@ -199,6 +207,7 @@ def save_channel_mapping(signature: str):
         data["provider_signature"] = signature
         mapping = ProviderMapping.from_dict(data)
         if save_mapping(mapping):
+            clear_transient_mapping(signature)
             return jsonify(mapping.to_dict())
         else:
             return jsonify({"error": "Failed to save mapping"}), 500
@@ -323,7 +332,14 @@ def create_mapping_from_template_endpoint():
 
 @mapping_bp.route("/mapping/auto-detect", methods=["POST"])
 def auto_detect_mapping():
-    """Auto-detect channel mappings for a provider."""
+    """Auto-detect channel mappings for a provider.
+
+    Returns a structured 503 when discovery yields no providers, matching
+    the contract used by ``/hardware/live/start``:
+    ``{ status, error_code, error, message, retryable, retry_after_ms }``.
+    The ``ChannelMappingPanel`` consumes this directly to render an
+    actionable message instead of a raw HTTP error.
+    """
     from api.services.jetdrive.jetdrive_client import JetDriveConfig, discover_providers
     from api.services.jetdrive.jetdrive_mapping import (
         compute_provider_signature,
@@ -344,7 +360,23 @@ def auto_detect_mapping():
             asyncio.set_event_loop(None)
 
         if not providers:
-            return jsonify({"error": "No JetDrive providers found"}), 404
+            message = (
+                "No JetDrive providers found. Start the dyno (DynoWare/Power Core) "
+                "and confirm multicast access, then retry."
+            )
+            return (
+                jsonify(
+                    {
+                        "status": "no_providers",
+                        "error_code": "no_providers",
+                        "error": message,
+                        "message": message,
+                        "retryable": True,
+                        "retry_after_ms": 5000,
+                    }
+                ),
+                503,
+            )
 
         provider = None
         if requested_provider_id:
@@ -353,11 +385,18 @@ def auto_detect_mapping():
                     provider = p
                     break
             if provider is None:
+                message = f"Requested provider 0x{int(requested_provider_id):04X} not found."
                 return (
                     jsonify(
                         {
-                            "error": f"Provider {requested_provider_id} not found",
-                            "available": [p.provider_id for p in providers],
+                            "status": "provider_not_found",
+                            "error_code": "provider_not_found",
+                            "error": message,
+                            "message": message,
+                            "available_provider_ids": [
+                                f"0x{p.provider_id:04X}" for p in providers
+                            ],
+                            "retryable": False,
                         }
                     ),
                     404,
@@ -365,12 +404,31 @@ def auto_detect_mapping():
         else:
             provider = providers[0]
 
+        from api.services.jetdrive.mapping_transient_cache import (
+            store_transient_mapping,
+        )
+
         signature = compute_provider_signature(provider)
         mapping = create_auto_mapping(provider, signature)
+        mapping_dict = mapping.to_dict()
+
+        # Cache the proposal in-memory so the Hardware Configuration UI can
+        # show "Unsaved auto-detected mapping" via the unified status
+        # endpoint until the operator persists it.
+        transient_entry = store_transient_mapping(
+            provider_signature=signature,
+            provider_id=provider.provider_id,
+            provider_name=provider.name,
+            host=provider.host,
+            mapping=mapping_dict,
+            source="auto_detect",
+        )
 
         return jsonify(
             {
-                "mapping": mapping.to_dict(),
+                "status": "ok",
+                "mapping": mapping_dict,
+                "transient_proposal": transient_entry.to_dict(),
                 "provider_channels": [
                     {"id": c.chan_id, "name": c.name}
                     for c in provider.channels.values()
@@ -388,7 +446,7 @@ def auto_detect_mapping():
 
     except Exception as e:
         logger.error(f"Failed to auto-detect mapping: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @mapping_bp.route("/mapping/transforms", methods=["GET"])

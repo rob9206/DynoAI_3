@@ -385,9 +385,7 @@ export default function OperatorTrainingPage() {
   // API calls
   const startSimulator = async () => {
     try {
-      // First start the base simulator
-      await fetch(`${API_BASE}/api/jetdrive/simulator/start`, { method: 'POST' });
-      // Then start training
+      // Start the dedicated training simulation service.
       const res = await fetch(`${TRAINING_API}/start`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {

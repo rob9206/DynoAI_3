@@ -1,6 +1,6 @@
 import { ReactNode, memo, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { History, Home, Radio, Gauge, Volume2, VolumeX, Shield, Database, FlaskConical, Zap } from 'lucide-react';
+import { History, Gauge, Volume2, VolumeX, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUiSoundsEnabled, toggleUiSoundsEnabled } from '@/lib/ui-sounds';
 
@@ -8,7 +8,7 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-export default function Layout({ children }: LayoutProps) {
+function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [uiSoundsEnabled, setUiSoundsEnabled] = useState(() => getUiSoundsEnabled());
 
@@ -30,35 +30,22 @@ export default function Layout({ children }: LayoutProps) {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  // Check if we're on JetDrive (main page)
+  // JetDrive owns its own command-center top bar. Workspace pages live under
+  // the JetDrive shell conceptually, so they also opt out of the legacy header
+  // and provide their own back navigation back to /jetdrive?view=tuning.
   const isJetDrivePage = isActive('/jetdrive');
+  const isWorkspaceRoute = isActive('/workspace');
+  const hideLegacyChrome = isJetDrivePage || isWorkspaceRoute;
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
-      {/* JetDrive hides the full nav; surface Workspace here so Analyze (session page) is discoverable */}
-      {isJetDrivePage && (
-        <Link
-          to="/workspace"
-          className="fixed top-3 right-3 z-[100] inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-3 py-2 text-sm font-medium text-zinc-100 shadow-lg backdrop-blur-sm hover:bg-zinc-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-          title="Open tuning workspace — upload files and run Analyze on a session"
-        >
-          <FlaskConical className="h-4 w-4 shrink-0 text-orange-400" aria-hidden />
-          Workspace
-        </Link>
-      )}
-      {!isJetDrivePage && (
-        <header className={`border-b sticky top-0 z-50 transition-colors ${isJetDrivePage
-          ? 'bg-zinc-950/95 backdrop-blur-md border-zinc-800'
-          : 'bg-background/80 backdrop-blur-sm border-border'
-          }`}>
+      {!hideLegacyChrome && (
+        <header className="border-b sticky top-0 z-50 transition-colors bg-background/80 backdrop-blur-sm border-border">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <Link to="/jetdrive" className="flex items-center space-x-3 group">
-                <div className={`p-2 rounded-lg transition-all ${isJetDrivePage
-                  ? 'bg-gradient-to-br from-orange-500 to-red-600 shadow-lg shadow-orange-500/20'
-                  : 'bg-primary/10'
-                  }`}>
-                  <Gauge className={`h-6 w-6 ${isJetDrivePage ? 'text-white' : 'text-primary'}`} />
+                <div className="p-2 rounded-lg transition-all bg-primary/10">
+                  <Gauge className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-1">
@@ -86,36 +73,6 @@ export default function Layout({ children }: LayoutProps) {
                 <div className="w-px h-6 bg-border mx-2" />
 
                 <Link
-                  to="/jetstream"
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/jetstream') || isActive('/runs')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                    }`}
-                >
-                  <Radio className="h-4 w-4" />
-                  <span>Live Feed</span>
-                </Link>
-                <Link
-                  to="/dashboard"
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/dashboard')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                    }`}
-                >
-                  <Home className="h-4 w-4" />
-                  <span>Control</span>
-                </Link>
-                <Link
-                  to="/workspace"
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/workspace')
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
-                    }`}
-                >
-                  <FlaskConical className="h-4 w-4" />
-                  <span>Workspace</span>
-                </Link>
-                <Link
                   to="/history"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/history')
                     ? 'bg-primary text-primary-foreground shadow-sm'
@@ -126,16 +83,6 @@ export default function Layout({ children }: LayoutProps) {
                   <span>History</span>
                 </Link>
                 <Link
-                  to="/training"
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/training')
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-amber-500/10 hover:text-amber-300'
-                    }`}
-                >
-                  <Shield className="h-4 w-4" />
-                  <span>Training</span>
-                </Link>
-                <Link
                   to="/hard-start-analyzer"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/hard-start-analyzer')
                     ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-sm'
@@ -144,16 +91,6 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   <Zap className="h-4 w-4" />
                   <span>Hard Start</span>
-                </Link>
-                <Link
-                  to="/engine-analyzer"
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${isActive('/engine-analyzer')
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-cyan-500/10 hover:text-cyan-300'
-                    }`}
-                >
-                  <Database className="h-4 w-4" />
-                  <span>EA Library</span>
                 </Link>
 
                 <div className="w-px h-6 bg-border mx-2" />
@@ -181,17 +118,16 @@ export default function Layout({ children }: LayoutProps) {
       <main
         className={isJetDrivePage
           ? 'h-screen w-full p-0'
-          : 'container mx-auto px-4 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500 contain-layout'
+          : hideLegacyChrome
+            ? 'animate-in fade-in slide-in-from-bottom-4 duration-500 contain-layout'
+            : 'container mx-auto px-4 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500 contain-layout'
         }
       >
         {children}
       </main>
 
-      {!isJetDrivePage && (
-        <footer className={`border-t mt-auto ${isJetDrivePage
-          ? 'bg-zinc-950 border-zinc-800'
-          : 'bg-muted/30 border-border'
-          }`}>
+      {!hideLegacyChrome && (
+        <footer className="border-t mt-auto bg-muted/30 border-border">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <div className="flex items-center gap-4">
@@ -209,3 +145,5 @@ export default function Layout({ children }: LayoutProps) {
     </div>
   );
 }
+
+export default memo(Layout);

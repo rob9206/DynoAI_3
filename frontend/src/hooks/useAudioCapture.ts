@@ -83,7 +83,7 @@ export interface UseAudioCaptureReturn {
 
     // Actions
     requestPermission: () => Promise<boolean>;
-    startRecording: () => Promise<void>;
+    startRecording: () => Promise<boolean>;
     stopRecording: () => Promise<RecordedAudio | null>;
     pauseRecording: () => void;
     resumeRecording: () => void;
@@ -146,6 +146,7 @@ export function useAudioCapture(options: UseAudioCaptureOptions = {}): UseAudioC
     const knockEventsRef = useRef<KnockEvent[]>([]);
     const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const startRecordingInFlightRef = useRef(false);
 
     // Knock detection state
     const knockConfirmCountRef = useRef<number>(0);
@@ -398,69 +399,83 @@ export function useAudioCapture(options: UseAudioCaptureOptions = {}): UseAudioC
     }, [opts.enableKnockDetection, opts.knockSensitivity, opts.knockFrequencyRange, state.isRecording, playAlarm]);
 
     // Start recording
-    const startRecording = useCallback(async () => {
+    const startRecording = useCallback(async (): Promise<boolean> => {
+        if (state.isRecording || mediaRecorderRef.current?.state === 'recording') {
+            return true;
+        }
+        if (startRecordingInFlightRef.current) {
+            return false;
+        }
+        startRecordingInFlightRef.current = true;
+
         // Request permission if not already granted
-        if (!mediaStreamRef.current) {
-            const granted = await requestPermission();
-            if (!granted) return;
-        }
-
-        // Resume audio context if suspended
-        if (audioContextRef.current?.state === 'suspended') {
-            await audioContextRef.current.resume();
-        }
-
-        const stream = mediaStreamRef.current;
-        if (!stream) {
-            setState(prev => ({ ...prev, error: 'No audio stream available' }));
-            return;
-        }
-
         try {
-            // Create MediaRecorder
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                ? 'audio/webm;codecs=opus'
-                : 'audio/webm';
-
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-            chunksRef.current = [];
-            knockEventsRef.current = [];
-            startTimeRef.current = Date.now();
-
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    chunksRef.current.push(e.data);
-                }
-            };
-
-            mediaRecorderRef.current.start(100); // Collect data every 100ms
-
-            setState(prev => ({
-                ...prev,
-                isRecording: true,
-                isPaused: false,
-                duration: 0,
-                error: null,
-            }));
-
-            // Start duration timer
-            durationIntervalRef.current = setInterval(() => {
-                setState(prev => ({
-                    ...prev,
-                    duration: Date.now() - startTimeRef.current,
-                }));
-            }, 100);
-
-            // Start analysis
-            if (opts.enableAnalysis) {
-                analysisIntervalRef.current = setInterval(analyzeAudio, opts.analysisInterval);
+            if (!mediaStreamRef.current) {
+                const granted = await requestPermission();
+                if (!granted) return false;
             }
 
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to start recording';
-            setState(prev => ({ ...prev, error: message }));
+            // Resume audio context if suspended
+            if (audioContextRef.current?.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+
+            const stream = mediaStreamRef.current;
+            if (!stream) {
+                setState(prev => ({ ...prev, error: 'No audio stream available' }));
+                return false;
+            }
+
+            try {
+                // Create MediaRecorder
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : 'audio/webm';
+
+                mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+                chunksRef.current = [];
+                knockEventsRef.current = [];
+                startTimeRef.current = Date.now();
+
+                mediaRecorderRef.current.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunksRef.current.push(e.data);
+                    }
+                };
+
+                mediaRecorderRef.current.start(100); // Collect data every 100ms
+
+                setState(prev => ({
+                    ...prev,
+                    isRecording: true,
+                    isPaused: false,
+                    duration: 0,
+                    error: null,
+                }));
+
+                // Start duration timer
+                durationIntervalRef.current = setInterval(() => {
+                    setState(prev => ({
+                        ...prev,
+                        duration: Date.now() - startTimeRef.current,
+                    }));
+                }, 100);
+
+                // Start analysis
+                if (opts.enableAnalysis) {
+                    analysisIntervalRef.current = setInterval(analyzeAudio, opts.analysisInterval);
+                }
+
+                return true;
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Failed to start recording';
+                setState(prev => ({ ...prev, error: message }));
+                return false;
+            }
+        } finally {
+            startRecordingInFlightRef.current = false;
         }
-    }, [requestPermission, opts.enableAnalysis, opts.analysisInterval, analyzeAudio]);
+    }, [requestPermission, opts.enableAnalysis, opts.analysisInterval, analyzeAudio, state.isRecording]);
 
     // Stop recording
     const stopRecording = useCallback(async (): Promise<RecordedAudio | null> => {
