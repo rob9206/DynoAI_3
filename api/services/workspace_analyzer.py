@@ -166,8 +166,11 @@ def analyze_iteration(
     imported = workflow.import_dataframe(autotune_session,
                                          dataframe_for_autotune)
     if not imported:
-        result.errors.extend(autotune_session.errors
-                             or ["import_dataframe failed"])
+        result.errors.extend(
+            _dedupe_errors(
+                autotune_session.errors or ["import_dataframe failed"],
+            )
+        )
         return result
 
     try:
@@ -184,6 +187,9 @@ def analyze_iteration(
         logger.exception("AFR/correction step failed")
         result.errors.append(f"analysis failed: {exc}")
         return result
+
+    if autotune_session.errors:
+        result.errors.extend(_dedupe_errors(autotune_session.errors))
 
     if autotune_session.afr_analysis:
         result.afr_mean_error_pct = float(
@@ -239,6 +245,14 @@ def analyze_iteration(
                     result.correction_pvv_n_changed_cells = changed
 
                 result.correction_manifest_path = str(manifest_path)
+        else:
+            export_errors = _dedupe_errors(autotune_session.errors)
+            if export_errors:
+                result.errors.extend(export_errors)
+            else:
+                result.errors.append(
+                    "no correction patch generated from selected pull"
+                )
     except Exception as exc:
         logger.exception("pvv export failed")
         result.errors.append(f"pvv export failed: {exc}")
@@ -251,8 +265,7 @@ def analyze_iteration(
     analyses_dir = (ws.iteration_dir(vehicle_id, session_id, iteration.id) /
                     ws.ANALYSES_DIRNAME)
     result.analysis_json_path = str(analyses_dir / analysis_filename)
-    result.success = len(
-        result.errors) == 0 or result.correction_pvv_path is not None
+    result.success = len(result.errors) == 0 and result.correction_pvv_path is not None
 
     persisted_path = ws.add_analysis(
         vehicle_id,
@@ -413,6 +426,7 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
 
     rpm_col = pick("engine rpm", "rpm", "engine speed")
     map_col = pick("map kpa", "manifold absolute pressure", "map")
+    tps_col = pick("throttle position", "throttle pct", "tps")
     afr_col = pick("afr meas", "afr_meas", "lc2_afr", "lc1_afr")
     hp_col = pick("horsepower", " hp", "power", exclude=("uncorrected",))
     tq_col = pick("torque", "tq", exclude=("uncorrected",))
@@ -421,6 +435,8 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
         rename[rpm_col] = "Engine RPM"
     if map_col and map_col != "MAP kPa":
         rename[map_col] = "MAP kPa"
+    if tps_col and tps_col != "Throttle Position":
+        rename[tps_col] = "Throttle Position"
     if afr_col and afr_col != "AFR Meas":
         rename[afr_col] = "AFR Meas"
     if hp_col and hp_col != "Horsepower":
@@ -431,41 +447,64 @@ def _shape_for_autotune(df: pd.DataFrame) -> pd.DataFrame:
         renamed = renamed.rename(columns=rename)
 
     if "AFR Meas" not in renamed.columns:
-        front_col = _find_column_any_ci(renamed, ["AFR Front", "WBO2 AFR Front"])
-        rear_col = _find_column_any_ci(renamed, ["AFR Rear", "WBO2 AFR Rear"])
-        if front_col and rear_col:
-            front = pd.to_numeric(renamed[front_col], errors="coerce")
-            rear = pd.to_numeric(renamed[rear_col], errors="coerce")
-            renamed["AFR Meas"] = pd.concat([front, rear],
-                                            axis=1).mean(axis=1, skipna=True)
-        elif front_col:
-            renamed["AFR Meas"] = pd.to_numeric(renamed[front_col],
-                                                errors="coerce")
-        elif rear_col:
-            renamed["AFR Meas"] = pd.to_numeric(renamed[rear_col],
-                                                errors="coerce")
+        # DynoWare often labels AFR channels as "*Volts*AFR*" even when the
+        # values are already AFR. Prefer LC2, then LC1, without any rescale.
+        lc2_col = _find_column_any_ci(renamed, ["LC2 Volts Petrol AFR2", "LC2 AFR"])
+        lc1_col = _find_column_any_ci(renamed, ["LC1 Volts Petrol AFR", "LC1 AFR"])
+        generic_afr = _find_column_any_ci(
+            renamed,
+            ["AFR"],
+            excludes=["desired", "warm-up", "target", "lambda", "front", "rear"],
+        )
+
+        if lc2_col:
+            renamed["AFR Meas"] = pd.to_numeric(renamed[lc2_col], errors="coerce")
+        elif lc1_col:
+            renamed["AFR Meas"] = pd.to_numeric(renamed[lc1_col], errors="coerce")
+        elif generic_afr:
+            renamed["AFR Meas"] = pd.to_numeric(renamed[generic_afr], errors="coerce")
         else:
-            # DynoWare often labels AFR channels as "*Volts*AFR*" even when the
-            # values are already AFR. Prefer LC2, then LC1, without any rescale.
-            lc2_col = _find_column_any_ci(renamed, ["LC2 Volts Petrol AFR2", "LC2 AFR"])
-            lc1_col = _find_column_any_ci(renamed, ["LC1 Volts Petrol AFR", "LC1 AFR"])
-            generic_afr = _find_column_any_ci(
-                renamed,
-                ["AFR"],
-                excludes=["desired", "warm-up", "target", "lambda"],
+            front_col = _find_column_any_ci(renamed, ["AFR Front", "WBO2 AFR Front"])
+            rear_col = _find_column_any_ci(renamed, ["AFR Rear", "WBO2 AFR Rear"])
+            front = (
+                pd.to_numeric(renamed[front_col], errors="coerce")
+                if front_col
+                else None
             )
-            if lc2_col:
-                renamed["AFR Meas"] = pd.to_numeric(renamed[lc2_col],
-                                                    errors="coerce")
-            elif lc1_col:
-                renamed["AFR Meas"] = pd.to_numeric(renamed[lc1_col],
-                                                    errors="coerce")
-            elif generic_afr:
-                renamed["AFR Meas"] = pd.to_numeric(renamed[generic_afr],
-                                                    errors="coerce")
+            rear = (
+                pd.to_numeric(renamed[rear_col], errors="coerce")
+                if rear_col
+                else None
+            )
+            # Some logs expose WBO2 channels as raw 0-5V; treat those as
+            # non-canonical and avoid feeding them into AFR analysis.
+            if _looks_like_voltage_rail(front):
+                front = None
+            if _looks_like_voltage_rail(rear):
+                rear = None
+
+            if front is not None and rear is not None:
+                renamed["AFR Meas"] = pd.concat([front, rear], axis=1).mean(
+                    axis=1, skipna=True
+                )
+            elif front is not None:
+                renamed["AFR Meas"] = front
+            elif rear is not None:
+                renamed["AFR Meas"] = rear
 
     if "Engine RPM" not in renamed.columns and "mph" in renamed.columns:
         renamed["Engine RPM"] = renamed["mph"] * 60.0
+
+    for col in (
+        "Engine RPM",
+        "MAP kPa",
+        "Throttle Position",
+        "AFR Meas",
+        "Horsepower",
+        "Torque",
+    ):
+        if col in renamed.columns:
+            renamed[col] = pd.to_numeric(renamed[col], errors="coerce")
     return renamed
 
 
@@ -512,6 +551,25 @@ def _read_delimited_pull(path: Path) -> Optional[pd.DataFrame]:
         if not df.empty:
             return df
     return None
+
+
+def _looks_like_voltage_rail(series: Optional[pd.Series]) -> bool:
+    if series is None:
+        return False
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return False
+    return float(numeric.max()) <= 5.5 and float(numeric.min()) >= 0.0
+
+
+def _dedupe_errors(errors: list[str]) -> list[str]:
+    out: list[str] = []
+    for raw in errors:
+        msg = str(raw).strip()
+        if not msg or msg in out:
+            continue
+        out.append(msg)
+    return out
 
 
 def _utc_now() -> str:

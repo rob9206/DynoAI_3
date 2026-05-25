@@ -43,7 +43,13 @@ import {
   useUploadToSession,
   useVehicle,
 } from '../hooks/useTuningWorkspace';
-import type { AnalysisResult, RoutedFile, RejectedFile } from '../api/workspace';
+import {
+  downloadWorkspaceArtifact,
+  type AnalysisResult,
+  type RoutedFile,
+  type RejectedFile,
+  type WorkspaceArtifactSlot,
+} from '../api/workspace';
 
 interface PerUploadResult {
   routed: RoutedFile[];
@@ -90,6 +96,13 @@ export default function TuningSessionPage() {
       ),
     [lastAnalysis]
   );
+
+  const generatedPatchFilename = useMemo(() => {
+    if (!lastAnalysis) return null;
+    if (lastAnalysis.correction_pvv_filename) return lastAnalysis.correction_pvv_filename;
+    if (!lastAnalysis.correction_pvv_path) return null;
+    return lastAnalysis.correction_pvv_path.split(/[\\/]/).pop() ?? null;
+  }, [lastAnalysis]);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -140,16 +153,76 @@ export default function TuningSessionPage() {
     }
   }, [createIter]);
 
+  const downloadArtifact = useCallback(
+    async (slot: WorkspaceArtifactSlot, filename: string, iterationId?: string) => {
+      const resolvedIterationId = iterationId ?? activeIterationId;
+      if (!vehicleId || !sessionId || !resolvedIterationId) {
+        toast.error('No active iteration selected for download');
+        return;
+      }
+      try {
+        await downloadWorkspaceArtifact(
+          vehicleId,
+          sessionId,
+          resolvedIterationId,
+          slot,
+          filename
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : `Failed to download ${filename}`;
+        if (msg.includes('404')) {
+          toast.error(
+            'Download endpoint returned 404. Restart backend so the new workspace download route is loaded.'
+          );
+          return;
+        }
+        toast.error(msg);
+      }
+    },
+    [activeIterationId, sessionId, vehicleId]
+  );
+
   const runAnalysis = useCallback(async () => {
     try {
       const res = await analyze.mutateAsync({ iterationId: activeIterationId });
       setLastAnalysis(res);
       if (res.success) {
-        toast.success(
-          res.zones_adjusted
-            ? `Analyzed. ${res.zones_adjusted} zones adjusted.`
-            : 'Analysis complete.'
-        );
+        const generatedPatchName =
+          res.correction_pvv_filename ??
+          res.correction_pvv_path?.split(/[\\/]/).pop() ??
+          null;
+
+        if (generatedPatchName && vehicleId && sessionId) {
+          try {
+            await downloadWorkspaceArtifact(
+              vehicleId,
+              sessionId,
+              res.iteration_id,
+              'patches',
+              generatedPatchName
+            );
+            toast.success(
+              res.zones_adjusted
+                ? `Analyzed. ${res.zones_adjusted} zones adjusted. Downloaded ${generatedPatchName}.`
+                : `Analysis complete. Downloaded ${generatedPatchName}.`
+            );
+          } catch {
+            toast.success(
+              res.zones_adjusted
+                ? `Analyzed. ${res.zones_adjusted} zones adjusted.`
+                : 'Analysis complete.'
+            );
+            toast.error(
+              'Patch was generated but auto-download failed. Use Artifacts > Patches to download.'
+            );
+          }
+        } else {
+          toast.success(
+            res.zones_adjusted
+              ? `Analyzed. ${res.zones_adjusted} zones adjusted.`
+              : 'Analysis complete.'
+          );
+        }
       } else {
         toast.error(res.errors?.[0] ?? 'analysis failed');
       }
@@ -162,7 +235,7 @@ export default function TuningSessionPage() {
       }
       toast.error(err instanceof Error ? err.message : 'analysis failed');
     }
-  }, [activeIterationId, analyze]);
+  }, [activeIterationId, analyze, sessionId, vehicleId]);
 
   const loading = vehicle.isLoading || session.isLoading;
   const notFound = vehicle.isError || session.isError;
@@ -382,6 +455,24 @@ export default function TuningSessionPage() {
                         Manifest: {lastAnalysis.correction_manifest_path.split(/[\\/]/).pop()}
                       </p>
                     )}
+                    {generatedPatchFilename && (
+                      <div className="pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void downloadArtifact(
+                              'patches',
+                              generatedPatchFilename,
+                              lastAnalysis.iteration_id
+                            )
+                          }
+                        >
+                          Download patch
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {(baseTuneMissing || guardrailsMissing) && (
@@ -456,9 +547,42 @@ export default function TuningSessionPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <ArtifactSection title="Pulls" files={pulls.data ?? []} loading={pulls.isLoading} />
-                <ArtifactSection title="Patches" files={patches.data ?? []} loading={patches.isLoading} />
-                <ArtifactSection title="Analyses" files={analyses.data ?? []} loading={analyses.isLoading} />
+                <ArtifactSection
+                  title="Pulls"
+                  files={pulls.data ?? []}
+                  loading={pulls.isLoading}
+                  onDownloadFile={(file) => {
+                    void downloadArtifact(
+                      'pulls',
+                      file.name,
+                      extractIterationIdFromFilePath(file.path)
+                    );
+                  }}
+                />
+                <ArtifactSection
+                  title="Patches"
+                  files={patches.data ?? []}
+                  loading={patches.isLoading}
+                  onDownloadFile={(file) => {
+                    void downloadArtifact(
+                      'patches',
+                      file.name,
+                      extractIterationIdFromFilePath(file.path)
+                    );
+                  }}
+                />
+                <ArtifactSection
+                  title="Analyses"
+                  files={analyses.data ?? []}
+                  loading={analyses.isLoading}
+                  onDownloadFile={(file) => {
+                    void downloadArtifact(
+                      'analyses',
+                      file.name,
+                      extractIterationIdFromFilePath(file.path)
+                    );
+                  }}
+                />
               </CardContent>
             </Card>
           </div>
@@ -527,10 +651,12 @@ function ArtifactSection({
   title,
   files,
   loading,
+  onDownloadFile,
 }: {
   title: string;
   files: Array<{ name: string; size: number; mtime: number; path: string }>;
   loading: boolean;
+  onDownloadFile?: (file: { name: string; size: number; mtime: number; path: string }) => void;
 }) {
   const displayFiles = useMemo(
     () => [...files].sort((a, b) => b.mtime - a.mtime).slice(0, 8),
@@ -552,7 +678,18 @@ function ArtifactSection({
           {displayFiles.map((f) => (
             <li key={f.path} className="flex items-center gap-2 text-xs">
               <FileIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="font-mono truncate flex-1">{f.name}</span>
+              {onDownloadFile ? (
+                <button
+                  type="button"
+                  className="font-mono truncate flex-1 text-left hover:underline"
+                  title={`Download ${f.name}`}
+                  onClick={() => onDownloadFile(f)}
+                >
+                  {f.name}
+                </button>
+              ) : (
+                <span className="font-mono truncate flex-1">{f.name}</span>
+              )}
               <span className="text-muted-foreground shrink-0">
                 {(f.size / 1024).toFixed(1)} KB
               </span>
@@ -562,4 +699,9 @@ function ArtifactSection({
       )}
     </div>
   );
+}
+
+function extractIterationIdFromFilePath(filePath: string): string | undefined {
+  const match = filePath.match(/[\\/]iterations[\\/]([^\\/]+)[\\/]/i);
+  return match?.[1];
 }

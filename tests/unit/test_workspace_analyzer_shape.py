@@ -132,6 +132,7 @@ class TestDynoWareColumnAliases:
         df = pd.DataFrame(
             {
                 "(DWRT CPU) Engine RPM": [2200, 2800],
+                "(PV) Throttle Position": [12.0, 35.0],
                 "(Harley) Manifold Absolute Pressure": [42.0, 55.0],
                 "(PV) Desired Air/Fuel": [13.0, 13.2],
                 "(DWRT CPU) LC2 Volts Petrol AFR2": [14.4, 13.9],
@@ -141,6 +142,25 @@ class TestDynoWareColumnAliases:
         shaped = _shape_for_autotune(df)
 
         assert "Engine RPM" in shaped.columns
+        assert "Throttle Position" in shaped.columns
         assert "MAP kPa" in shaped.columns
+        assert "AFR Meas" in shaped.columns
+        assert list(shaped["AFR Meas"]) == [14.4, 13.9]
+
+
+class TestAfrChannelPriority:
+    def test_lc2_beats_voltage_like_wbo2_channels(self):
+        df = pd.DataFrame(
+            {
+                "(DWRT CPU) Engine RPM": [2200, 2800],
+                "(PV) Throttle Position": [12.0, 35.0],
+                "(PV) WBO2 AFR Front": [5.0, 5.0],
+                "(PV) WBO2 AFR Rear": [5.1, 5.1],
+                "(DWRT CPU) LC2 Volts Petrol AFR2": [14.4, 13.9],
+            }
+        )
+
+        shaped = _shape_for_autotune(df)
+
         assert "AFR Meas" in shaped.columns
         assert list(shaped["AFR Meas"]) == [14.4, 13.9]

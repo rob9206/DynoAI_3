@@ -23,6 +23,7 @@ Endpoints:
     GET    /api/workspace/vehicles/<vid>/sessions/<sid>/iterations/<iid>/pulls
     GET    /api/workspace/vehicles/<vid>/sessions/<sid>/iterations/<iid>/patches
     GET    /api/workspace/vehicles/<vid>/sessions/<sid>/iterations/<iid>/analyses
+    GET    /api/workspace/vehicles/<vid>/sessions/<sid>/iterations/<iid>/download/<slot>/<filename>
 
 The /upload route runs each file through the ingest sniffer and routes by content:
 PVV -> base tune or patch; WP8/TXT/CSV -> pulls.
@@ -32,7 +33,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
 from api.errors import ValidationError, with_error_handling
@@ -237,6 +238,46 @@ def list_analyses(vid: str, sid: str, iid: str):
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
     files = ws.list_analyses(vid, sid, iid)
     return jsonify([_file_summary(p) for p in files]), 200
+
+
+@workspace_bp.route(
+    "/vehicles/<vid>/sessions/<sid>/iterations/<iid>/download/<slot>/<filename>",
+    methods=["GET"],
+)
+@with_error_handling
+def download_iteration_artifact(
+    vid: str, sid: str, iid: str, slot: str, filename: str
+):
+    ws = get_workspace()
+    try:
+        ws.get_iteration(vid, sid, iid)
+    except WorkspaceError as exc:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": str(exc)}}), 404
+
+    slot_name = (slot or "").strip().lower()
+    slot_dirs = {
+        "pulls": ws.PULLS_DIRNAME,
+        "patches": ws.PATCHES_DIRNAME,
+        "analyses": ws.ANALYSES_DIRNAME,
+    }
+    target_dirname = slot_dirs.get(slot_name)
+    if target_dirname is None:
+        raise ValidationError("slot must be one of: pulls, patches, analyses")
+
+    base_dir = (ws.iteration_dir(vid, sid, iid) / target_dirname).resolve()
+    candidate = (base_dir / filename).resolve()
+    try:
+        candidate.relative_to(base_dir)
+    except ValueError as exc:
+        raise ValidationError("invalid artifact filename") from exc
+
+    if not candidate.exists() or not candidate.is_file():
+        return (
+            jsonify({"error": {"code": "NOT_FOUND", "message": "artifact not found"}}),
+            404,
+        )
+
+    return send_file(candidate, as_attachment=True, download_name=candidate.name)
 
 
 # =============================================================================

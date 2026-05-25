@@ -178,6 +178,34 @@ class TestUploadRouting:
         assert resp.status_code == 400
 
 
+class TestArtifactDownloads:
+
+    @staticmethod
+    def test_download_patch_artifact(client):
+        from api.services.tuning_workspace import get_workspace
+
+        sid = TestUploadRouting._bootstrap(client)
+        ws = get_workspace()
+        ws.add_patch("dyna", sid, "iter_0", "generated_patch.pvv", b"<PVV/>")
+
+        resp = client.get(
+            f"/api/workspace/vehicles/dyna/sessions/{sid}/iterations/iter_0/download/patches/generated_patch.pvv"
+        )
+        assert resp.status_code == 200
+        assert resp.data == b"<PVV/>"
+        disposition = resp.headers.get("Content-Disposition", "")
+        assert "attachment" in disposition
+        assert "generated_patch.pvv" in disposition
+
+    @staticmethod
+    def test_download_rejects_unknown_slot(client):
+        sid = TestUploadRouting._bootstrap(client)
+        resp = client.get(
+            f"/api/workspace/vehicles/dyna/sessions/{sid}/iterations/iter_0/download/unknown/file.bin"
+        )
+        assert resp.status_code == 400
+
+
 # -----------------------------------------------------------------------------
 # Persisted-result consistency: the on-disk autotune_<ts>.json must match the
 # API response. The earlier ordering wrote first then mutated success/path,

@@ -7,7 +7,7 @@
  */
 
 import axios from 'axios';
-import { encodePathSegment } from '@/lib/sanitize';
+import { encodePathSegment, sanitizeDownloadName } from '@/lib/sanitize';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5001';
 
@@ -118,6 +118,8 @@ export interface FileSummary {
   mtime: number;
   path: string;
 }
+
+export type WorkspaceArtifactSlot = 'pulls' | 'patches' | 'analyses';
 
 // -----------------------------------------------------------------------------
 // Vehicles
@@ -259,6 +261,41 @@ export async function listAnalyses(
     `/api/workspace/vehicles/${encodePathSegment(vehicleId)}/sessions/${encodePathSegment(sessionId)}/iterations/${encodePathSegment(iterationId)}/analyses`
   );
   return data;
+}
+
+function workspaceArtifactDownloadPath(
+  vehicleId: string,
+  sessionId: string,
+  iterationId: string,
+  slot: WorkspaceArtifactSlot,
+  filename: string
+): string {
+  return `/api/workspace/vehicles/${encodePathSegment(vehicleId)}/sessions/${encodePathSegment(sessionId)}/iterations/${encodePathSegment(iterationId)}/download/${encodePathSegment(slot)}/${encodePathSegment(filename)}`;
+}
+
+export async function downloadWorkspaceArtifact(
+  vehicleId: string,
+  sessionId: string,
+  iterationId: string,
+  slot: WorkspaceArtifactSlot,
+  filename: string
+): Promise<void> {
+  const url = workspaceArtifactDownloadPath(
+    vehicleId,
+    sessionId,
+    iterationId,
+    slot,
+    filename
+  );
+  const response = await api.get<Blob>(url, { responseType: 'blob' });
+  const objectUrl = window.URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = sanitizeDownloadName(filename, 'download');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 // -----------------------------------------------------------------------------
