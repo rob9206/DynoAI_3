@@ -14,6 +14,8 @@ The NextGen workflow produces:
 - Next-test recommendations
 """
 
+from pathlib import Path
+
 from flask import Blueprint, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
@@ -22,6 +24,10 @@ from api.services.nextgen_workflow import (
     TestPlannerConstraints,
     get_planner_constraints,
     save_planner_constraints,
+)
+from api.services.patch_recommender import (
+    PatchRecommendationRequest,
+    recommend_patches,
 )
 from api.services.coverage_tracker import (
     aggregate_run_coverage,
@@ -356,6 +362,116 @@ def get_test_plan(run_id: str):
         "filtered_count": len(filtered),
         "priority_rationale": next_tests.get("priority_rationale"),
         "coverage_gaps": next_tests.get("coverage_gaps", []),
+    }), 200
+
+
+# =============================================================================
+# Patch recommendations: NextGen analysis -> diagnostics dispatcher -> ToolPlan
+# =============================================================================
+
+
+@nextgen_bp.route("/<run_id>/patches", methods=["GET"])
+def get_patch_recommendations(run_id: str):
+    """
+    Get patch recommendations from the diagnostics dispatcher.
+
+    Runs all 4 detectors (spark_valley, knock_hotspot, idle_ve_noise,
+    wot_lean) against the cached NextGen surfaces and the base PVV, then
+    returns the top-ranked ToolPlan (or None if no actionable finding).
+
+    READ-ONLY: this endpoint never writes a PVV. Use a separate apply
+    endpoint (not yet exposed) to materialize an accepted plan.
+
+    URL Parameters:
+        run_id: The run ID with a cached NextGen analysis.
+
+    Query Parameters (required):
+        vehicle_id: Vehicle identifier (e.g. "seanbike"). Used to locate
+            the base PVV and profile.json.
+        session_id: Session identifier (e.g. "dai_2026_0518_pcv_bake_verify").
+            Used to locate base_tune/base.pvv and the active iteration dir.
+
+    Query Parameters (optional):
+        donor_pvv_path: Absolute or repo-relative path to a donor PVV for
+            wot_ve_graft. If omitted, wot_lean findings still emit but the
+            graft tool's plan() rejects them (fail-closed).
+        include_wot_lean: "true" (default) or "false". Set to "false" to
+            suppress wot_lean detection entirely.
+
+    Returns:
+        {
+            "success": true,
+            "run_id": "...",
+            "context": {
+                "vehicle_id": "...",
+                "session_id": "...",
+                "base_pvv_path": "...",
+                "iteration_dir": "...",
+                "surfaces_loaded": ["spark_front", "afr_error_front", ...],
+                ...
+            },
+            "decision": {
+                "findings": [...],
+                "plan": {...} or null,
+                "skipped": [...]
+            }
+        }
+
+        Errors:
+            400 - missing/invalid vehicle_id or session_id
+            404 - run not analyzed, or base PVV not found
+            500 - dispatcher failure (logged with traceback)
+    """
+    run_id = secure_filename(run_id)
+    if not run_id:
+        return jsonify({"error": "Invalid run_id"}), 400
+
+    vehicle_id = request.args.get("vehicle_id")
+    session_id = request.args.get("session_id")
+    if not vehicle_id or not session_id:
+        return jsonify({
+            "error": "vehicle_id and session_id query params are required",
+        }), 400
+
+    # secure_filename strips path separators; safe to use raw vehicle/session
+    # ids since they're not path components per se, but we still defensively
+    # reject any with traversal characters.
+    if "/" in vehicle_id or "\\" in vehicle_id or ".." in vehicle_id:
+        return jsonify({"error": "Invalid vehicle_id"}), 400
+    if "/" in session_id or "\\" in session_id or ".." in session_id:
+        return jsonify({"error": "Invalid session_id"}), 400
+
+    donor_path_str = request.args.get("donor_pvv_path")
+    donor_path = Path(donor_path_str) if donor_path_str else None
+    include_wot_lean = (
+        request.args.get("include_wot_lean", "true").lower() == "true"
+    )
+
+    req = PatchRecommendationRequest(
+        run_id=run_id,
+        vehicle_id=vehicle_id,
+        session_id=session_id,
+        donor_pvv_path=donor_path,
+        include_wot_lean=include_wot_lean,
+    )
+    result = recommend_patches(req)
+
+    if not result.success:
+        # Distinguish "not yet analyzed" / "missing base PVV" (404) from other
+        # errors (500) by looking at the error message — simple enough at
+        # this slice's scale, can be formalized later if it grows.
+        status = 404 if "not found" in (result.error or "").lower() else 500
+        return jsonify({
+            "success": False,
+            "run_id": run_id,
+            "error": result.error,
+        }), status
+
+    return jsonify({
+        "success": True,
+        "run_id": run_id,
+        "context": result.context_meta,
+        "decision": result.decision_dict,
     }), 200
 
 

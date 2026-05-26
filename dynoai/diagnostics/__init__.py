@@ -16,7 +16,9 @@ from dynoai.diagnostics.detectors.knock_hotspot import KnockHotspotDetector
 from dynoai.diagnostics.detectors.spark_valley import SparkValleyDetector
 from dynoai.diagnostics.detectors.wot_lean import WotLeanDetector
 from dynoai.diagnostics.dispatcher import DispatchDecision, TuningDispatcher
+from dynoai.diagnostics.factory import build_default_dispatcher
 from dynoai.diagnostics.finding import Finding
+from dynoai.diagnostics.surface_load import surface_from_dict, surfaces_from_payload
 
 __all__ = [
     "DetectionContext",
@@ -28,4 +30,7 @@ __all__ = [
     "SparkValleyDetector",
     "TuningDispatcher",
     "WotLeanDetector",
+    "build_default_dispatcher",
+    "surface_from_dict",
+    "surfaces_from_payload",
 ]
