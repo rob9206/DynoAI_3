@@ -112,6 +112,20 @@ def parse_scalar(root: ET.Element, item_id: str) -> float:
     return float(cell.get("value", "0"))
 
 
+def mutate_scalar(root: ET.Element, item_id: str, value: float) -> None:
+    """Set a single-Cell scalar Item's value via format_value.
+
+    Counterpart to parse_scalar. Used by tools that rewrite scalars like
+    `tbl_injector_size` and `tbl_engine_displacement` (e.g. injector
+    rescaling). Same byte-stable formatting as mutate_table_cells.
+    """
+    item = find_item_by_id(root, item_id)
+    cell = item.find("./Rows/Row/Cell")
+    if cell is None:
+        raise ValueError(f"Scalar item {item_id!r} missing Cell value")
+    cell.set("value", format_value(float(value)))
+
+
 def collect_item_cells(root: ET.Element) -> dict[str, list[str]]:
     """Return every Item's id -> list of cell value strings.
 
