@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 
 from dynoai.diagnostics.detector import DetectionContext
+from dynoai.diagnostics.detectors.injector_mismatch import InjectorMismatchDetector
+from dynoai.diagnostics.dispatcher import TuningDispatcher
 from dynoai.diagnostics.finding import Finding
 from dynoai.tools.injector_scalar_rebase import (
     DEFAULT_DISPLACEMENT_ID,
@@ -254,3 +256,106 @@ def test_profile_override_changes_blend_zone(tmp_path, fixture_input_sha):
     assert result_default.success and result_override.success
     assert result_default.sha256 == REFERENCE_OUTPUT_SHA
     assert result_override.sha256 != REFERENCE_OUTPUT_SHA
+
+
+# ---------------------------------------------------------------------------
+# End-to-end via InjectorMismatchDetector (profile vs tune scalars).
+# ---------------------------------------------------------------------------
+
+
+def test_injector_mismatch_fires_when_profile_disagrees(tmp_path, fixture_input_sha):
+    """v_pc_advanced_translation.pvv declares displacement=103. If the profile
+    says displacement_ci=95.5 (seanbike's real declared hardware), the
+    detector must flag the 7.9% mismatch."""
+    detector = InjectorMismatchDetector(min_mismatch_pct=5.0)
+    iter_dir = tmp_path / "iter_detect"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=INPUT_PVV,
+        vehicle_profile={"id": "seanbike", "displacement_ci": 95.5},
+        iteration_dir=iter_dir,
+    )
+
+    findings = detector.detect(ctx)
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.kind == "injector_calibration"
+    assert finding.source == "injector_mismatch_detector"
+    assert finding.suggested_tool == TOOL_NAME
+    assert finding.evidence["declared_displacement_ci"] == 95.5
+    assert finding.evidence["tune_displacement_ci"] == pytest.approx(103.0)
+    assert finding.evidence["displacement_mismatch_pct"] == pytest.approx(7.85, abs=0.5)
+    # Tool params bind the displacement target = profile's declared value.
+    assert finding.tool_params["displacement_cid"] == 95.5
+    # ~7.85% mismatch -> piecewise (5..10% -> 0.30..0.55) puts severity ~0.44.
+    assert 0.40 <= finding.severity <= 0.55
+
+
+def test_injector_mismatch_quiet_when_profile_matches(tmp_path, fixture_input_sha):
+    """Profile that matches the tune within threshold suppresses the finding."""
+    detector = InjectorMismatchDetector(min_mismatch_pct=5.0)
+    iter_dir = tmp_path / "iter_quiet"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=INPUT_PVV,
+        # tune declares 103; profile says 102 -> only 1% off, below threshold.
+        vehicle_profile={"id": "seanbike", "displacement_ci": 102.0},
+        iteration_dir=iter_dir,
+    )
+
+    findings = detector.detect(ctx)
+
+    assert findings == []
+
+
+def test_injector_mismatch_quiet_when_profile_missing_displacement(
+    tmp_path, fixture_input_sha
+):
+    """Profile without displacement_ci -> nothing to compare against -> silent."""
+    detector = InjectorMismatchDetector(min_mismatch_pct=5.0)
+    iter_dir = tmp_path / "iter_no_decl"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=INPUT_PVV,
+        vehicle_profile={"id": "seanbike"},  # no displacement_ci key
+        iteration_dir=iter_dir,
+    )
+
+    findings = detector.detect(ctx)
+
+    assert findings == []
+
+
+def test_dispatcher_routes_injector_mismatch_with_profile_target(
+    tmp_path, fixture_input_sha
+):
+    """Full pipeline: profile-declared displacement -> detector -> dispatcher
+    -> injector_scalar_rebase, which rebases the tune to the profile's value
+    (95.5 CID instead of the default 110)."""
+    tool = InjectorScalarRebaseTool()
+    dispatcher = TuningDispatcher(
+        detectors=[InjectorMismatchDetector()],
+        tools={tool.name: tool},
+    )
+    iter_dir = tmp_path / "iter_e2e"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=INPUT_PVV,
+        vehicle_profile={"id": "seanbike", "displacement_ci": 95.5},
+        iteration_dir=iter_dir,
+    )
+
+    decision = dispatcher.step(ctx)
+
+    assert decision.plan is not None
+    assert decision.plan.tool == TOOL_NAME
+    assert decision.plan.finding.kind == "injector_calibration"
+    # Detector bound displacement_cid=95.5 in tool_params, so the rebase
+    # targets the profile's value, NOT the tool's default 110.
+    assert decision.plan.bound_params["displacement_cid"] == 95.5
+    result = dispatcher.apply(decision.plan, ctx)
+    assert result.success
+    # Different SHA from the default-110 reference because the target
+    # displacement differs.
+    assert result.sha256 != REFERENCE_OUTPUT_SHA

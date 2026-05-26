@@ -80,7 +80,32 @@ _DEFAULTS: Dict[str, Any] = {
     "ve_cap": DEFAULT_VE_CAP,
     "ve_clamp_gate_pct": DEFAULT_VE_CLAMP_GATE_PCT,
     "donor_pvv_path": None,
+    # gain_schedule: optional list of (rpm_krpm, gain_pct) knots for an
+    # RPM-shaped gain ramp. None (default) = use flat graft_pct on every
+    # row, byte-identical to the original graft_wot_from_v5 behavior.
+    # When set, the per-row gain is linearly interpolated between knots
+    # (clamped to first/last knot outside the range), matching the
+    # graft_wot_rpm_ramp.py seanbike variant.
+    "gain_schedule": None,
 }
+
+
+def _gain_for_rpm(
+    rpm_krpm: float, ramp: List[Tuple[float, float]]
+) -> float:
+    """Linear interpolation of a (rpm_krpm, gain_pct) ramp. Clamps outside."""
+    ramp_sorted = sorted(ramp, key=lambda kv: kv[0])
+    if rpm_krpm <= ramp_sorted[0][0]:
+        return float(ramp_sorted[0][1])
+    if rpm_krpm >= ramp_sorted[-1][0]:
+        return float(ramp_sorted[-1][1])
+    for (r_lo, g_lo), (r_hi, g_hi) in zip(ramp_sorted, ramp_sorted[1:]):
+        if r_lo <= rpm_krpm <= r_hi:
+            if r_hi == r_lo:
+                return float(g_hi)
+            t = (rpm_krpm - r_lo) / (r_hi - r_lo)
+            return float(g_lo + t * (g_hi - g_lo))
+    return 0.0
 
 
 def _verify_axis_alignment(
@@ -133,6 +158,13 @@ def _compute_patch(
     rpm_min_krpm = float(params["rpm_min_krpm"])
     tps_min_pct = float(params["tps_min_pct"])
     ve_cap = float(params["ve_cap"])
+    gain_schedule_raw = params.get("gain_schedule")
+    gain_schedule: List[Tuple[float, float]] | None = None
+    if gain_schedule_raw:
+        # Normalize to list of (float, float) tuples for deterministic ordering.
+        gain_schedule = [
+            (float(r), float(p)) for r, p in gain_schedule_raw
+        ]
 
     per_table: Dict[str, Dict[str, Any]] = {}
     axis_failure: GateFailure | None = None
@@ -146,7 +178,17 @@ def _compute_patch(
 
         before = target.values.copy()
         source_scalar_comp = source.values * scalar_factor
-        gain_cap = before * (1.0 + graft_pct / 100.0)
+
+        # Per-row gain: either constant (flat graft) or RPM-interpolated (ramp).
+        if gain_schedule is not None:
+            per_row_gain_pct = np.array(
+                [_gain_for_rpm(float(r), gain_schedule) for r in target.row_axis]
+            )
+            gain_cap = before * (1.0 + per_row_gain_pct[:, None] / 100.0)
+        else:
+            per_row_gain_pct = None
+            gain_cap = before * (1.0 + graft_pct / 100.0)
+
         mask = (
             (target.row_axis[:, None] >= (rpm_min_krpm - 1e-9))
             & (target.col_axis[None, :] >= (tps_min_pct - 1e-9))
@@ -166,6 +208,7 @@ def _compute_patch(
             "delta": delta,
             "mask": mask,
             "source_scalar_comp": source_scalar_comp,
+            "per_row_gain_pct": per_row_gain_pct,
             "cells_in_mask": int(np.sum(mask)),
             "cells_changed": int(np.sum(changed_mask)),
         }
@@ -465,6 +508,7 @@ class WotVeGraftTool:
             },
             "policy": {
                 "graft_pct": params["graft_pct"],
+                "gain_schedule": params.get("gain_schedule"),
                 "rpm_min_krpm": params["rpm_min_krpm"],
                 "tps_min_pct": params["tps_min_pct"],
                 "ve_cap": params["ve_cap"],

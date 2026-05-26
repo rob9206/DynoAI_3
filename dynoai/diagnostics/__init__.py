@@ -11,7 +11,10 @@ before any PVV mutation.
 """
 
 from dynoai.diagnostics.detector import DetectionContext, Detector
+from dynoai.diagnostics.detectors.accel_transient import AccelTransientDetector
+from dynoai.diagnostics.detectors.decel_pop import DecelPopDetector
 from dynoai.diagnostics.detectors.idle_ve_noise import IdleVeNoiseDetector
+from dynoai.diagnostics.detectors.injector_mismatch import InjectorMismatchDetector
 from dynoai.diagnostics.detectors.knock_hotspot import KnockHotspotDetector
 from dynoai.diagnostics.detectors.spark_valley import SparkValleyDetector
 from dynoai.diagnostics.detectors.wot_lean import WotLeanDetector
@@ -21,11 +24,14 @@ from dynoai.diagnostics.finding import Finding
 from dynoai.diagnostics.surface_load import surface_from_dict, surfaces_from_payload
 
 __all__ = [
+    "AccelTransientDetector",
+    "DecelPopDetector",
     "DetectionContext",
     "Detector",
     "DispatchDecision",
     "Finding",
     "IdleVeNoiseDetector",
+    "InjectorMismatchDetector",
     "KnockHotspotDetector",
     "SparkValleyDetector",
     "TuningDispatcher",

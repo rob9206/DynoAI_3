@@ -296,6 +296,109 @@ def test_profile_override_changes_graft_pct(
 
 
 # ---------------------------------------------------------------------------
+# RPM-ramped variant: same tool, gain_schedule param swaps from flat to ramp.
+# Reference output captured by running tools/seanbike/graft_wot_rpm_ramp.py
+# on the same donor + base as the flat-graft test.
+# ---------------------------------------------------------------------------
+
+REFERENCE_RAMP_OUTPUT_SHA = (
+    "d2467db2c40d87f1938116dd885490eec61d48bc1759df22e6b6950a858be35f"
+)
+REFERENCE_RAMP_GAIN_SCHEDULE = [
+    (5.0, 8.0),
+    (5.5, 14.0),
+    (6.0, 20.0),
+    (6.5, 25.0),
+]
+REFERENCE_RAMP_CELLS_CHANGED = 156  # 78 per cylinder
+
+
+def test_gain_schedule_produces_seanbike_rpm_ramp_reference_sha(
+    tmp_path, fixture_donor_sha, fixture_base_sha
+):
+    """When the caller passes a gain_schedule, the tool must produce
+    byte-identical output to the seanbike graft_wot_rpm_ramp.py script."""
+    tool = WotVeGraftTool()
+    ctx = _make_ctx(tmp_path / "iter_ramp")
+    finding = _make_finding()
+    # Override the flat graft_pct with an RPM-shaped schedule.
+    object.__setattr__(
+        finding, "tool_params", {
+            "donor_pvv_path": str(DONOR_PVV),
+            "gain_schedule": REFERENCE_RAMP_GAIN_SCHEDULE,
+        },
+    )
+
+    plan = tool.plan(finding, ctx)
+    result = tool.apply(plan, ctx)
+
+    assert result.success, f"apply failed: {result.gates_failed}"
+    assert result.sha256 == REFERENCE_RAMP_OUTPUT_SHA, (
+        f"byte drift from seanbike graft_wot_rpm_ramp reference: "
+        f"got {result.sha256}, expected {REFERENCE_RAMP_OUTPUT_SHA}"
+    )
+    assert result.cells_changed == REFERENCE_RAMP_CELLS_CHANGED
+
+
+def test_gain_schedule_none_is_byte_identical_to_flat_graft(
+    tmp_path, fixture_donor_sha, fixture_base_sha
+):
+    """Setting gain_schedule=None explicitly must give the same SHA as
+    the flat default — confirms the gain_schedule None branch maps to
+    exactly the same algorithm path."""
+    tool = WotVeGraftTool()
+    ctx_default = _make_ctx(tmp_path / "iter_flat_default")
+    ctx_explicit_none = _make_ctx(tmp_path / "iter_flat_explicit_none")
+
+    finding_default = _make_finding()
+    finding_explicit = _make_finding()
+    object.__setattr__(
+        finding_explicit, "tool_params", {
+            "donor_pvv_path": str(DONOR_PVV),
+            "gain_schedule": None,
+        },
+    )
+
+    result_default = tool.apply(tool.plan(finding_default, ctx_default), ctx_default)
+    result_explicit = tool.apply(tool.plan(finding_explicit, ctx_explicit_none), ctx_explicit_none)
+
+    assert result_default.success and result_explicit.success
+    assert result_default.sha256 == REFERENCE_OUTPUT_SHA
+    assert result_explicit.sha256 == REFERENCE_OUTPUT_SHA
+
+
+def test_manifest_records_gain_schedule_when_used(
+    tmp_path, fixture_donor_sha, fixture_base_sha
+):
+    """When gain_schedule is supplied, the manifest's policy block must
+    record it. When None, manifest carries gain_schedule: null."""
+    import json as _json
+    tool = WotVeGraftTool()
+    ctx_flat = _make_ctx(tmp_path / "iter_manifest_flat")
+    ctx_ramp = _make_ctx(tmp_path / "iter_manifest_ramp")
+
+    finding_flat = _make_finding()
+    finding_ramp = _make_finding()
+    object.__setattr__(
+        finding_ramp, "tool_params", {
+            "donor_pvv_path": str(DONOR_PVV),
+            "gain_schedule": REFERENCE_RAMP_GAIN_SCHEDULE,
+        },
+    )
+
+    result_flat = tool.apply(tool.plan(finding_flat, ctx_flat), ctx_flat)
+    result_ramp = tool.apply(tool.plan(finding_ramp, ctx_ramp), ctx_ramp)
+
+    assert result_flat.success and result_ramp.success
+    manifest_flat = _json.loads(result_flat.manifest_path.read_text(encoding="utf-8"))
+    manifest_ramp = _json.loads(result_ramp.manifest_path.read_text(encoding="utf-8"))
+    assert manifest_flat["policy"]["gain_schedule"] is None
+    # Manifest goes through JSON serialization, which turns tuples into lists.
+    expected_list_of_lists = [list(kv) for kv in REFERENCE_RAMP_GAIN_SCHEDULE]
+    assert manifest_ramp["policy"]["gain_schedule"] == expected_list_of_lists
+
+
+# ---------------------------------------------------------------------------
 # End-to-end dispatcher tests with a synthetic AFR-error surface.
 #
 # WotLeanDetector consumes an AFR-error surface, detects a lean zone inside

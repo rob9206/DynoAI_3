@@ -24,6 +24,8 @@ from pathlib import Path
 import pytest
 
 from dynoai.diagnostics.detector import DetectionContext
+from dynoai.diagnostics.detectors.accel_transient import AccelTransientDetector
+from dynoai.diagnostics.dispatcher import TuningDispatcher
 from dynoai.diagnostics.finding import Finding
 from dynoai.tools.accel_enrich import (
     DEFAULT_TARGET_ITEM_ID,
@@ -229,3 +231,76 @@ def test_profile_override_changes_target_hot(tmp_path, fixture_input_sha):
     assert result_default.success and result_override.success
     assert result_default.sha256 == REFERENCE_OUTPUT_SHA
     assert result_override.sha256 != REFERENCE_OUTPUT_SHA
+
+
+# ---------------------------------------------------------------------------
+# End-to-end via AccelTransientDetector (bidirectional rich/lean).
+# ---------------------------------------------------------------------------
+
+
+def test_accel_transient_detector_fires_lean_lag_on_seanbike(tmp_path, fixture_input_sha):
+    """seanbike base.pvv accel enrichment hot cells go down to 0.36 - below
+    the 0.50 lean threshold. Detector must emit accel_lean_lag."""
+    detector = AccelTransientDetector(
+        lean_min_mult=0.50,
+        rich_max_mult=1.20,
+    )
+    ctx = _make_ctx(tmp_path / "iter_detect")
+
+    findings = detector.detect(ctx)
+
+    # seanbike hot cells: 0.92, 0.77, 0.62, 0.53, 0.44, 0.38, 0.36 ->
+    # min=0.36 (triggers lean), max=0.92 (does NOT trigger rich at 1.20).
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.kind == "accel_lean_lag"
+    assert finding.source == "accel_transient_detector"
+    assert finding.suggested_tool == TOOL_NAME
+    assert finding.evidence["hot_min"] == pytest.approx(0.36, abs=0.01)
+    # target_hot bound to the detector's lean_target_mult so the tool
+    # raises hot cells toward it.
+    assert finding.tool_params["target_hot"] > finding.evidence["hot_min"]
+
+
+def test_accel_transient_detector_quiet_when_in_range(tmp_path, fixture_input_sha):
+    """Loosen both thresholds past the seanbike data range - nothing fires."""
+    detector = AccelTransientDetector(
+        lean_min_mult=0.20,
+        rich_max_mult=3.00,
+    )
+    ctx = _make_ctx(tmp_path / "iter_quiet")
+
+    findings = detector.detect(ctx)
+
+    assert findings == []
+
+
+def test_dispatcher_routes_accel_lean_to_plan(tmp_path, fixture_input_sha):
+    """Full pipeline: seanbike base.pvv -> AccelTransientDetector ->
+    dispatcher -> accel_enrich. Detector binds target_hot=lean_target_mult
+    in tool_params, so the patch raises hot cells (direction=raise)."""
+    tool = AccelEnrichTool()
+    dispatcher = TuningDispatcher(
+        detectors=[AccelTransientDetector()],
+        tools={tool.name: tool},
+    )
+    iter_dir = tmp_path / "iter_e2e"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=SEANBIKE_BASE_PVV,
+        vehicle_profile={"id": "seanbike", "tool_overrides": {}},
+        iteration_dir=iter_dir,
+    )
+
+    decision = dispatcher.step(ctx)
+
+    assert decision.plan is not None
+    assert decision.plan.tool == TOOL_NAME
+    assert decision.plan.finding.kind == "accel_lean_lag"
+    result = dispatcher.apply(decision.plan, ctx)
+    assert result.success
+    # Detector raised cells toward lean_target_mult (0.90 default).
+    assert result.extra["direction"] == "raise"
+    # Different from the lower-direction reference SHA the tool's defaults
+    # produce, because the detector overrides target_hot.
+    assert result.sha256 != REFERENCE_OUTPUT_SHA

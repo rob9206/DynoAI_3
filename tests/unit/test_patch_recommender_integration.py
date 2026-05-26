@@ -122,7 +122,7 @@ def test_surfaces_from_payload_handles_missing_surfaces_key():
 # ---------------------------------------------------------------------------
 
 
-def test_build_default_dispatcher_wires_4_detectors_4_tools():
+def test_build_default_dispatcher_wires_all_tools():
     dispatcher = build_default_dispatcher()
     # Inspect via the tools mapping; detectors are private to the dispatcher
     # but their effect is observable via step().
@@ -132,6 +132,10 @@ def test_build_default_dispatcher_wires_4_detectors_4_tools():
         "spark_knock_hotspot",
         "gp_smooth_idle_cruise_ve",
         "wot_ve_graft",
+        "decel_enleanment",
+        "accel_enrich",
+        "injector_scalar_rebase",
+        "idle_ve_scale",
     }
 
 
@@ -155,12 +159,16 @@ def test_build_default_dispatcher_omits_wot_lean_when_excluded():
 
 
 def test_build_default_dispatcher_with_spark_valley_surface_produces_plan(tmp_path):
-    """End-to-end smoke: default dispatcher + planted spark valley -> a plan."""
+    """End-to-end smoke: default dispatcher with seanbike base + planted
+    spark valley produces *some* plan. Several detectors fire on seanbike
+    (the base PVV has aggressive decel enleanment, the planted surface
+    shows a spark valley, etc.); the dispatcher picks the highest-ranked
+    one. This test asserts the routing path works, not which specific
+    tool wins."""
     dispatcher = build_default_dispatcher()
     surfaces = {"spark_front": _build_planted_spark_surface("front")}
 
-    # Use a copy of the seanbike base PVV from a path the dispatcher can write
-    # patches under (tmp_path) without touching the real session tree.
+    # Use the seanbike base PVV; iter_dir is a tmp output target.
     iter_dir = tmp_path / "iter_test"
     iter_dir.mkdir(parents=True, exist_ok=True)
     ctx = DetectionContext(
@@ -172,11 +180,12 @@ def test_build_default_dispatcher_with_spark_valley_surface_produces_plan(tmp_pa
     decision = dispatcher.step(ctx)
 
     assert decision.plan is not None
-    assert decision.plan.tool in {
-        "spark_feathered_ramp",
-        "spark_knock_hotspot",
-        "gp_smooth_idle_cruise_ve",
-    }
+    # Plan must come from one of the registered tools.
+    assert decision.plan.tool in set(dispatcher.tools.keys())
+    # And the planted spark valley must be among the findings (other
+    # detectors fire too on the seanbike base; that's expected).
+    spark_findings = [f for f in decision.findings if f.kind == "spark_valley"]
+    assert len(spark_findings) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -256,14 +265,26 @@ def test_recommend_patches_succeeds_with_planted_spark_surface(tmp_path):
     assert result.decision_dict is not None
     assert result.decision_dict["plan"] is not None
     plan = result.decision_dict["plan"]
+    # Plan must come from one of the eight registered tools. The exact tool
+    # depends on which detector ranks highest — seanbike's base PVV
+    # legitimately has multiple issues (aggressive decel, lean accel hot
+    # cells, etc.), so the planted spark valley may or may not win.
     assert plan["tool"] in {
         "spark_feathered_ramp",
         "spark_knock_hotspot",
         "gp_smooth_idle_cruise_ve",
+        "wot_ve_graft",
+        "decel_enleanment",
+        "accel_enrich",
+        "injector_scalar_rebase",
+        "idle_ve_scale",
     }
     assert plan["predicted_cells_changed"] > 0
     assert result.context_meta["base_pvv_path"] == str(SEANBIKE_BASE_PVV)
     assert "spark_front" in result.context_meta["surfaces_loaded"]
+    # The planted spark_valley finding must be present even if it didn't win.
+    finding_kinds = {f["kind"] for f in result.decision_dict["findings"]}
+    assert "spark_valley" in finding_kinds
 
 
 def test_recommend_patches_serializes_finding_severity_and_confidence(tmp_path):

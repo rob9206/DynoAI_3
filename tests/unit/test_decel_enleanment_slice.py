@@ -26,6 +26,8 @@ from pathlib import Path
 import pytest
 
 from dynoai.diagnostics.detector import DetectionContext
+from dynoai.diagnostics.detectors.decel_pop import DecelPopDetector
+from dynoai.diagnostics.dispatcher import TuningDispatcher
 from dynoai.diagnostics.finding import Finding
 from dynoai.tools.decel_enleanment import (
     DEFAULT_TARGET_ITEM_ID,
@@ -239,3 +241,69 @@ def test_profile_override_changes_target_hot(tmp_path, fixture_input_sha):
     assert result_default.success and result_override.success
     assert result_default.sha256 == REFERENCE_OUTPUT_SHA
     assert result_override.sha256 != REFERENCE_OUTPUT_SHA
+
+
+# ---------------------------------------------------------------------------
+# End-to-end via DecelPopDetector (tune-as-data: reads the PVV directly).
+# ---------------------------------------------------------------------------
+
+
+def test_decel_pop_detector_fires_on_seanbike_aggressive_decel(tmp_path, fixture_input_sha):
+    """seanbike base.pvv hot cells go down to 0.34 — well below the 0.55 safe
+    threshold — so the detector must fire with high severity."""
+    detector = DecelPopDetector(min_safe_mult=0.55)
+    ctx = _make_ctx(tmp_path / "iter_detect")
+
+    findings = detector.detect(ctx)
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.kind == "decel_pop"
+    assert finding.source == "decel_pop_detector"
+    assert finding.suggested_tool == TOOL_NAME
+    # hot_min on seanbike base = 0.34, severity should be in severe band.
+    assert finding.evidence["hot_min"] == pytest.approx(0.34, abs=0.01)
+    assert finding.severity >= 0.70
+    assert finding.confidence >= 0.80
+    # tool_params carry the detector's hot_threshold so the tool acts on the
+    # same temperature band the detector flagged.
+    assert finding.tool_params["target_item_id"] == "tbl_deceleration_enleanment"
+    assert finding.tool_params["hot_threshold"] == 140.0
+
+
+def test_decel_pop_detector_quiet_when_above_threshold(tmp_path, fixture_input_sha):
+    """Raising the safe threshold below seanbike's hot_min should suppress."""
+    detector = DecelPopDetector(min_safe_mult=0.30)
+    ctx = _make_ctx(tmp_path / "iter_quiet")
+
+    findings = detector.detect(ctx)
+
+    assert findings == []
+
+
+def test_dispatcher_routes_decel_pop_to_reference_sha(tmp_path, fixture_input_sha):
+    """Full pipeline: seanbike base.pvv -> DecelPopDetector -> dispatcher
+    -> decel_enleanment tool -> reference SHA. Detector's tool_params bind
+    the same defaults as the seanbike script (hot_threshold=140), so the
+    output bytes must match the byte-identical reference."""
+    tool = DecelEnleanmentTool()
+    dispatcher = TuningDispatcher(
+        detectors=[DecelPopDetector()],
+        tools={tool.name: tool},
+    )
+    iter_dir = tmp_path / "iter_e2e"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    ctx = DetectionContext(
+        base_pvv_path=SEANBIKE_BASE_PVV,
+        vehicle_profile={"id": "seanbike", "tool_overrides": {}},
+        iteration_dir=iter_dir,
+    )
+
+    decision = dispatcher.step(ctx)
+
+    assert decision.plan is not None
+    assert decision.plan.tool == TOOL_NAME
+    assert decision.plan.finding.kind == "decel_pop"
+    result = dispatcher.apply(decision.plan, ctx)
+    assert result.success
+    assert result.sha256 == REFERENCE_OUTPUT_SHA
