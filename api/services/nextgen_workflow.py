@@ -44,6 +44,7 @@ from dynoai.core.nextgen_payload import (
 )
 from dynoai.core.spark_valley import detect_valleys_multi_cylinder
 from dynoai.core.surface_builder import build_standard_surfaces
+from dynoai.pvv.surface_view import load_ve_surfaces
 
 __all__ = [
     "NextGenWorkflow",
@@ -271,6 +272,8 @@ class NextGenWorkflow:
         self,
         run_id: str,
         force: bool = False,
+        *,
+        base_pvv_path: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """
         Generate NextGen analysis for a run.
@@ -278,6 +281,14 @@ class NextGenWorkflow:
         Args:
             run_id: The run ID
             force: If True, regenerate even if cached
+            base_pvv_path: Optional path to the session's base PVV. When
+                provided, the workflow merges VE-table surfaces (front +
+                rear, parsed from the PVV) into the payload's surfaces dict
+                under "ve_front" / "ve_rear". This gives surface-based
+                detectors symmetric access to the tune's VE tables without
+                needing the PVV path themselves. When None (default), the
+                payload contains only pull-derived surfaces — the previous
+                behavior, byte-identical for all existing callers.
 
         Returns:
             Dict with success, payload, and metadata
@@ -312,8 +323,11 @@ class NextGenWorkflow:
             return result
 
         try:
-            # Execute pipeline
-            payload = self._execute_pipeline(run_id, csv_path)
+            # Execute pipeline (optionally augmented with VE surfaces from
+            # the supplied base PVV).
+            payload = self._execute_pipeline(
+                run_id, csv_path, base_pvv_path=base_pvv_path
+            )
 
             # Write outputs
             output_dir = self.get_output_dir(run_id)
@@ -337,6 +351,8 @@ class NextGenWorkflow:
     def _execute_pipeline(
         run_id: str,
         csv_path: Path,
+        *,
+        base_pvv_path: Optional[Path] = None,
     ) -> NextGenAnalysisPayload:
         """
         Execute the full NextGen analysis pipeline.
@@ -344,6 +360,9 @@ class NextGenWorkflow:
         Args:
             run_id: The run ID
             csv_path: Path to input CSV
+            base_pvv_path: Optional path to the session's base PVV. When
+                provided, the pipeline augments the surfaces dict with VE
+                tables parsed from the PVV (keys "ve_front" / "ve_rear").
 
         Returns:
             NextGenAnalysisPayload with all analysis results
@@ -384,7 +403,34 @@ class NextGenWorkflow:
         # Step 4: Build surfaces
         logger.info("Building surfaces...")
         surfaces = build_standard_surfaces(mode_result.df)
-        logger.info(f"Built {len(surfaces)} surfaces: {list(surfaces.keys())}")
+        logger.info(f"Built {len(surfaces)} pull-derived surfaces: {list(surfaces.keys())}")
+
+        # Step 4b (optional): augment with VE-table surfaces from the base PVV.
+        # When base_pvv_path is supplied, the pipeline merges "ve_front" and
+        # "ve_rear" surfaces parsed from the tune's VE tables. This gives
+        # surface-based detectors symmetric access to the tune data without
+        # needing the PVV path. When omitted, behavior is byte-identical to
+        # the pre-existing pipeline.
+        if base_pvv_path is not None:
+            try:
+                ve_surfaces = load_ve_surfaces(base_pvv_path)
+                if ve_surfaces:
+                    surfaces.update(ve_surfaces)
+                    logger.info(
+                        f"Augmented with {len(ve_surfaces)} VE surfaces from "
+                        f"{base_pvv_path}: {list(ve_surfaces.keys())}"
+                    )
+                else:
+                    logger.info(
+                        f"No VE tables found in {base_pvv_path}; "
+                        "continuing without VE surface augmentation"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                # VE surfaces are an augmentation, never required. Don't
+                # let a PVV parse failure kill the whole pipeline.
+                logger.warning(
+                    f"Failed to load VE surfaces from {base_pvv_path}: {exc}"
+                )
 
         # Step 5: Detect spark valley
         logger.info("Detecting spark valleys...")

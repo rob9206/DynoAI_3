@@ -26,8 +26,12 @@ from api.services.nextgen_workflow import (
     save_planner_constraints,
 )
 from api.services.patch_recommender import (
+    APPLY_CONFIRMATION_TOKEN,
+    PatchApplyRequest,
     PatchRecommendationRequest,
+    apply_patch_request,
     recommend_patches,
+    resolve_base_pvv,
 )
 from api.services.coverage_tracker import (
     aggregate_run_coverage,
@@ -74,16 +78,37 @@ def generate_analysis(run_id: str):
     run_id = secure_filename(run_id)
     if not run_id:
         return jsonify({"error": "Invalid run_id"}), 400
-    
+
     # Parse query parameters
     force = request.args.get("force", "false").lower() == "true"
     include_full = request.args.get("include", "summary").lower() == "full"
-    
+
+    # Optional: if vehicle_id + session_id are supplied, resolve the base
+    # PVV so the workflow can augment the payload with VE-table surfaces
+    # ("ve_front" / "ve_rear"). Backward compatible — without these params,
+    # the pipeline runs unchanged.
+    vehicle_id = request.args.get("vehicle_id")
+    session_id = request.args.get("session_id")
+    base_pvv_path = None
+    if vehicle_id and session_id:
+        if (
+            "/" in vehicle_id or "\\" in vehicle_id or ".." in vehicle_id
+            or "/" in session_id or "\\" in session_id or ".." in session_id
+        ):
+            return jsonify({"error": "Invalid vehicle_id or session_id"}), 400
+        base_pvv_path = resolve_base_pvv(vehicle_id, session_id)
+        # Silently skip if not found — base_pvv_path is augmentation, not
+        # required; the workflow will still produce the pull-derived
+        # surfaces and downstream detectors that need PVV will fall back
+        # to their own resolution paths.
+
     # Get workflow service
     workflow = get_nextgen_workflow()
-    
+
     # Generate analysis
-    result = workflow.generate_for_run(run_id, force=force)
+    result = workflow.generate_for_run(
+        run_id, force=force, base_pvv_path=base_pvv_path
+    )
     
     if not result["success"]:
         error_msg = result.get("error", "Unknown error")
@@ -473,6 +498,119 @@ def get_patch_recommendations(run_id: str):
         "context": result.context_meta,
         "decision": result.decision_dict,
     }), 200
+
+
+@nextgen_bp.route("/<run_id>/patches/apply", methods=["POST"])
+def apply_patch(run_id: str):
+    """
+    Apply a previously-recommended patch.
+
+    This is the ONLY HTTP endpoint in the diagnostics surface that mutates
+    a PVV file. Safety contract:
+
+      - Caller MUST include `"confirmation": "apply_patch"` in the JSON body
+        as an explicit guard against accidental triggers.
+      - The plan must come from a prior GET /patches response (or be
+        constructed with equivalent shape). The tool's own gates enforce all
+        per-cell clamps, integrity checks, and abort-without-write semantics
+        — this endpoint never bypasses them.
+      - Every apply attempt (successful or not) appends an entry to
+        `vehicles/<vid>/sessions/<sid>/iterations/<iter>/apply_log.jsonl`
+        for audit.
+
+    URL Parameters:
+        run_id: The run ID (audit / context only — apply doesn't need a
+            cached NextGen payload).
+
+    Request Body (JSON):
+        {
+            "vehicle_id": "seanbike",
+            "session_id": "dai_2026_0518_pcv_bake_verify",
+            "confirmation": "apply_patch",
+            "plan": { ... full plan dict from GET /patches response ... },
+            "donor_pvv_path": "..."   // optional, for wot_ve_graft
+        }
+
+    Returns:
+        Success (gates passed, patch written):
+            200 + { "success": true, "result": {sha256, patch_path, ...},
+                    "audit_log_path": "...", "context": {...} }
+        Gate failure (patch refused — by design, not a server error):
+            200 + { "success": false, "error": "Gate failure ...",
+                    "result": { "gates_failed": [...] }, "audit_log_path": "..." }
+        Bad request (missing fields, invalid plan, missing confirmation):
+            400 + { "success": false, "error": "..." }
+        Server / dispatcher exception:
+            500 + { "success": false, "error": "..." }
+    """
+    run_id = secure_filename(run_id)
+    if not run_id:
+        return jsonify({"success": False, "error": "Invalid run_id"}), 400
+
+    body = request.get_json(silent=True) or {}
+    vehicle_id = body.get("vehicle_id")
+    session_id = body.get("session_id")
+    plan_dict = body.get("plan")
+    confirmation = body.get("confirmation", "")
+    donor_path_str = body.get("donor_pvv_path")
+
+    if not vehicle_id or not session_id:
+        return jsonify({
+            "success": False,
+            "error": "vehicle_id and session_id are required in the request body",
+        }), 400
+    if (
+        "/" in vehicle_id or "\\" in vehicle_id or ".." in vehicle_id
+        or "/" in session_id or "\\" in session_id or ".." in session_id
+    ):
+        return jsonify({"success": False, "error": "Invalid vehicle_id or session_id"}), 400
+    if not isinstance(plan_dict, dict):
+        return jsonify({
+            "success": False,
+            "error": "plan must be a JSON object (from GET /patches response)",
+        }), 400
+    if confirmation != APPLY_CONFIRMATION_TOKEN:
+        return jsonify({
+            "success": False,
+            "error": (
+                f"Missing or invalid confirmation token. Set "
+                f"'confirmation' = {APPLY_CONFIRMATION_TOKEN!r} in the request body."
+            ),
+        }), 400
+
+    req = PatchApplyRequest(
+        run_id=run_id,
+        vehicle_id=vehicle_id,
+        session_id=session_id,
+        plan_dict=plan_dict,
+        confirmation=confirmation,
+        donor_pvv_path=Path(donor_path_str) if donor_path_str else None,
+    )
+    result = apply_patch_request(req)
+
+    if result.error and result.result_dict is None:
+        # Service-level error before dispatcher ran (bad plan, missing base PVV).
+        # 400 keeps the contract: client-supplied data was bad.
+        return jsonify({
+            "success": False,
+            "run_id": run_id,
+            "error": result.error,
+        }), 400
+
+    payload = {
+        "success": result.success,
+        "run_id": run_id,
+        "context": result.context_meta,
+        "result": result.result_dict,
+        "audit_log_path": (
+            str(result.audit_log_path) if result.audit_log_path else None
+        ),
+    }
+    if not result.success:
+        # Gate failures: 200 — the framework correctly refused a bad patch.
+        # The result block carries the gate_failed details.
+        payload["error"] = result.error
+    return jsonify(payload), 200
 
 
 # =============================================================================

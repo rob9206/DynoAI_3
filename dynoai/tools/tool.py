@@ -78,6 +78,28 @@ class ToolPlan:
     predicted_max_delta: Mapping[str, float]
     risk_score: float = 0.0
 
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "ToolPlan":
+        """Reconstruct a ToolPlan from a JSON-decoded dict.
+
+        Counterpart to the serialization used by the patch_recommender's
+        _plan_to_dict. The `finding` block is reconstructed via
+        Finding.from_dict.
+        """
+        finding_d = d.get("finding")
+        if finding_d is None:
+            raise ValueError("ToolPlan dict missing required 'finding' block")
+        return cls(
+            tool=str(d["tool"]),
+            finding=Finding.from_dict(finding_d),
+            bound_params=dict(d.get("bound_params") or {}),
+            input_pvv_path=Path(str(d["input_pvv_path"])),
+            output_pvv_path=Path(str(d["output_pvv_path"])),
+            predicted_cells_changed=int(d["predicted_cells_changed"]),
+            predicted_max_delta=dict(d.get("predicted_max_delta") or {}),
+            risk_score=float(d.get("risk_score") or 0.0),
+        )
+
 
 @dataclass(frozen=True)
 class PatchResult:

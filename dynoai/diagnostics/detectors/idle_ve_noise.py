@@ -1,9 +1,16 @@
 """IdleVeNoiseDetector: detect roughness in the idle/cruise VE region.
 
-Unlike the other detectors, this one consumes the **base PVV's VE tables
-directly** rather than a built Surface2D. The data IS the tune — there's
-no upstream "build a surface from pulls" step for an analysis whose entire
-purpose is checking whether the table itself is bumpy.
+Consumes the tune's VE tables. Two input paths, preferred order:
+
+  1. **`ctx.surfaces["ve_front"]` + `["ve_rear"]`** — symmetric with the
+     other surface-based detectors. The NextGen workflow can populate
+     these by passing `base_pvv_path` to `generate_for_run()`, which
+     merges PVV VE tables into the payload's surfaces dict via
+     `dynoai.pvv.surface_view.load_ve_surfaces`.
+  2. **`ctx.base_pvv_path`** — direct PVV parse fallback for callers
+     that don't populate surfaces (legacy, tests, ad-hoc invocations).
+
+Both paths produce the same metric on the same input.
 
 Metric: **max adjacent-cell delta as a percentage of the mean cell value
 in the smoothing mask** (RPM <= mask_rpm_max AND TPS <= mask_tps_max).
@@ -33,6 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from dynoai.core.surface_builder import Surface2D
 from dynoai.diagnostics.detector import DetectionContext
 from dynoai.diagnostics.finding import Finding
 from dynoai.pvv.io import parse_table
@@ -139,30 +147,67 @@ class IdleVeNoiseDetector:
         self.min_max_delta_pct = float(min_max_delta_pct)
         self.min_mask_cells = int(min_mask_cells)
 
-    def detect(self, ctx: DetectionContext) -> List[Finding]:
-        if ctx.base_pvv_path is None or not ctx.base_pvv_path.exists():
-            return []
-        root = ET.parse(ctx.base_pvv_path).getroot()
+    def _load_from_surfaces(
+        self,
+        ctx: DetectionContext,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+        """Try to load front+rear VE arrays from ctx.surfaces.
 
+        Returns (front_values, rear_values, row_axis, col_axis) or None if
+        either surface is missing or has incompatible shape.
+        """
+        if not ctx.surfaces:
+            return None
+        front_s = ctx.surfaces.get("ve_front")
+        rear_s = ctx.surfaces.get("ve_rear")
+        if front_s is None or rear_s is None:
+            return None
+        if not isinstance(front_s, Surface2D) or not isinstance(rear_s, Surface2D):
+            return None
+        front_vals = np.asarray(front_s.values, dtype=float)
+        rear_vals = np.asarray(rear_s.values, dtype=float)
+        if front_vals.shape != rear_vals.shape:
+            return None
+        front_row = np.asarray(front_s.rpm_axis.bins, dtype=float)
+        front_col = np.asarray(front_s.map_axis.bins, dtype=float)
+        rear_row = np.asarray(rear_s.rpm_axis.bins, dtype=float)
+        rear_col = np.asarray(rear_s.map_axis.bins, dtype=float)
+        if not np.array_equal(front_row, rear_row) or not np.array_equal(front_col, rear_col):
+            return None
+        return front_vals, rear_vals, front_row, front_col
+
+    def _load_from_pvv(
+        self,
+        ctx: DetectionContext,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+        """Fallback: parse VE tables from ctx.base_pvv_path directly."""
+        if ctx.base_pvv_path is None or not ctx.base_pvv_path.exists():
+            return None
+        root = ET.parse(ctx.base_pvv_path).getroot()
         try:
             front = parse_table(root, self.ve_front_id)
             rear = parse_table(root, self.ve_rear_id)
         except ValueError:
-            # PVV doesn't have one or both VE tables — nothing this detector
-            # can say. Stay silent rather than emit a noisy "missing table"
-            # finding; the workflow has already verified table presence.
-            return []
-
+            return None
         if front.values.shape != rear.values.shape:
-            return []
+            return None
         if not np.array_equal(front.row_axis, rear.row_axis) or not np.array_equal(
             front.col_axis, rear.col_axis
         ):
+            return None
+        return front.values, rear.values, front.row_axis, front.col_axis
+
+    def detect(self, ctx: DetectionContext) -> List[Finding]:
+        # Prefer surfaces (symmetry with other detectors). Fall back to
+        # direct PVV parse if surfaces aren't populated.
+        loaded = self._load_from_surfaces(ctx) or self._load_from_pvv(ctx)
+        if loaded is None:
             return []
+        front_values, rear_values, row_axis, col_axis = loaded
 
         mask = _build_mask(
-            front.row_axis,
-            front.col_axis,
+            row_axis,
+            col_axis,
             self.mask_rpm_max_krpm,
             self.mask_tps_max_pct,
         )
@@ -170,8 +215,8 @@ class IdleVeNoiseDetector:
         if n_mask < self.min_mask_cells:
             return []
 
-        front_metrics = _compute_roughness(front.values, mask)
-        rear_metrics = _compute_roughness(rear.values, mask)
+        front_metrics = _compute_roughness(front_values, mask)
+        rear_metrics = _compute_roughness(rear_values, mask)
 
         peak_max_delta_pct = max(
             front_metrics["max_delta_pct"], rear_metrics["max_delta_pct"]

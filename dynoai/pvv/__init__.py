@@ -42,17 +42,25 @@ from dynoai.pvv.io import (
     verify_integrity_or_cleanup,
     write_xml_tree,
 )
+from dynoai.pvv.surface_view import (
+    load_ve_surfaces,
+    ve_surface_from_pvv,
+    ve_table_to_surface,
+)
 
 __all__ = [
     "TableData",
     "collect_item_cells",
     "find_item_by_id",
     "format_value",
+    "load_ve_surfaces",
     "mutate_scalar",
     "mutate_table_cells",
     "parse_scalar",
     "parse_table",
     "sha256",
+    "ve_surface_from_pvv",
+    "ve_table_to_surface",
     "verify_integrity_or_cleanup",
     "write_xml_tree",
 ]

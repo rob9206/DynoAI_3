@@ -31,3 +31,21 @@ class Finding:
 
     def rank_score(self) -> float:
         return float(self.severity) * float(self.confidence)
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "Finding":
+        """Reconstruct a Finding from a JSON-decoded dict.
+
+        Counterpart to the serialization used by the patch_recommender's
+        decision_dict. Tolerates the round-trip-derived `rank_score` field
+        in the input (ignored — it's a derived property).
+        """
+        return cls(
+            kind=str(d["kind"]),
+            severity=float(d["severity"]),
+            confidence=float(d["confidence"]),
+            evidence=dict(d.get("evidence") or {}),
+            suggested_tool=d.get("suggested_tool"),
+            tool_params=dict(d.get("tool_params") or {}),
+            source=str(d.get("source") or ""),
+        )
